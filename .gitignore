@@ -1,0 +1,24 @@
+# Node / Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env*
+!frontend/.env.example
+
+# Python / Django Backend
+backend/venv/
+backend/.venv/
+**/__pycache__/
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*.pyc
+backend/*.sqlite3
+backend/.env
+!backend/.env.example
+
+# Environment & Misc
+.env*
+.DS_Store
+*.pem
+*.log
