@@ -17,7 +17,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <SiteNav />
 
-      <section id="top" className="mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:pt-20">
+      <section id="top" className="mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:pt-12">
         <div>
           <p className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Loma Linda Seventh-day Adventist Church</p>
           <h1 className="max-w-3xl text-4xl font-semibold leading-[1.15] tracking-tight sm:text-6xl">We love you.<br />We value you.<br />And we&apos;ll always pray for you.</h1>
@@ -25,11 +25,11 @@ export default function Home() {
           <div className="mt-9 flex flex-wrap gap-4"><a href="#schedule" className="rounded-full bg-[#b36b3c] px-6 py-3.5 font-medium text-white transition hover:bg-[#96552e]">Join us this Sabbath</a><a href="#about" className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-medium transition hover:border-[#26352f]">Learn more</a></div>
         </div>
 
-        <div className="relative min-h-80 overflow-hidden rounded-[2rem] bg-[#26352f] p-8 text-white shadow-xl sm:min-h-[28rem]">
-          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#e7b783]/20 blur-xl" />
-          <div className="relative z-10 flex h-full flex-col justify-between">
-            <div><span className="inline-block rounded-full bg-[#f1c89e]/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#f1c89e]">Sabbath Gathering</span><h2 className="mt-4 text-3xl font-semibold">Every Sabbath</h2><p className="mt-2 text-lg text-white/80">8:00 AM – 4:00 PM</p><p className="mt-1 text-sm text-white/60">Loma Linda Church Campus</p></div>
-            <div className="mt-8 rounded-2xl bg-white/10 p-5 backdrop-blur-md"><p className="text-xs font-semibold uppercase tracking-widest text-[#f1c89e]">Weekly Highlights</p><p className="mt-2 text-sm text-white/90">• <strong>Wed:</strong> Online Prayer (8–9 PM)<br />• <strong>Fri:</strong> Vespers at Church (5:30–6:30 PM)<br />• <strong>Sat:</strong> Full Day Sabbath Program (8 AM–4 PM)</p></div>
+        <div className="relative min-h-80 overflow-hidden rounded-[2rem] bg-[#d5dfd7] p-10 text-[#26352f] shadow-sm ring-1 ring-[#c9d5ca] sm:min-h-[28rem]">
+          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#e7b783]/60 blur-xl" />
+          <div className="relative z-10 flex h-full flex-col">
+            <div><span className="inline-block rounded-full bg-white/65 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">Sabbath Gathering</span><h2 className="mt-5 text-3xl font-semibold">Every Sabbath</h2><p className="mt-3 text-lg text-[#3d5148]">8:00 AM – 4:00 PM</p><p className="mt-1 text-sm text-[#617068]">Loma Linda Church Campus</p></div>
+            <div className="mt-auto pt-12"><div className="rounded-2xl bg-white/75 p-6 shadow-sm backdrop-blur-md"><p className="text-xs font-semibold uppercase tracking-widest text-[#b36b3c]">Weekly Highlights</p><p className="mt-3 text-sm leading-6 text-[#3d5148]">• <strong>Wed:</strong> Online Prayer (8–9 PM)<br />• <strong>Fri:</strong> Vespers at Church (5:30–6:30 PM)<br />• <strong>Sat:</strong> Full Day Sabbath Program (8 AM–4 PM)</p></div></div>
           </div>
         </div>
       </section>
