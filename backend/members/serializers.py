@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Contribution, MemberProfile
+from .models import ChurchFinancialReport, Contribution, MemberProfile, PrayerRequest, SabbathEvent
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -22,5 +22,40 @@ class RegisterSerializer(serializers.ModelSerializer):
 class ContributionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contribution
-        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
+        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
+
+
+class ContributionInitiateSerializer(serializers.Serializer):
+    giving_type = serializers.ChoiceField(choices=['financial', 'in_kind'], default='financial')
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, default=0)
+    purpose = serializers.CharField(max_length=120, default='General giving')
+    phone_number = serializers.CharField(max_length=20)
+    donor_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    donor_email = serializers.EmailField(required=False, allow_blank=True)
+    item_description = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs['giving_type'] == 'financial' and attrs['amount'] < 1:
+            raise serializers.ValidationError({'amount': 'Financial giving must be at least KES 1.'})
+        if attrs['giving_type'] == 'in_kind' and not attrs.get('item_description'):
+            raise serializers.ValidationError({'item_description': 'Describe the item you would like to give.'})
+        return attrs
+
+
+class PrayerRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PrayerRequest
+        fields = ('request_text', 'name', 'email', 'anonymous')
+
+
+class ChurchFinancialReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChurchFinancialReport
+        fields = ('id', 'title', 'period_start', 'period_end', 'total_tithes', 'total_offerings', 'total_expenses', 'notes')
+
+
+class SabbathEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SabbathEvent
+        fields = ('id', 'date', 'name', 'program_text', 'program_file')
