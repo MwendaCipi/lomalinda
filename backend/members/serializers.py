@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
+from .models import Announcement, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -17,6 +17,25 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         MemberProfile.objects.create(user=user, phone_number=phone_number)
         return user
+
+
+class EnrollmentRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnrollmentRequest
+        fields = ('email', 'first_name', 'last_name', 'phone_number')
+
+
+class EnrollmentCompleteSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    username = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True, min_length=8)
+
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Announcement
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'published', 'created_at')
+        read_only_fields = ('id', 'created_at')
 
 
 class ContributionSerializer(serializers.ModelSerializer):

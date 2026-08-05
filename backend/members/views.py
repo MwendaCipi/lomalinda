@@ -1,13 +1,31 @@
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.db import transaction
+from django.utils import timezone
+from datetime import timedelta
+import uuid
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, GivingPurpose, PrayerRequest, SabbathEvent
+from .models import Announcement, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+from .serializers import AnnouncementSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+
+
+def send_enrollment_email(enrollment):
+    link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
+    send_mail('Complete your Loma Linda Church member account', f"Hello {enrollment.first_name or 'there'},\n\nComplete your member account here:\n{link}\n\nThis link expires in 48 hours.", settings.DEFAULT_FROM_EMAIL, [enrollment.email], fail_silently=False)
+
+
+def send_password_reset_email(user, uid, token):
+    link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+    send_mail('Reset your Loma Linda Church password', f"Hello {user.first_name or user.username},\n\nReset your password here:\n{link}\n\nIf you did not request this, you can ignore this email.", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
 
 
 def is_finance_manager(user):
@@ -18,6 +36,96 @@ def is_finance_manager(user):
 class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
+
+
+class EnrollmentRequestView(generics.CreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = EnrollmentRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        enrollment, _ = EnrollmentRequest.objects.update_or_create(email=serializer.validated_data['email'], defaults={**serializer.validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
+        send_enrollment_email(enrollment)
+        return Response({'message': 'If that email can receive member invitations, an enrollment link has been sent.'}, status=status.HTTP_202_ACCEPTED)
+
+
+class EnrollmentVerifyView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status='pending', expires_at__gt=timezone.now()).first()
+        if not enrollment:
+            return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'email': enrollment.email, 'first_name': enrollment.first_name, 'last_name': enrollment.last_name})
+
+
+class EnrollmentCompleteView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = EnrollmentCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status='pending', expires_at__gt=timezone.now()).first()
+        if not enrollment:
+            return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username=serializer.validated_data['username']).exists():
+            return Response({'username': 'That username is already in use.'}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email__iexact=enrollment.email).exists():
+            return Response({'email': 'An account already exists for this email.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'])
+        from .models import MemberProfile
+        MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number)
+        enrollment.status = 'completed'
+        enrollment.save(update_fields=['status'])
+        return Response({'message': 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user:
+            send_password_reset_email(user, user.pk, default_token_generator.make_token(user))
+        return Response({'message': 'If an account exists for that email, a password reset link has been sent.'})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        user = User.objects.filter(pk=request.data.get('uid'), is_active=True).first()
+        token = request.data.get('token')
+        if not user or not default_token_generator.check_token(user, token):
+            return Response({'detail': 'This password reset link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(request.data.get('password', ''), user)
+        except Exception as error:
+            return Response({'password': list(error.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(request.data['password'])
+        user.save(update_fields=['password'])
+        return Response({'message': 'Your password has been reset. You can now sign in.'})
+
+
+class AnnouncementView(generics.ListCreateAPIView):
+    serializer_class = AnnouncementSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
+
+    def get_queryset(self):
+        queryset = Announcement.objects.filter(published=True)
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset.filter(visibility='public')
+
+    def perform_create(self, serializer):
+        if getattr(getattr(self.request.user, 'member_profile', None), 'role', '') not in ('admin', 'leader'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only church leaders can post announcements.')
+        serializer.save()
 
 
 class MeView(APIView):
@@ -105,7 +213,7 @@ class PrayerRequestView(generics.CreateAPIView):
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = ChurchFinancialReportSerializer
 
     def get_queryset(self):
@@ -116,7 +224,7 @@ class ChurchFinancialReportsView(generics.ListAPIView):
 
 
 class ChurchBudgetsView(generics.ListAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = ChurchBudgetSerializer
 
     def get_queryset(self):

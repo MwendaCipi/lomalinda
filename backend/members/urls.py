@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PrayerRequestView, RegisterView, SabbathEventsView
+from .views import AnnouncementView, ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='member-register'),
@@ -15,4 +15,10 @@ urlpatterns = [
     path('church-settings/', ChurchSettingsView.as_view(), name='church-settings'),
     path('giving-purposes/', GivingPurposeListCreateView.as_view(), name='giving-purpose-list-create'),
     path('giving-purposes/<int:pk>/', GivingPurposeDetailView.as_view(), name='giving-purpose-detail'),
+    path('auth/enrollment-request/', EnrollmentRequestView.as_view(), name='enrollment-request'),
+    path('auth/enrollment/verify/', EnrollmentVerifyView.as_view(), name='enrollment-verify'),
+    path('auth/enrollment/complete/', EnrollmentCompleteView.as_view(), name='enrollment-complete'),
+    path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('auth/password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    path('announcements/', AnnouncementView.as_view(), name='announcements'),
 ]

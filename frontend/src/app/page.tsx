@@ -10,7 +10,7 @@ const ChurchLocation = dynamic(() => import("@/components/church-location"), { s
 const weeklyCalendar = [
   { day: "Wednesday", title: "Midweek Vespers", time: "8:00 PM - 9:00 PM", location: "Online" },
   { day: "Friday", title: "Friday Vespers", time: "5:30 PM - 6:30 PM", location: "Church sanctuary" },
-  { day: "Saturday", title: "Sabbath worship", time: "8:00 AM - 4:00 PM", location: "Church campus" },
+  { day: "Saturday", title: "Sabbath worship", time: "8:00 AM - 4:00 PM", location: "Church grounds" },
 ];
 
 export default function Home() {
@@ -57,7 +57,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer id="contact" className="bg-[#26352f] px-6 py-14 text-white lg:px-8"><div className="mx-auto max-w-6xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Contact us</p><div className="mt-4 grid gap-8 md:grid-cols-[1fr_auto] md:items-end"><div><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">We would love to hear from you.</h2><p className="mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p></div><div className="grid gap-3 text-sm"><a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a><Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link><Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link></div></div><div className="mt-10 grid gap-10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center"><div><h3 className="text-xl font-semibold">Visit us in person</h3><p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church campus and plan your visit.</p></div><ChurchLocation /></div><p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 Loma Linda Seventh-day Church</p></div></footer>
+      <footer id="contact" className="bg-[#26352f] px-6 py-14 text-white lg:px-8"><div className="mx-auto max-w-6xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Contact us</p><div className="mt-4 grid gap-8 md:grid-cols-[1fr_auto] md:items-end"><div><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">We would love to hear from you.</h2><p className="mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p></div><div className="grid gap-3 text-sm"><a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a><Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link><Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link></div></div><div className="mt-10 grid gap-10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center"><div><h3 className="text-xl font-semibold">Visit us in person</h3><p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church grounds and plan your visit.</p></div><ChurchLocation /></div><p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 Loma Linda Seventh-day Church</p></div></footer>
     </main>
   );
 }
