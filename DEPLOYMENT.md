@@ -1,16 +1,16 @@
 # Deployment
 
-## Frontend: Cloudflare Pages
+## Frontend: Cloudflare Worker
 
-Create a Pages project connected to this repository with:
+Create a Worker connected to this repository with:
 
 - **Root directory:** `frontend`
 - **Build command:** `npm run build`
-- **Build output directory:** `out`
+- **Deploy command:** `npx wrangler deploy`
 - **Production branch:** `main`
 - **Environment variable:** `NEXT_PUBLIC_API_URL=https://api.example.com`
 
-The frontend is configured with `output: "export"`, so it does not require a Node.js server.
+The repository includes `frontend/wrangler.jsonc`, which tells Wrangler to publish the generated `out` directory as Worker static assets. The frontend is configured with `output: "export"`, so it does not require a Node.js server.
 
 ## Backend: VPS
 
