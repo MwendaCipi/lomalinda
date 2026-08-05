@@ -1,8 +1,9 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "loma-linda-church",
+  "name": "lomalinda",
   "compatibility_date": "2026-08-05",
   "assets": {
-    "directory": "./out"
+    "directory": "./out",
+    "not_found_handling": "404-page"
   }
 }
