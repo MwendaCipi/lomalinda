@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import ChurchFinancialReport, Contribution, MemberProfile, PrayerRequest, SabbathEvent
+from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, MemberProfile, PrayerRequest, SabbathEvent
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -55,7 +55,19 @@ class ChurchFinancialReportSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'period_start', 'period_end', 'total_tithes', 'total_offerings', 'total_expenses', 'notes')
 
 
+class ChurchBudgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChurchBudget
+        fields = ('id', 'year', 'total_income', 'total_expenses', 'notes')
+
+
 class SabbathEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = SabbathEvent
-        fields = ('id', 'date', 'name', 'program_text', 'program_file')
+        fields = ('id', 'date', 'name', 'department', 'leader', 'program_text', 'program_file')
+
+
+class ChurchSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChurchSettings
+        fields = ('church_name', 'address', 'latitude', 'longitude', 'midweek_vespers_link', 'midweek_vespers_time', 'friday_vespers_time', 'sabbath_time')

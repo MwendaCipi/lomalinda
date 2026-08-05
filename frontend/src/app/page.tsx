@@ -1,48 +1,65 @@
-import { SiteNav } from "@/components/site-nav";
+"use client";
 
-const schedules = [
-  { day: "Wednesday", title: "Online Prayer Meeting", time: "8:00 PM – 9:00 PM", location: "Online", description: "Connect mid-week with our church family for prayer, scripture, and mutual encouragement.", badge: "Virtual Gathering" },
-  { day: "Friday", title: "Friday Vespers", time: "5:30 PM – 6:30 PM", location: "At Church Sanctuary", description: "Welcome the holy Sabbath together with song, reflection, and peaceful worship.", badge: "In-Person" },
-  { day: "Sabbath (Saturday)", title: "Sabbath Worship & Programs", time: "8:00 AM – 4:00 PM", location: "At Church Campus", description: "Join us for Sabbath School, Divine Service, Fellowship Meal, and afternoon community programs.", badge: "Main Service" },
-];
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { NextGatheringCard } from "@/components/next-gathering-card";
+import { ChurchGallery } from "@/components/church-gallery";
 
-const ministries = [
-  { title: "Worship & Praise", text: "Experience uplifting music, prayer, and Bible-centered teaching every Sabbath." },
-  { title: "Prayer & Support", text: "Join our Wednesday online prayer sessions or reach out for personal prayer support." },
-  { title: "Youth & Community", text: "Engaging programs for kids, youth, and families to grow together in faith." },
+const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
+
+const weeklyCalendar = [
+  { day: "Wednesday", title: "Midweek Vespers", time: "8:00 PM - 9:00 PM", location: "Online" },
+  { day: "Friday", title: "Friday Vespers", time: "5:30 PM - 6:30 PM", location: "Church sanctuary" },
+  { day: "Saturday", title: "Sabbath worship", time: "8:00 AM - 4:00 PM", location: "Church campus" },
 ];
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <SiteNav />
-
-      <section id="top" className="mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:pt-12">
-        <div>
-          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Loma Linda Seventh-day Adventist Church</p>
-          <h1 className="max-w-3xl text-4xl font-semibold leading-[1.15] tracking-tight sm:text-6xl">We love you.<br />We value you.<br />And we&apos;ll always pray for you.</h1>
-          <p className="mt-7 max-w-xl text-lg leading-8 text-[#617068]">We are a welcoming Seventh-day church family learning to follow Jesus, care for our neighbors, and live with hope.</p>
-          <div className="mt-9 flex flex-wrap gap-4"><a href="#calendar" className="rounded-full bg-[#b36b3c] px-6 py-3.5 font-medium text-white transition hover:bg-[#96552e]">Join us this Sabbath</a><a href="#about" className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-medium transition hover:border-[#26352f]">Learn more</a></div>
+      <section id="top" className="mx-auto max-w-6xl px-6 pb-16 pt-10 lg:px-8 lg:pt-14">
+        <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <h1 className="mt-6 max-w-3xl text-4xl font-semibold leading-[1.15] tracking-tight sm:text-6xl">
+              <span className="hero-line block">We love you.</span>
+              <span className="hero-line block">We value you.</span>
+              <span className="hero-line block">And we&apos;ll always pray for you.</span>
+            </h1>
+            <p className="hero-line mt-7 max-w-xl text-lg leading-8 text-[#617068]">We are a welcoming church family learning to follow Jesus, care for our neighbours, and live with hope.</p>
+            <div className="hero-line mt-9 flex flex-wrap gap-4">
+              <Link href="#contact" className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-medium transition hover:border-[#26352f]">Contact & location</Link>
+              <Link href="/calendar" className="rounded-full bg-[#b36b3c] px-6 py-3.5 font-medium text-white transition hover:bg-[#96552e]">See our calendar</Link>
+              <Link href="/beliefs" className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-medium transition hover:border-[#26352f]">Learn more</Link>
+            </div>
+          </div>
+          <div className="hero-card"><NextGatheringCard /></div>
         </div>
+      </section>
 
-        <div className="relative min-h-80 overflow-hidden rounded-[2rem] bg-[#d5dfd7] p-10 text-[#26352f] shadow-sm ring-1 ring-[#c9d5ca] sm:min-h-[28rem]">
-          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#e7b783]/60 blur-xl" />
-          <div className="relative z-10 flex h-full flex-col">
-            <div><span className="inline-block rounded-full bg-white/65 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">Sabbath Gathering</span><h2 className="mt-5 text-3xl font-semibold">Every Sabbath</h2><p className="mt-3 text-lg text-[#3d5148]">8:00 AM – 4:00 PM</p><p className="mt-1 text-sm text-[#617068]">Loma Linda Church Campus</p></div>
-            <div className="mt-auto pt-12"><div className="rounded-2xl bg-white/75 p-6 shadow-sm backdrop-blur-md"><p className="text-xs font-semibold uppercase tracking-widest text-[#b36b3c]">Weekly Highlights</p><p className="mt-3 text-sm leading-6 text-[#3d5148]">• <strong>Wed:</strong> Online Prayer (8–9 PM)<br />• <strong>Fri:</strong> Vespers at Church (5:30–6:30 PM)<br />• <strong>Sat:</strong> Full Day Sabbath Program (8 AM–4 PM)</p></div></div>
+      <ChurchGallery />
+
+      <section id="about" className="border-y border-[#dfdbd1] bg-white/60 px-6 py-16 lg:px-8">
+        <div className="mx-auto max-w-6xl"><p className="max-w-3xl text-2xl leading-relaxed tracking-tight sm:text-3xl">As a Seventh-day church, we honour the Sabbath, cherish Bible truth, and build a supportive community where everyone feels loved, valued, and remembered in prayer.</p></div>
+      </section>
+
+      <section id="beliefs" className="mx-auto max-w-6xl px-6 py-20 lg:px-8">
+        <div className="max-w-2xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">What guides us</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Faith that shapes everyday life</h2></div>
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
+          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">The Bible</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We look to Scripture as the foundation for knowing God and living with wisdom, grace, and purpose.</p></article>
+          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">The Sabbath</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We set apart the seventh day to worship, rest, remember God&apos;s goodness, and grow together.</p></article>
+          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">Hope in Jesus</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We believe Jesus brings forgiveness, healing, and the promise of a future filled with hope.</p></article>
+        </div>
+      </section>
+
+      <section id="calendar" className="bg-white/60 px-6 py-20 lg:px-8">
+        <div className="mx-auto max-w-6xl"><div className="flex flex-wrap items-end justify-between gap-6"><div><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Weekly calendar</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Connect & worship with us</h2></div><Link href="/calendar" className="text-sm font-semibold text-[#b36b3c] hover:underline">See all Sabbaths &rarr;</Link></div>
+          <div className="mt-10 grid gap-8 border-t border-[#dfdbd1] md:grid-cols-3 md:gap-0 md:divide-x md:divide-[#dfdbd1]">
+            {weeklyCalendar.map((item) => <article key={item.title} className="pt-6 md:px-7 md:first:pl-0 md:last:pr-0"><p className="text-sm font-semibold text-[#b36b3c]">{item.day}</p><h3 className="mt-3 text-xl font-semibold">{item.title}</h3><p className="mt-2 text-sm font-medium text-[#26352f]">{item.time}</p><p className="mt-1 text-sm text-[#617068]">{item.location}</p></article>)}
           </div>
         </div>
       </section>
 
-      <section id="about" className="border-y border-[#dfdbd1] bg-white/60 px-6 py-16 lg:px-8"><div className="mx-auto max-w-6xl"><p className="max-w-3xl text-2xl leading-relaxed tracking-tight sm:text-3xl">As a Seventh-day church, we honor the Sabbath, cherish Bible truth, and build a supportive community where everyone feels loved, valued, and remembered in prayer.</p></div></section>
-
-      <section id="beliefs" className="mx-auto max-w-6xl px-6 py-20 lg:px-8"><div className="max-w-2xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">What guides us</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Faith that shapes everyday life</h2></div><div className="mt-10 grid gap-6 md:grid-cols-3"><article className="rounded-3xl border border-[#dfdbd1] bg-white p-7"><h3 className="text-xl font-semibold">The Bible</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We look to Scripture as the foundation for knowing God and living with wisdom, grace, and purpose.</p></article><article className="rounded-3xl border border-[#dfdbd1] bg-white p-7"><h3 className="text-xl font-semibold">The Sabbath</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We set apart the seventh day to worship, rest, remember God’s goodness, and grow together.</p></article><article className="rounded-3xl border border-[#dfdbd1] bg-white p-7"><h3 className="text-xl font-semibold">Hope in Jesus</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We believe Jesus brings forgiveness, healing, and the promise of a future filled with hope.</p></article></div></section>
-
-      <section id="calendar" className="mx-auto max-w-6xl px-6 py-20 lg:px-8"><div className="max-w-2xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Weekly Calendar</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Connect & Worship With Us</h2></div><div className="mt-10 grid gap-6 md:grid-cols-3">{schedules.map((item) => <article key={item.title} className="flex flex-col justify-between rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md"><div><div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-[#b36b3c]">{item.day}</span><span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-medium text-[#26352f]">{item.badge}</span></div><h3 className="mt-4 text-2xl font-semibold">{item.title}</h3><p className="mt-2 font-medium text-[#26352f]">{item.time}</p><p className="mt-0.5 text-xs font-medium text-[#b36b3c]">{item.location}</p><p className="mt-4 text-sm leading-6 text-[#617068]">{item.description}</p></div></article>)}</div></section>
-
-      <section id="ministries" className="bg-[#eef2ed] px-6 py-20 lg:px-8"><div className="mx-auto max-w-6xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Grow & Serve</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Our Ministries</h2><div className="mt-10 grid gap-6 md:grid-cols-3">{ministries.map((ministry) => <article key={ministry.title} className="rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm"><h3 className="text-xl font-semibold">{ministry.title}</h3><p className="mt-3 text-sm leading-6 text-[#617068]">{ministry.text}</p></article>)}</div></div></section>
-
-      <footer id="contact" className="mx-auto flex max-w-6xl flex-col gap-5 px-6 py-12 text-sm text-[#617068] sm:flex-row sm:items-center sm:justify-between lg:px-8"><p>© 2026 Loma Linda Seventh-day Church</p><p>Questions & Prayer Requests: <a className="font-medium text-[#26352f] underline hover:text-[#b36b3c]" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a></p></footer>
+      <footer id="contact" className="border-t border-[#33483e] bg-[#26352f] px-6 py-14 text-white lg:px-8"><div className="mx-auto max-w-6xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Contact us</p><div className="mt-4 grid gap-8 md:grid-cols-[1fr_auto] md:items-end"><div><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">We would love to hear from you.</h2><p className="mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p></div><div className="grid gap-3 text-sm"><a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a><Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link><Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link></div></div><div className="mt-10 grid gap-10 border-t border-white/15 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center"><div><h3 className="text-xl font-semibold">Visit us in person</h3><p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church campus and plan your visit.</p></div><ChurchLocation /></div><p className="mt-12 border-t border-white/15 pt-5 text-xs text-white/50">&copy; 2026 Loma Linda Seventh-day Church</p></div></footer>
     </main>
   );
 }
+

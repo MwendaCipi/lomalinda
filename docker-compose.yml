@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: loma-linda-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: loma_linda
+      POSTGRES_USER: loma_linda_app
+      POSTGRES_PASSWORD: loma_linda_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - loma_linda_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loma_linda_app -d loma_linda"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  loma_linda_postgres:

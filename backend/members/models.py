@@ -3,9 +3,20 @@ from django.db import models
 
 
 class MemberProfile(models.Model):
+    ROLE_CHOICES = [
+        ('member', 'Member'),
+        ('leader', 'Church leader'),
+        ('admin', 'Administrator'),
+        ('finance', 'Finance team'),
+        ('choir_director', 'Choir director'),
+        ('children_ministry', 'Children ministry'),
+        ('men_ministry', 'Adventist men ministries'),
+        ('women_ministry', 'Adventist Women Ministries'),
+        ('chaplaincy', 'Chaplaincy'),
+    ]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_profile')
     phone_number = models.CharField(max_length=20, blank=True)
-    role = models.CharField(max_length=20, default='member', choices=[('member', 'Member'), ('leader', 'Leader'), ('admin', 'Admin')])
+    role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -51,6 +62,18 @@ class ChurchFinancialReport(models.Model):
         ordering = ['-period_end']
 
 
+class ChurchBudget(models.Model):
+    year = models.PositiveIntegerField(unique=True)
+    total_income = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_expenses = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    published_to_public = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-year']
+
+
 class PrayerRequest(models.Model):
     request_text = models.TextField()
     name = models.CharField(max_length=160, blank=True)
@@ -66,6 +89,8 @@ class PrayerRequest(models.Model):
 class SabbathEvent(models.Model):
     date = models.DateField(unique=True)
     name = models.CharField(max_length=160, default='Sabbath Worship')
+    department = models.CharField(max_length=160, blank=True)
+    leader = models.CharField(max_length=160, blank=True)
     program_text = models.TextField(blank=True)
     program_file = models.FileField(upload_to='sabbath-programs/', blank=True, null=True)
     published = models.BooleanField(default=True)
@@ -73,3 +98,18 @@ class SabbathEvent(models.Model):
 
     class Meta:
         ordering = ['date']
+
+
+class ChurchSettings(models.Model):
+    church_name = models.CharField(max_length=160, default='Loma Linda SDA Church, Meru')
+    address = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    midweek_vespers_link = models.URLField(blank=True)
+    midweek_vespers_time = models.CharField(max_length=120, default='Wednesday · 8:00 PM – 9:00 PM')
+    friday_vespers_time = models.CharField(max_length=120, default='Friday · 5:30 PM – 6:30 PM')
+    sabbath_time = models.CharField(max_length=120, default='Saturday · 8:00 AM – 4:00 PM')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.church_name

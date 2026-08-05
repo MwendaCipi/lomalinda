@@ -5,9 +5,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import ChurchFinancialReport, Contribution, PrayerRequest, SabbathEvent
+from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, PrayerRequest, SabbathEvent
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import ChurchFinancialReportSerializer, ContributionInitiateSerializer, ContributionSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+from .serializers import ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
 
 
 class RegisterView(generics.CreateAPIView):
@@ -20,7 +20,7 @@ class MeView(APIView):
 
     def get(self, request):
         profile = getattr(request.user, 'member_profile', None)
-        return Response({'id': request.user.id, 'username': request.user.username, 'email': request.user.email, 'first_name': request.user.first_name, 'last_name': request.user.last_name, 'phone_number': profile.phone_number if profile else ''})
+        return Response({'id': request.user.id, 'username': request.user.username, 'email': request.user.email, 'first_name': request.user.first_name, 'last_name': request.user.last_name, 'phone_number': profile.phone_number if profile else '', 'role': profile.role if profile else 'member'})
 
 
 class MyContributionsView(generics.ListAPIView):
@@ -100,14 +100,25 @@ class PrayerRequestView(generics.CreateAPIView):
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = ChurchFinancialReportSerializer
 
     def get_queryset(self):
         profile = getattr(self.request.user, 'member_profile', None)
-        if profile and profile.role in ('leader', 'admin'):
+        if profile and profile.role in ('leader', 'admin', 'finance'):
             return ChurchFinancialReport.objects.all()
         return ChurchFinancialReport.objects.filter(published_to_members=True)
+
+
+class ChurchBudgetsView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ChurchBudgetSerializer
+
+    def get_queryset(self):
+        profile = getattr(self.request.user, 'member_profile', None)
+        if profile and profile.role in ('leader', 'admin', 'finance'):
+            return ChurchBudget.objects.all()
+        return ChurchBudget.objects.filter(published_to_public=True)
 
 
 class SabbathEventsView(generics.ListAPIView):
@@ -116,3 +127,12 @@ class SabbathEventsView(generics.ListAPIView):
 
     def get_queryset(self):
         return SabbathEvent.objects.filter(published=True)
+
+
+class ChurchSettingsView(generics.RetrieveAPIView):
+    serializer_class = ChurchSettingsSerializer
+    permission_classes = [AllowAny]
+
+    def get_object(self):
+        settings, _ = ChurchSettings.objects.get_or_create(pk=1)
+        return settings

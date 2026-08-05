@@ -10,3 +10,29 @@ body {
   color: #26352f;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes hero-image-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hero-line-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-line {
+  opacity: 0;
+  animation: hero-line-in 650ms ease-out forwards;
+}
+
+.hero-line:nth-child(1) { animation-delay: 700ms; }
+.hero-line:nth-child(2) { animation-delay: 950ms; }
+.hero-line:nth-child(3) { animation-delay: 1200ms; }
+.hero-line:nth-child(4) { animation-delay: 1450ms; }
+.hero-line:nth-child(5) { animation-delay: 1700ms; }
+
+.hero-card {
+  opacity: 0;
+  animation: hero-line-in 700ms ease-out 2100ms forwards;
+}

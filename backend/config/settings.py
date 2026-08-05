@@ -15,6 +15,7 @@ from pathlib import Path
 
 import dj_database_url
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv()
 
@@ -82,10 +83,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///db.sqlite3')
-DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_URL.startswith('postgres'))}
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ImproperlyConfigured('DATABASE_URL must be set to a PostgreSQL connection string.')
+DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
+DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)}
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',') if origin.strip()]
+
+# Required when Django is served behind Nginx/Cloudflare over HTTPS.
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', os.getenv('FRONTEND_URL', 'http://localhost:3000')).split(',') if origin.strip()]
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
