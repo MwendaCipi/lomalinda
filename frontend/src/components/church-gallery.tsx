@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const slides = [
   { src: "https://images.unsplash.com/photo-1438032005730-c779502df39b?auto=format&fit=crop&w=1800&q=85", alt: "A welcoming church sanctuary", caption: "A place to worship together" },
-  { src: "https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=1800&q=85", alt: "A peaceful church gathering", caption: "Growing together in faith" },
+  { src: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=85", alt: "Friends sharing fellowship outdoors", caption: "Making room for one another" },
   { src: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1800&q=85", alt: "People gathered in fellowship", caption: "A church family for every season" },
 ];
 
