@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, MemberProfile, PrayerRequest, SabbathEvent
+from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -41,6 +41,13 @@ class ContributionInitiateSerializer(serializers.Serializer):
         if attrs['giving_type'] == 'in_kind' and not attrs.get('item_description'):
             raise serializers.ValidationError({'item_description': 'Describe the item you would like to give.'})
         return attrs
+
+
+class GivingPurposeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GivingPurpose
+        fields = ('id', 'name', 'active')
+        read_only_fields = ('id',)
 
 
 class PrayerRequestSerializer(serializers.ModelSerializer):

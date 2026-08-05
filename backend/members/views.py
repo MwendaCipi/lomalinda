@@ -5,9 +5,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, PrayerRequest, SabbathEvent
+from .models import ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, GivingPurpose, PrayerRequest, SabbathEvent
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+from .serializers import ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+
+
+def is_finance_manager(user):
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.role in ('admin', 'leader', 'finance', 'treasurer'))
 
 
 class RegisterView(generics.CreateAPIView):
@@ -136,3 +141,31 @@ class ChurchSettingsView(generics.RetrieveAPIView):
     def get_object(self):
         settings, _ = ChurchSettings.objects.get_or_create(pk=1)
         return settings
+
+
+class GivingPurposeListCreateView(generics.ListCreateAPIView):
+    serializer_class = GivingPurposeSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
+
+    def get_queryset(self):
+        return GivingPurpose.objects.filter(active=True)
+
+    def perform_create(self, serializer):
+        if not is_finance_manager(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only finance managers can add giving purposes.')
+        serializer.save()
+
+
+class GivingPurposeDetailView(generics.DestroyAPIView):
+    serializer_class = GivingPurposeSerializer
+    queryset = GivingPurpose.objects.all()
+
+    def perform_destroy(self, instance):
+        if not is_finance_manager(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only finance managers can remove giving purposes.')
+        instance.active = False
+        instance.save(update_fields=['active'])

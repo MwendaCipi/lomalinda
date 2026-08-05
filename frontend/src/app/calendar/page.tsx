@@ -14,6 +14,7 @@ type CalendarEvent = { date: string; name: string; department?: string; program_
 function dateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
 function getDates(year: number, day: number) { const dates: Date[] = []; const date = new Date(year, 0, 1); while (date.getFullYear() === year) { if (date.getDay() === day) dates.push(new Date(date)); date.setDate(date.getDate() + 1); } return dates; }
 function mapsLink(settings: ChurchSettings | null) { return settings?.latitude && settings.longitude ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}` : ""; }
+function timeOnly(value?: string) { if (!value) return "-"; const match = value.match(/\d{1,2}:\d{2}\s*[AP]M(?:\s*[-–—]\s*\d{1,2}:\d{2}\s*[AP]M)?/i); return match?.[0] ?? value; }
 function newYearsThanksgiving(year: number): CalendarEvent { return { date: `${year}-01-01`, name: "New Year's Thanksgiving", department: "Whole church", kind: "special", program_items: [["9:00 AM", "Opening prayer"], ["9:15 AM", "Music"], ["9:45 AM", "Bible sharing"], ["10:30 AM", "Testimonies"], ["11:15 AM", "Prayers"], ["12:00 PM", "Offerings"], ["12:30 PM", "Departure"]] }; }
 
 function CalendarPageContent() {
@@ -41,12 +42,12 @@ function CalendarPageContent() {
   useEffect(() => { Promise.all([fetch(`${API_URL}/api/members/sabbath-events/`).then((response) => response.ok ? response.json() : []), fetch(`${API_URL}/api/members/church-settings/`).then((response) => response.ok ? response.json() : null)]).then(([calendarEvents, churchSettings]) => { setEvents(calendarEvents); setSettings(churchSettings); }).catch(() => setEvents([])).finally(() => setLoaded(true)); }, []);
 
   const rows = useMemo(() => {
-    const eventMap = new Map(events.filter((event) => event.date.startsWith(`${selectedYear}-`)).map((event) => [event.date, event]));
+    const eventMap = new Map(events.filter((event) => event.date.startsWith(`${selectedYear}-`)).map((event) => [event.date, { ...event, time: timeOnly(event.time) }]));
     const mapUrl = mapsLink(settings);
     const entries: { date: string; event: CalendarEvent }[] = [];
-    getDates(selectedYear, 3).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Midweek Vespers", department: "Prayer ministry", kind: "online", time: settings?.midweek_vespers_time || "Wednesday ? 8:00 PM - 9:00 PM", meeting_link: settings?.midweek_vespers_link } }));
-    getDates(selectedYear, 5).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Friday Vespers", department: "Worship ministry", kind: "onsite", time: settings?.friday_vespers_time || "Friday ? 5:30 PM - 6:30 PM", location_link: mapUrl } }));
-    getDates(selectedYear, 6).forEach((date) => { const key = dateKey(date); const customEvent = eventMap.get(key); entries.push({ date: key, event: customEvent ? { ...customEvent, kind: "sabbath", time: customEvent.time || settings?.sabbath_time || "Saturday ? 8:00 AM - 4:00 PM", location_link: mapUrl } : { date: key, name: "Sabbath Worship", kind: "sabbath", time: settings?.sabbath_time || "Saturday ? 8:00 AM - 4:00 PM", location_link: mapUrl } }); });
+    getDates(selectedYear, 3).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Midweek Vespers", department: "Prayer ministry", kind: "online", time: timeOnly(settings?.midweek_vespers_time || "Wednesday - 8:00 PM - 9:00 PM"), meeting_link: settings?.midweek_vespers_link } }));
+    getDates(selectedYear, 5).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Friday Vespers", department: "Worship ministry", kind: "onsite", time: timeOnly(settings?.friday_vespers_time || "Friday - 5:30 PM - 6:30 PM"), location_link: mapUrl } }));
+    getDates(selectedYear, 6).forEach((date) => { const key = dateKey(date); const customEvent = eventMap.get(key); entries.push({ date: key, event: customEvent ? { ...customEvent, kind: "sabbath", time: timeOnly(customEvent.time || settings?.sabbath_time || "Saturday - 8:00 AM - 4:00 PM"), location_link: mapUrl } : { date: key, name: "Sabbath Worship", kind: "sabbath", time: timeOnly(settings?.sabbath_time || "Saturday - 8:00 AM - 4:00 PM"), location_link: mapUrl } }); });
     const newYear = newYearsThanksgiving(selectedYear); entries.push({ date: newYear.date, event: newYear });
     eventMap.forEach((event, date) => { if (!entries.some((entry) => entry.date === date)) entries.push({ date, event }); });
     return entries.sort((a, b) => a.date.localeCompare(b.date)).filter(({ date, event }) => { const monthMatches = selectedMonth === "all" || Number(date.slice(5, 7)) - 1 === Number(selectedMonth); const dateText = new Date(`${date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }); return monthMatches && `${date} ${dateText} ${event.name} ${event.department ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()); });
@@ -61,7 +62,5 @@ function CalendarPageContent() {
 export default function CalendarPage() {
   return <Suspense fallback={<main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">Loading calendar...</main>}><CalendarPageContent /></Suspense>;
 }
-
-
 
 

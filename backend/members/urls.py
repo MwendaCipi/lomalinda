@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PrayerRequestView, RegisterView, SabbathEventsView
+from .views import ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PrayerRequestView, RegisterView, SabbathEventsView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='member-register'),
@@ -13,4 +13,6 @@ urlpatterns = [
     path('budgets/', ChurchBudgetsView.as_view(), name='church-budgets'),
     path('sabbath-events/', SabbathEventsView.as_view(), name='sabbath-events'),
     path('church-settings/', ChurchSettingsView.as_view(), name='church-settings'),
+    path('giving-purposes/', GivingPurposeListCreateView.as_view(), name='giving-purpose-list-create'),
+    path('giving-purposes/<int:pk>/', GivingPurposeDetailView.as_view(), name='giving-purpose-detail'),
 ]

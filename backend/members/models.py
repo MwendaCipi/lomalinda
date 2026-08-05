@@ -8,6 +8,7 @@ class MemberProfile(models.Model):
         ('leader', 'Church leader'),
         ('admin', 'Administrator'),
         ('finance', 'Finance team'),
+        ('treasurer', 'Treasurer'),
         ('choir_director', 'Choir director'),
         ('children_ministry', 'Children ministry'),
         ('men_ministry', 'Adventist men ministries'),
@@ -45,6 +46,18 @@ class Contribution(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class GivingPurpose(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
 
 
 class ChurchFinancialReport(models.Model):
