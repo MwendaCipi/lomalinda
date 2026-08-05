@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Loma Linda Church",
-  description: "A welcoming community growing in faith, hope, and love.",
+  description: "A young, English-speaking church family in Meru, Kenya, growing in faith, hope, and love.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
