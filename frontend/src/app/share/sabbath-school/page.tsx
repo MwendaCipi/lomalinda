@@ -53,7 +53,7 @@ export default function SabbathSchoolPage() {
             Sabbath School
           </h1>
           <p className="mt-2 text-base leading-7 text-[#617068]">
-            Access current quarter Bible study lessons for adults and children, plus the upcoming Sabbath mission reading.
+            Access current quarter Bible study lessons for adults and children, plus this Sabbath&apos;s mission reading.
           </p>
         </div>
 
