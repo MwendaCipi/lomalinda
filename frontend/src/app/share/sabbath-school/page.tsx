@@ -18,16 +18,20 @@ const missionReadings = [
   {
     target: "Youth & Adults",
     title: "Youth & Adult Mission Quarterly",
-    description: "Inspirational stories and reports from missionaries and communities across the globe for youth and adults.",
+    description: "Read this Sabbath's mission story for youth and adults.",
+    note: "Select the 2nd result on the page for this Sabbath's adult story.",
     link: "https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles",
     icon: "🌍",
+    badge: "2nd Result",
   },
   {
     target: "Children",
     title: "Children's Mission Quarterly",
-    description: "Engaging weekly mission stories, illustrations, and cultural activities tailored for children's Sabbath School.",
+    description: "Read this Sabbath's mission story for children.",
+    note: "Select the 1st result on the page for this Sabbath's children story.",
     link: "https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/",
     icon: "🎈",
+    badge: "1st Result",
   },
 ];
 
@@ -140,16 +144,24 @@ export default function SabbathSchoolPage() {
                   className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-6 transition hover:border-[#b36b3c] hover:bg-white hover:shadow-sm"
                 >
                   <div>
-                    <span className="text-3xl">{mission.icon}</span>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-3xl">{mission.icon}</span>
+                      <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-[11px] font-semibold text-[#b36b3c]">
+                        {mission.badge}
+                      </span>
+                    </div>
                     <h3 className="mt-3 text-lg font-semibold text-[#26352f] group-hover:text-[#b36b3c]">
                       {mission.title}
                     </h3>
-                    <p className="mt-2 text-xs leading-5 text-[#617068]">
+                    <p className="mt-1 text-xs text-[#617068]">
                       {mission.description}
+                    </p>
+                    <p className="mt-2 text-[11px] font-medium text-[#b36b3c]">
+                      💡 {mission.note}
                     </p>
                   </div>
                   <span className="mt-5 text-xs font-semibold text-[#b36b3c]">
-                    Read {mission.target} Mission Articles &rarr;
+                    Open {mission.target} Mission Articles &rarr;
                   </span>
                 </a>
               ))}
