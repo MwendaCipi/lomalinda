@@ -42,9 +42,6 @@ export default function FellowshipPage() {
 
         <div className="mt-6 max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Fellowship</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068]">
-            Connect, grow, and celebrate faith together with the Loma Linda church family.
-          </p>
         </div>
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
