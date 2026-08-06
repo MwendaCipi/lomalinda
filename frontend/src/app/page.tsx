@@ -26,7 +26,7 @@ export default function Home() {
                 And we&apos;ll always<br />pray for you.
               </span>
             </h1>
-            <p className="hero-line mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">We are a young, English-speaking church family in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
+            <p className="hero-line mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">We are a vibrant, English-speaking church in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
             <div className="hero-line mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-4">
               <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Location & Contacts</Link>
               <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">See Our Calendar</Link>

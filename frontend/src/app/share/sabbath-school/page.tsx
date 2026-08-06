@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 const adultQuarterly = {
   quarter: "Current Quarter",
   title: "Adult Bible Study Guide",
@@ -46,7 +48,7 @@ const missionReadings = [
     target: "Youth & Adults",
     title: "Youth & Adult Mission Story",
     description: "Read this Sabbath's mission story for youth and adults.",
-    link: "https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles",
+    link: `${API_URL}/api/members/mission-reading/adults/`,
     icon: "🌍",
     buttonText: "Read Adult Mission Story",
   },
@@ -54,7 +56,7 @@ const missionReadings = [
     target: "Children",
     title: "Children's Mission Story",
     description: "Read this Sabbath's mission story for children.",
-    link: "https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/",
+    link: `${API_URL}/api/members/mission-reading/children/`,
     icon: "🎈",
     buttonText: "Read Children Mission Story",
   },

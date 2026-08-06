@@ -3,10 +3,15 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.http import HttpResponseRedirect
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 import uuid
+import re
+from html.parser import HTMLParser
+from urllib.parse import urljoin
+import requests
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -31,6 +36,43 @@ def send_password_reset_email(user, uid, token):
 def is_finance_manager(user):
     profile = getattr(user, 'member_profile', None)
     return bool(profile and profile.role in ('admin', 'leader', 'finance', 'treasurer'))
+
+
+MISSION_READING_SOURCES = {
+    'children': 'https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/',
+    'adults': 'https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles',
+}
+
+
+class _MissionLinkParser(HTMLParser):
+    def __init__(self, source_url, path_fragment):
+        super().__init__()
+        self.source_url = source_url
+        self.path_fragment = path_fragment
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'a':
+            return
+        href = dict(attrs).get('href', '')
+        if not href or href.startswith('#'):
+            return
+        url = urljoin(self.source_url, href)
+        is_article_path = self.path_fragment in url
+        is_children_article = self.path_fragment == '/children/' and re.search(r'/v\d+n\d+(?:[-/]|$)', url) is not None
+        is_adult_article = self.path_fragment == '/youth-and-adult/' and re.search(r'/a\d+(?:[-/]|$)', url) is not None
+        if (is_article_path or is_children_article or is_adult_article) and url.rstrip('/') != self.source_url.rstrip('/') and url not in self.links:
+            self.links.append(url)
+
+
+def first_mission_story_url(audience):
+    source_url = MISSION_READING_SOURCES[audience]
+    path_fragment = '/children/' if audience == 'children' else '/youth-and-adult/'
+    response = requests.get(source_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    response.raise_for_status()
+    parser = _MissionLinkParser(source_url, path_fragment)
+    parser.feed(response.text)
+    return parser.links[0] if parser.links else source_url
 
 
 class RegisterView(generics.CreateAPIView):
@@ -131,6 +173,20 @@ class AnnouncementView(generics.ListCreateAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church leaders can post announcements.')
         serializer.save()
+
+
+class MissionReadingRedirectView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, audience):
+        if audience not in MISSION_READING_SOURCES:
+            return HttpResponseRedirect(MISSION_READING_SOURCES['children'])
+        try:
+            destination = first_mission_story_url(audience)
+        except requests.RequestException:
+            destination = MISSION_READING_SOURCES[audience]
+        return HttpResponseRedirect(destination)
 
 
 class MeView(APIView):

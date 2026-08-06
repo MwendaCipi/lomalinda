@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Loma Linda SDA Church",
     short_name: "Loma Linda",
-    description: "A young, English-speaking Seventh-day Adventist church family in Meru, Kenya.",
+    description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya.",
     start_url: "/",
     display: "standalone",
     background_color: "#f7f4ee",

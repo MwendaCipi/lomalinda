@@ -1,8 +1,10 @@
 from django.urls import path
+from .views import MissionReadingRedirectView
 
 from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
+    path('mission-reading/<str:audience>/', MissionReadingRedirectView.as_view(), name='mission-reading-redirect'),
     path('register/', RegisterView.as_view(), name='member-register'),
     path('me/', MeView.as_view(), name='member-me'),
     path('contributions/', MyContributionsView.as_view(), name='member-contributions'),
