@@ -149,7 +149,7 @@ export default function ChildDedicationPage() {
               disabled={loading}
               className="w-full rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
             >
-              {loading ? "Submitting request..." : "Submit child dedication request"}
+              {loading ? "Submitting request..." : "Submit request"}
             </button>
           </form>
 
