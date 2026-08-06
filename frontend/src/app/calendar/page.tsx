@@ -67,7 +67,7 @@ function CalendarPageContent() {
           <span>Back to Fellowship</span>
         </Link>
 
-        <div className="grid gap-4 pt-2 pb-1 md:grid-cols-[150px_170px_1fr]">
+        <div className="grid grid-cols-2 gap-4 pt-2 pb-1 md:grid-cols-[150px_170px_1fr]">
           <label className="text-sm font-semibold">
             Year
             <select
@@ -97,7 +97,7 @@ function CalendarPageContent() {
               ))}
             </select>
           </label>
-          <div className="flex items-end gap-3">
+          <div className="col-span-2 flex items-end gap-3 md:col-span-1">
             <label className="min-w-0 flex-1 text-sm font-semibold">
               Search
               <input
@@ -233,5 +233,4 @@ function CalendarPageContent() {
 export default function CalendarPage() {
   return <Suspense fallback={<main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">Loading calendar...</main>}><CalendarPageContent /></Suspense>;
 }
-
 
