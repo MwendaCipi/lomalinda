@@ -58,7 +58,7 @@ export default function GiveInKindPage() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
         >
           <span>&larr;</span>
-          <span>Back to Support Hub</span>
+          <span>Back to Stewardship & Support</span>
         </Link>
 
         <div className="mt-6">
