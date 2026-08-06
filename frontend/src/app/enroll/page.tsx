@@ -50,7 +50,7 @@ export default function EnrollPage() {
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 pb-16 text-[#26352f]">
-      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
+      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10 lg:max-w-4xl">
         <Link
           href="/share"
           className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
@@ -64,7 +64,7 @@ export default function EnrollPage() {
         </p>
 
         {/* Mode toggle */}
-        <div className="mt-6 flex rounded-2xl border border-[#dfdbd1] p-1 gap-1">
+        <div className="mt-6 flex max-w-md rounded-2xl border border-[#dfdbd1] p-1 gap-1">
           {(["baptism", "transfer"] as Mode[]).map((m) => (
             <button
               key={m}
@@ -82,46 +82,50 @@ export default function EnrollPage() {
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-5">
-          <label className="block text-sm font-medium">
-            Email
-            <input
-              type="email"
-              required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-            />
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
+          {/* First 4 fields in 1 row on large screens */}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-sm font-medium">
               First name
               <input
+                required
                 value={form.first_name}
                 onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                 className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
               />
             </label>
+
             <label className="block text-sm font-medium">
               Last name
               <input
+                required
                 value={form.last_name}
                 onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                 className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
               />
             </label>
-          </div>
 
-          <label className="block text-sm font-medium">
-            Phone number
-            <input
-              required
-              placeholder="e.g. 01XX XXX XXX or 07XX XXX XXX"
-              value={form.phone_number}
-              onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
-              className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-            />
-          </label>
+            <label className="block text-sm font-medium">
+              Phone number
+              <input
+                required
+                placeholder="e.g. 07XX XXX XXX"
+                value={form.phone_number}
+                onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+              />
+            </label>
+
+            <label className="block text-sm font-medium">
+              Email address
+              <input
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+              />
+            </label>
+          </div>
 
           {/* Transfer-only: current church */}
           {mode === "transfer" && (
