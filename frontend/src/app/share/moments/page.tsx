@@ -45,9 +45,6 @@ export default function LiveServicesAndMomentsPage() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
               Live Services &amp; Moments
             </h1>
-            <p className="mt-3 text-base leading-7 text-[#617068]">
-              Watch worship services, vespers, and explore photos and videos of fellowship moments.
-            </p>
           </div>
 
           {/* Live badge */}
