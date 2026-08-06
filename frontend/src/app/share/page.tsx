@@ -10,7 +10,7 @@ const items = [
   {
     href: "/spiritual/visitation",
     title: "Request visitation",
-    text: "Ask for a church member or pastor to visit or pray with you.",
+    text: "Request church members, elders or pastor to visit or pray with you.",
     icon: "🏠",
   },
   {

@@ -74,11 +74,7 @@ export default function VisitationPage() {
         </Link>
 
         <header className="mt-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Pastoral & Care Ministry</p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight sm:text-6xl">Request Visitation</h1>
-          <p className="mt-4 text-base leading-7 text-[#617068] sm:text-lg">
-            Would you or your family like a pastor, elder, or church care team to visit, pray, or offer encouragement? Fill in your details below.
-          </p>
         </header>
 
         <section className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">

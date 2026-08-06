@@ -52,6 +52,26 @@ export function SiteHeader() {
     normalizedPath === "/forgot-password" ||
     normalizedPath === "/reset-password";
 
+  // Hide the announcement banner on all pages that have forms, to avoid distraction
+  const isFormPage =
+    normalizedPath.startsWith("/support/financial") ||
+    normalizedPath.startsWith("/support/in-kind") ||
+    normalizedPath.startsWith("/support/budget") ||
+    normalizedPath.startsWith("/support/reports") ||
+    normalizedPath.startsWith("/support/prayers") ||
+    normalizedPath.startsWith("/support/ideas") ||
+    normalizedPath.startsWith("/community/prayer") ||
+    normalizedPath.startsWith("/community/visitation") ||
+    normalizedPath.startsWith("/community/child-dedication") ||
+    normalizedPath.startsWith("/community/testimonies") ||
+    normalizedPath.startsWith("/community/welfare") ||
+    normalizedPath.startsWith("/spiritual/prayer") ||
+    normalizedPath.startsWith("/spiritual/visitation") ||
+    normalizedPath.startsWith("/spiritual/child-dedication") ||
+    normalizedPath.startsWith("/spiritual/testimonies") ||
+    normalizedPath.startsWith("/share/moments") ||
+    normalizedPath.startsWith("/administration");
+
   return (
     <>
       <div
@@ -64,9 +84,9 @@ export function SiteHeader() {
         }`}
       >
         <SiteNav open={mobileMenuOpen} setOpen={setMobileMenuOpen} />
-        {!isAuthOrMember && <AnnouncementBanner />}
+        {!isAuthOrMember && !isFormPage && <AnnouncementBanner />}
       </div>
-      <div className={isAuthOrMember ? "h-[73px]" : "h-[142px] sm:h-[115px]"} />
+      <div className={isAuthOrMember || isFormPage ? "h-[73px]" : "h-[142px] sm:h-[115px]"} />
     </>
   );
 }

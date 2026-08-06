@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function FinancialGivingPage() {
-  const [purposes, setPurposes] = useState<string[]>(["Tithes", "Local Church Budget", "Combined Offerings", "Camp Meeting / Evangelism", "Church Building Project"]);
+  const [purposes, setPurposes] = useState<string[]>(["Tithes", "Local Church Budget", "Combined Offerings", "Camp Meeting Expenses", "Camp Meeting Offering", "Church Building Project"]);
   const [selectedPurpose, setSelectedPurpose] = useState("Tithes");
   const [amount, setAmount] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
