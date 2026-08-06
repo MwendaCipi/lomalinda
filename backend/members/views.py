@@ -239,25 +239,23 @@ class TestimonyView(generics.ListCreateAPIView):
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = ChurchFinancialReportSerializer
 
     def get_queryset(self):
-        profile = getattr(self.request.user, 'member_profile', None)
+        user = self.request.user if self.request.user.is_authenticated else None
+        profile = getattr(user, 'member_profile', None) if user else None
         if profile and profile.role in ('leader', 'admin', 'finance'):
             return ChurchFinancialReport.objects.all()
         return ChurchFinancialReport.objects.filter(published_to_members=True)
 
 
 class ChurchBudgetsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = ChurchBudgetSerializer
 
     def get_queryset(self):
-        profile = getattr(self.request.user, 'member_profile', None)
-        if profile and profile.role in ('leader', 'admin', 'finance'):
-            return ChurchBudget.objects.all()
-        return ChurchBudget.objects.filter(published_to_public=True)
+        return ChurchBudget.objects.all()
 
 
 class SabbathEventsView(generics.ListAPIView):

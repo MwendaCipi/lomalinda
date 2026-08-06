@@ -12,8 +12,8 @@ const mobileNavItems = [
   ["Beliefs", "/beliefs"],
   ["Calendar", "/calendar"],
   ["Ministries", "/ministries"],
-  ["Outreach", "/ministries/outreach"],
   ["Spiritual", "/spiritual"],
+  ["Financial", "/financial"],
   ["Announcements", "/announcements"],
   ["Member Login", "/login"],
 ] as const;
@@ -48,14 +48,14 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                 {label}
               </Link>
             ))}
-            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries") && pathname !== "/ministries/outreach")}>
+            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
               Ministries
-            </Link>
-            <Link href="/ministries/outreach" className={navItemClass(pathname.startsWith("/ministries/outreach"))}>
-              Outreach
             </Link>
             <Link href="/spiritual" className={navItemClass(pathname.startsWith("/spiritual"))}>
               Spiritual
+            </Link>
+            <Link href="/financial" className={navItemClass(pathname.startsWith("/financial"))}>
+              Financial
             </Link>
             {desktopLinks.slice(3).map(([label, href]) => (
               <Link key={href} href={href} className="text-white/80 transition hover:text-[#f1c89e]">
