@@ -4,8 +4,8 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Loma Linda SDA Church",
-    short_name: "Loma Linda",
+    name: "SDA Loma Linda Meru",
+    short_name: "SDA Loma Linda Meru",
     description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya.",
     start_url: "/",
     display: "standalone",
