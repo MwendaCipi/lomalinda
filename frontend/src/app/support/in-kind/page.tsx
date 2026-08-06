@@ -1,21 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const IN_KIND_CATEGORIES = [
-  { value: "Tithes", label: "Tithes (e.g. Produce/Harvest)" },
-  { value: "Local Church Budget", label: "Local Church Budget" },
-  { value: "Combined Offerings", label: "Combined Offerings" },
-  { value: "Camp Meeting Expenses", label: "Camp Meeting Expenses" },
-  { value: "Camp Meeting Offering", label: "Camp Meeting Offering" },
-  { value: "Church Building Project", label: "Church Building Project" },
-];
+const defaultPurposes = ["General giving", "Tithe", "Church development", "Local Church Budget (LCB)", "Msamaria Mwema", "Missions"];
 
 export default function GiveInKindPage() {
-  const [category, setCategory]           = useState("Tithes");
+  const [purpose, setPurpose]             = useState("General giving");
+  const [purposes, setPurposes]           = useState<string[]>(defaultPurposes);
   const [donorName, setDonorName]         = useState("");
   const [phoneNumber, setPhoneNumber]     = useState("");
   const [donorEmail, setDonorEmail]       = useState("");
@@ -23,12 +17,17 @@ export default function GiveInKindPage() {
   const [submitting, setSubmitting]       = useState(false);
   const [message, setMessage]             = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  useEffect(() => {
+    fetch(`${API_URL}/api/members/giving-purposes/`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: { name: string }[]) => { if (data.length) setPurposes(data.map((item) => item.name)); })
+      .catch(() => undefined);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage(null);
-
-    const selectedCat = IN_KIND_CATEGORIES.find((c) => c.value === category);
 
     try {
       const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -37,12 +36,11 @@ export default function GiveInKindPage() {
         body: JSON.stringify({
           giving_type: "in_kind",
           amount: 0,
-          purpose: `In-kind pledge – ${selectedCat?.value ?? category}`,
+          purpose,
           phone_number: phoneNumber,
           donor_name: donorName,
           donor_email: donorEmail,
           item_description: itemDescription,
-          category,
         }),
       });
 
@@ -55,7 +53,7 @@ export default function GiveInKindPage() {
         setDonorName("");
         setPhoneNumber("");
         setDonorEmail("");
-        setCategory("Tithes");
+        setPurpose("General giving");
       } else {
         const data = await res.json();
         setMessage({
@@ -87,24 +85,6 @@ export default function GiveInKindPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical &amp; Service Contributions</h1>
         </div>
 
-        {/* Category grid — visual picker */}
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {IN_KIND_CATEGORIES.map((cat) => (
-            <button
-              key={cat.value}
-              type="button"
-              onClick={() => setCategory(cat.value)}
-              className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                category === cat.value
-                  ? "border-[#b36b3c] bg-[#b36b3c] text-white shadow-sm"
-                  : "border-[#dfdbd1] bg-white text-[#26352f] hover:border-[#b36b3c]"
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
         {/* Form Card */}
         <div className="mt-6 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
           {message && (
@@ -118,6 +98,12 @@ export default function GiveInKindPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-[#26352f]">Giving Purpose</label>
+              <select required value={purpose} onChange={(e) => setPurpose(e.target.value)} className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]">
+                {purposes.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-semibold text-[#26352f]">
                 Describe Your Contribution / Item
