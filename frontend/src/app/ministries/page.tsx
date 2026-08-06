@@ -16,19 +16,21 @@ const ministries = [
 export default function MinistriesPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <div className="mx-auto max-w-5xl px-6 py-6 lg:px-8 lg:py-10">
+      <div className="mx-auto max-w-6xl px-6 py-6 lg:px-8 lg:py-10">
         <div className="max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Our ministries</h1>
         </div>
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
+        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {ministries.map((ministry) => (
             <Link
               key={ministry.slug}
               href={`/ministries/${ministry.slug}`}
-              className="rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-sm sm:p-7"
+              className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-sm sm:p-7"
             >
-              <h2 className="text-xl font-semibold sm:text-2xl">{ministry.title}</h2>
-              <p className="mt-2.5 text-sm leading-6 text-[#617068]">{ministry.description}</p>
+              <div>
+                <h2 className="text-xl font-semibold sm:text-2xl">{ministry.title}</h2>
+                <p className="mt-2.5 text-sm leading-6 text-[#617068]">{ministry.description}</p>
+              </div>
               <span className="mt-5 inline-block text-sm font-semibold text-[#b36b3c]">Explore {ministry.title} &rarr;</span>
             </Link>
           ))}
