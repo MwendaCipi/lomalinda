@@ -10,5 +10,37 @@ type Announcement = { id?: number; title: string; text: string; detail: string; 
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>(defaultAnnouncements);
   useEffect(() => { const token = localStorage.getItem("access_token"); fetch(`${API_URL}/api/members/announcements/`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then((response) => response.ok ? response.json() : []).then((data: Announcement[]) => { if (data.length) setAnnouncements(data); }).catch(() => undefined); }, []);
-  return <main className="min-h-screen bg-[#f7f4ee] px-6 py-12 text-[#26352f] sm:py-16"><div className="mx-auto max-w-5xl"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">Announcements</h1><p className="mt-5 text-lg leading-8 text-[#617068]">Stay connected with what is happening in the Loma Linda church family.</p></div><div className="mt-12 grid gap-6">{announcements.map((announcement) => <article key={announcement.id ?? announcement.title} className="rounded-2xl border border-[#dfdbd1] bg-white p-7 sm:p-9"><div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>{announcement.visibility === "members" && <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">Members only</span>}{announcement.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${announcement.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}</div><h2 className="mt-3 text-2xl font-semibold">{announcement.title}</h2><p className="mt-4 text-base leading-7 text-[#26352f]">{announcement.text}</p>{announcement.detail && <p className="mt-3 max-w-2xl text-sm leading-6 text-[#617068]">{announcement.detail}</p>}{announcement.href && <Link href={announcement.href} className="mt-5 inline-block text-sm font-semibold text-[#b36b3c] hover:underline">Learn more &rarr;</Link>}</article>)}</div></div></main>;
+  return (
+    <main className="min-h-screen bg-[#f7f4ee] px-6 py-12 text-[#26352f] sm:py-16">
+      <div className="mx-auto max-w-5xl">
+        <div className="max-w-3xl">
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">Announcements</h1>
+          <p className="mt-5 text-lg leading-8 text-[#617068]">Stay connected with what is happening in the Loma Linda church family.</p>
+        </div>
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+          {announcements.map((announcement) => (
+            <article key={announcement.id ?? announcement.title} className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-7 sm:p-9 shadow-sm">
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
+                  {announcement.visibility === "members" && <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">Members only</span>}
+                  {announcement.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${announcement.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold">{announcement.title}</h2>
+                <p className="mt-4 text-base leading-7 text-[#26352f]">{announcement.text}</p>
+                {announcement.detail && <p className="mt-3 text-sm leading-6 text-[#617068]">{announcement.detail}</p>}
+              </div>
+              {announcement.href && (
+                <div className="mt-6 border-t border-[#dfdbd1] pt-4">
+                  <Link href={announcement.href} className="inline-block text-sm font-semibold text-[#b36b3c] hover:underline">
+                    Learn more &rarr;
+                  </Link>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
 }
