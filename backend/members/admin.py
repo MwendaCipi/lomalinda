@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
+from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent, Testimony
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -10,6 +10,22 @@ admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
 admin.site.register(EnrollmentRequest)
+
+
+@admin.register(Testimony)
+class TestimonyAdmin(admin.ModelAdmin):
+    list_display = ('name', 'testimony_text', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('name', 'testimony_text')
+    actions = ['approve_testimonies', 'reject_testimonies']
+
+    @admin.action(description='Approve selected testimonies for public display')
+    def approve_testimonies(self, request, queryset):
+        queryset.update(status='approved')
+
+    @admin.action(description='Reject selected testimonies')
+    def reject_testimonies(self, request, queryset):
+        queryset.update(status='rejected')
 
 
 @admin.register(ChildDedicationRequest)

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AnnouncementView, ChildDedicationRequestView, ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView
+from .views import AnnouncementView, ChildDedicationRequestView, ChurchBudgetsView, ChurchFinancialReportsView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MpesaCallbackView, MyContributionsView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='member-register'),
@@ -10,6 +10,7 @@ urlpatterns = [
     path('payments/mpesa/callback/', MpesaCallbackView.as_view(), name='mpesa-callback'),
     path('prayer-requests/', PrayerRequestView.as_view(), name='prayer-request'),
     path('child-dedications/', ChildDedicationRequestView.as_view(), name='child-dedication'),
+    path('testimonies/', TestimonyView.as_view(), name='testimonies'),
     path('reports/', ChurchFinancialReportsView.as_view(), name='church-reports'),
     path('budgets/', ChurchBudgetsView.as_view(), name='church-budgets'),
     path('sabbath-events/', SabbathEventsView.as_view(), name='sabbath-events'),

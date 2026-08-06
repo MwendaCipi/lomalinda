@@ -13,9 +13,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent
+from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent, Testimony
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import AnnouncementSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+from .serializers import AnnouncementSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer
 
 
 def send_enrollment_email(enrollment):
@@ -221,6 +221,21 @@ class ChildDedicationRequestView(generics.CreateAPIView):
     queryset = ChildDedicationRequest.objects.all()
     serializer_class = ChildDedicationRequestSerializer
     permission_classes = [AllowAny]
+
+
+class TestimonyView(generics.ListCreateAPIView):
+    serializer_class = TestimonySerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Testimony.objects.filter(status='approved')
+
+    def perform_create(self, serializer):
+        user = self.request.user if self.request.user.is_authenticated else None
+        name = serializer.validated_data.get('name', '')
+        if user and not name:
+            name = f"{user.first_name} {user.last_name}".strip() or user.username
+        serializer.save(user=user, name=name, status='pending_review')
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):

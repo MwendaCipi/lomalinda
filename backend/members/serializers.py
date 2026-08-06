@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
+from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent, Testimony
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -79,6 +79,13 @@ class ChildDedicationRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChildDedicationRequest
         fields = ('id', 'parent_name', 'child_name', 'child_dob', 'phone_number', 'email', 'requested_date', 'notes', 'status', 'created_at')
+        read_only_fields = ('id', 'status', 'created_at')
+
+
+class TestimonySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Testimony
+        fields = ('id', 'name', 'testimony_text', 'status', 'created_at')
         read_only_fields = ('id', 'status', 'created_at')
 
 

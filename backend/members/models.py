@@ -133,6 +133,24 @@ class PrayerRequest(models.Model):
         ordering = ['-created_at']
 
 
+class Testimony(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    name = models.CharField(max_length=160, blank=True)
+    testimony_text = models.TextField(max_length=1000)
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending_review', 'Pending review'), ('approved', 'Approved'), ('rejected', 'Rejected')],
+        default='pending_review'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Testimony by {self.name or self.user or 'Guest'} ({self.status})"
+
+
 class ChildDedicationRequest(models.Model):
     parent_name = models.CharField(max_length=160)
     child_name = models.CharField(max_length=160)
