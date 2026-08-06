@@ -11,14 +11,14 @@ const adultLessonLinks = [
     text: "Download the current Adult Bible Study Guide PDF for offline study.",
     href: `${API_URL}/api/members/lesson-pdf/adult/lesson/`,
     icon: "📄",
-    buttonText: "Download Student PDF",
+    buttonText: "Open Student PDF",
   },
   {
     title: "Teachers PDF",
     text: "Download the current teacher's preparation guide PDF.",
     href: `${API_URL}/api/members/lesson-pdf/adult/teachers/`,
     icon: "🎓",
-    buttonText: "Download Teacher PDF",
+    buttonText: "Open Teacher PDF",
   },
 ];
 
@@ -99,7 +99,7 @@ export default function SabbathSchoolPage() {
           </p>
         </div>
 
-        <div className="mt-10 flex flex-col gap-12">
+        <div className="mt-10 flex flex-col gap-6">
           {/* Section 3: Adult Lesson */}
           <section className="order-3 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
             <div className="flex items-center gap-3">
