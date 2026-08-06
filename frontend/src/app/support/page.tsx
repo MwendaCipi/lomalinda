@@ -76,11 +76,7 @@ export default function SupportHubPage() {
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Stewardship & Support</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Church Support Hub</h1>
-          <p className="mt-4 text-base leading-7 text-[#617068] sm:text-lg">
-            Partner with Loma Linda SDA Church through financial giving, in-kind contributions, published budgets, prayer commitments, and sharing innovative ideas.
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Stewardship & Support</h1>
         </div>
 
         {/* 6 Category Cards Grid */}
