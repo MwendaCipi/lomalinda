@@ -26,11 +26,17 @@ const items = [
     icon: "✨",
   },
   {
-    href: "/share/moments",
-    title: "Live Services & Moments",
-    text: "Photos and videos of amazing fellowship moments, worship services, and church life.",
-    icon: "📸",
+    href: "/share/services",
+    title: "Live Services",
+    text: "Watch or catch up on Sabbath worship, vespers, and special programmes from Loma Linda.",
+    icon: "📡",
     badge: "Live",
+  },
+  {
+    href: "/share/moments",
+    title: "Moments",
+    text: "Photos and videos of amazing fellowship moments, outings, and church life.",
+    icon: "📸",
   },
 ];
 

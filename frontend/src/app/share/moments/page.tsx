@@ -1,24 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 
 export default function MomentsPage() {
-  const [selected, setSelected] = useState<"all" | "services" | "moments">("all");
-
   // Placeholder tiles — real content will come from the backend media API
   const placeholders = [
-    { type: "services", label: "Sabbath Worship", date: "3 Aug 2026", emoji: "🎵" },
-    { type: "moments",  label: "Fellowship Lunch", date: "3 Aug 2026", emoji: "🍽️" },
-    { type: "services", label: "Midweek Vespers", date: "30 Jul 2026", emoji: "🕯️" },
-    { type: "moments",  label: "Youth Outdoor Worship", date: "27 Jul 2026", emoji: "⛺" },
-    { type: "services", label: "Friday Vespers", date: "25 Jul 2026", emoji: "🌅" },
-    { type: "moments",  label: "Potluck Sabbath", date: "20 Jul 2026", emoji: "🥗" },
+    { label: "Fellowship Lunch", date: "3 Aug 2026", emoji: "🍽️" },
+    { label: "Youth Outdoor Worship", date: "27 Jul 2026", emoji: "⛺" },
+    { label: "Potluck Sabbath", date: "20 Jul 2026", emoji: "🥗" },
+    { label: "Women's Ministry Picnic", date: "13 Jul 2026", emoji: "🌻" },
+    { label: "Baptism Service", date: "6 Jul 2026", emoji: "💧" },
+    { label: "Camp Meeting Fellowship", date: "29 Jun 2026", emoji: "⛺" },
   ];
-
-  const visible = placeholders.filter(
-    (p) => selected === "all" || p.type === selected
-  );
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
@@ -37,10 +30,10 @@ export default function MomentsPage() {
               Fellowship
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
-              Live Services &amp; Moments
+              Moments
             </h1>
             <p className="mt-3 text-base leading-7 text-[#617068]">
-              Photos and videos from worship services, fellowship lunches, youth outings, and church life at Loma Linda.
+              Photos and videos of fellowship moments, outings, and church life at Loma Linda.
             </p>
           </div>
 
@@ -54,27 +47,11 @@ export default function MomentsPage() {
           </span>
         </div>
 
-        {/* Filter tabs */}
-        <div className="mt-8 flex gap-2 rounded-2xl border border-[#dfdbd1] bg-white p-1.5">
-          {(["all", "services", "moments"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setSelected(tab)}
-              className={`flex-1 rounded-xl py-2.5 text-sm font-semibold capitalize transition ${
-                selected === tab
-                  ? "bg-[#26352f] text-white shadow-sm"
-                  : "text-[#617068] hover:bg-[#f7f4ee]"
-              }`}
-            >
-              {tab === "all" ? "All" : tab === "services" ? "Services" : "Moments"}
-            </button>
-          ))}
-        </div>
+        {/* No filter tabs needed — moments only */}
 
-        {/* Media grid — placeholder cards until media API is wired */}
+        {/* Media grid */}
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((item, i) => (
+          {placeholders.map((item, i) => (
             <div
               key={i}
               className="group relative flex h-52 flex-col items-center justify-center rounded-2xl border border-[#dfdbd1] bg-white text-center shadow-sm"
@@ -83,7 +60,7 @@ export default function MomentsPage() {
               <p className="mt-4 text-sm font-semibold text-[#26352f]">{item.label}</p>
               <p className="text-xs text-[#617068]">{item.date}</p>
               <span className="absolute top-3 right-3 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#b36b3c]">
-                {item.type === "services" ? "Service" : "Moment"}
+                Moment
               </span>
             </div>
           ))}

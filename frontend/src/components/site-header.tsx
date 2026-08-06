@@ -70,6 +70,7 @@ export function SiteHeader() {
     normalizedPath.startsWith("/spiritual/child-dedication") ||
     normalizedPath.startsWith("/spiritual/testimonies") ||
     normalizedPath.startsWith("/share/moments") ||
+    normalizedPath.startsWith("/share/services") ||
     normalizedPath.startsWith("/administration");
 
   return (
