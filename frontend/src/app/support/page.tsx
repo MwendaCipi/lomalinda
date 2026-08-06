@@ -73,14 +73,22 @@ const supportCategories = [
 
 export default function SupportHubPage() {
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-16 text-[#26352f] lg:px-8">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">
-        <div className="max-w-3xl">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Home</span>
+        </Link>
+
+        <div className="mt-6 max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Stewardship & Support</h1>
         </div>
 
-        {/* 6 Category Cards Grid */}
-        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* 6 Category Cards Grid (2 per row on desktop to avoid cluttering) */}
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-2">
           {supportCategories.map((cat) => (
             <Link
               key={cat.href}
