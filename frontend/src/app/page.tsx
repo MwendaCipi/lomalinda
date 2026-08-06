@@ -22,7 +22,9 @@ export default function Home() {
             <h1 className="mt-4 text-3xl font-semibold leading-[1.15] tracking-tight sm:mt-6 sm:text-6xl">
               <span className="hero-line block">We love you.</span>
               <span className="hero-line block">We value you.</span>
-              <span className="hero-line block">And we&apos;ll always pray for you.</span>
+              <span className="hero-line block">
+                And we&apos;ll always<br />pray for you.
+              </span>
             </h1>
             <p className="hero-line mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">We are a young, English-speaking church family in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
             <div className="hero-line mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-4">
