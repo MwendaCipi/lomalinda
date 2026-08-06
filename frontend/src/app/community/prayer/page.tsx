@@ -25,7 +25,7 @@ export default function CommunityPrayerPage() {
       <div className="mx-auto max-w-3xl">
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
-          <span>Back to Share & Care</span>
+          <span>Back to Care & Fellowship</span>
         </Link>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer</h1>
         <p className="mt-3 text-lg leading-8 text-[#617068]">You do not have to carry it alone.</p>

@@ -70,7 +70,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               Ministries
             </Link>
             <Link href="/share" className={navItemClass(pathname.startsWith("/share") || pathname.startsWith("/spiritual"))}>
-              Share
+              Care & Fellowship
             </Link>
             <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
               Support
@@ -190,7 +190,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                 pathname.startsWith("/share") || pathname.startsWith("/spiritual") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Share</span>
+              <span>Care & Fellowship</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 

@@ -7,16 +7,12 @@ const items = [
   { href: "/spiritual/testimonies", title: "Testimonies", text: "Share how God has been working in your life, or read stories of faith." },
 ];
 
-export default function ShareCarePage() {
+export default function CareFellowshipPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-10 text-[#26352f] sm:py-16">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Care & Fellowship</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Share & Care</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">
-            Find care, prayer, pastoral visitation, testimonies, and practical ways to grow spiritually with the Loma Linda church family.
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Care & Fellowship</h1>
         </div>
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           {items.map((item) => (
