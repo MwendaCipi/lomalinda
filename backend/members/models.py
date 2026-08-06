@@ -270,3 +270,37 @@ class ChurchNotification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.user.username}: {self.title}"
+
+
+class VisitationRequest(models.Model):
+    VISITATION_TYPE_CHOICES = [
+        ('pastoral', 'Pastoral Care & Prayer'),
+        ('sick', 'Sick / Hospital Visitation'),
+        ('bereavement', 'Bereavement / Grief Support'),
+        ('family', 'Home Blessing / Family Visit'),
+        ('other', 'Other'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('scheduled', 'Scheduled'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    requester_name = models.CharField(max_length=160)
+    phone_number = models.CharField(max_length=40)
+    email = models.EmailField(blank=True)
+    visitation_type = models.CharField(max_length=40, choices=VISITATION_TYPE_CHOICES, default='pastoral')
+    preferred_date = models.DateField(null=True, blank=True)
+    preferred_time = models.CharField(max_length=80, blank=True)
+    location_description = models.TextField(help_text="Landmarks or house address description")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Visitation Request: {self.requester_name} ({self.get_visitation_type_display()})"

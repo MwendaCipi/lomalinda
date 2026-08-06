@@ -13,9 +13,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer
+from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -341,3 +341,11 @@ class ChurchNotificationView(generics.ListAPIView):
 
     def get_queryset(self):
         return ChurchNotification.objects.filter(user=self.request.user)
+
+
+class VisitationRequestView(generics.ListCreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = VisitationRequestSerializer
+
+    def get_queryset(self):
+        return VisitationRequest.objects.all()

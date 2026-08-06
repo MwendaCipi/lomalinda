@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -14,6 +14,13 @@ admin.site.register(MembershipTransferRequest)
 admin.site.register(ChurchCorrespondence)
 admin.site.register(BoardMeeting)
 admin.site.register(ChurchNotification)
+
+
+@admin.register(VisitationRequest)
+class VisitationRequestAdmin(admin.ModelAdmin):
+    list_display = ('requester_name', 'visitation_type', 'phone_number', 'preferred_date', 'preferred_time', 'latitude', 'longitude', 'status', 'created_at')
+    list_filter = ('status', 'visitation_type', 'created_at')
+    search_fields = ('requester_name', 'phone_number', 'location_description', 'notes')
 
 
 @admin.register(Testimony)
