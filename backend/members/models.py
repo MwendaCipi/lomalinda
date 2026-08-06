@@ -49,6 +49,7 @@ class Announcement(models.Model):
     href = models.CharField(max_length=255, blank=True)
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
     published = models.BooleanField(default=True)
+    expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

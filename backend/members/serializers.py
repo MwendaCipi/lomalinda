@@ -34,7 +34,7 @@ class EnrollmentCompleteSerializer(serializers.Serializer):
 class AnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'published', 'created_at')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'published', 'expires_at', 'created_at')
         read_only_fields = ('id', 'created_at')
 
 

@@ -116,7 +116,12 @@ class AnnouncementView(generics.ListCreateAPIView):
         return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
 
     def get_queryset(self):
-        queryset = Announcement.objects.filter(published=True)
+        from django.db.models import Q
+        from django.utils import timezone
+        today = timezone.now().date()
+        queryset = Announcement.objects.filter(published=True).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gte=today)
+        )
         if self.request.user.is_authenticated:
             return queryset
         return queryset.filter(visibility='public')

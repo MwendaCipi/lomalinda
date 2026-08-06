@@ -10,7 +10,11 @@ admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
 admin.site.register(EnrollmentRequest)
-admin.site.register(Announcement)
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'visibility', 'published', 'expires_at', 'created_at')
+    list_filter = ('visibility', 'published', 'expires_at', 'created_at')
+    search_fields = ('title', 'text')
 
 
 @admin.register(ChurchSettings)
