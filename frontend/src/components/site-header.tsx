@@ -41,23 +41,32 @@ export function SiteHeader() {
   }, []);
 
   const isVisible = headerVisible || mobileMenuOpen;
-  const isLogin = pathname === "/login";
+  const normalizedPath = (pathname ?? "").toLowerCase().replace(/\/$/, "");
+  const isAuthOrMember =
+    normalizedPath === "/login" ||
+    normalizedPath.startsWith("/login/") ||
+    normalizedPath === "/member" ||
+    normalizedPath.startsWith("/member/") ||
+    normalizedPath === "/enroll" ||
+    normalizedPath.startsWith("/enroll/") ||
+    normalizedPath === "/forgot-password" ||
+    normalizedPath === "/reset-password";
 
   return (
     <>
       <div
         className={`fixed top-0 left-0 right-0 z-[70] shadow-md transition-transform duration-300 ease-in-out ${
           !isVisible
-            ? isLogin
+            ? isAuthOrMember
               ? "-translate-y-full"
               : "-translate-y-[73px]"
             : "translate-y-0"
         }`}
       >
         <SiteNav open={mobileMenuOpen} setOpen={setMobileMenuOpen} />
-        {!isLogin && <AnnouncementBanner />}
+        {!isAuthOrMember && <AnnouncementBanner />}
       </div>
-      <div className={isLogin ? "h-[73px]" : "h-[115px]"} />
+      <div className={isAuthOrMember ? "h-[73px]" : "h-[115px]"} />
     </>
   );
 }
