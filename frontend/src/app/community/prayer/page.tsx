@@ -7,17 +7,25 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function CommunityPrayerPage() {
   const [requestText, setRequestText] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [anonymous, setAnonymous] = useState(false);
   const [message, setMessage] = useState("");
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const body: Record<string, unknown> = { request_text: requestText, anonymous };
+    if (!anonymous) {
+      if (name) body.name = name;
+      if (email) body.email = email;
+    }
     const response = await fetch(`${API_URL}/api/members/prayer-requests/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ request_text: requestText, anonymous: false }),
+      body: JSON.stringify(body),
     });
     setMessage(response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.");
-    if (response.ok) setRequestText("");
+    if (response.ok) { setRequestText(""); setName(""); setEmail(""); }
   }
 
   return (
@@ -25,12 +33,52 @@ export default function CommunityPrayerPage() {
       <div className="mx-auto max-w-3xl">
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
-          <span>Back to Care & Fellowship</span>
+          <span>Back to Fellowship</span>
         </Link>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer</h1>
         <p className="mt-3 text-lg leading-8 text-[#617068]">You do not have to carry it alone.</p>
-        <p className="mt-2 text-sm leading-6 text-[#617068]">Bring what is on your heart. Our church family would be honoured to pray with you.</p>
         <form onSubmit={submitRequest} className="mt-5 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
+          {/* Anonymous toggle */}
+          <label className="flex cursor-pointer items-center gap-3 mb-5">
+            <div
+              role="checkbox"
+              aria-checked={anonymous}
+              tabIndex={0}
+              onClick={() => setAnonymous(!anonymous)}
+              onKeyDown={(e) => e.key === " " && setAnonymous(!anonymous)}
+              className={`relative h-6 w-11 rounded-full transition-colors ${anonymous ? "bg-[#b36b3c]" : "bg-[#c9c5bb]"}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${anonymous ? "translate-x-5" : "translate-x-0"}`} />
+            </div>
+            <span className="text-sm font-medium">Submit anonymously</span>
+          </label>
+
+          {/* Name & email — hidden when anonymous */}
+          {!anonymous && (
+            <div className="mb-5 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Your name
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Email address
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+          )}
+
           <label className="block text-sm font-medium">
             Your prayer request
             <textarea
@@ -48,7 +96,7 @@ export default function CommunityPrayerPage() {
           {message && <p className="mt-4 rounded-xl bg-[#eef2ed] p-4 text-sm">{message}</p>}
         </form>
         <blockquote className="mt-6 border-l-2 border-[#b36b3c] pl-6 text-lg leading-7 text-[#3d5148]">
-          “Prayer is the opening of the heart to God as to a friend.”
+          "Prayer is the opening of the heart to God as to a friend."
           <footer className="mt-2 text-sm font-semibold text-[#b36b3c]">
             — Ellen G. White, <cite>Steps to Christ</cite>
           </footer>
