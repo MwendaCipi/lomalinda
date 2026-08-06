@@ -26,17 +26,6 @@ const supportCategories = [
     ),
   },
   {
-    title: "Prayers & Moral Support",
-    description: "Share your prayer requests, seek pastoral counseling, or offer spiritual encouragement and volunteer support for fellow members.",
-    href: "/support/prayers",
-    badge: "Spiritual & Care",
-    icon: (
-      <svg className="h-7 w-7 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-      </svg>
-    ),
-  },
-  {
     title: "Church Budget",
     description: "Review published annual church budgets, departmental budget allocations, and planned stewardship projects for Loma Linda SDA.",
     href: "/support/budget",
@@ -58,6 +47,28 @@ const supportCategories = [
       </svg>
     ),
   },
+  {
+    title: "Prayers & Moral Support",
+    description: "Pledge intercessory prayer and volunteer moral support for church leadership, pastoral initiatives, and church projects.",
+    href: "/support/prayers",
+    badge: "Intercessory & Care",
+    icon: (
+      <svg className="h-7 w-7 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Share Ideas",
+    description: "Submit suggestions, creative ideas, and constructive feedback to church leadership for ministry growth and improvement.",
+    href: "/support/ideas",
+    badge: "Ideas & Feedback",
+    icon: (
+      <svg className="h-7 w-7 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-4a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function SupportHubPage() {
@@ -65,14 +76,14 @@ export default function SupportHubPage() {
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Stewardship & Care</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Stewardship & Support</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Church Support Hub</h1>
           <p className="mt-4 text-base leading-7 text-[#617068] sm:text-lg">
-            Partner with Loma Linda SDA Church through financial giving, in-kind contributions, prayer support, and transparent financial reporting.
+            Partner with Loma Linda SDA Church through financial giving, in-kind contributions, published budgets, prayer commitments, and sharing innovative ideas.
           </p>
         </div>
 
-        {/* 5 Category Cards Grid */}
+        {/* 6 Category Cards Grid */}
         <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {supportCategories.map((cat) => (
             <Link

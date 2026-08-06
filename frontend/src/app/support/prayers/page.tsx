@@ -6,8 +6,9 @@ import { useState } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function PrayersMoralSupportPage() {
-  const [requestText, setRequestText] = useState("");
+  const [pledgeText, setPledgeText] = useState("");
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -19,24 +20,32 @@ export default function PrayersMoralSupportPage() {
     setMessage(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/members/prayer-requests/`, {
+      const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          request_text: requestText,
-          name,
-          email,
-          anonymous,
+          giving_type: "moral_support",
+          amount: 0,
+          purpose: "Prayer & Moral Support Pledge",
+          phone_number: phoneNumber || "0000000000",
+          donor_name: anonymous ? "Anonymous Intercessor" : name,
+          donor_email: email,
+          item_description: pledgeText,
         }),
       });
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Your prayer request has been received. Our prayer team and pastoral elders will lift you up in prayer." });
-        setRequestText("");
+        setMessage({
+          type: "success",
+          text: "Thank you for supporting Loma Linda SDA Church in prayer and moral commitment! May God richly bless your faithful dedication.",
+        });
+        setPledgeText("");
         setName("");
+        setPhoneNumber("");
         setEmail("");
       } else {
-        setMessage({ type: "error", text: "Unable to submit prayer request. Please check input." });
+        const data = await res.json();
+        setMessage({ type: "error", text: data.detail || "Unable to record your pledge. Please check input." });
       }
     } catch {
       setMessage({ type: "error", text: "Network error. Please try again." });
@@ -58,14 +67,14 @@ export default function PrayersMoralSupportPage() {
         </Link>
 
         <div className="mt-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Spiritual & Care Support</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Prayers & Moral Support</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Church Encouragement</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer & Moral Support for the Church</h1>
           <p className="mt-3 text-base leading-7 text-[#617068]">
-            &quot;The prayer of a righteous person is powerful and effective.&quot; &mdash; James 5:16. Let us stand with you in faith and moral support.
+            Support Loma Linda SDA Church through faithful intercessory prayer, pastoral encouragement, evangelism backing, and spiritual moral support.
           </p>
         </div>
 
-        {/* Prayer Form Card */}
+        {/* Form Card */}
         <div className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
           {message && (
             <div
@@ -79,41 +88,54 @@ export default function PrayersMoralSupportPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-[#26352f]">How can we pray for or support you?</label>
+              <label className="block text-sm font-semibold text-[#26352f]">Your Prayer & Moral Support Commitment</label>
               <textarea
                 required
                 rows={5}
-                value={requestText}
-                onChange={(e) => setRequestText(e.target.value)}
-                placeholder="Share your prayer requests, health needs, family encouragement, or pastoral visitation request..."
+                value={pledgeText}
+                onChange={(e) => setPledgeText(e.target.value)}
+                placeholder="e.g. I pledge to pray daily for church leadership and evangelism missions, volunteering for intercessory prayer, or offering encouragement..."
                 className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
               />
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-semibold text-[#26352f]">Your Name (Optional)</label>
+                <label className="block text-sm font-semibold text-[#26352f]">Your Name</label>
                 <input
                   type="text"
+                  required={!anonymous}
+                  disabled={anonymous}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Full name"
-                  disabled={anonymous}
                   className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c] disabled:opacity-40"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[#26352f]">Email / Contact (Optional)</label>
+                <label className="block text-sm font-semibold text-[#26352f]">Phone Number (Optional)</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="If you'd like pastoral follow-up"
+                  type="tel"
                   disabled={anonymous}
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="Contact phone number"
                   className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c] disabled:opacity-40"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[#26352f]">Email Address (Optional)</label>
+              <input
+                type="email"
+                disabled={anonymous}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+                className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c] disabled:opacity-40"
+              />
             </div>
 
             <div className="flex items-center gap-3">
@@ -125,7 +147,7 @@ export default function PrayersMoralSupportPage() {
                 className="h-4 w-4 rounded border-[#dfdbd1] text-[#b36b3c] focus:ring-[#b36b3c]"
               />
               <label htmlFor="anonymous" className="text-sm font-medium text-[#617068]">
-                Keep this prayer request confidential / anonymous
+                Keep this prayer & moral support pledge anonymous
               </label>
             </div>
 
@@ -134,7 +156,7 @@ export default function PrayersMoralSupportPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
             >
-              {submitting ? "Submitting..." : "Submit Prayer & Moral Support Request"}
+              {submitting ? "Submitting pledge..." : "Submit Prayer & Moral Support Pledge"}
             </button>
           </form>
         </div>

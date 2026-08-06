@@ -69,8 +69,8 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
               Ministries
             </Link>
-            <Link href="/spiritual" className={navItemClass(pathname.startsWith("/spiritual"))}>
-              Spiritual
+            <Link href="/share" className={navItemClass(pathname.startsWith("/share") || pathname.startsWith("/spiritual"))}>
+              Share
             </Link>
             <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
               Support
@@ -184,13 +184,13 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/spiritual"
+              href="/share"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname.startsWith("/spiritual") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+                pathname.startsWith("/share") || pathname.startsWith("/spiritual") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Spiritual</span>
+              <span>Share</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 

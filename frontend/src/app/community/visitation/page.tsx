@@ -68,9 +68,9 @@ export default function VisitationPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-3xl">
-        <Link href="/spiritual" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c]">
+        <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
-          <span>Back to Spiritual Hub</span>
+          <span>Back to Share & Care</span>
         </Link>
 
         <header className="mt-6">
