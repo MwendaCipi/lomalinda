@@ -68,9 +68,9 @@ export default function VisitationPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-3xl">
-        <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
+        <Link href="/requests" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
-          <span>Back to Fellowship</span>
+          <span>Back to Requests</span>
         </Link>
 
         <header className="mt-6">

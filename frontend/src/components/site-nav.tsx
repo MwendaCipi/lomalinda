@@ -8,8 +8,6 @@ import { useEffect, useState } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const staffRoles = ["admin", "leader", "clerk", "elder", "youth_leader", "choir_director", "children_ministry", "men_ministry", "women_ministry", "chaplaincy", "finance", "treasurer"];
 
-const desktopLinks = [["About Us", "/about"], ["Beliefs", "/beliefs"], ["Calendar", "/calendar"], ["Announcements", "/announcements"]] as const;
-
 function navItemClass(active: boolean) {
   return active ? "rounded-full bg-white/15 px-3 py-1.5 text-white" : "text-white/80 transition hover:text-[#f1c89e]";
 }
@@ -61,13 +59,17 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
           </Link>
 
           <div className="hidden items-center gap-6 text-sm font-medium md:flex">
-            {desktopLinks.slice(0, 3).map(([label, href]) => (
-              <Link key={href} href={href} className={navItemClass(pathname === href)}>
-                {label}
-              </Link>
-            ))}
+            <Link href="/about" className={navItemClass(pathname === "/about")}>
+              About Us
+            </Link>
+            <Link href="/beliefs" className={navItemClass(pathname === "/beliefs")}>
+              Beliefs
+            </Link>
             <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
               Ministries
+            </Link>
+            <Link href="/requests" className={navItemClass(pathname.startsWith("/requests"))}>
+              Requests
             </Link>
             <Link href="/share" className={navItemClass(pathname.startsWith("/share") || pathname.startsWith("/spiritual"))}>
               Fellowship
@@ -75,11 +77,9 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
               Support
             </Link>
-            {desktopLinks.slice(3).map(([label, href]) => (
-              <Link key={href} href={href} className="text-white/80 transition hover:text-[#f1c89e]">
-                {label}
-              </Link>
-            ))}
+            <Link href="/announcements" className={navItemClass(pathname === "/announcements")}>
+              Announcements
+            </Link>
 
             {/* Staff Admin Link */}
             {userState.isLoggedIn && isStaff && (
@@ -162,17 +162,6 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/calendar"
-              onClick={() => setOpen(false)}
-              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname === "/calendar" ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
-              }`}
-            >
-              <span>Calendar</span>
-              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
-            </Link>
-
-            <Link
               href="/ministries"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
@@ -180,6 +169,17 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               }`}
             >
               <span>Ministries</span>
+              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
+            </Link>
+
+            <Link
+              href="/requests"
+              onClick={() => setOpen(false)}
+              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
+                pathname.startsWith("/requests") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+              }`}
+            >
+              <span>Requests</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 
@@ -223,7 +223,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                   <Link
                     href="/administration"
                     onClick={() => setOpen(false)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-[#b36b3c]/50 bg-[#b36b3c]/15 p-4 text-sm font-semibold text-white transition hover:bg-[#b36b3c]/25"
+                    className="flex w-full items-center justify-between rounded-2xl border border-[#b36b3c]/50 bg-[#b36b3c]/15 p-4 text-sm font-semibold text-[#f1c89e] transition hover:bg-[#b36b3c]/25"
                   >
                     <span>Church Admin ({userState.role.replaceAll("_", " ")})</span>
                     <span className="text-[#f1c89e]">&rarr;</span>
@@ -248,7 +248,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               <Link
                 href="/login"
                 onClick={() => setOpen(false)}
-                className="flex w-full items-center justify-between rounded-2xl border border-[#b36b3c]/60 bg-[#b36b3c]/20 p-4 text-sm font-semibold text-white transition hover:bg-[#b36b3c]/30"
+                className="flex w-full items-center justify-between rounded-2xl border border-[#b36b3c]/60 bg-[#b36b3c]/20 p-4 text-sm font-semibold text-[#f1c89e] transition hover:bg-[#b36b3c]/30"
               >
                 <span>Member Login</span>
                 <span className="text-[#f1c89e]">&rarr;</span>

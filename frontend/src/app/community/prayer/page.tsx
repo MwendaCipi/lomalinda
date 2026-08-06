@@ -31,9 +31,9 @@ export default function CommunityPrayerPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-8 text-[#26352f] sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
+        <Link href="/requests" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
-          <span>Back to Fellowship</span>
+          <span>Back to Requests</span>
         </Link>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer</h1>
         <p className="mt-3 text-lg leading-8 text-[#617068]">You do not have to carry it alone.</p>

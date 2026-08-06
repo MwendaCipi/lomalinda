@@ -1,24 +1,6 @@
 import Link from "next/link";
 
-const items = [
-  {
-    href: "/spiritual/prayer",
-    title: "Prayer requests",
-    text: "Share what is on your heart and let our church family pray with you.",
-    icon: "🙏",
-  },
-  {
-    href: "/spiritual/visitation",
-    title: "Request visitation",
-    text: "Request church members, elders or pastor to visit or pray with you.",
-    icon: "🏠",
-  },
-  {
-    href: "/spiritual/child-dedication",
-    title: "Child dedication",
-    text: "Begin a conversation about dedicating your child during worship.",
-    icon: "👶",
-  },
+const fellowshipItems = [
   {
     href: "/spiritual/testimonies",
     title: "Testimonies",
@@ -39,22 +21,34 @@ const items = [
     icon: "📸",
   },
   {
-    href: "/enroll",
-    title: "Request membership",
-    text: "Request to join Loma Linda SDA Church as a new member or through membership transfer.",
-    icon: "🤝",
+    href: "/calendar",
+    title: "Calendar",
+    text: "View upcoming Sabbath services, midweek vespers, and special church events.",
+    icon: "📅",
   },
 ];
 
-export default function CareFellowshipPage() {
+export default function FellowshipPage() {
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-10 text-[#26352f] sm:py-16">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] sm:py-16 lg:px-8">
       <div className="mx-auto max-w-5xl">
-        <div className="max-w-3xl">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Home</span>
+        </Link>
+
+        <div className="mt-6 max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Fellowship</h1>
+          <p className="mt-3 text-base leading-7 text-[#617068]">
+            Connect, grow, and celebrate faith together with the Loma Linda church family.
+          </p>
         </div>
+
         <div className="mt-8 grid gap-5 md:grid-cols-2">
-          {items.map((item) => (
+          {fellowshipItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
