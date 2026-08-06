@@ -3,7 +3,7 @@ import Link from "next/link";
 const items = [
   {
     href: "/spiritual/prayer",
-    title: "Prayer box",
+    title: "Prayer requests",
     text: "Share what is on your heart and let our church family pray with you.",
     icon: "🙏",
   },
