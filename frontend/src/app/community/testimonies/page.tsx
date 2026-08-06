@@ -22,7 +22,22 @@ export default function TestimoniesPage() {
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    setIsLoggedIn(Boolean(token));
+    const loggedIn = Boolean(token);
+    setIsLoggedIn(loggedIn);
+
+    if (loggedIn) {
+      fetch(`${API_URL}/api/members/me/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.user) {
+            const fullName = `${data.user.first_name || ""} ${data.user.last_name || ""}`.trim() || data.user.username || "";
+            setName(fullName);
+          }
+        })
+        .catch(() => {});
+    }
 
     fetch(`${API_URL}/api/members/testimonies/`)
       .then((res) => (res.ok ? res.json() : []))
@@ -49,7 +64,7 @@ export default function TestimoniesPage() {
         headers,
         body: JSON.stringify({
           testimony_text: testimony,
-          name: isLoggedIn ? "" : name,
+          name: name.trim(),
         }),
       });
 
@@ -60,7 +75,9 @@ export default function TestimoniesPage() {
 
       setMessage("Thank you for sharing your testimony. Your testimony has been submitted for review by church leadership before being published.");
       setTestimony("");
-      setName("");
+      if (!isLoggedIn) {
+        setName("");
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "We could not submit your testimony. Please try again.");
     } finally {
@@ -82,19 +99,17 @@ export default function TestimoniesPage() {
         <form onSubmit={submitTestimony} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
           <h2 className="text-xl font-semibold sm:text-2xl">Share your testimony</h2>
 
-          {!isLoggedIn && (
-            <label className="mt-6 block text-sm font-medium">
-              Your Name
-              <input
-                required
-                maxLength={160}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-                placeholder="Enter your name"
-              />
-            </label>
-          )}
+          <label className="mt-6 block text-sm font-medium">
+            Your Name
+            <input
+              required
+              maxLength={160}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+              placeholder="Enter your name"
+            />
+          </label>
 
           <div className="mt-5">
             <div className="flex items-center justify-between text-sm font-medium">
