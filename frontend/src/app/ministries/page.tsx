@@ -9,7 +9,7 @@ const ministries = [
   { slug: "adventist-women", title: "Adventist Women Ministries", description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach." },
   { slug: "ensemble", title: "Church Choir", description: "Leading the church family in worship through music, harmony, and joyful service." },
   { slug: "chaplaincy", title: "Chaplaincy", description: "Offering a ministry of presence, comfort, prayer, and spiritual care in places of need." },
-  { slug: "evangelism", title: "Evangelism", description: "Sharing the good news of Jesus through community outreach, chaplaincy, and missions." },
+  { slug: "outreach", title: "Outreach", description: "Sharing the good news of Jesus through community outreach, chaplaincy, and missions." },
 ];
 
 export default function MinistriesPage() {

@@ -8,6 +8,7 @@ export function generateStaticParams() {
     "adventist-women",
     "ensemble",
     "chaplaincy",
+    "outreach",
     "evangelism",
   ].map((slug) => ({ slug }));
 }
