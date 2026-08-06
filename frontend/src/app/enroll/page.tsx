@@ -5,10 +5,10 @@ import { FormEvent, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-type Mode = "new" | "transfer";
+type Mode = "baptism" | "transfer";
 
 export default function EnrollPage() {
-  const [mode, setMode] = useState<Mode>("new");
+  const [mode, setMode] = useState<Mode>("baptism");
   const [form, setForm] = useState({
     email: "",
     first_name: "",
@@ -65,7 +65,7 @@ export default function EnrollPage() {
 
         {/* Mode toggle */}
         <div className="mt-6 flex rounded-2xl border border-[#dfdbd1] p-1 gap-1">
-          {(["new", "transfer"] as Mode[]).map((m) => (
+          {(["baptism", "transfer"] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
@@ -76,7 +76,7 @@ export default function EnrollPage() {
                   : "text-[#617068] hover:bg-[#f7f4ee]"
               }`}
             >
-              {m === "new" ? "New member" : "Membership transfer"}
+              {m === "baptism" ? "Baptism" : "Membership transfer"}
             </button>
           ))}
         </div>
