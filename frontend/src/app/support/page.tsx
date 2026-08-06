@@ -5,7 +5,7 @@ import Link from "next/link";
 const supportCategories = [
   {
     title: "Financial Giving",
-    description: "Support church operations, tithes, offerings, building projects, and mission work through online giving and M-Pesa.",
+    description: "Give tithes, offerings, building funds, and mission gifts online via M-Pesa.",
     href: "/support/financial",
     badge: "Tithes & Offerings",
     icon: (
@@ -16,7 +16,7 @@ const supportCategories = [
   },
   {
     title: "Give in Kind",
-    description: "Pledge or donate physical equipment, food supplies, building materials, instruments, or professional services to the church.",
+    description: "Pledge physical produce, equipment, building supplies, or professional skills.",
     href: "/support/in-kind",
     badge: "Physical & Services",
     icon: (
@@ -27,7 +27,7 @@ const supportCategories = [
   },
   {
     title: "Church Budget",
-    description: "Review published annual church budgets, departmental budget allocations, and planned stewardship projects for Loma Linda SDA.",
+    description: "Review published annual church budgets and departmental budget allocations.",
     href: "/support/budget",
     badge: "Annual Plans",
     icon: (
@@ -38,7 +38,7 @@ const supportCategories = [
   },
   {
     title: "Financial Reports",
-    description: "View transparent monthly, quarterly, and annual financial statements detailing tithes, offerings, and church expenditures.",
+    description: "View transparent monthly, quarterly, and annual church financial statements.",
     href: "/support/reports",
     badge: "Monthly, Quarterly, Annual",
     icon: (
@@ -49,7 +49,7 @@ const supportCategories = [
   },
   {
     title: "Prayers & Moral Support",
-    description: "Pledge intercessory prayer and volunteer moral support for church leadership, pastoral initiatives, and church projects.",
+    description: "Pledge intercessory prayer and moral support for church leaders and projects.",
     href: "/support/prayers",
     badge: "Intercessory & Care",
     icon: (
@@ -60,7 +60,7 @@ const supportCategories = [
   },
   {
     title: "Share Ideas",
-    description: "Submit suggestions, creative ideas, and constructive feedback to church leadership for ministry growth and improvement.",
+    description: "Submit creative ideas, suggestions, and feedback to help our church grow.",
     href: "/support/ideas",
     badge: "Ideas & Feedback",
     icon: (
