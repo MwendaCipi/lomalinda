@@ -6,7 +6,7 @@ from django.core.mail import send_mail
 from django.http import HttpResponseRedirect
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
 import uuid
 import re
 from html.parser import HTMLParser
@@ -47,7 +47,8 @@ CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
     'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
     'primary': 'https://primary.aliveinjesus.info/students',
-    'junior': 'https://junior.aliveinjesus.info/students',
+    'junior': 'https://www.juniorpowerpoints.org/page2447',
+    'teens': 'https://www.cornerstoneconnections.net/lessons',
 }
 
 
@@ -70,6 +71,41 @@ class _MissionLinkParser(HTMLParser):
         is_adult_article = self.path_fragment == '/youth-and-adult/' and re.search(r'/a\d+(?:[-/]|$)', url) is not None
         if (is_article_path or is_children_article or is_adult_article) and url.rstrip('/') != self.source_url.rstrip('/') and url not in self.links:
             self.links.append(url)
+
+
+class _WeeklyLessonParser(HTMLParser):
+    def __init__(self, source_url):
+        super().__init__()
+        self.source_url = source_url
+        self.current_href = None
+        self.current_text = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            self.current_href = dict(attrs).get('href', '')
+            self.current_text = []
+
+    def handle_data(self, data):
+        if self.current_href is not None:
+            self.current_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag != 'a' or not self.current_href:
+            return
+        text = ' '.join(''.join(self.current_text).split())
+        match = re.search(r'Lesson\s+(\d{1,2})\s+-\s+([A-Za-z]+\s+\d{1,2})', text, flags=re.IGNORECASE)
+        href = urljoin(self.source_url, self.current_href)
+        if match and re.search(r'/assets/(juniors|teens)/Lessons/\d{4}/Q\d/English/(Student|Teacher)/', href):
+            year_match = re.search(r'/Lessons/(\d{4})/Q(\d)/', href)
+            self.links.append({
+                'number': int(match.group(1)),
+                'date': datetime.strptime(f"{year_match.group(1)} {match.group(2)}", '%Y %B %d').date(),
+                'audience': 'teachers' if '/Teacher/' in href else 'students',
+                'url': href,
+            })
+        self.current_href = None
+        self.current_text = []
 
 
 def first_mission_story_url(audience):
@@ -113,6 +149,17 @@ def first_children_lesson_url(division, audience):
     source_url = CHILDREN_LESSON_SOURCES[division]
     page = requests.get(source_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
     page.raise_for_status()
+    if division in ('junior', 'teens'):
+        parser = _WeeklyLessonParser(source_url)
+        parser.feed(page.text)
+        lessons = [link for link in parser.links if link['audience'] == audience]
+        if not lessons:
+            return source_url
+        today = timezone.localdate()
+        upcoming = [lesson for lesson in lessons if lesson['date'] >= today]
+        target_date = min(upcoming, key=lambda lesson: lesson['date'])['date'] if upcoming else max(lessons, key=lambda lesson: lesson['date'])['date']
+        target = next(lesson for lesson in lessons if lesson['date'] == target_date)
+        return target['url']
     script_urls = re.findall(r'<script[^>]+src="([^"]+)"', page.text)
     today = timezone.localdate()
     quarter_start = today.replace(month=((today.month - 1) // 3) * 3 + 1, day=1)
@@ -219,9 +266,18 @@ class AnnouncementView(generics.ListCreateAPIView):
         from django.db.models import Q
         from django.utils import timezone
         today = timezone.now().date()
-        queryset = Announcement.objects.filter(published=True).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gte=today)
-        )
+        queryset = Announcement.objects.filter(published=True)
+        if self.request.query_params.get('include_expired') != 'true':
+            queryset = queryset.filter(Q(expires_at__isnull=True) | Q(expires_at__gte=today))
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(Q(title__icontains=search) | Q(text__icontains=search) | Q(detail__icontains=search))
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(created_at__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(created_at__date__lte=end_date)
         if self.request.user.is_authenticated:
             return queryset
         return queryset.filter(visibility='public')

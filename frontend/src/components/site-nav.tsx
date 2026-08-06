@@ -23,6 +23,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
     role: "",
     username: "",
   });
+  const [announcementCount, setAnnouncementCount] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -40,6 +41,14 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
         })
         .catch(() => {});
     }
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    fetch(`${API_URL}/api/members/announcements/`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: unknown) => setAnnouncementCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => setAnnouncementCount(0));
   }, []);
 
   const isStaff = staffRoles.includes(userState.role);
@@ -78,7 +87,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               Support
             </Link>
             <Link href="/announcements" className={navItemClass(pathname === "/announcements")}>
-              Announcements
+              <span className="inline-flex items-center gap-2">Announcements{announcementCount > 0 && <span aria-label={`${announcementCount} announcements`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{announcementCount > 99 ? "99+" : announcementCount}</span>}</span>
             </Link>
 
             {/* Staff Admin Link */}
@@ -212,7 +221,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                 pathname === "/announcements" ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Announcements</span>
+              <span className="flex items-center gap-2">Announcements{announcementCount > 0 && <span aria-label={`${announcementCount} announcements`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{announcementCount > 99 ? "99+" : announcementCount}</span>}</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 

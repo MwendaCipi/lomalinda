@@ -16,7 +16,7 @@ class Command(BaseCommand):
             'mission_adults': lambda: first_mission_story_url('adults'),
             'mission_children': lambda: first_mission_story_url('children'),
         }
-        for division in ('beginner', 'kindergarten', 'primary', 'junior'):
+        for division in ('beginner', 'kindergarten', 'primary', 'junior', 'teens'):
             for audience in ('students', 'teachers'):
                 jobs[f'children_{division}_{audience}'] = lambda division=division, audience=audience: first_children_lesson_url(division, audience)
 

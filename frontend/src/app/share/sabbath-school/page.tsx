@@ -7,22 +7,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const adultLessonLinks = [
   {
-    title: "Read Online",
-    text: "Read the current Adult Bible Study Guide directly online.",
-    href: `${API_URL}/api/members/lesson-reading/adult/`,
-    icon: "📖",
-  },
-  {
     title: "Lesson PDF",
-    text: "Download the current Adult Bible Study Guide PDF.",
+    text: "Download the current Adult Bible Study Guide PDF for offline study.",
     href: `${API_URL}/api/members/lesson-pdf/adult/lesson/`,
     icon: "📄",
+    buttonText: "Download Student PDF",
   },
   {
     title: "Teachers PDF",
     text: "Download the current teacher's preparation guide PDF.",
     href: `${API_URL}/api/members/lesson-pdf/adult/teachers/`,
     icon: "🎓",
+    buttonText: "Download Teacher PDF",
   },
 ];
 
@@ -55,6 +51,13 @@ const childrenDivisions = [
     teachersLink: `${API_URL}/api/members/lesson-reading/children/junior/teachers/`,
     icon: "📚",
   },
+  {
+    division: "Teens",
+    age: "Ages 15 - 18",
+    studentsLink: `${API_URL}/api/members/lesson-reading/children/teens/students/`,
+    teachersLink: `${API_URL}/api/members/lesson-reading/children/teens/teachers/`,
+    icon: "🎓",
+  },
 ];
 
 export default function SabbathSchoolPage() {
@@ -76,7 +79,7 @@ export default function SabbathSchoolPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] lg:px-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-4xl">
         <Link
           href="/share"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
@@ -92,120 +95,114 @@ export default function SabbathSchoolPage() {
             Sabbath School
           </h1>
           <p className="mt-2 text-base leading-7 text-[#617068]">
-            Access this quarter&apos;s Bible study lessons and current mission stories organized into four main sections below.
+            Access this quarter&apos;s Bible study guides and weekly mission stories for adults and children below.
           </p>
         </div>
 
-        {/* 4 Cards Grid */}
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {/* Card 1: Adult Lesson */}
-          <section className="flex flex-col justify-between rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:border-[#b36b3c]/50 sm:p-9">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#f7f4ee] px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
-                  Quarter {currentInfo.quarter}
-                </span>
-                <span className="text-2xl" aria-hidden="true">📖</span>
-              </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[#26352f]">
-                Adult Lesson
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[#617068]">
-                Study the current Adult Bible Study Guide online or download PDF editions for students and teachers.
-              </p>
-              <div className="mt-6 grid gap-3">
-                {adultLessonLinks.map((item) => (
+        <div className="mt-10 flex flex-col gap-12">
+          {/* Section 3: Adult Lesson */}
+          <section className="order-3 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-[#f7f4ee] border border-[#b36b3c]/30 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                Quarter {currentInfo.quarter}
+              </span>
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold text-[#26352f] flex items-center gap-2">
+              <span>📖</span> Adult Lesson
+            </h2>
+            <p className="mt-1.5 text-sm leading-6 text-[#617068]">
+              Download the current Adult Bible Study Guide PDF and teacher preparation materials.
+            </p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {adultLessonLinks.map((item) => (
+                <div
+                  key={item.title}
+                  className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{item.icon}</span>
+                      <h3 className="font-semibold text-[#26352f]">{item.title}</h3>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-[#617068]">{item.text}</p>
+                  </div>
                   <a
-                    key={item.title}
                     href={item.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="group flex items-start gap-3 rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-4 transition hover:border-[#b36b3c] hover:bg-white"
+                    className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-center text-xs font-semibold text-white transition hover:bg-[#96552e]"
                   >
-                    <span className="text-xl">{item.icon}</span>
-                    <div>
-                      <span className="font-semibold text-[#26352f] group-hover:text-[#b36b3c]">
-                        {item.title} &rarr;
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-5 text-[#617068]">
-                        {item.text}
-                      </span>
-                    </div>
+                    <span>{item.buttonText}</span>
+                    <span>&rarr;</span>
                   </a>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </section>
 
-          {/* Card 2: Children's Lesson */}
-          <section className="flex flex-col justify-between rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:border-[#b36b3c]/50 sm:p-9">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#f7f4ee] px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
-                  Quarter {currentInfo.quarter} · Week {currentInfo.week}
-                </span>
-                <span className="text-2xl" aria-hidden="true">👶</span>
-              </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[#26352f]">
-                Children&apos;s Lesson
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[#617068]">
-                Explore Sabbath School lessons tailored for every age division with student and teacher materials.
-              </p>
-              <div className="mt-6 space-y-3">
-                {childrenDivisions.map((division) => (
-                  <div
-                    key={division.division}
-                    className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{division.icon}</span>
-                      <div>
-                        <h3 className="font-semibold text-[#26352f]">{division.division}</h3>
-                        <p className="text-xs text-[#617068]">{division.age}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <a
-                        href={division.studentsLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 rounded-xl bg-[#b36b3c] px-3 py-2 text-center text-xs font-semibold text-white transition hover:bg-[#96552e]"
-                      >
-                        Student lesson
-                      </a>
-                      <a
-                        href={division.teachersLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-center text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
-                      >
-                        Teacher lesson
-                      </a>
+          {/* Section 4: Children's Lesson */}
+          <section className="order-4 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-[#f7f4ee] border border-[#b36b3c]/30 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                Quarter {currentInfo.quarter} · Week {currentInfo.week}
+              </span>
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold text-[#26352f] flex items-center gap-2">
+              <span>👶</span> Children&apos;s Lesson
+            </h2>
+            <p className="mt-1.5 text-sm leading-6 text-[#617068]">
+              Bible study guides for each children&apos;s age division, featuring student and teacher resources.
+            </p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {childrenDivisions.map((division) => (
+                <div
+                  key={division.division}
+                  className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{division.icon}</span>
+                    <div>
+                      <h3 className="font-semibold text-[#26352f]">{division.division}</h3>
+                      <p className="text-xs text-[#617068]">{division.age}</p>
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="mt-4 flex gap-2">
+                    <a
+                      href={division.studentsLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 rounded-xl bg-[#b36b3c] px-3 py-2 text-center text-xs font-semibold text-white transition hover:bg-[#96552e]"
+                    >
+                      Student lesson
+                    </a>
+                    <a
+                      href={division.teachersLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-center text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+                    >
+                      Teacher lesson
+                    </a>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
-          {/* Card 3: Adult Mission Story */}
-          <section className="flex flex-col justify-between rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:border-[#b36b3c]/50 sm:p-9">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
-                  Sabbath Mission Reading
-                </span>
-                <span className="text-2xl" aria-hidden="true">🌍</span>
-              </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[#26352f]">
-                Adult Mission Story
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[#617068]">
-                Read inspiring current weekly mission field stories from around the world written for youth and adults.
-              </p>
+          {/* Section 1: Adult Mission Story */}
+          <section className="order-1 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                Sabbath Mission Reading
+              </span>
             </div>
-            <div className="mt-8">
+            <h2 className="mt-3 text-2xl font-semibold text-[#26352f] flex items-center gap-2">
+              <span>🌍</span> Adult Mission Story
+            </h2>
+            <p className="mt-1.5 text-sm leading-6 text-[#617068]">
+              Read the current weekly mission story from global mission fields written for youth and adults.
+            </p>
+            <div className="mt-6">
               <a
                 href={`${API_URL}/api/members/mission-reading/adults/`}
                 target="_blank"
@@ -218,23 +215,20 @@ export default function SabbathSchoolPage() {
             </div>
           </section>
 
-          {/* Card 4: Children Mission Story */}
-          <section className="flex flex-col justify-between rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:border-[#b36b3c]/50 sm:p-9">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
-                  Sabbath Mission Reading
-                </span>
-                <span className="text-2xl" aria-hidden="true">🎈</span>
-              </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[#26352f]">
-                Children Mission Story
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[#617068]">
-                Discover engaging and educational mission stories crafted especially for children and young minds.
-              </p>
+          {/* Section 2: Children Mission Story */}
+          <section className="order-2 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                Sabbath Mission Reading
+              </span>
             </div>
-            <div className="mt-8">
+            <h2 className="mt-3 text-2xl font-semibold text-[#26352f] flex items-center gap-2">
+              <span>🎈</span> Children Mission Story
+            </h2>
+            <p className="mt-1.5 text-sm leading-6 text-[#617068]">
+              Read the current weekly mission story specially written for children.
+            </p>
+            <div className="mt-6">
               <a
                 href={`${API_URL}/api/members/mission-reading/children/`}
                 target="_blank"
@@ -251,4 +245,3 @@ export default function SabbathSchoolPage() {
     </main>
   );
 }
-
