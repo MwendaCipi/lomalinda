@@ -10,6 +10,13 @@ export function SiteHeader() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Scroll to top automatically whenever a new page is opened
+  useEffect(() => {
+    if (typeof window !== "undefined" && !window.location.hash) {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname]);
+
   useEffect(() => {
     let lastScrollY = window.scrollY;
     let ticking = false;
