@@ -66,7 +66,7 @@ export function SiteHeader() {
         <SiteNav open={mobileMenuOpen} setOpen={setMobileMenuOpen} />
         {!isAuthOrMember && <AnnouncementBanner />}
       </div>
-      <div className={isAuthOrMember ? "h-[73px]" : "h-[132px] sm:h-[115px]"} />
+      <div className={isAuthOrMember ? "h-[73px]" : "h-[142px] sm:h-[115px]"} />
     </>
   );
 }
