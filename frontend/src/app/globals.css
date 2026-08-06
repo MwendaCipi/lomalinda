@@ -23,16 +23,16 @@ body {
 
 .hero-line {
   opacity: 0;
-  animation: hero-line-in 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: hero-line-in 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.hero-line:nth-child(1) { animation-delay: 50ms; }
-.hero-line:nth-child(2) { animation-delay: 120ms; }
-.hero-line:nth-child(3) { animation-delay: 190ms; }
-.hero-line:nth-child(4) { animation-delay: 260ms; }
-.hero-line:nth-child(5) { animation-delay: 330ms; }
+.hero-line:nth-child(1) { animation-delay: 150ms; }
+.hero-line:nth-child(2) { animation-delay: 350ms; }
+.hero-line:nth-child(3) { animation-delay: 550ms; }
+.hero-line:nth-child(4) { animation-delay: 750ms; }
+.hero-line:nth-child(5) { animation-delay: 950ms; }
 
 .hero-card {
   opacity: 0;
-  animation: hero-line-in 400ms cubic-bezier(0.16, 1, 0.3, 1) 150ms forwards;
+  animation: hero-line-in 600ms cubic-bezier(0.16, 1, 0.3, 1) 550ms forwards;
 }
