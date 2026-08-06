@@ -44,21 +44,19 @@ const childrenDivisions = [
 const missionReadings = [
   {
     target: "Youth & Adults",
-    title: "Youth & Adult Mission Quarterly",
+    title: "Youth & Adult Mission Story",
     description: "Read this Sabbath's mission story for youth and adults.",
-    note: "Select the 2nd result on the page for this Sabbath's adult story.",
     link: "https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles",
     icon: "🌍",
-    badge: "2nd Result",
+    buttonText: "Read Adult Mission Story",
   },
   {
     target: "Children",
-    title: "Children's Mission Quarterly",
+    title: "Children's Mission Story",
     description: "Read this Sabbath's mission story for children.",
-    note: "Select the 1st result on the page for this Sabbath's children story.",
     link: "https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/",
     icon: "🎈",
-    badge: "1st Result",
+    buttonText: "Read Children Mission Story",
   },
 ];
 
@@ -161,7 +159,7 @@ export default function SabbathSchoolPage() {
                       {division.division}
                     </h3>
                     <p className="mt-1 text-xs text-[#617068]">
-                      Automatically targets Quarter {currentInfo.quarter} (Week {currentInfo.week}).
+                      Quarter {currentInfo.quarter} • Week {currentInfo.week}
                     </p>
                   </div>
 
@@ -198,7 +196,7 @@ export default function SabbathSchoolPage() {
                 Adventist Mission Quarterlies
               </h2>
               <p className="mt-1 text-sm text-[#617068]">
-                Read current weekly mission stories and articles for youth, adults, and children.
+                Read current weekly mission stories for youth, adults, and children.
               </p>
             </div>
 
@@ -214,9 +212,6 @@ export default function SabbathSchoolPage() {
                   <div>
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-3xl">{mission.icon}</span>
-                      <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-[11px] font-semibold text-[#b36b3c]">
-                        {mission.badge}
-                      </span>
                     </div>
                     <h3 className="mt-3 text-lg font-semibold text-[#26352f] group-hover:text-[#b36b3c]">
                       {mission.title}
@@ -224,12 +219,9 @@ export default function SabbathSchoolPage() {
                     <p className="mt-1 text-xs text-[#617068]">
                       {mission.description}
                     </p>
-                    <p className="mt-2 text-[11px] font-medium text-[#b36b3c]">
-                      💡 {mission.note}
-                    </p>
                   </div>
                   <span className="mt-5 text-xs font-semibold text-[#b36b3c]">
-                    Open {mission.target} Mission Articles &rarr;
+                    {mission.buttonText} &rarr;
                   </span>
                 </a>
               ))}
