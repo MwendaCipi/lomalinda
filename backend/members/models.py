@@ -133,6 +133,28 @@ class PrayerRequest(models.Model):
         ordering = ['-created_at']
 
 
+class ChildDedicationRequest(models.Model):
+    parent_name = models.CharField(max_length=160)
+    child_name = models.CharField(max_length=160)
+    child_dob = models.DateField(null=True, blank=True)
+    phone_number = models.CharField(max_length=40)
+    email = models.EmailField(blank=True)
+    requested_date = models.DateField()
+    notes = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending', 'Pending'), ('approved', 'Approved'), ('completed', 'Completed'), ('cancelled', 'Cancelled')],
+        default='pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Dedication request for {self.child_name} by {self.parent_name}"
+
+
 class SabbathEvent(models.Model):
     date = models.DateField(unique=True)
     name = models.CharField(max_length=160, default='Sabbath Worship')

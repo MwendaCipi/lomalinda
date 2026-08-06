@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Announcement, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
+from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -10,6 +10,13 @@ admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
 admin.site.register(EnrollmentRequest)
+
+
+@admin.register(ChildDedicationRequest)
+class ChildDedicationRequestAdmin(admin.ModelAdmin):
+    list_display = ('child_name', 'parent_name', 'requested_date', 'phone_number', 'status', 'created_at')
+    list_filter = ('status', 'requested_date', 'created_at')
+    search_fields = ('child_name', 'parent_name', 'phone_number', 'email')
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ('title', 'visibility', 'published', 'expires_at', 'created_at')

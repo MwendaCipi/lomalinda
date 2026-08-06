@@ -13,9 +13,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent
+from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import AnnouncementSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
+from .serializers import AnnouncementSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -215,6 +215,12 @@ class MpesaCallbackView(APIView):
 class PrayerRequestView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     serializer_class = PrayerRequestSerializer
+
+
+class ChildDedicationRequestView(generics.CreateAPIView):
+    queryset = ChildDedicationRequest.objects.all()
+    serializer_class = ChildDedicationRequestSerializer
+    permission_classes = [AllowAny]
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
