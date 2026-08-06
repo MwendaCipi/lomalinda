@@ -2,12 +2,6 @@ import Link from "next/link";
 
 const fellowshipItems = [
   {
-    href: "/spiritual/testimonies",
-    title: "Testimonies",
-    text: "Share how God has been working in your life, or read stories of faith.",
-    icon: "✨",
-  },
-  {
     href: "/share/services",
     title: "Live Services",
     text: "Watch or catch up on Sabbath worship, vespers, and special programmes from Loma Linda.",
@@ -25,6 +19,12 @@ const fellowshipItems = [
     title: "Calendar",
     text: "View upcoming Sabbath services, midweek vespers, and special church events.",
     icon: "📅",
+  },
+  {
+    href: "/spiritual/testimonies",
+    title: "Testimonies",
+    text: "Share how God has been working in your life, or read stories of faith.",
+    icon: "✨",
   },
 ];
 
