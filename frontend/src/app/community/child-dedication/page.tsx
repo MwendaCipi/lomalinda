@@ -7,7 +7,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function ChildDedicationPage() {
   const [form, setForm] = useState({
-    child_name: "",
+    child_first_name: "",
+    child_last_name: "",
     child_dob: "",
     father_name: "",
     mother_name: "",
@@ -23,8 +24,11 @@ export default function ChildDedicationPage() {
     setMessage("");
 
     try {
+      const fullName = `${form.child_first_name.trim()} ${form.child_last_name.trim()}`.trim();
       const payload = {
-        child_name: form.child_name.trim(),
+        child_name: fullName,
+        child_first_name: form.child_first_name.trim(),
+        child_last_name: form.child_last_name.trim(),
         child_dob: form.child_dob,
         father_name: form.father_name.trim(),
         mother_name: form.mother_name.trim(),
@@ -41,7 +45,8 @@ export default function ChildDedicationPage() {
         throw new Error(Object.values(data).flat().join(" ") || "Unable to submit dedication request.");
       }
       setForm({
-        child_name: "",
+        child_first_name: "",
+        child_last_name: "",
         child_dob: "",
         father_name: "",
         mother_name: "",
@@ -68,25 +73,41 @@ export default function ChildDedicationPage() {
           Dedicating a child is a sacred opportunity to thank God for the gift of life and pledge to guide them in faith alongside your church family.
         </p>
 
-        <section className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-10">
+        <section className="mt-8 rounded-3xl border border-[#dfdbd1] bg-[#ffffff] p-6 shadow-sm sm:p-10">
           <h2 className="text-xl font-semibold sm:text-2xl">Child dedication details</h2>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
             Please provide your child&apos;s information and contact details below.
           </p>
 
           <form onSubmit={submit} className="mt-6 space-y-5">
+            {/* Child First & Last Name */}
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="block text-sm font-medium">
-                Child&apos;s Full Name
+                Child&apos;s First Name
                 <input
                   required
-                  maxLength={160}
-                  value={form.child_name}
-                  onChange={(event) => setForm({ ...form, child_name: event.target.value })}
-                  placeholder="Enter child's full name"
+                  maxLength={80}
+                  value={form.child_first_name}
+                  onChange={(event) => setForm({ ...form, child_first_name: event.target.value })}
+                  placeholder="Enter child's first name"
                   className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
                 />
               </label>
+              <label className="block text-sm font-medium">
+                Child&apos;s Last Name
+                <input
+                  required
+                  maxLength={80}
+                  value={form.child_last_name}
+                  onChange={(event) => setForm({ ...form, child_last_name: event.target.value })}
+                  placeholder="Enter child's last name"
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+            </div>
+
+            {/* Date of Birth & Phone */}
+            <div className="grid gap-5 sm:grid-cols-2">
               <label className="block text-sm font-medium">
                 Child&apos;s Date of Birth
                 <input
@@ -97,8 +118,20 @@ export default function ChildDedicationPage() {
                   className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 outline-none focus:border-[#b36b3c]"
                 />
               </label>
+              <label className="block text-sm font-medium">
+                Phone / Contact Number
+                <input
+                  required
+                  maxLength={40}
+                  placeholder="e.g. 07XX XXX XXX"
+                  value={form.phone_number}
+                  onChange={(event) => setForm({ ...form, phone_number: event.target.value })}
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                />
+              </label>
             </div>
 
+            {/* Parents' Names */}
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="block text-sm font-medium">
                 Father&apos;s Name (optional)
@@ -121,18 +154,6 @@ export default function ChildDedicationPage() {
                 />
               </label>
             </div>
-
-            <label className="block text-sm font-medium">
-              Phone / Contact Number
-              <input
-                required
-                maxLength={40}
-                placeholder="e.g. 07XX XXX XXX"
-                value={form.phone_number}
-                onChange={(event) => setForm({ ...form, phone_number: event.target.value })}
-                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-              />
-            </label>
 
             <label className="block text-sm font-medium">
               Additional Notes or Special Requests (optional)
