@@ -6,17 +6,16 @@ import { useState } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const IN_KIND_CATEGORIES = [
-  { value: "food_supplies",   label: "Food Supplies" },
-  { value: "building_materials", label: "Building Materials" },
-  { value: "equipment",       label: "Equipment & Furniture" },
-  { value: "musical_instruments", label: "Musical Instruments" },
-  { value: "clothing",        label: "Clothing & Bedding" },
-  { value: "professional_services", label: "Professional Services / Skills" },
-  { value: "other",           label: "Other" },
+  { value: "Tithes", label: "Tithes (e.g. Produce/Harvest)" },
+  { value: "Local Church Budget", label: "Local Church Budget" },
+  { value: "Combined Offerings", label: "Combined Offerings" },
+  { value: "Camp Meeting Expenses", label: "Camp Meeting Expenses" },
+  { value: "Camp Meeting Offering", label: "Camp Meeting Offering" },
+  { value: "Church Building Project", label: "Church Building Project" },
 ];
 
 export default function GiveInKindPage() {
-  const [category, setCategory]           = useState("food_supplies");
+  const [category, setCategory]           = useState("Tithes");
   const [donorName, setDonorName]         = useState("");
   const [phoneNumber, setPhoneNumber]     = useState("");
   const [donorEmail, setDonorEmail]       = useState("");
@@ -38,7 +37,7 @@ export default function GiveInKindPage() {
         body: JSON.stringify({
           giving_type: "in_kind",
           amount: 0,
-          purpose: `In-kind pledge – ${selectedCat?.label ?? category}`,
+          purpose: `In-kind pledge – ${selectedCat?.value ?? category}`,
           phone_number: phoneNumber,
           donor_name: donorName,
           donor_email: donorEmail,
@@ -56,7 +55,7 @@ export default function GiveInKindPage() {
         setDonorName("");
         setPhoneNumber("");
         setDonorEmail("");
-        setCategory("food_supplies");
+        setCategory("Tithes");
       } else {
         const data = await res.json();
         setMessage({
