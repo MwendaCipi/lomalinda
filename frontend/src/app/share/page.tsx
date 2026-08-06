@@ -15,6 +15,12 @@ const fellowshipItems = [
     badge: "Live",
   },
   {
+    href: "/share/sabbath-school",
+    title: "Sabbath School",
+    text: "Access current quarter Bible study lessons for adults & children, plus the coming Sabbath mission reading.",
+    icon: "📖",
+  },
+  {
     href: "/spiritual/testimonies",
     title: "Testimonies",
     text: "Share how God has been working in your life, or read stories of faith.",
