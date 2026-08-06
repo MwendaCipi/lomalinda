@@ -13,9 +13,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, PrayerRequest, SabbathEvent, Testimony
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .serializers import AnnouncementSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchFinancialReportSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer
+from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -301,3 +301,43 @@ class GivingPurposeDetailView(generics.DestroyAPIView):
             raise PermissionDenied('Only finance managers can remove giving purposes.')
         instance.active = False
         instance.save(update_fields=['active'])
+
+
+class CurrentMemberView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserDetailSerializer
+
+    def get_object(self):
+        return self.request.user
+
+
+class MembershipTransferRequestView(generics.ListCreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = MembershipTransferRequestSerializer
+
+    def get_queryset(self):
+        return MembershipTransferRequest.objects.all()
+
+
+class ChurchCorrespondenceView(generics.ListCreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ChurchCorrespondenceSerializer
+
+    def get_queryset(self):
+        return ChurchCorrespondence.objects.all()
+
+
+class BoardMeetingView(generics.ListCreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = BoardMeetingSerializer
+
+    def get_queryset(self):
+        return BoardMeeting.objects.all()
+
+
+class ChurchNotificationView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChurchNotificationSerializer
+
+    def get_queryset(self):
+        return ChurchNotification.objects.filter(user=self.request.user)

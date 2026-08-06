@@ -6,15 +6,18 @@ import uuid
 class MemberProfile(models.Model):
     ROLE_CHOICES = [
         ('member', 'Member'),
-        ('leader', 'Church leader'),
-        ('admin', 'Administrator'),
-        ('finance', 'Finance team'),
-        ('treasurer', 'Treasurer'),
-        ('choir_director', 'Choir director'),
-        ('children_ministry', 'Children ministry'),
-        ('men_ministry', 'Adventist men ministries'),
+        ('clerk', 'Church Clerk'),
+        ('elder', 'Elder / First Elder'),
+        ('youth_leader', 'Youth Ministries Leader'),
+        ('choir_director', 'Choir Director'),
+        ('children_ministry', 'Children Ministry'),
+        ('men_ministry', 'Adventist Men Ministries'),
         ('women_ministry', 'Adventist Women Ministries'),
         ('chaplaincy', 'Chaplaincy'),
+        ('finance', 'Finance Team'),
+        ('treasurer', 'Treasurer'),
+        ('leader', 'Church Leader'),
+        ('admin', 'Administrator'),
     ]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_profile')
     phone_number = models.CharField(max_length=20, blank=True)
@@ -23,7 +26,7 @@ class MemberProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.user.get_username()
+        return f"{self.user.get_username()} ({self.get_role_display()})"
 
 
 class EnrollmentRequest(models.Model):
@@ -200,3 +203,68 @@ class ChurchSettings(models.Model):
 
     def __str__(self):
         return self.church_name
+
+
+class MembershipTransferRequest(models.Model):
+    TRANSFER_TYPE_CHOICES = [('incoming', 'Incoming Transfer'), ('outgoing', 'Outgoing Transfer')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('under_review', 'Under review'), ('approved', 'Approved'), ('completed', 'Completed'), ('cancelled', 'Cancelled')]
+    member_name = models.CharField(max_length=160)
+    transfer_type = models.CharField(max_length=20, choices=TRANSFER_TYPE_CHOICES, default='incoming')
+    other_church = models.CharField(max_length=160, help_text="Previous or destination church name")
+    phone_number = models.CharField(max_length=40, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    clerk_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_transfer_type_display()}: {self.member_name} ({self.status})"
+
+
+class ChurchCorrespondence(models.Model):
+    CATEGORY_CHOICES = [('clerk_letter', 'Clerk Letter'), ('recommendation', 'Letter of Recommendation'), ('board_notice', 'Board Notice'), ('general', 'General Correspondence')]
+    title = models.CharField(max_length=160)
+    sender_or_recipient = models.CharField(max_length=160)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='general')
+    body = models.TextField()
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.title} ({self.get_category_display()})"
+
+
+class BoardMeeting(models.Model):
+    STATUS_CHOICES = [('upcoming', 'Upcoming'), ('completed', 'Completed'), ('archived', 'Archived')]
+    title = models.CharField(max_length=160)
+    meeting_date = models.DateField()
+    agenda = models.TextField(help_text="Meeting agenda items")
+    minutes = models.TextField(blank=True, help_text="Recorded board meeting minutes")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
+    reference_file = models.FileField(upload_to='board-materials/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-meeting_date']
+
+    def __str__(self):
+        return f"Board Meeting: {self.title} ({self.meeting_date})"
+
+
+class ChurchNotification(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=160)
+    message = models.TextField()
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notification for {self.user.username}: {self.title}"

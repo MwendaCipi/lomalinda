@@ -1,7 +1,16 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Announcement, ChildDedicationRequest, ChurchBudget, ChurchFinancialReport, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, PrayerRequest, SabbathEvent, Testimony
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony
+
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source='member_profile.role', read_only=True)
+    phone_number = serializers.CharField(source='member_profile.phone_number', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone_number')
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -111,3 +120,31 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchSettings
         fields = ('church_name', 'address', 'latitude', 'longitude', 'midweek_vespers_link', 'midweek_vespers_time', 'friday_vespers_time', 'sabbath_time')
+
+
+class MembershipTransferRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MembershipTransferRequest
+        fields = ('id', 'member_name', 'transfer_type', 'other_church', 'phone_number', 'status', 'clerk_notes', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+
+class ChurchCorrespondenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChurchCorrespondence
+        fields = ('id', 'title', 'sender_or_recipient', 'category', 'body', 'date', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+
+class BoardMeetingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BoardMeeting
+        fields = ('id', 'title', 'meeting_date', 'agenda', 'minutes', 'status', 'reference_file', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+
+class ChurchNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChurchNotification
+        fields = ('id', 'title', 'message', 'read', 'created_at')
+        read_only_fields = ('id', 'created_at')
