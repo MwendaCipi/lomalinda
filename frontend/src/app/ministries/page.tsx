@@ -17,10 +17,17 @@ export default function MinistriesPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <div className="mx-auto max-w-6xl px-6 py-6 lg:px-8 lg:py-10">
-        <div className="max-w-3xl">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Home</span>
+        </Link>
+        <div className="mt-4 max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Our ministries</h1>
         </div>
-        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-2">
           {ministries.map((ministry) => (
             <Link
               key={ministry.slug}
