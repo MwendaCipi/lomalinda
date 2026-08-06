@@ -1,124 +1,200 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-type Report = {
-  id: number;
-  title: string;
-  period_type: "monthly" | "quarterly" | "annual";
-  period_start: string;
-  period_end: string;
-  total_tithes: string;
-  total_offerings: string;
-  total_expenses: string;
-  notes: string;
+// ── Types ──────────────────────────────────────────────────────────────────
+type LiveStat = {
+  category: string;
+  label: string;
+  total: number;
+  count: number;
+  color: string;
 };
 
-const money = (value: string) => `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
+type RecentEntry = {
+  id: number;
+  category: string;
+  label: string;
+  amount: number;
+  donor_name: string;
+  created_at: string;
+};
 
-export default function FinancialReportsPage() {
-  const [reports, setReports] = useState<Report[]>([]);
+// ── Helpers ────────────────────────────────────────────────────────────────
+const money = (n: number) =>
+  `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
+
+const FINANCIAL_CATEGORIES: { key: string; label: string; color: string }[] = [
+  { key: "tithe",           label: "Tithes",                 color: "#26352f" },
+  { key: "local_budget",    label: "Local Church Budget",    color: "#b36b3c" },
+  { key: "offering",        label: "Regular Offerings",      color: "#617068" },
+  { key: "building_fund",   label: "Building Fund",          color: "#4a6f62" },
+  { key: "welfare",         label: "Welfare Fund",           color: "#7a8c56" },
+  { key: "mission",         label: "Mission Fund",           color: "#8f6a3a" },
+];
+
+// Pulse dot for live indicator
+function LiveDot() {
+  return (
+    <span className="relative flex h-3 w-3">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b36b3c] opacity-75" />
+      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#b36b3c]" />
+    </span>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────
+export default function LiveReportsPage() {
+  const [stats, setStats] = useState<LiveStat[]>([]);
+  const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "monthly" | "quarterly" | "annual">("all");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function loadData() {
+    try {
+      const [statsRes, recentRes] = await Promise.all([
+        fetch(`${API_URL}/api/members/contributions/live-stats/`),
+        fetch(`${API_URL}/api/members/contributions/recent/`),
+      ]);
+
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (recentRes.ok) setRecent(await recentRes.json());
+      setLastUpdated(new Date());
+    } catch {
+      // silently retry
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetch(`${API_URL}/api/members/reports/`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setReports(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    loadData();
+    intervalRef.current = setInterval(loadData, 30_000); // refresh every 30 s
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
 
-  const filteredReports = reports.filter((r) => (filter === "all" ? true : r.period_type === filter));
+  // Totals
+  const grandTotal = stats.reduce((s, c) => s + c.total, 0);
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        {/* Back Button */}
+      <div className="mx-auto max-w-5xl">
+        {/* Back */}
         <Link
           href="/support"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
         >
           <span>&larr;</span>
-          <span>Back to Stewardship & Support</span>
+          <span>Back to Stewardship &amp; Support</span>
         </Link>
 
-        <div className="mt-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Financial Stewardship</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Financial Reports</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068]">
-            Transparent monthly, quarterly, and annual financial statements published by Loma Linda SDA Church treasury.
-          </p>
+        {/* Header */}
+        <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
+              Financial Stewardship
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
+              Live Reports
+            </h1>
+            <p className="mt-3 text-base leading-7 text-[#617068]">
+              Real-time contribution tracking across all giving categories.
+            </p>
+          </div>
+
+          {/* Live badge */}
+          <div className="flex items-center gap-2 rounded-full border border-[#b36b3c]/30 bg-white px-4 py-2 text-sm font-semibold text-[#b36b3c] shadow-sm">
+            <LiveDot />
+            <span>Live</span>
+            {lastUpdated && (
+              <span className="ml-1 text-xs font-normal text-[#617068]">
+                · updated {lastUpdated.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Filter Tabs (All, Monthly, Quarterly, Annual) */}
-        <div className="mt-8 flex flex-wrap gap-2 rounded-2xl border border-[#dfdbd1] bg-white p-2">
-          {(["all", "monthly", "quarterly", "annual"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setFilter(tab)}
-              className={`rounded-xl px-5 py-2.5 text-xs font-semibold uppercase tracking-wider transition ${
-                filter === tab ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
-              }`}
-            >
-              {tab === "all" ? "All Reports" : `${tab} Reports`}
-            </button>
-          ))}
+        {/* Grand Total Banner */}
+        {!loading && (
+          <div className="mt-8 rounded-3xl bg-[#26352f] px-8 py-6 text-white">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+              Total Contributions — All Categories
+            </p>
+            <p className="mt-2 text-4xl font-bold tracking-tight">{money(grandTotal)}</p>
+          </div>
+        )}
+
+        {/* Per-Category Cards */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-2xl border border-[#dfdbd1] bg-white p-6 h-28"
+                />
+              ))
+            : FINANCIAL_CATEGORIES.map((cat) => {
+                const stat = stats.find((s) => s.category === cat.key);
+                return (
+                  <div
+                    key={cat.key}
+                    className="rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="text-xs font-semibold text-[#617068]">
+                        {stat?.count ?? 0} contributions
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-[#617068]">{cat.label}</p>
+                    <p className="mt-1 text-2xl font-bold text-[#26352f]">
+                      {money(stat?.total ?? 0)}
+                    </p>
+                  </div>
+                );
+              })}
         </div>
 
-        {/* Reports Content */}
-        <div className="mt-8">
+        {/* Recent Activity Feed */}
+        <div className="mt-10">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-lg font-semibold">Recent Activity</h2>
+            <LiveDot />
+          </div>
+
           {loading ? (
-            <p className="text-sm text-[#617068]">Loading financial statements...</p>
-          ) : filteredReports.length === 0 ? (
-            <div className="rounded-3xl border border-[#dfdbd1] bg-white p-8 text-center text-[#617068]">
-              No {filter !== "all" ? filter : ""} financial reports have been published yet.
+            <p className="text-sm text-[#617068]">Loading live data...</p>
+          ) : recent.length === 0 ? (
+            <div className="rounded-3xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
+              No contribution activity yet.
             </div>
           ) : (
-            <div className="space-y-6">
-              {filteredReports.map((report) => (
-                <article key={report.id} className="rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#dfdbd1] pb-5">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-semibold text-[#26352f]">{report.title}</h2>
-                        <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold capitalize text-[#b36b3c]">
-                          {report.period_type || "Monthly"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-[#617068]">
-                        Period: {report.period_start} &ndash; {report.period_end}
-                      </p>
-                    </div>
+            <div className="space-y-3">
+              {recent.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between rounded-2xl border border-[#dfdbd1] bg-white px-5 py-4"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-[#26352f]">
+                      {entry.donor_name || "Anonymous"}
+                    </p>
+                    <p className="text-xs text-[#617068]">
+                      {entry.label ?? entry.category} ·{" "}
+                      {new Date(entry.created_at).toLocaleDateString("en-KE")}
+                    </p>
                   </div>
-
-                  <div className="mt-6 grid gap-4 text-sm sm:grid-cols-3">
-                    <div className="rounded-2xl bg-[#f7f4ee] p-4">
-                      <span className="block text-xs font-semibold uppercase tracking-wider text-[#617068]">Tithes</span>
-                      <span className="mt-1 block text-lg font-semibold text-[#26352f]">{money(report.total_tithes)}</span>
-                    </div>
-
-                    <div className="rounded-2xl bg-[#f7f4ee] p-4">
-                      <span className="block text-xs font-semibold uppercase tracking-wider text-[#617068]">Offerings</span>
-                      <span className="mt-1 block text-lg font-semibold text-[#26352f]">{money(report.total_offerings)}</span>
-                    </div>
-
-                    <div className="rounded-2xl bg-[#f7f4ee] p-4">
-                      <span className="block text-xs font-semibold uppercase tracking-wider text-[#617068]">Expenses</span>
-                      <span className="mt-1 block text-lg font-semibold text-[#26352f]">{money(report.total_expenses)}</span>
-                    </div>
-                  </div>
-
-                  {report.notes && (
-                    <div className="mt-5 border-t border-[#dfdbd1] pt-4">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-[#617068]">Treasury Notes</p>
-                      <p className="mt-2 text-sm leading-6 text-[#617068]">{report.notes}</p>
-                    </div>
-                  )}
-                </article>
+                  <p className="text-sm font-bold text-[#b36b3c]">{money(entry.amount)}</p>
+                </div>
               ))}
             </div>
           )}

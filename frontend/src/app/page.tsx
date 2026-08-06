@@ -60,7 +60,62 @@ export default function Home() {
         </div>
       </section>
 
-      <footer id="contact" className="bg-[#26352f] px-6 py-14 text-white lg:px-8"><div className="mx-auto max-w-6xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Contact us</p><div className="mt-4 grid gap-8 md:grid-cols-[1fr_auto] md:items-end"><div><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">We would love to hear from you.</h2><p className="mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p></div><div className="grid gap-3 text-sm"><a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a><Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link><Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link></div></div><div id="location" className="mt-10 grid gap-10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center"><div><h3 className="text-xl font-semibold">Visit us in person</h3><p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church grounds and plan your visit.</p></div><ChurchLocation /></div><p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 Loma Linda Seventh-day Church</p></div></footer>
+      <footer id="contact" className="bg-[#26352f] px-6 py-14 text-white lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Contact us</p>
+          <div className="mt-4 grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">We would love to hear from you.</h2>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p>
+            </div>
+            <div className="grid gap-3 text-sm">
+              <a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a>
+              <Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link>
+              <Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link>
+            </div>
+          </div>
+
+          {/* Social media links */}
+          <div className="mt-10 flex flex-wrap items-center gap-4 border-t border-white/10 pt-8">
+            <p className="text-sm font-semibold text-white/60 uppercase tracking-wider">Follow us</p>
+            <a
+              href="https://www.tiktok.com/@lomalindachurch"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
+              title="TikTok — Coming soon"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.75a8.28 8.28 0 004.84 1.56V6.86a4.85 4.85 0 01-1.07-.17z"/>
+              </svg>
+              TikTok
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/50">Coming soon</span>
+            </a>
+            <a
+              href="https://www.youtube.com/@lomalindachurch"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
+              title="YouTube — Coming soon"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              YouTube
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/50">Coming soon</span>
+            </a>
+          </div>
+
+          <div id="location" className="mt-10 grid gap-10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+            <div>
+              <h3 className="text-xl font-semibold">Visit us in person</h3>
+              <p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church grounds and plan your visit.</p>
+            </div>
+            <ChurchLocation />
+          </div>
+          <p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 Loma Linda Seventh-day Church</p>
+        </div>
+      </footer>
     </main>
   );
 }

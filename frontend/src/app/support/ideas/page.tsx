@@ -140,7 +140,7 @@ export default function ShareIdeasPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
             >
-              {submitting ? "Submitting idea..." : "Submit Idea to Church Leadership"}
+              {submitting ? "Submitting idea..." : "Submit idea"}
             </button>
           </form>
         </div>

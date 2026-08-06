@@ -5,18 +5,31 @@ import { useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const IN_KIND_CATEGORIES = [
+  { value: "food_supplies",   label: "Food Supplies" },
+  { value: "building_materials", label: "Building Materials" },
+  { value: "equipment",       label: "Equipment & Furniture" },
+  { value: "musical_instruments", label: "Musical Instruments" },
+  { value: "clothing",        label: "Clothing & Bedding" },
+  { value: "professional_services", label: "Professional Services / Skills" },
+  { value: "other",           label: "Other" },
+];
+
 export default function GiveInKindPage() {
-  const [donorName, setDonorName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [donorEmail, setDonorEmail] = useState("");
+  const [category, setCategory]           = useState("food_supplies");
+  const [donorName, setDonorName]         = useState("");
+  const [phoneNumber, setPhoneNumber]     = useState("");
+  const [donorEmail, setDonorEmail]       = useState("");
   const [itemDescription, setItemDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [submitting, setSubmitting]       = useState(false);
+  const [message, setMessage]             = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage(null);
+
+    const selectedCat = IN_KIND_CATEGORIES.find((c) => c.value === category);
 
     try {
       const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -25,22 +38,31 @@ export default function GiveInKindPage() {
         body: JSON.stringify({
           giving_type: "in_kind",
           amount: 0,
-          purpose: "In-kind pledge",
+          purpose: `In-kind pledge – ${selectedCat?.label ?? category}`,
           phone_number: phoneNumber,
           donor_name: donorName,
           donor_email: donorEmail,
           item_description: itemDescription,
+          category,
         }),
       });
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Thank you! Your in-kind contribution pledge has been recorded. Our welfare & deaconry team will contact you shortly." });
+        setMessage({
+          type: "success",
+          text: "Thank you! Your in-kind contribution pledge has been recorded. Our welfare & deaconry team will contact you shortly.",
+        });
         setItemDescription("");
         setDonorName("");
         setPhoneNumber("");
+        setDonorEmail("");
+        setCategory("food_supplies");
       } else {
         const data = await res.json();
-        setMessage({ type: "error", text: data.detail || "Unable to submit in-kind contribution. Check form input." });
+        setMessage({
+          type: "error",
+          text: data.detail || "Unable to submit in-kind contribution. Check form input.",
+        });
       }
     } catch {
       setMessage({ type: "error", text: "Network error. Please try again." });
@@ -58,16 +80,34 @@ export default function GiveInKindPage() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
         >
           <span>&larr;</span>
-          <span>Back to Stewardship & Support</span>
+          <span>Back to Stewardship &amp; Support</span>
         </Link>
 
         <div className="mt-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">In-Kind Giving</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical & Service Contributions</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical &amp; Service Contributions</h1>
+        </div>
+
+        {/* Category grid — visual picker */}
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {IN_KIND_CATEGORIES.map((cat) => (
+            <button
+              key={cat.value}
+              type="button"
+              onClick={() => setCategory(cat.value)}
+              className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                category === cat.value
+                  ? "border-[#b36b3c] bg-[#b36b3c] text-white shadow-sm"
+                  : "border-[#dfdbd1] bg-white text-[#26352f] hover:border-[#b36b3c]"
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
         </div>
 
         {/* Form Card */}
-        <div className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
+        <div className="mt-6 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
           {message && (
             <div
               className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
@@ -80,7 +120,9 @@ export default function GiveInKindPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-[#26352f]">Describe Your Contribution / Item</label>
+              <label className="block text-sm font-semibold text-[#26352f]">
+                Describe Your Contribution / Item
+              </label>
               <textarea
                 required
                 rows={4}
@@ -118,7 +160,9 @@ export default function GiveInKindPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-[#26352f]">Email Address (Optional)</label>
+              <label className="block text-sm font-semibold text-[#26352f]">
+                Email Address (Optional)
+              </label>
               <input
                 type="email"
                 value={donorEmail}
