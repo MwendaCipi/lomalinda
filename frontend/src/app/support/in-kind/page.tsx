@@ -64,9 +64,6 @@ export default function GiveInKindPage() {
         <div className="mt-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">In-Kind Giving</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical & Service Contributions</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068]">
-            Donate equipment, food supplies, building materials, musical instruments, or volunteer your professional skills to support church projects.
-          </p>
         </div>
 
         {/* Form Card */}
