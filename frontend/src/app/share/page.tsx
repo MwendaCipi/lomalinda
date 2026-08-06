@@ -2,23 +2,17 @@ import Link from "next/link";
 
 const fellowshipItems = [
   {
-    href: "/share/services",
-    title: "Live Services",
-    text: "Watch or catch up on Sabbath worship, vespers, and special programmes from Loma Linda.",
-    icon: "📡",
-    badge: "Live",
-  },
-  {
-    href: "/share/moments",
-    title: "Moments",
-    text: "Photos and videos of amazing fellowship moments, outings, and church life.",
-    icon: "📸",
-  },
-  {
     href: "/calendar",
     title: "Calendar",
     text: "View upcoming Sabbath services, midweek vespers, and special church events.",
     icon: "📅",
+  },
+  {
+    href: "/share/moments",
+    title: "Live Services & Moments",
+    text: "Watch worship services and explore photos & videos of fellowship moments.",
+    icon: "📸",
+    badge: "Live",
   },
   {
     href: "/spiritual/testimonies",

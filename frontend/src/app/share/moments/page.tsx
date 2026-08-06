@@ -1,17 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
-export default function MomentsPage() {
-  // Placeholder tiles — real content will come from the backend media API
-  const placeholders = [
-    { label: "Fellowship Lunch", date: "3 Aug 2026", emoji: "🍽️" },
-    { label: "Youth Outdoor Worship", date: "27 Jul 2026", emoji: "⛺" },
-    { label: "Potluck Sabbath", date: "20 Jul 2026", emoji: "🥗" },
-    { label: "Women's Ministry Picnic", date: "13 Jul 2026", emoji: "🌻" },
-    { label: "Baptism Service", date: "6 Jul 2026", emoji: "💧" },
-    { label: "Camp Meeting Fellowship", date: "29 Jun 2026", emoji: "⛺" },
-  ];
+type Tab = "services" | "moments";
+
+const servicesList = [
+  { label: "Sabbath Worship Service", date: "3 Aug 2026", time: "8:00 AM", emoji: "🎵", badge: "Sabbath" },
+  { label: "Friday Vespers", date: "1 Aug 2026", time: "5:30 PM", emoji: "🌅", badge: "Vespers" },
+  { label: "Midweek Vespers", date: "30 Jul 2026", time: "8:00 PM", emoji: "🕯️", badge: "Midweek" },
+  { label: "Sabbath Worship Service", date: "27 Jul 2026", time: "8:00 AM", emoji: "🎵", badge: "Sabbath" },
+  { label: "Special Programme – Youth Sunday", date: "20 Jul 2026", time: "10:00 AM", emoji: "⭐", badge: "Special" },
+  { label: "Friday Vespers", date: "18 Jul 2026", time: "5:30 PM", emoji: "🌅", badge: "Vespers" },
+];
+
+const momentsList = [
+  { label: "Fellowship Lunch", date: "3 Aug 2026", emoji: "🍽️", badge: "Moment" },
+  { label: "Youth Outdoor Worship", date: "27 Jul 2026", emoji: "⛺", badge: "Moment" },
+  { label: "Potluck Sabbath", date: "20 Jul 2026", emoji: "🥗", badge: "Moment" },
+  { label: "Women's Ministry Picnic", date: "13 Jul 2026", emoji: "🌻", badge: "Moment" },
+  { label: "Baptism Service", date: "6 Jul 2026", emoji: "💧", badge: "Moment" },
+  { label: "Camp Meeting Fellowship", date: "29 Jun 2026", emoji: "⛺", badge: "Moment" },
+];
+
+export default function LiveServicesAndMomentsPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("services");
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
@@ -30,10 +43,10 @@ export default function MomentsPage() {
               Fellowship
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
-              Moments
+              Live Services &amp; Moments
             </h1>
             <p className="mt-3 text-base leading-7 text-[#617068]">
-              Photos and videos of fellowship moments, outings, and church life at Loma Linda.
+              Watch worship services, vespers, and explore photos and videos of fellowship moments.
             </p>
           </div>
 
@@ -47,27 +60,67 @@ export default function MomentsPage() {
           </span>
         </div>
 
-        {/* No filter tabs needed — moments only */}
+        {/* 2 Tabs: Live Services vs Moments */}
+        <div className="mt-8 flex rounded-2xl border border-[#dfdbd1] bg-white p-1.5 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("services")}
+            className={`flex-1 rounded-xl py-3 text-sm font-semibold transition ${
+              activeTab === "services"
+                ? "bg-[#26352f] text-white shadow-sm"
+                : "text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
+            }`}
+          >
+            📡 Live Services
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("moments")}
+            className={`flex-1 rounded-xl py-3 text-sm font-semibold transition ${
+              activeTab === "moments"
+                ? "bg-[#26352f] text-white shadow-sm"
+                : "text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
+            }`}
+          >
+            📸 Fellowship Moments
+          </button>
+        </div>
 
-        {/* Media grid */}
+        {/* Media Grid */}
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {placeholders.map((item, i) => (
-            <div
-              key={i}
-              className="group relative flex h-52 flex-col items-center justify-center rounded-2xl border border-[#dfdbd1] bg-white text-center shadow-sm"
-            >
-              <span className="text-5xl">{item.emoji}</span>
-              <p className="mt-4 text-sm font-semibold text-[#26352f]">{item.label}</p>
-              <p className="text-xs text-[#617068]">{item.date}</p>
-              <span className="absolute top-3 right-3 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#b36b3c]">
-                Moment
-              </span>
-            </div>
-          ))}
+          {activeTab === "services"
+            ? servicesList.map((item, i) => (
+                <div
+                  key={i}
+                  className="group relative flex h-52 flex-col items-center justify-center rounded-2xl border border-[#dfdbd1] bg-white text-center shadow-sm"
+                >
+                  <span className="text-5xl">{item.emoji}</span>
+                  <p className="mt-4 px-4 text-sm font-semibold text-[#26352f]">{item.label}</p>
+                  <p className="text-xs text-[#617068]">{item.date} · {item.time}</p>
+                  <span className="absolute top-3 right-3 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#b36b3c]">
+                    {item.badge}
+                  </span>
+                </div>
+              ))
+            : momentsList.map((item, i) => (
+                <div
+                  key={i}
+                  className="group relative flex h-52 flex-col items-center justify-center rounded-2xl border border-[#dfdbd1] bg-white text-center shadow-sm"
+                >
+                  <span className="text-5xl">{item.emoji}</span>
+                  <p className="mt-4 text-sm font-semibold text-[#26352f]">{item.label}</p>
+                  <p className="text-xs text-[#617068]">{item.date}</p>
+                  <span className="absolute top-3 right-3 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#b36b3c]">
+                    {item.badge}
+                  </span>
+                </div>
+              ))}
         </div>
 
         <p className="mt-8 text-center text-sm text-[#617068]">
-          Media uploads coming soon. Church members will be able to share photos and videos here.
+          {activeTab === "services"
+            ? "Live streaming and service recordings coming soon."
+            : "Media uploads coming soon. Church members will be able to share photos and videos here."}
         </p>
       </div>
     </main>
