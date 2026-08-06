@@ -6,10 +6,10 @@ export function generateStaticParams() {
     "possibility-ministries",
     "adventist-men",
     "adventist-women",
+    "personal-ministries",
+    "adventist-muslim-relations",
     "ensemble",
     "chaplaincy",
-    "outreach",
-    "evangelism",
   ].map((slug) => ({ slug }));
 }
 
