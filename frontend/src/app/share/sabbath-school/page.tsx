@@ -1,11 +1,10 @@
 import Link from "next/link";
 
 const adultQuarterly = {
-  quarter: "3rd Quarter 2026",
+  quarter: "Current Quarter",
   title: "Adult Bible Study Guide",
   subtitle: "Daily lesson study & weekly discussion guides",
-  link: "https://ssnet.org",
-  officialLink: "https://abs.adventist.org",
+  link: "https://sabbath.school",
 };
 
 const childrenDivisions = [
@@ -61,24 +60,14 @@ export default function SabbathSchoolPage() {
                 </h2>
                 <p className="mt-1 text-sm text-[#617068]">{adultQuarterly.subtitle}</p>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={adultQuarterly.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full bg-[#26352f] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1b2622]"
-                >
-                  Read on SSNET &rarr;
-                </a>
-                <a
-                  href={adultQuarterly.officialLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
-                >
-                  Official Adventist ABS &rarr;
-                </a>
-              </div>
+              <a
+                href={adultQuarterly.link}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full bg-[#b36b3c] px-6 py-3 text-xs font-semibold text-white transition hover:bg-[#96552e]"
+              >
+                Read Adult Lesson (sabbath.school) &rarr;
+              </a>
             </div>
           </section>
 
