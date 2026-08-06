@@ -59,20 +59,20 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
           </Link>
 
           <div className="hidden items-center gap-6 text-sm font-medium md:flex">
-            <Link href="/about" className={navItemClass(pathname === "/about")}>
-              About Us
-            </Link>
             <Link href="/beliefs" className={navItemClass(pathname === "/beliefs")}>
               Beliefs
             </Link>
-            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
-              Ministries
+            <Link href="/about" className={navItemClass(pathname === "/about")}>
+              About Us
+            </Link>
+            <Link href="/share" className={navItemClass(pathname.startsWith("/share") || pathname.startsWith("/spiritual"))}>
+              Fellowship
             </Link>
             <Link href="/requests" className={navItemClass(pathname.startsWith("/requests"))}>
               Requests
             </Link>
-            <Link href="/share" className={navItemClass(pathname.startsWith("/share") || pathname.startsWith("/spiritual"))}>
-              Fellowship
+            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
+              Ministries
             </Link>
             <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
               Support
@@ -136,20 +136,9 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
           </button>
         </div>
 
-        {/* Mobile Navigation List (1 item per row, no sub-items) */}
+        {/* Mobile Navigation List */}
         {open && (
           <div id="mobile-menu" className="mt-4 max-h-[calc(100vh-100px)] space-y-2.5 overflow-y-auto border-t border-white/15 pt-4 pb-6 md:hidden">
-            <Link
-              href="/about"
-              onClick={() => setOpen(false)}
-              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname === "/about" ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
-              }`}
-            >
-              <span>About Us</span>
-              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
-            </Link>
-
             <Link
               href="/beliefs"
               onClick={() => setOpen(false)}
@@ -162,13 +151,24 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/ministries"
+              href="/about"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname.startsWith("/ministries") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+                pathname === "/about" ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Ministries</span>
+              <span>About Us</span>
+              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
+            </Link>
+
+            <Link
+              href="/share"
+              onClick={() => setOpen(false)}
+              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
+                pathname.startsWith("/share") || pathname.startsWith("/spiritual") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+              }`}
+            >
+              <span>Fellowship</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 
@@ -184,13 +184,13 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/share"
+              href="/ministries"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname.startsWith("/share") || pathname.startsWith("/spiritual") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+                pathname.startsWith("/ministries") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Fellowship</span>
+              <span>Ministries</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 
