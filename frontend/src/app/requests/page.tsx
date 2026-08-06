@@ -8,6 +8,12 @@ const requestItems = [
     icon: "🙏",
   },
   {
+    href: "/spiritual/visitation",
+    title: "Request visitation",
+    text: "Request church members, elders or pastor to visit or pray with you.",
+    icon: "🏠",
+  },
+  {
     href: "/spiritual/child-dedication",
     title: "Child dedication requests",
     text: "Begin a conversation about dedicating your child during worship.",
@@ -18,12 +24,6 @@ const requestItems = [
     title: "Membership requests",
     text: "Request to join Loma Linda SDA Church through baptism or membership transfer.",
     icon: "🤝",
-  },
-  {
-    href: "/spiritual/visitation",
-    title: "Request visitation",
-    text: "Request church members, elders or pastor to visit or pray with you.",
-    icon: "🏠",
   },
 ];
 
