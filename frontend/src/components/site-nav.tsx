@@ -72,8 +72,8 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             <Link href="/spiritual" className={navItemClass(pathname.startsWith("/spiritual"))}>
               Spiritual
             </Link>
-            <Link href="/financial" className={navItemClass(pathname.startsWith("/financial"))}>
-              Financial
+            <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
+              Support
             </Link>
             {desktopLinks.slice(3).map(([label, href]) => (
               <Link key={href} href={href} className="text-white/80 transition hover:text-[#f1c89e]">
@@ -195,13 +195,13 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/financial"
+              href="/support"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname.startsWith("/financial") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+                pathname.startsWith("/support") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
               }`}
             >
-              <span>Financial</span>
+              <span>Support</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 

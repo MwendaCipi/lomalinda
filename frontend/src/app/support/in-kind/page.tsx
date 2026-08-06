@@ -1,0 +1,146 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export default function GiveInKindPage() {
+  const [donorName, setDonorName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [itemDescription, setItemDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          giving_type: "in_kind",
+          amount: 0,
+          purpose: "In-kind pledge",
+          phone_number: phoneNumber,
+          donor_name: donorName,
+          donor_email: donorEmail,
+          item_description: itemDescription,
+        }),
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Thank you! Your in-kind contribution pledge has been recorded. Our welfare & deaconry team will contact you shortly." });
+        setItemDescription("");
+        setDonorName("");
+        setPhoneNumber("");
+      } else {
+        const data = await res.json();
+        setMessage({ type: "error", text: data.detail || "Unable to submit in-kind contribution. Check form input." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
+      <div className="mx-auto max-w-4xl">
+        {/* Back Button */}
+        <Link
+          href="/support"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Support Hub</span>
+        </Link>
+
+        <div className="mt-6">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">In-Kind Giving</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical & Service Contributions</h1>
+          <p className="mt-3 text-base leading-7 text-[#617068]">
+            Donate equipment, food supplies, building materials, musical instruments, or volunteer your professional skills to support church projects.
+          </p>
+        </div>
+
+        {/* Form Card */}
+        <div className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
+          {message && (
+            <div
+              className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
+                message.type === "success" ? "bg-[#eef2ed] text-[#26352f]" : "bg-red-50 text-red-700"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-[#26352f]">Describe Your Contribution / Item</label>
+              <textarea
+                required
+                rows={4}
+                value={itemDescription}
+                onChange={(e) => setItemDescription(e.target.value)}
+                placeholder="e.g. 5 bags of cement for church building, PA system equipment, catering supplies, or legal/accounting services..."
+                className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+              />
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-semibold text-[#26352f]">Your Name</label>
+                <input
+                  type="text"
+                  required
+                  value={donorName}
+                  onChange={(e) => setDonorName(e.target.value)}
+                  placeholder="Full name"
+                  className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#26352f]">Phone Number</label>
+                <input
+                  type="tel"
+                  required
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="Contact phone number"
+                  className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[#26352f]">Email Address (Optional)</label>
+              <input
+                type="email"
+                value={donorEmail}
+                onChange={(e) => setDonorEmail(e.target.value)}
+                placeholder="Email address for confirmation"
+                className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+            >
+              {submitting ? "Submitting..." : "Submit In-Kind Pledge"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  );
+}

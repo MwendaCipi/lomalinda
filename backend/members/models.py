@@ -98,7 +98,9 @@ class GivingPurpose(models.Model):
 
 
 class ChurchFinancialReport(models.Model):
+    PERIOD_TYPE_CHOICES = [('monthly', 'Monthly'), ('quarterly', 'Quarterly'), ('annual', 'Annual')]
     title = models.CharField(max_length=160)
+    period_type = models.CharField(max_length=20, choices=PERIOD_TYPE_CHOICES, default='monthly')
     period_start = models.DateField()
     period_end = models.DateField()
     total_tithes = models.DecimalField(max_digits=14, decimal_places=2, default=0)

@@ -101,7 +101,7 @@ class TestimonySerializer(serializers.ModelSerializer):
 class ChurchFinancialReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchFinancialReport
-        fields = ('id', 'title', 'period_start', 'period_end', 'total_tithes', 'total_offerings', 'total_expenses', 'notes')
+        fields = ('id', 'title', 'period_type', 'period_start', 'period_end', 'total_tithes', 'total_offerings', 'total_expenses', 'notes')
 
 
 class ChurchBudgetSerializer(serializers.ModelSerializer):

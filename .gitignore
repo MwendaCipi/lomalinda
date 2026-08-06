@@ -21,3 +21,5 @@ backend/.env
 .DS_Store
 *.pem
 *.log
+*.sqlite3
+backend/db.sqlite3
