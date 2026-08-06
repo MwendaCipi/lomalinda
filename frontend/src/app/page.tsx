@@ -25,11 +25,10 @@ export default function Home() {
               <span className="hero-line block">And we&apos;ll always pray for you.</span>
             </h1>
             <p className="hero-line mt-7 max-w-xl text-lg leading-8 text-[#617068]">We are a young, English-speaking church family in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
-            <div className="hero-line mt-9 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 max-w-2xl">
-              <Link href="#location" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Location</Link>
-              <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Contacts</Link>
-              <Link href="/calendar" className="flex items-center justify-center rounded-full bg-[#b36b3c] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[#96552e] sm:py-3.5 sm:text-base">Calendar</Link>
-              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#26352f] bg-[#26352f] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[#1c2823] sm:py-3.5 sm:text-base">Login</Link>
+            <div className="hero-line mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+              <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:text-base">Location & Contacts</Link>
+              <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:text-base">Our Calendar</Link>
+              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:text-base">Member Login</Link>
             </div>
           </div>
           <div className="hero-card"><NextGatheringCard /></div>
