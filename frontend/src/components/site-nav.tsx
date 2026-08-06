@@ -14,33 +14,7 @@ function navItemClass(active: boolean) {
   return active ? "rounded-full bg-white/15 px-3 py-1.5 text-white" : "text-white/80 transition hover:text-[#f1c89e]";
 }
 
-function DesktopMenu({ label, href, items }: { label: string; href: string; items: readonly (readonly [string, string])[] }) {
-  const pathname = usePathname();
-  const active = pathname.startsWith(href);
-  return (
-    <div className="group relative">
-      <Link href={href} className={`${navItemClass(active)} focus:text-[#f1c89e]`}>
-        {label}
-      </Link>
-      <div className="invisible absolute left-1/2 top-full z-[60] w-64 -translate-x-1/2 pt-3 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100">
-        <div className="rounded-2xl border border-white/15 bg-[#26352f] p-3 shadow-2xl backdrop-blur-md">
-          <div className="space-y-1.5">
-            {items.map(([item, itemHref]) => (
-              <Link
-                key={itemHref}
-                href={itemHref}
-                className="group/item flex items-center justify-between rounded-xl border border-transparent bg-white/5 p-2.5 text-xs font-medium text-white/90 transition hover:border-[#b36b3c]/40 hover:bg-white/10 hover:text-white"
-              >
-                <span>{item}</span>
-                <span className="text-[#b36b3c] opacity-0 transition group-hover/item:opacity-100">&rarr;</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+
 
 export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { open?: boolean; setOpen?: (open: boolean) => void } = {}) {
   const pathname = usePathname();
@@ -68,9 +42,15 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                 {label}
               </Link>
             ))}
-            <DesktopMenu label="Ministries" href="/ministries" items={ministryLinks} />
-            <DesktopMenu label="Outreach" href="/ministries/outreach" items={outreachLinks} />
-            <DesktopMenu label="Spiritual" href="/spiritual" items={spiritualLinks} />
+            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries") && pathname !== "/ministries/outreach")}>
+              Ministries
+            </Link>
+            <Link href="/ministries/outreach" className={navItemClass(pathname.startsWith("/ministries/outreach"))}>
+              Outreach
+            </Link>
+            <Link href="/spiritual" className={navItemClass(pathname.startsWith("/spiritual"))}>
+              Spiritual
+            </Link>
             {links.slice(3).map(([label, href]) => (
               <Link key={href} href={href} className="text-white/80 transition hover:text-[#f1c89e]">
                 {label}

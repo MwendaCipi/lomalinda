@@ -16,22 +16,22 @@ const weeklyCalendar = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <section id="top" className="mx-auto max-w-6xl px-6 pb-12 pt-3 sm:pt-10 lg:px-8 lg:pt-14">
-        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+      <section id="top" className="mx-auto max-w-6xl px-6 pb-14 pt-6 sm:pt-10 lg:px-8 lg:pt-14">
+        <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
-            <h1 className="mt-2 text-2xl font-semibold leading-[1.15] tracking-tight sm:mt-6 sm:text-6xl">
+            <h1 className="mt-4 text-3xl font-semibold leading-[1.15] tracking-tight sm:mt-6 sm:text-6xl">
               <span className="hero-line block">We love you.</span>
               <span className="hero-line block">We value you.</span>
               <span className="hero-line block">And we&apos;ll always pray for you.</span>
             </h1>
-            <p className="hero-line mt-3 text-sm leading-6 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">We are a young, English-speaking church family in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
-            <div className="hero-line mt-4 flex flex-col gap-2.5 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-4">
-              <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:px-6 sm:py-3.5 sm:text-base">Location & Contacts</Link>
-              <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:px-6 sm:py-3.5 sm:text-base">See Our Calendar</Link>
-              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:px-6 sm:py-3.5 sm:text-base">Member Login</Link>
+            <p className="hero-line mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">We are a young, English-speaking church family in Meru, Kenya, learning to follow Jesus, care for our neighbours, and live with hope.</p>
+            <div className="hero-line mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-4">
+              <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Location & Contacts</Link>
+              <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">See Our Calendar</Link>
+              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Member Login</Link>
             </div>
           </div>
-          <div className="hero-card mt-4 sm:mt-0"><NextGatheringCard /></div>
+          <div className="hero-card mt-6 sm:mt-0"><NextGatheringCard /></div>
         </div>
       </section>
 
