@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
@@ -41,6 +41,13 @@ def is_finance_manager(user):
 MISSION_READING_SOURCES = {
     'children': 'https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/',
     'adults': 'https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles',
+}
+ADULT_LESSON_SOURCE = 'https://sabbath.school'
+CHILDREN_LESSON_SOURCES = {
+    'beginner': 'https://beginner.aliveinjesus.info/students',
+    'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
+    'primary': 'https://primary.aliveinjesus.info/students',
+    'junior': 'https://junior.aliveinjesus.info/students',
 }
 
 
@@ -73,6 +80,57 @@ def first_mission_story_url(audience):
     parser = _MissionLinkParser(source_url, path_fragment)
     parser.feed(response.text)
     return parser.links[0] if parser.links else source_url
+
+
+def cached_resource_url(key):
+    link = ExternalResourceLink.objects.filter(key=key).first()
+    return link.url if link and link.resolved_at >= timezone.now() - timedelta(days=8) else None
+
+
+def save_resource_url(key, url):
+    ExternalResourceLink.objects.update_or_create(key=key, defaults={'url': url, 'resolved_at': timezone.now()})
+    return url
+
+
+def current_adult_lesson_url():
+    response = requests.get(ADULT_LESSON_SOURCE, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    response.raise_for_status()
+    parser = _MissionLinkParser(ADULT_LESSON_SOURCE, '/Lesson?')
+    parser.feed(response.text)
+    return parser.links[0] if parser.links else ADULT_LESSON_SOURCE
+
+
+def current_adult_pdf_url(kind):
+    lesson_url = current_adult_lesson_url()
+    page = requests.get(lesson_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    page.raise_for_status()
+    pdfs = [urljoin(lesson_url, href) for href in re.findall(r'href=["\']([^"\']+\.pdf)["\']', page.text, flags=re.IGNORECASE)]
+    marker = 'EAQ' if kind == 'lesson' else 'ETQ'
+    return next((url for url in pdfs if marker in url), ADULT_LESSON_SOURCE)
+
+
+def first_children_lesson_url(division, audience):
+    source_url = CHILDREN_LESSON_SOURCES[division]
+    page = requests.get(source_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    page.raise_for_status()
+    script_urls = re.findall(r'<script[^>]+src="([^"]+)"', page.text)
+    today = timezone.localdate()
+    quarter_start = today.replace(month=((today.month - 1) // 3) * 3 + 1, day=1)
+    current_week = min(max(((today - quarter_start).days // 7) + 1, 1), 13)
+    target_host = urljoin(source_url, '/').split('//', 1)[1].split('.', 1)[0]
+    target_host = f'app.{target_host}.aliveinjesus.info'
+    pattern = re.compile(rf'https://{re.escape(target_host)}/resources/en/aij/(\d{{4}})-(\d{{2}})-([^/]+)/{current_week:02d}(?:"|,)')
+    candidates = []
+    for script_url in script_urls:
+        script = requests.get(urljoin(source_url, script_url), headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+        script.raise_for_status()
+        candidates.extend(match.group(0)[:-1] for match in pattern.finditer(script.text))
+    if not candidates:
+        return source_url.replace('/students', f'/{audience}')
+    destination = sorted(set(candidates), key=lambda url: tuple(map(int, re.search(r'/aij/(\d{4})-(\d{2})-', url).groups())), reverse=True)[0]
+    if audience == 'teachers':
+        destination = re.sub(r'-(bg|kd|pr|jr)/(?=\d{2}$)', r'-\1-tg/', destination)
+    return destination
 
 
 class RegisterView(generics.CreateAPIView):
@@ -182,10 +240,57 @@ class MissionReadingRedirectView(APIView):
     def get(self, request, audience):
         if audience not in MISSION_READING_SOURCES:
             return HttpResponseRedirect(MISSION_READING_SOURCES['children'])
+        key = f'mission_{audience}'
+        destination = cached_resource_url(key)
         try:
-            destination = first_mission_story_url(audience)
+            destination = destination or save_resource_url(key, first_mission_story_url(audience))
         except requests.RequestException:
             destination = MISSION_READING_SOURCES[audience]
+        return HttpResponseRedirect(destination)
+
+
+class AdultLessonRedirectView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        destination = cached_resource_url('adult_lesson')
+        try:
+            destination = destination or save_resource_url('adult_lesson', current_adult_lesson_url())
+        except requests.RequestException:
+            destination = ADULT_LESSON_SOURCE
+        return HttpResponseRedirect(destination)
+
+
+class AdultLessonPdfRedirectView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, kind):
+        if kind not in ('lesson', 'teachers'):
+            return HttpResponseRedirect(ADULT_LESSON_SOURCE)
+        key = f'adult_pdf_{kind}'
+        destination = cached_resource_url(key)
+        try:
+            destination = destination or save_resource_url(key, current_adult_pdf_url(kind))
+        except requests.RequestException:
+            destination = ADULT_LESSON_SOURCE
+        return HttpResponseRedirect(destination)
+
+
+class ChildrenLessonRedirectView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, division, audience):
+        if division not in CHILDREN_LESSON_SOURCES or audience not in ('students', 'teachers'):
+            return HttpResponseRedirect(CHILDREN_LESSON_SOURCES.get(division, CHILDREN_LESSON_SOURCES['primary']))
+        key = f'children_{division}_{audience}'
+        destination = cached_resource_url(key)
+        try:
+            destination = destination or save_resource_url(key, first_children_lesson_url(division, audience))
+        except requests.RequestException:
+            destination = CHILDREN_LESSON_SOURCES[division].replace('/students', f'/{audience}')
         return HttpResponseRedirect(destination)
 
 

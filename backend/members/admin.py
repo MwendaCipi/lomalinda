@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -10,6 +10,7 @@ admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
 admin.site.register(EnrollmentRequest)
+admin.site.register(ExternalResourceLink)
 admin.site.register(MembershipTransferRequest)
 admin.site.register(ChurchCorrespondence)
 admin.site.register(BoardMeeting)

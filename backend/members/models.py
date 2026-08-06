@@ -304,3 +304,12 @@ class VisitationRequest(models.Model):
 
     def __str__(self):
         return f"Visitation Request: {self.requester_name} ({self.get_visitation_type_display()})"
+
+
+class ExternalResourceLink(models.Model):
+    key = models.CharField(max_length=100, unique=True)
+    url = models.URLField(max_length=500)
+    resolved_at = models.DateTimeField()
+
+    def __str__(self):
+        return self.key

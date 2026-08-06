@@ -17,7 +17,7 @@ const fellowshipItems = [
   {
     href: "/share/sabbath-school",
     title: "Sabbath School",
-    text: "Access current quarter Bible study lessons for adults & children, plus this Sabbath's mission reading.",
+    text: "Access Adult Lesson, Children's Lesson, Adult Mission Story, and Children Mission Story.",
     icon: "📖",
   },
   {
