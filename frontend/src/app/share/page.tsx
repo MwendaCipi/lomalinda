@@ -38,6 +38,12 @@ const items = [
     text: "Photos and videos of amazing fellowship moments, outings, and church life.",
     icon: "📸",
   },
+  {
+    href: "/enroll",
+    title: "Request membership",
+    text: "Request to join Loma Linda SDA Church as a new member or through membership transfer.",
+    icon: "🤝",
+  },
 ];
 
 export default function CareFellowshipPage() {

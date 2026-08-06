@@ -51,7 +51,14 @@ export default function EnrollPage() {
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 pb-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
-        <h1 className="text-3xl font-semibold">Request to join</h1>
+        <Link
+          href="/share"
+          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Fellowship</span>
+        </Link>
+        <h1 className="mt-2 text-3xl font-semibold">Request to join</h1>
         <p className="mt-3 text-sm leading-6 text-[#617068]">
           Fill in your details and we will reach out to walk you through the next steps.
         </p>
