@@ -77,9 +77,6 @@ export default function FinancialGivingPage() {
         <div className="mt-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Financial Giving</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Tithes & Offerings</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068]">
-            &quot;Bring the whole tithe into the storehouse, that there may be food in my house.&quot; &mdash; Malachi 3:10
-          </p>
         </div>
 
         {/* Giving Form Card */}
