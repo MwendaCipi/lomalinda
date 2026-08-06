@@ -78,7 +78,7 @@ class PrayerRequestSerializer(serializers.ModelSerializer):
 class ChildDedicationRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChildDedicationRequest
-        fields = ('id', 'parent_name', 'child_name', 'child_dob', 'phone_number', 'email', 'requested_date', 'notes', 'status', 'created_at')
+        fields = ('id', 'child_name', 'child_dob', 'father_name', 'mother_name', 'phone_number', 'notes', 'status', 'created_at')
         read_only_fields = ('id', 'status', 'created_at')
 
 

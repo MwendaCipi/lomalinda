@@ -152,12 +152,11 @@ class Testimony(models.Model):
 
 
 class ChildDedicationRequest(models.Model):
-    parent_name = models.CharField(max_length=160)
     child_name = models.CharField(max_length=160)
-    child_dob = models.DateField(null=True, blank=True)
+    child_dob = models.DateField()
+    father_name = models.CharField(max_length=160, blank=True)
+    mother_name = models.CharField(max_length=160, blank=True)
     phone_number = models.CharField(max_length=40)
-    email = models.EmailField(blank=True)
-    requested_date = models.DateField()
     notes = models.TextField(blank=True)
     status = models.CharField(
         max_length=20,
@@ -170,7 +169,8 @@ class ChildDedicationRequest(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Dedication request for {self.child_name} by {self.parent_name}"
+        parents = ", ".join(filter(None, [self.father_name, self.mother_name])) or "Parents"
+        return f"Child Dedication: {self.child_name} ({parents})"
 
 
 class SabbathEvent(models.Model):

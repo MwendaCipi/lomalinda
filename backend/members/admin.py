@@ -30,9 +30,9 @@ class TestimonyAdmin(admin.ModelAdmin):
 
 @admin.register(ChildDedicationRequest)
 class ChildDedicationRequestAdmin(admin.ModelAdmin):
-    list_display = ('child_name', 'parent_name', 'requested_date', 'phone_number', 'status', 'created_at')
-    list_filter = ('status', 'requested_date', 'created_at')
-    search_fields = ('child_name', 'parent_name', 'phone_number', 'email')
+    list_display = ('child_name', 'child_dob', 'father_name', 'mother_name', 'phone_number', 'status', 'created_at')
+    list_filter = ('status', 'child_dob', 'created_at')
+    search_fields = ('child_name', 'father_name', 'mother_name', 'phone_number')
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ('title', 'visibility', 'published', 'expires_at', 'created_at')
