@@ -195,7 +195,9 @@ class EnrollmentRequestView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        enrollment, _ = EnrollmentRequest.objects.update_or_create(email=serializer.validated_data['email'], defaults={**serializer.validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
+        validated_data = {key: value for key, value in serializer.validated_data.items() if key != 'privacy_accepted'}
+        validated_data['privacy_accepted_at'] = timezone.now()
+        enrollment, _ = EnrollmentRequest.objects.update_or_create(email=validated_data['email'], defaults={**validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
         send_enrollment_email(enrollment)
         return Response({'message': 'If that email can receive member invitations, an enrollment link has been sent.'}, status=status.HTTP_202_ACCEPTED)
 
@@ -227,7 +229,8 @@ class EnrollmentCompleteView(APIView):
         from .models import MemberProfile
         MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number)
         enrollment.status = 'completed'
-        enrollment.save(update_fields=['status'])
+        enrollment.privacy_accepted_at = timezone.now()
+        enrollment.save(update_fields=['status', 'privacy_accepted_at'])
         return Response({'message': 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
 
 

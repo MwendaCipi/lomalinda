@@ -16,6 +16,7 @@ export default function EnrollPage() {
   const [form, setForm] = useState({ email: "", first_name: "", surname: "", phone_number: "", id_number: "", education_level: "", profession: "", date_of_birth: "", county_of_birth: "", destination_church: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   function update(field: keyof typeof form, value: string) { setForm((current) => ({ ...current, [field]: value })); }
   function selectTab(nextTab: Tab) { setTab(nextTab); setStep(1); setMessage(""); }
@@ -26,8 +27,8 @@ export default function EnrollPage() {
     try {
       const endpoint = tab === "transfer_out" ? `${API_URL}/api/members/transfers/` : `${API_URL}/api/members/auth/enrollment-request/`;
       const payload = tab === "transfer_out"
-        ? { member_name: `${form.first_name} ${form.surname}`.trim(), transfer_type: "outgoing", other_church: form.destination_church, phone_number: form.phone_number, email: form.email }
-        : { email: form.email, first_name: form.first_name, last_name: form.surname, phone_number: form.phone_number, joining_mode: joiningMode, id_number: form.id_number, education_level: form.education_level, profession: form.profession, date_of_birth: form.date_of_birth || null, county_of_birth: form.county_of_birth };
+        ? { member_name: `${form.first_name} ${form.surname}`.trim(), transfer_type: "outgoing", other_church: form.destination_church, phone_number: form.phone_number, email: form.email, privacy_accepted: privacyAccepted }
+        : { email: form.email, first_name: form.first_name, last_name: form.surname, phone_number: form.phone_number, joining_mode: joiningMode, id_number: form.id_number, education_level: form.education_level, profession: form.profession, date_of_birth: form.date_of_birth || null, county_of_birth: form.county_of_birth, privacy_accepted: privacyAccepted };
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
@@ -67,6 +68,7 @@ export default function EnrollPage() {
                 <label className="block text-sm font-medium">Level of education<input required value={form.education_level} onChange={(event) => update("education_level", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">Profession<input required value={form.profession} onChange={(event) => update("profession", event.target.value)} className={inputClass} /></label>
               </div>
+              <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]"><input type="checkbox" required checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" /><span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span></label>
               <div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setStep(1)} className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#c9c5bb] px-5 font-medium text-[#617068] transition hover:bg-[#f7f4ee]">Back</button><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Submit"}</button></div>
             </>}
           </form>
@@ -79,6 +81,7 @@ export default function EnrollPage() {
             <label className="block text-sm font-medium">Email address<input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium sm:col-span-2">Destination church<input required value={form.destination_church} onChange={(event) => update("destination_church", event.target.value)} className={inputClass} /></label>
           </div>
+          <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]"><input type="checkbox" required checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#9a741c]" /><span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span></label>
           <div className="grid gap-3 sm:grid-cols-2"><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#9a741c] px-5 font-medium text-white transition hover:bg-[#7c5d16] disabled:opacity-60 sm:col-start-2">{loading ? "Sending..." : "Request transfer out"}</button></div>
         </form>}
         {message && <p className="mt-5 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}

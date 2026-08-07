@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
@@ -29,15 +30,28 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class EnrollmentRequestSerializer(serializers.ModelSerializer):
+    privacy_accepted = serializers.BooleanField(write_only=True)
+
     class Meta:
         model = EnrollmentRequest
-        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth')
+        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'privacy_accepted')
+
+    def validate_privacy_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Privacy Policy.')
+        return value
 
 
 class EnrollmentCompleteSerializer(serializers.Serializer):
     token = serializers.UUIDField()
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
+    privacy_accepted = serializers.BooleanField(write_only=True)
+
+    def validate_privacy_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Privacy Policy.')
+        return value
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -126,10 +140,22 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 
 
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):
+    privacy_accepted = serializers.BooleanField(write_only=True)
+
     class Meta:
         model = MembershipTransferRequest
         fields = ('id', 'member_name', 'transfer_type', 'other_church', 'phone_number', 'email', 'status', 'clerk_notes', 'created_at')
         read_only_fields = ('id', 'created_at')
+
+    def validate_privacy_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Privacy Policy.')
+        return value
+
+    def create(self, validated_data):
+        validated_data.pop('privacy_accepted', None)
+        validated_data['privacy_accepted_at'] = timezone.now()
+        return super().create(validated_data)
 
 
 class ChurchCorrespondenceSerializer(serializers.ModelSerializer):
