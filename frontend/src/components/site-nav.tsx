@@ -92,11 +92,11 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             <Link href="/requests" className={navItemClass(pathname.startsWith("/requests"))}>
               Requests
             </Link>
-            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
-              Ministries
-            </Link>
             <Link href="/support" className={navItemClass(pathname.startsWith("/support"))}>
               Support
+            </Link>
+            <Link href="/ministries" className={navItemClass(pathname.startsWith("/ministries"))}>
+              Ministries
             </Link>
             <Link href="/announcements" className={navItemClass(pathname === "/announcements")}>
               <span className="inline-flex items-center gap-2">Announcements{announcementCount > 0 && <span aria-label={`${announcementCount} announcements`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{announcementCount > 99 ? "99+" : announcementCount}</span>}</span>
@@ -205,17 +205,6 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
             </Link>
 
             <Link
-              href="/ministries"
-              onClick={() => setOpen(false)}
-              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname.startsWith("/ministries") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
-              }`}
-            >
-              <span>Ministries</span>
-              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
-            </Link>
-
-            <Link
               href="/support"
               onClick={() => setOpen(false)}
               className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
@@ -223,6 +212,17 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               }`}
             >
               <span>Support</span>
+              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
+            </Link>
+
+            <Link
+              href="/ministries"
+              onClick={() => setOpen(false)}
+              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
+                pathname.startsWith("/ministries") ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+              }`}
+            >
+              <span>Ministries</span>
               <span className="text-[#b36b3c] font-semibold">&rarr;</span>
             </Link>
 
