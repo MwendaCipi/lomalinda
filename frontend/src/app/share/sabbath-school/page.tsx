@@ -88,9 +88,6 @@ export default function SabbathSchoolPage() {
         </Link>
 
         <div className="mt-3 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
-            Fellowship &amp; Study
-          </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-5xl">
             Sabbath School
           </h1>
