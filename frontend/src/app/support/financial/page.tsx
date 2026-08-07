@@ -108,14 +108,14 @@ export default function FinancialGivingPage() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("mpesa")}
-                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "mpesa" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "mpesa" ? "bg-[#3d79a3] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
                 >
                   M-Pesa
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("card")}
-                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "card" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "card" ? "bg-[#3d79a3] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
                 >
                   Card
                 </button>
