@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { kenyaCounties } from "@/config/kenya-counties";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Tab = "join" | "transfer_out";
@@ -32,8 +33,9 @@ export default function EnrollPage() {
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
-      setMessage(tab === "transfer_out" ? "Your transfer-out request has been received. The church office will be in touch." : "Your request has been received. We will be in touch.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to submit your request."); }
+      const text = tab === "transfer_out" ? "Your transfer-out request has been received. The church office will be in touch." : "Your request has been received. We will be in touch.";
+      setMessage(text); showAlert("Request received", text, "success");
+    } catch (error) { const text = error instanceof Error ? error.message : "Unable to submit your request."; setMessage(text); showAlert("Request error", text, "error"); }
     finally { setLoading(false); }
   }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -24,7 +25,8 @@ export default function CommunityPrayerPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    setMessage(response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.");
+    const text = response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.";
+    setMessage(text); showAlert(response.ok ? "Prayer request received" : "Request error", text, response.ok ? "success" : "error");
     if (response.ok) { setRequestText(""); setName(""); setPhoneNumber(""); }
   }
 

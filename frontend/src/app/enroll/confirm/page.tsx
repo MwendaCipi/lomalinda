@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -38,9 +39,9 @@ function EnrollmentConfirmContent() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(Object.values(data).flat().join(" "));
-      setMessage(data.message);
+      setMessage(data.message); showAlert("Account created", data.message, "success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create your account.");
+      const text = error instanceof Error ? error.message : "Unable to create your account."; setMessage(text); showAlert("Account error", text, "error");
     } finally {
       setLoading(false);
     }

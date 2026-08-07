@@ -3,6 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -31,7 +32,7 @@ export default function VisitationPage() {
 
     try {
       if (form.latitude === null || form.longitude === null) {
-        setMessage({ type: "error", text: "Please pin your location on the map before submitting." });
+        const text = "Please pin your location on the map before submitting."; setMessage({ type: "error", text }); showAlert("Location required", text, "warning");
         setLoading(false);
         return;
       }
@@ -42,10 +43,12 @@ export default function VisitationPage() {
       });
 
       if (response.ok) {
+        const text = "Thank you! Your visitation request has been submitted. Our pastoral elders and care team will connect with you shortly.";
         setMessage({
           type: "success",
-          text: "Thank you! Your visitation request has been submitted. Our pastoral elders and care team will connect with you shortly.",
+          text,
         });
+        showAlert("Request received", text, "success");
         setForm({
           requester_name: "",
           phone_number: "",
@@ -59,10 +62,10 @@ export default function VisitationPage() {
         });
       } else {
         const data = await response.json();
-        setMessage({ type: "error", text: data.detail || "Unable to submit visitation request. Please verify inputs." });
+        const text = data.detail || "Unable to submit visitation request. Please verify inputs."; setMessage({ type: "error", text }); showAlert("Request error", text, "error");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+      const text = "Network error. Please try again."; setMessage({ type: "error", text }); showAlert("Network error", text, "error");
     } finally {
       setLoading(false);
     }

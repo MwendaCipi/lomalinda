@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -14,7 +15,6 @@ export default function FinancialGivingPage() {
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/giving-purposes/`)
@@ -29,14 +29,13 @@ export default function FinancialGivingPage() {
       .catch(() => {});
 
     const paymentStatus = new URLSearchParams(window.location.search).get("payment");
-    if (paymentStatus === "success") setMessage({ type: "success", text: "Your card payment was received. Thank you for giving." });
-    if (paymentStatus === "cancelled") setMessage({ type: "error", text: "Card checkout was cancelled. You can try again or use M-Pesa." });
+    if (paymentStatus === "success") { const text = "Your card payment was received. Thank you for giving."; showAlert("Payment received", text, "success"); }
+    if (paymentStatus === "cancelled") { const text = "Card checkout was cancelled. You can try again or use M-Pesa."; showAlert("Payment cancelled", text, "warning"); }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setMessage(null);
 
     try {
       const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -59,15 +58,15 @@ export default function FinancialGivingPage() {
           window.location.assign(data.checkout_url);
           return;
         }
-        setMessage({ type: "success", text: "M-Pesa prompt sent to your phone. Complete payment to record your gift." });
+        const text = "M-Pesa prompt sent to your phone. Complete payment to record your gift."; showAlert("Payment request sent", text, "success");
         setAmount("");
         setPhoneNumber("");
       } else {
         const data = await res.json();
-        setMessage({ type: "error", text: data.detail || "Unable to initiate payment. Check phone number format." });
+        const text = paymentMethod === "mpesa" ? "M-Pesa has not been set up yet." : "Card giving is not available yet."; showAlert("Payment unavailable", text, "warning");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+      const text = paymentMethod === "mpesa" ? "M-Pesa has not been set up yet." : "Card giving is not available yet."; showAlert("Payment unavailable", text, "warning");
     } finally {
       setSubmitting(false);
     }
@@ -91,16 +90,6 @@ export default function FinancialGivingPage() {
 
         {/* Giving Form Card */}
         <div className="mx-auto mt-4 max-w-2xl rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
-          {message && (
-            <div
-              className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
-                message.type === "success" ? "bg-[#eef2ed] text-[#26352f]" : "bg-red-50 text-red-700"
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-[#26352f]">Payment method</label>

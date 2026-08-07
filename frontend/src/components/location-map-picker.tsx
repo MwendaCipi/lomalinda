@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { showAlert } from "@/lib/alerts";
 
 // Default Leaflet icon fix for Next.js SSR
 const defaultIcon = L.icon({
@@ -55,13 +56,13 @@ export default function LocationMapPicker({
           setDetecting(false);
         },
         () => {
-          alert("Unable to detect GPS position. Please tap on the map to set your location pin.");
+          showAlert("Location unavailable", "Unable to detect GPS position. Please tap on the map to set your location pin.", "warning");
           setDetecting(false);
         },
         { enableHighAccuracy: true }
       );
     } else {
-      alert("GPS Geolocation is not supported by your browser.");
+      showAlert("GPS unavailable", "GPS geolocation is not supported by your browser.", "warning");
     }
   };
 
