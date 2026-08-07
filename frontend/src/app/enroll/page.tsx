@@ -44,7 +44,7 @@ export default function EnrollPage() {
         <p className="mt-2 text-sm leading-6 text-[#617068]">Choose whether you would like to join us or request a transfer out.</p>
         <div className="mt-5 flex gap-1 rounded-2xl border border-[#dfdbd1] p-1">
           <button type="button" onClick={() => selectTab("join")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "join" ? "bg-[#5f8067] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Join us</button>
-          <button type="button" onClick={() => selectTab("transfer_out")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "transfer_out" ? "bg-[#b36b3c] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Transfer out</button>
+          <button type="button" onClick={() => selectTab("transfer_out")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "transfer_out" ? "bg-[#9a741c] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Transfer out</button>
         </div>
 
         {tab === "join" ? (
@@ -79,7 +79,7 @@ export default function EnrollPage() {
             <label className="block text-sm font-medium">Email address<input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium sm:col-span-2">Destination church<input required value={form.destination_church} onChange={(event) => update("destination_church", event.target.value)} className={inputClass} /></label>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2"><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#9a741c] px-5 font-medium text-white transition hover:bg-[#7c5d16] disabled:opacity-60 sm:col-start-2">{loading ? "Sending..." : "Submit"}</button></div>
+          <div className="grid gap-3 sm:grid-cols-2"><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#9a741c] px-5 font-medium text-white transition hover:bg-[#7c5d16] disabled:opacity-60 sm:col-start-2">{loading ? "Sending..." : "Request transfer out"}</button></div>
         </form>}
         {message && <p className="mt-5 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
       </section>
