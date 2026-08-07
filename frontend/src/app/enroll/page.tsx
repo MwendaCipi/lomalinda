@@ -37,7 +37,7 @@ export default function EnrollPage() {
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] sm:py-10">
-      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8 lg:max-w-4xl">
+      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8 lg:max-w-3xl">
         <Link href="/requests" className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[#b36b3c]"><span>&larr;</span><span>Back to Requests</span></Link>
         <h1 className="mt-2 text-3xl font-semibold">Membership requests</h1>
         <p className="mt-2 text-sm leading-6 text-[#617068]">Choose whether you would like to join us or request a transfer out.</p>
@@ -81,7 +81,6 @@ export default function EnrollPage() {
           <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white transition hover:bg-[#3d5148] disabled:opacity-60">{loading ? "Sending..." : "Submit transfer request"}</button>
         </form>}
         {message && <p className="mt-5 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
-        <Link href="/login" className="mt-6 block text-center text-sm font-semibold text-[#b36b3c]">Back to sign in</Link>
       </section>
     </main>
   );
