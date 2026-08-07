@@ -87,27 +87,27 @@ export default function TestimoniesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-10 text-[#26352f] sm:py-16">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-8 text-[#26352f] sm:py-10">
       <div className="mx-auto max-w-3xl">
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
           <span>Back to Fellowship</span>
         </Link>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-5xl">Testimonies</h1>
-        <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Testimonies</h1>
+        <p className="mt-2 text-sm leading-6 text-[#617068] sm:text-lg sm:leading-7">
           Share how God has been working in your life to encourage and build up your church family.
         </p>
 
-        <div className="mt-8 flex rounded-2xl border border-[#dfdbd1] bg-white p-1.5">
-          <button type="button" onClick={() => setMode("online")} className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${mode === "online" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Share online</button>
-          <button type="button" onClick={() => setMode("fellowship")} className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${mode === "fellowship" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Request during fellowship</button>
+        <div className="mt-5 flex rounded-2xl border border-[#dfdbd1] bg-white p-1">
+          <button type="button" onClick={() => setMode("online")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${mode === "online" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Share online</button>
+          <button type="button" onClick={() => setMode("fellowship")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${mode === "fellowship" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Request</button>
         </div>
 
-        <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+        <form onSubmit={submitTestimony} className="mt-3 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
           <h2 className="text-xl font-semibold sm:text-2xl">{mode === "online" ? "Share your testimony online" : "Request to share during fellowship"}</h2>
           <p className="mt-2 text-sm leading-6 text-[#617068]">{mode === "online" ? "Your testimony will be reviewed before it is shared on the website." : "Tell us your name and any helpful details. A church leader will arrange an opportunity during fellowship."}</p>
 
-          <label className="mt-6 block text-sm font-medium">
+          <label className="mt-4 block text-sm font-medium">
             Your Name
             <input
               required
@@ -119,7 +119,7 @@ export default function TestimoniesPage() {
             />
           </label>
 
-          <div className="mt-5">
+          <div className="mt-4">
             <div className="flex items-center justify-between text-sm font-medium">
               <label htmlFor="testimony-text">{mode === "online" ? "Your Testimony" : "Message (optional)"}</label>
               <span className={`text-xs ${testimony.length >= 900 ? "text-[#b36b3c] font-semibold" : "text-[#617068]"}`}>
