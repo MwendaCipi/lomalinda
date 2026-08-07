@@ -7,7 +7,7 @@ import { kenyaCounties } from "@/config/kenya-counties";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Tab = "join" | "transfer_out";
 type JoiningMode = "baptism" | "membership_transfer";
-const inputClass = "mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]";
+const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]";
 
 export default function EnrollPage() {
   const [tab, setTab] = useState<Tab>("join");
@@ -38,19 +38,19 @@ export default function EnrollPage() {
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] sm:py-10">
-      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8 lg:max-w-3xl">
+      <section className="w-full max-w-md rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7 lg:max-w-3xl">
         <Link href="/requests" className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[#b36b3c]"><span>&larr;</span><span>Back to Requests</span></Link>
         <h1 className="mt-2 text-3xl font-semibold">Membership requests</h1>
         <p className="mt-2 text-sm leading-6 text-[#617068]">Choose whether you would like to join us or request a transfer out.</p>
-        <div className="mt-6 flex gap-1 rounded-2xl border border-[#dfdbd1] p-1">
+        <div className="mt-5 flex gap-1 rounded-2xl border border-[#dfdbd1] p-1">
           <button type="button" onClick={() => selectTab("join")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "join" ? "bg-[#5f8067] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Join us</button>
           <button type="button" onClick={() => selectTab("transfer_out")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "transfer_out" ? "bg-[#b36b3c] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Transfer out</button>
         </div>
 
         {tab === "join" ? (
-          <form onSubmit={step === 1 ? nextStep : submit} className="mt-6 space-y-5">
+          <form onSubmit={step === 1 ? nextStep : submit} className="mt-5 space-y-4">
             {step === 1 ? <>
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium">Mode of joining<select value={joiningMode} onChange={(event) => setJoiningMode(event.target.value as JoiningMode)} className={inputClass}><option value="baptism">Baptism</option><option value="membership_transfer">Membership transfer</option></select></label>
                 <label className="block text-sm font-medium">ID number<input required value={form.id_number} onChange={(event) => update("id_number", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
@@ -61,7 +61,7 @@ export default function EnrollPage() {
               <div className="grid gap-3 sm:grid-cols-2"><button className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] sm:col-start-2">Next</button></div>
             </> : <>
               <div><p className="text-sm font-semibold">Additional details</p><p className="mt-1 text-xs text-[#617068]">These details help the church prepare for the next step.</p></div>
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium">Date of birth<input required type="date" value={form.date_of_birth} onChange={(event) => update("date_of_birth", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">County of birth<select required value={form.county_of_birth} onChange={(event) => update("county_of_birth", event.target.value)} className={inputClass}><option value="">Select county</option>{kenyaCounties.map((county) => <option key={county} value={county}>{county}</option>)}</select></label>
                 <label className="block text-sm font-medium">Level of education<input required value={form.education_level} onChange={(event) => update("education_level", event.target.value)} className={inputClass} /></label>
@@ -70,9 +70,9 @@ export default function EnrollPage() {
               <div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setStep(1)} className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#c9c5bb] px-5 font-medium text-[#617068] transition hover:bg-[#f7f4ee]">Back</button><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Submit"}</button></div>
             </>}
           </form>
-        ) : <form onSubmit={submit} className="mt-6 space-y-5">
+        ) : <form onSubmit={submit} className="mt-5 space-y-4">
           <p className="rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">For SDA members transferring from Loma Linda Church to another church.</p>
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium">Surname<input required value={form.surname} onChange={(event) => update("surname", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium">Phone number<input required value={form.phone_number} onChange={(event) => update("phone_number", event.target.value)} className={inputClass} /></label>
