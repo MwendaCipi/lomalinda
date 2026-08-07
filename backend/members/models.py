@@ -31,10 +31,17 @@ class MemberProfile(models.Model):
 
 class EnrollmentRequest(models.Model):
     STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('expired', 'Expired')]
+    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer')]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
+    joining_mode = models.CharField(max_length=30, choices=JOINING_MODE_CHOICES, default='baptism')
+    id_number = models.CharField(max_length=40, blank=True)
+    education_level = models.CharField(max_length=120, blank=True)
+    profession = models.CharField(max_length=120, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    county_of_birth = models.CharField(max_length=120, blank=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
@@ -219,6 +226,7 @@ class MembershipTransferRequest(models.Model):
     transfer_type = models.CharField(max_length=20, choices=TRANSFER_TYPE_CHOICES, default='incoming')
     other_church = models.CharField(max_length=160, help_text="Previous or destination church name")
     phone_number = models.CharField(max_length=40, blank=True)
+    email = models.EmailField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     clerk_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

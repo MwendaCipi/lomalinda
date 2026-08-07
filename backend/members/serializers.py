@@ -31,7 +31,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class EnrollmentRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnrollmentRequest
-        fields = ('email', 'first_name', 'last_name', 'phone_number')
+        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth')
 
 
 class EnrollmentCompleteSerializer(serializers.Serializer):
@@ -128,7 +128,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = MembershipTransferRequest
-        fields = ('id', 'member_name', 'transfer_type', 'other_church', 'phone_number', 'status', 'clerk_notes', 'created_at')
+        fields = ('id', 'member_name', 'transfer_type', 'other_church', 'phone_number', 'email', 'status', 'clerk_notes', 'created_at')
         read_only_fields = ('id', 'created_at')
 
 
