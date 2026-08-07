@@ -37,10 +37,10 @@ const FINANCIAL_CATEGORIES: { key: string; label: string; color: string }[] = [
 ];
 
 // Pulse dot for live indicator
-function LiveDot() {
+function LiveDot({ active = false }: { active?: boolean }) {
   return (
     <span className="relative flex h-3 w-3">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b36b3c] opacity-75" />
+      {active && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b36b3c] opacity-75" />}
       <span className="relative inline-flex rounded-full h-3 w-3 bg-[#b36b3c]" />
     </span>
   );

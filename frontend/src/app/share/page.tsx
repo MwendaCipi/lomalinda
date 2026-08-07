@@ -12,7 +12,6 @@ const fellowshipItems = [
     title: "Live Services & Moments",
     text: "Watch worship services and explore photos & videos of fellowship moments.",
     icon: "📸",
-    badge: "Live",
   },
   {
     href: "/share/sabbath-school",

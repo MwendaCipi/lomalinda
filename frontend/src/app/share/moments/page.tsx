@@ -47,14 +47,6 @@ export default function LiveServicesAndMomentsPage() {
             </h1>
           </div>
 
-          {/* Live badge */}
-          <span className="flex items-center gap-1.5 rounded-full border border-[#b36b3c]/30 bg-white px-4 py-2 text-sm font-semibold text-[#b36b3c] shadow-sm">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b36b3c] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#b36b3c]" />
-            </span>
-            Live
-          </span>
         </div>
 
         {/* 2 Tabs: Live Services vs Moments */}
