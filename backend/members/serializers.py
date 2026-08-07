@@ -67,6 +67,8 @@ class ContributionInitiateSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs['giving_type'] == 'financial' and attrs['amount'] < 1:
             raise serializers.ValidationError({'amount': 'Financial giving must be at least KES 1.'})
+        if attrs['giving_type'] == 'financial' and attrs.get('payment_method') == 'card' and not attrs.get('donor_email'):
+            raise serializers.ValidationError({'donor_email': 'Email is required for card checkout.'})
         if attrs['giving_type'] == 'in_kind' and not attrs.get('item_description'):
             raise serializers.ValidationError({'item_description': 'Describe the item you would like to give.'})
         return attrs

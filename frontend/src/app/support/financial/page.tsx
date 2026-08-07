@@ -177,9 +177,10 @@ export default function FinancialGivingPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[#26352f]">Email Address (Optional)</label>
+                <label className="block text-sm font-semibold text-[#26352f]">Email Address {paymentMethod === "card" ? "(Required)" : "(Optional)"}</label>
                 <input
                   type="email"
+                  required={paymentMethod === "card"}
                   value={donorEmail}
                   onChange={(e) => setDonorEmail(e.target.value)}
                   placeholder="For electronic receipt"

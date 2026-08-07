@@ -80,7 +80,7 @@ class Contribution(models.Model):
     mpesa_receipt_number = models.CharField(max_length=64, unique=True, null=True, blank=True)
     checkout_request_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
     merchant_request_id = models.CharField(max_length=128, blank=True)
-    stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, StripeWebhookView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -13,7 +13,7 @@ urlpatterns = [
     path('contributions/', MyContributionsView.as_view(), name='member-contributions'),
     path('contributions/initiate/', InitiateContributionView.as_view(), name='contribution-initiate'),
     path('payments/mpesa/callback/', MpesaCallbackView.as_view(), name='mpesa-callback'),
-    path('payments/stripe/webhook/', StripeWebhookView.as_view(), name='stripe-webhook'),
+    path('payments/paystack/webhook/', PaystackWebhookView.as_view(), name='paystack-webhook'),
     path('prayer-requests/', PrayerRequestView.as_view(), name='prayer-request'),
     path('child-dedications/', ChildDedicationRequestView.as_view(), name='child-dedication'),
     path('visitations/', VisitationRequestView.as_view(), name='visitations'),

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 import re
 import json
+from decimal import Decimal
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 import requests
@@ -21,7 +22,7 @@ from rest_framework.views import APIView
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
-from .stripe import StripeConfigurationError, create_checkout_session, parse_webhook, verify_webhook_signature
+from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
@@ -390,8 +391,8 @@ class InitiateContributionView(APIView):
             return Response({'message': 'Thank you. The church will contact you about delivering this gift.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
         if contribution.payment_method == 'card':
             try:
-                result = create_checkout_session(contribution)
-            except StripeConfigurationError as error:
+                result = initialize_checkout(contribution)
+            except PaystackConfigurationError as error:
                 contribution.delete()
                 return Response({'detail': str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             except ValueError as error:
@@ -401,9 +402,9 @@ class InitiateContributionView(APIView):
                 contribution.status = 'failed'
                 contribution.save(update_fields=['status'])
                 return Response({'detail': 'The card checkout could not be started.'}, status=status.HTTP_502_BAD_GATEWAY)
-            contribution.stripe_session_id = result['id']
-            contribution.save(update_fields=['stripe_session_id'])
-            return Response({'message': 'Continue to secure card checkout.', 'checkout_url': result['url'], 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
+            contribution.paystack_reference = result['reference']
+            contribution.save(update_fields=['paystack_reference'])
+            return Response({'message': 'Continue to secure card checkout.', 'checkout_url': result['authorization_url'], 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
         try:
             result = initiate_stk_push(contribution)
         except MpesaConfigurationError as error:
@@ -448,28 +449,29 @@ class MpesaCallbackView(APIView):
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
-class StripeWebhookView(APIView):
+class PaystackWebhookView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
         try:
-            if not verify_webhook_signature(request.body, request.headers.get('Stripe-Signature', '')):
+            if not verify_webhook_signature(request.body, request.headers.get('X-Paystack-Signature', '')):
                 return Response({'detail': 'Invalid webhook signature.'}, status=status.HTTP_400_BAD_REQUEST)
             event = parse_webhook(request.body)
-        except (StripeConfigurationError, ValueError, TypeError, json.JSONDecodeError):
-            return Response({'detail': 'Invalid Stripe webhook.'}, status=status.HTTP_400_BAD_REQUEST)
+        except (PaystackConfigurationError, ValueError, TypeError, json.JSONDecodeError):
+            return Response({'detail': 'Invalid Paystack webhook.'}, status=status.HTTP_400_BAD_REQUEST)
 
         event_type = event.get('type')
-        session = event.get('data', {}).get('object', {})
-        contribution_id = session.get('metadata', {}).get('contribution_id') or session.get('client_reference_id')
-        contribution = Contribution.objects.filter(id=contribution_id, stripe_session_id=session.get('id')).first()
+        payment = event.get('data', {})
+        contribution_id = payment.get('metadata', {}).get('contribution_id')
+        contribution = Contribution.objects.filter(id=contribution_id, paystack_reference=payment.get('reference')).first()
         if not contribution:
             return Response({'received': True})
-        if event_type in ('checkout.session.completed', 'checkout.session.async_payment_succeeded') and session.get('payment_status') == 'paid':
+        expected_amount = int(Decimal(contribution.amount) * 100)
+        if event_type == 'charge.success' and payment.get('status') and payment.get('amount') == expected_amount and payment.get('currency') == contribution.currency:
             contribution.status = 'completed'
             contribution.paid_at = timezone.now()
-        elif event_type in ('checkout.session.expired', 'checkout.session.async_payment_failed'):
+        elif event_type in ('charge.failed', 'transfer.failed'):
             contribution.status = 'failed'
         contribution.save(update_fields=['status', 'paid_at'])
         return Response({'received': True})
