@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { kenyaCounties } from "@/config/kenya-counties";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Tab = "join" | "transfer_out";
@@ -61,10 +62,10 @@ export default function EnrollPage() {
               <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">Additional details</p><p className="mt-1 text-xs text-[#617068]">These details help the church prepare for the next step.</p></div><button type="button" onClick={() => setStep(1)} className="text-xs font-semibold text-[#b36b3c]">Back</button></div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <label className="block text-sm font-medium">ID number<input required value={form.id_number} onChange={(event) => update("id_number", event.target.value)} className={inputClass} /></label>
+                <label className="block text-sm font-medium">Date of birth<input required type="date" value={form.date_of_birth} onChange={(event) => update("date_of_birth", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">Level of education<input required value={form.education_level} onChange={(event) => update("education_level", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">Profession<input required value={form.profession} onChange={(event) => update("profession", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">Date of birth<input required type="date" value={form.date_of_birth} onChange={(event) => update("date_of_birth", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium sm:col-span-2">County of birth<input required value={form.county_of_birth} onChange={(event) => update("county_of_birth", event.target.value)} className={inputClass} /></label>
+                <label className="block text-sm font-medium">County of birth<select required value={form.county_of_birth} onChange={(event) => update("county_of_birth", event.target.value)} className={inputClass}><option value="">Select county</option>{kenyaCounties.map((county) => <option key={county} value={county}>{county}</option>)}</select></label>
               </div>
               <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white transition hover:bg-[#3d5148] disabled:opacity-60">{loading ? "Sending..." : "Submit request"}</button>
             </>}
