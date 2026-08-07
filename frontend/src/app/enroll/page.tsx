@@ -43,8 +43,8 @@ export default function EnrollPage() {
         <h1 className="mt-2 text-3xl font-semibold">Membership requests</h1>
         <p className="mt-2 text-sm leading-6 text-[#617068]">Choose whether you would like to join us or request a transfer out.</p>
         <div className="mt-6 flex gap-1 rounded-2xl border border-[#dfdbd1] p-1">
-          <button type="button" onClick={() => selectTab("join")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "join" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Join us</button>
-          <button type="button" onClick={() => selectTab("transfer_out")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "transfer_out" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Transfer out</button>
+          <button type="button" onClick={() => selectTab("join")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "join" ? "bg-[#5f8067] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Join us</button>
+          <button type="button" onClick={() => selectTab("transfer_out")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "transfer_out" ? "bg-[#b36b3c] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Transfer out</button>
         </div>
 
         {tab === "join" ? (
@@ -57,7 +57,7 @@ export default function EnrollPage() {
                 <label className="block text-sm font-medium">Phone number<input required placeholder="e.g. 07XX XXX XXX" value={form.phone_number} onChange={(event) => update("phone_number", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">Email address<input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
               </div>
-              <button className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white transition hover:bg-[#3d5148]">Next</button>
+              <button className="w-full rounded-full bg-[#3d79a3] px-5 py-3.5 font-medium text-white transition hover:bg-[#2f6185]">Next</button>
             </> : <>
               <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">Additional details</p><p className="mt-1 text-xs text-[#617068]">These details help the church prepare for the next step.</p></div><button type="button" onClick={() => setStep(1)} className="text-xs font-semibold text-[#b36b3c]">Back</button></div>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -67,7 +67,7 @@ export default function EnrollPage() {
                 <label className="block text-sm font-medium">Profession<input required value={form.profession} onChange={(event) => update("profession", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">County of birth<select required value={form.county_of_birth} onChange={(event) => update("county_of_birth", event.target.value)} className={inputClass}><option value="">Select county</option>{kenyaCounties.map((county) => <option key={county} value={county}>{county}</option>)}</select></label>
               </div>
-              <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white transition hover:bg-[#3d5148] disabled:opacity-60">{loading ? "Sending..." : "Submit request"}</button>
+              <button disabled={loading} className="w-full rounded-full bg-[#3d79a3] px-5 py-3.5 font-medium text-white transition hover:bg-[#2f6185] disabled:opacity-60">{loading ? "Sending..." : "Submit request"}</button>
             </>}
           </form>
         ) : <form onSubmit={submit} className="mt-6 space-y-5">
@@ -79,7 +79,7 @@ export default function EnrollPage() {
             <label className="block text-sm font-medium">Email address<input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium sm:col-span-2">Destination church<input required value={form.destination_church} onChange={(event) => update("destination_church", event.target.value)} className={inputClass} /></label>
           </div>
-          <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white transition hover:bg-[#3d5148] disabled:opacity-60">{loading ? "Sending..." : "Submit transfer request"}</button>
+          <button disabled={loading} className="w-full rounded-full bg-[#3d79a3] px-5 py-3.5 font-medium text-white transition hover:bg-[#2f6185] disabled:opacity-60">{loading ? "Sending..." : "Submit transfer request"}</button>
         </form>}
         {message && <p className="mt-5 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
       </section>
