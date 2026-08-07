@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { fellowshipResources } from "@/config/fellowship-resources";
 
 export default function HymnalPage() {
   return (
@@ -11,7 +12,7 @@ export default function HymnalPage() {
         <section className="mt-6 rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
           <h2 className="mt-4 text-2xl font-semibold">Songs for worship</h2>
           <p className="mt-2 text-sm leading-6 text-[#617068]">Browse the Seventh-day Adventist hymnal online for worship, devotion, and Sabbath School.</p>
-          <a href="https://www.sdahymnal.org/" target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]">
+          <a href={fellowshipResources.hymnal} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]">
             Open SDA Hymnal <span>&rarr;</span>
           </a>
         </section>

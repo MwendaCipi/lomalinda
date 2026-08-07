@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { fellowshipResources } from "@/config/fellowship-resources";
 
 type ResourceTab = "bible" | "egw";
 
@@ -10,14 +11,14 @@ const resources = {
     label: "Bible",
     title: "Read the Bible",
     text: "Search books, chapters, and Bible versions for personal study.",
-    href: "https://www.biblesearch.me/Bible",
+    href: fellowshipResources.bible,
     button: "Open Bible",
   },
   egw: {
     label: "EGW Writings",
     title: "Ellen G. White Writings",
     text: "Explore the writings of Ellen G. White through the online collection.",
-    href: "https://egwwritings.org/allCollection/en",
+    href: fellowshipResources.egw,
     button: "Open EGW Library",
   },
 };
