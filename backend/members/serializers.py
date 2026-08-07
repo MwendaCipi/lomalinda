@@ -50,7 +50,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 class ContributionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contribution
-        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
+        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
 
 
@@ -62,6 +62,7 @@ class ContributionInitiateSerializer(serializers.Serializer):
     donor_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
     donor_email = serializers.EmailField(required=False, allow_blank=True)
     item_description = serializers.CharField(required=False, allow_blank=True)
+    payment_method = serializers.ChoiceField(choices=['mpesa', 'card'], default='mpesa')
 
     def validate(self, attrs):
         if attrs['giving_type'] == 'financial' and attrs['amount'] < 1:

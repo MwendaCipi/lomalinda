@@ -64,6 +64,7 @@ class Announcement(models.Model):
 
 class Contribution(models.Model):
     GIVING_TYPE_CHOICES = [('financial', 'Financial'), ('in_kind', 'In-kind')]
+    PAYMENT_METHOD_CHOICES = [('mpesa', 'M-Pesa'), ('card', 'Card')]
     STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')]
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='contributions', null=True, blank=True)
     donor_name = models.CharField(max_length=160, blank=True)
@@ -74,10 +75,12 @@ class Contribution(models.Model):
     purpose = models.CharField(max_length=120, default='General giving')
     item_description = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     mpesa_receipt_number = models.CharField(max_length=64, unique=True, null=True, blank=True)
     checkout_request_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
     merchant_request_id = models.CharField(max_length=128, blank=True)
+    stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

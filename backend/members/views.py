@@ -9,6 +9,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import uuid
 import re
+import json
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 import requests
@@ -20,6 +21,7 @@ from rest_framework.views import APIView
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
+from .stripe import StripeConfigurationError, create_checkout_session, parse_webhook, verify_webhook_signature
 from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
@@ -382,9 +384,26 @@ class InitiateContributionView(APIView):
             donor_name=serializer.validated_data.get('donor_name', ''),
             donor_email=serializer.validated_data.get('donor_email', ''),
             item_description=serializer.validated_data.get('item_description', ''),
+            payment_method=serializer.validated_data.get('payment_method', 'mpesa'),
         )
         if contribution.giving_type == 'in_kind':
             return Response({'message': 'Thank you. The church will contact you about delivering this gift.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
+        if contribution.payment_method == 'card':
+            try:
+                result = create_checkout_session(contribution)
+            except StripeConfigurationError as error:
+                contribution.delete()
+                return Response({'detail': str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except ValueError as error:
+                contribution.delete()
+                return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                contribution.status = 'failed'
+                contribution.save(update_fields=['status'])
+                return Response({'detail': 'The card checkout could not be started.'}, status=status.HTTP_502_BAD_GATEWAY)
+            contribution.stripe_session_id = result['id']
+            contribution.save(update_fields=['stripe_session_id'])
+            return Response({'message': 'Continue to secure card checkout.', 'checkout_url': result['url'], 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
         try:
             result = initiate_stk_push(contribution)
         except MpesaConfigurationError as error:
@@ -427,6 +446,33 @@ class MpesaCallbackView(APIView):
             contribution.status = 'failed'
         contribution.save()
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+class StripeWebhookView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            if not verify_webhook_signature(request.body, request.headers.get('Stripe-Signature', '')):
+                return Response({'detail': 'Invalid webhook signature.'}, status=status.HTTP_400_BAD_REQUEST)
+            event = parse_webhook(request.body)
+        except (StripeConfigurationError, ValueError, TypeError, json.JSONDecodeError):
+            return Response({'detail': 'Invalid Stripe webhook.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_type = event.get('type')
+        session = event.get('data', {}).get('object', {})
+        contribution_id = session.get('metadata', {}).get('contribution_id') or session.get('client_reference_id')
+        contribution = Contribution.objects.filter(id=contribution_id, stripe_session_id=session.get('id')).first()
+        if not contribution:
+            return Response({'received': True})
+        if event_type in ('checkout.session.completed', 'checkout.session.async_payment_succeeded') and session.get('payment_status') == 'paid':
+            contribution.status = 'completed'
+            contribution.paid_at = timezone.now()
+        elif event_type in ('checkout.session.expired', 'checkout.session.async_payment_failed'):
+            contribution.status = 'failed'
+        contribution.save(update_fields=['status', 'paid_at'])
+        return Response({'received': True})
 
 
 class PrayerRequestView(generics.CreateAPIView):

@@ -8,6 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export default function FinancialGivingPage() {
   const [purposes, setPurposes] = useState<string[]>(["Tithes", "Local Church Budget", "Combined Offerings", "Camp Meeting Expenses", "Camp Meeting Offering", "Church Building Project"]);
   const [selectedPurpose, setSelectedPurpose] = useState("Tithes");
+  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "card">("mpesa");
   const [amount, setAmount] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [donorName, setDonorName] = useState("");
@@ -26,6 +27,10 @@ export default function FinancialGivingPage() {
         }
       })
       .catch(() => {});
+
+    const paymentStatus = new URLSearchParams(window.location.search).get("payment");
+    if (paymentStatus === "success") setMessage({ type: "success", text: "Your card payment was received. Thank you for giving." });
+    if (paymentStatus === "cancelled") setMessage({ type: "error", text: "Card checkout was cancelled. You can try again or use M-Pesa." });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,6 +44,7 @@ export default function FinancialGivingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           giving_type: "financial",
+          payment_method: paymentMethod,
           amount: parseFloat(amount),
           purpose: selectedPurpose,
           phone_number: phoneNumber,
@@ -48,7 +54,12 @@ export default function FinancialGivingPage() {
       });
 
       if (res.ok) {
-        setMessage({ type: "success", text: "M-Pesa STK Push prompt sent to your phone! Complete payment to record your gift." });
+        const data = await res.json();
+        if (paymentMethod === "card" && data.checkout_url) {
+          window.location.assign(data.checkout_url);
+          return;
+        }
+        setMessage({ type: "success", text: "M-Pesa prompt sent to your phone. Complete payment to record your gift." });
         setAmount("");
         setPhoneNumber("");
       } else {
@@ -92,6 +103,26 @@ export default function FinancialGivingPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
+              <label className="block text-sm font-semibold text-[#26352f]">Payment method</label>
+              <div className="mt-2 flex rounded-2xl bg-[#eef2ed] p-1">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("mpesa")}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "mpesa" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+                >
+                  M-Pesa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("card")}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${paymentMethod === "card" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+                >
+                  Card
+                </button>
+              </div>
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold text-[#26352f]">Giving Purpose</label>
               <select
                 value={selectedPurpose}
@@ -121,7 +152,7 @@ export default function FinancialGivingPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[#26352f]">M-Pesa Phone Number</label>
+                <label className="block text-sm font-semibold text-[#26352f]">{paymentMethod === "mpesa" ? "M-Pesa Phone Number" : "Phone Number"}</label>
                 <input
                   type="tel"
                   required
@@ -162,7 +193,7 @@ export default function FinancialGivingPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
             >
-              {submitting ? "Processing..." : "Give via M-Pesa"}
+              {submitting ? "Processing..." : paymentMethod === "mpesa" ? "Give via M-Pesa" : "Give by Card"}
             </button>
           </form>
         </div>
