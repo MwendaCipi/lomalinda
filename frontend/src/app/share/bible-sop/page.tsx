@@ -17,7 +17,7 @@ const resources = {
     label: "EGW Writings",
     title: "Ellen G. White Writings",
     text: "Explore the writings of Ellen G. White through the online collection.",
-    href: "https://egwwritings.org/",
+    href: "https://egwwritings.org/allCollection/en",
     button: "Open EGW Library",
   },
 };

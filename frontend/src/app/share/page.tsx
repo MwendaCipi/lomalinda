@@ -37,13 +37,13 @@ const fellowshipItems: FellowshipItem[] = [
     href: "/share/bible-sop",
     title: "Bible & EGW Writings",
     text: "Read the Bible and explore the writings of Ellen G. White.",
-    icon: "books",
+    icon: "",
   },
   {
     href: "/share/hymnal",
     title: "SDA Hymnal",
     text: "Find hymns and worship songs for personal and church devotion.",
-    icon: "music",
+    icon: "",
   },
 ];
 
@@ -72,7 +72,7 @@ export default function FellowshipPage() {
             >
               <div>
                 <div className="flex items-start justify-between gap-3">
-                  <span className="text-2xl" aria-hidden="true">{item.icon}</span>
+                  {item.icon && <span className="text-2xl" aria-hidden="true">{item.icon}</span>}
                   {item.badge && (
                     <span className="flex items-center gap-1.5 rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">
                       <span className="relative flex h-2 w-2">
