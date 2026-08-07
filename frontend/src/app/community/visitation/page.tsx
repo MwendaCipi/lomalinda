@@ -77,7 +77,7 @@ export default function VisitationPage() {
         </Link>
 
         <header className="mt-6">
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight sm:text-6xl">Request Visitation</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Request Visitation</h1>
         </header>
 
         <section className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
@@ -173,9 +173,6 @@ export default function VisitationPage() {
 
             <div>
               <label className="block text-sm font-semibold text-[#26352f] mb-2">Pin Location</label>
-              <p className="mb-3 text-xs text-[#617068]">
-                Use your GPS location or tap the map to drop a pin so our care team can easily find you.
-              </p>
               <LocationMapPicker
                 latitude={form.latitude}
                 longitude={form.longitude}
@@ -194,13 +191,15 @@ export default function VisitationPage() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
-            >
-              {loading ? "Submitting request..." : "Submit request"}
-            </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-full bg-[#5f8067] py-4 text-center font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60 sm:col-start-2"
+              >
+                {loading ? "Submitting..." : "Submit"}
+              </button>
+            </div>
           </form>
         </section>
       </div>
