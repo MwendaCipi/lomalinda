@@ -74,7 +74,7 @@ export default function FinancialGivingPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-3xl">
         {/* Back Button */}
         <Link
@@ -85,12 +85,12 @@ export default function FinancialGivingPage() {
           <span>Back to Stewardship & Support</span>
         </Link>
 
-        <div className="mt-6">
+        <div className="mt-4">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Financial Giving</h1>
         </div>
 
         {/* Giving Form Card */}
-        <div className="mx-auto mt-6 max-w-2xl rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+        <div className="mx-auto mt-4 max-w-2xl rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
           {message && (
             <div
               className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
