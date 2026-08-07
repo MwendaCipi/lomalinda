@@ -75,7 +75,7 @@ export default function FinancialGivingPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-3xl">
         {/* Back Button */}
         <Link
           href="/support"
@@ -90,7 +90,7 @@ export default function FinancialGivingPage() {
         </div>
 
         {/* Giving Form Card */}
-        <div className="mx-auto mt-8 max-w-3xl rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
+        <div className="mx-auto mt-6 max-w-2xl rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
           {message && (
             <div
               className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
@@ -101,7 +101,7 @@ export default function FinancialGivingPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-[#26352f]">Payment method</label>
               <div className="mt-2 flex rounded-2xl bg-[#eef2ed] p-1">
@@ -137,7 +137,7 @@ export default function FinancialGivingPage() {
               </select>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-[#26352f]">Amount (KES)</label>
                 <input
@@ -164,7 +164,7 @@ export default function FinancialGivingPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-[#26352f]">Your Name (Optional)</label>
                 <input
@@ -189,13 +189,15 @@ export default function FinancialGivingPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
-            >
-              {submitting ? "Processing..." : paymentMethod === "mpesa" ? "Give via M-Pesa" : "Give by Card"}
-            </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-full bg-[#5f8067] py-3.5 text-center font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-50 sm:col-start-2"
+              >
+                {submitting ? "Processing..." : "Give"}
+              </button>
+            </div>
           </form>
         </div>
       </div>
