@@ -7,18 +7,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const adultLessonLinks = [
   {
-    title: "Lesson PDF",
-    text: "Download the current Adult Bible Study Guide PDF for offline study.",
-    href: `${API_URL}/api/members/lesson-pdf/adult/lesson/`,
-    icon: "📄",
-    buttonText: "Open Student PDF",
-  },
-  {
-    title: "Teachers PDF",
-    text: "Download the current teacher's preparation guide PDF.",
-    href: `${API_URL}/api/members/lesson-pdf/adult/teachers/`,
-    icon: "🎓",
-    buttonText: "Open Teacher PDF",
+    title: "Read Lesson Online",
+    text: "Read the current Adult Bible Study Guide on Sabbath.school.",
+    href: `${API_URL}/api/members/lesson-reading/adult/`,
+    icon: "📖",
+    buttonText: "Open Lesson",
   },
 ];
 
@@ -105,9 +98,9 @@ export default function SabbathSchoolPage() {
               <span>📖</span> Adult Lesson
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-[#617068]">
-              Download the current Adult Bible Study Guide PDF and teacher preparation materials.
+              Read the current lesson online without downloading a PDF.
             </p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4">
               {adultLessonLinks.map((item) => (
                 <div
                   key={item.title}
