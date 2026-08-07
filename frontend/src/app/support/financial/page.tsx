@@ -79,7 +79,7 @@ export default function FinancialGivingPage() {
         </div>
 
         {/* Giving Form Card */}
-        <div className="mt-8 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
+        <div className="mx-auto mt-8 max-w-3xl rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
           {message && (
             <div
               className={`mb-6 rounded-2xl p-4 text-sm font-medium ${
@@ -162,7 +162,7 @@ export default function FinancialGivingPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[#b36b3c] py-4 text-center font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-50"
             >
-              {submitting ? "Processing M-Pesa..." : "Give via M-Pesa Now"}
+              {submitting ? "Processing..." : "Give via M-Pesa"}
             </button>
           </form>
         </div>
