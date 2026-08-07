@@ -1,4 +1,4 @@
-const CACHE_NAME = "sda-loma-linda-meru-v2";
+const CACHE_NAME = "sda-loma-linda-meru-v3";
 const STATIC_ASSETS = [
   "/",
   "/about/",
