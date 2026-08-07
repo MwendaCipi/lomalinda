@@ -130,6 +130,7 @@ class PrayerRequest(models.Model):
     request_text = models.TextField()
     name = models.CharField(max_length=160, blank=True)
     email = models.EmailField(blank=True)
+    phone_number = models.CharField(max_length=40, blank=True)
     anonymous = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=[('new', 'New'), ('prayed', 'Prayed'), ('closed', 'Closed')], default='new')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -141,6 +142,7 @@ class PrayerRequest(models.Model):
 class Testimony(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     name = models.CharField(max_length=160, blank=True)
+    phone_number = models.CharField(max_length=40, blank=True)
     testimony_text = models.TextField(max_length=1000)
     status = models.CharField(
         max_length=20,

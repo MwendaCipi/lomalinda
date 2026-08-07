@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const staffRoles = ["admin", "leader", "clerk", "elder", "youth_leader", "choir_director", "children_ministry", "men_ministry", "women_ministry", "chaplaincy", "finance", "treasurer"];
@@ -17,6 +17,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledSetOpen ?? setInternalOpen;
+  const navRef = useRef<HTMLElement>(null);
   
   const [userState, setUserState] = useState<{ isLoggedIn: boolean; role: string; username: string }>({
     isLoggedIn: false,
@@ -53,9 +54,20 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
 
   const isStaff = staffRoles.includes(userState.role);
 
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [open, setOpen]);
+
   return (
     <header className="border-b border-white/10 bg-[#26352f] text-white shadow-lg">
-      <nav className="mx-auto max-w-6xl px-6 py-4 lg:px-8" aria-label="Main navigation">
+      <nav ref={navRef} className="mx-auto max-w-6xl px-6 py-4 lg:px-8" aria-label="Main navigation">
         <div className="flex items-center justify-between gap-6">
           <Link href="/" className="flex min-w-0 items-center gap-3">
             <span className="h-10 w-10 shrink-0 overflow-hidden" aria-hidden="true">
@@ -147,7 +159,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
 
         {/* Mobile Navigation List */}
         {open && (
-          <div id="mobile-menu" className="mt-4 max-h-[calc(100vh-100px)] space-y-2.5 overflow-y-auto border-t border-white/15 pt-4 pb-6 md:hidden">
+          <div id="mobile-menu" className="mt-3 flex max-h-[calc(100vh-100px)] flex-col overflow-y-auto border-t border-white/15 pt-3 pb-4 md:hidden">
             <Link
               href="/beliefs"
               onClick={() => setOpen(false)}

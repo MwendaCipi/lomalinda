@@ -81,7 +81,7 @@ class GivingPurposeSerializer(serializers.ModelSerializer):
 class PrayerRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PrayerRequest
-        fields = ('request_text', 'name', 'email', 'anonymous')
+        fields = ('request_text', 'name', 'phone_number', 'anonymous')
 
 
 class ChildDedicationRequestSerializer(serializers.ModelSerializer):
@@ -94,7 +94,7 @@ class ChildDedicationRequestSerializer(serializers.ModelSerializer):
 class TestimonySerializer(serializers.ModelSerializer):
     class Meta:
         model = Testimony
-        fields = ('id', 'name', 'testimony_text', 'status', 'created_at')
+        fields = ('id', 'name', 'phone_number', 'testimony_text', 'status', 'created_at')
         read_only_fields = ('id', 'status', 'created_at')
 
 

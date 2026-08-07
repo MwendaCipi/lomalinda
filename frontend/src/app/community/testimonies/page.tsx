@@ -16,6 +16,7 @@ export default function TestimoniesPage() {
   const [mode, setMode] = useState<"online" | "fellowship">("online");
   const [testimony, setTestimony] = useState("");
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -66,6 +67,7 @@ export default function TestimoniesPage() {
         body: JSON.stringify({
           testimony_text: testimony.trim() || "I would like to request an opportunity to share my testimony during fellowship.",
           name: name.trim(),
+          phone_number: phoneNumber.trim(),
         }),
       });
 
@@ -79,6 +81,7 @@ export default function TestimoniesPage() {
       if (!isLoggedIn) {
         setName("");
       }
+      setPhoneNumber("");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "We could not submit your testimony. Please try again.");
     } finally {
@@ -107,17 +110,31 @@ export default function TestimoniesPage() {
             </>
           )}
 
-          <label className="mt-3 block text-sm font-medium">
-            Your Name
-            <input
-              required
-              maxLength={160}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-              placeholder="Enter your name"
-            />
-          </label>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Your Name
+              <input
+                required
+                maxLength={160}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                placeholder="Enter your name"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Phone number
+              <input
+                required
+                maxLength={40}
+                type="tel"
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                placeholder="07XX XXX XXX"
+              />
+            </label>
+          </div>
 
           <div className="mt-4">
             <div className="flex items-center justify-between text-sm font-medium">

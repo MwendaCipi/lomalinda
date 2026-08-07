@@ -8,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export default function CommunityPrayerPage() {
   const [requestText, setRequestText] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -17,7 +17,7 @@ export default function CommunityPrayerPage() {
     const body: Record<string, unknown> = { request_text: requestText, anonymous };
     if (!anonymous) {
       if (name) body.name = name;
-      if (email) body.email = email;
+      if (phoneNumber) body.phone_number = phoneNumber;
     }
     const response = await fetch(`${API_URL}/api/members/prayer-requests/`, {
       method: "POST",
@@ -25,7 +25,7 @@ export default function CommunityPrayerPage() {
       body: JSON.stringify(body),
     });
     setMessage(response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.");
-    if (response.ok) { setRequestText(""); setName(""); setEmail(""); }
+    if (response.ok) { setRequestText(""); setName(""); setPhoneNumber(""); }
   }
 
   return (
@@ -53,7 +53,7 @@ export default function CommunityPrayerPage() {
             <span className="text-sm font-medium">Submit anonymously</span>
           </label>
 
-          {/* Name & email — hidden when anonymous */}
+          {/* Name & phone — hidden when anonymous */}
           {!anonymous && (
             <div className="mb-5 grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium">
@@ -67,13 +67,13 @@ export default function CommunityPrayerPage() {
                 />
               </label>
               <label className="block text-sm font-medium">
-                Email address
+                Phone number
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
-                  placeholder="Optional"
+                  placeholder="07XX XXX XXX"
                 />
               </label>
             </div>
