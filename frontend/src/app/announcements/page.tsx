@@ -54,8 +54,8 @@ export default function AnnouncementsPage() {
           <p className="mt-5 text-lg leading-8 text-[#617068]">Search the church announcement archive by keyword or date.</p>
         </div>
 
-        <form onSubmit={submitFilters} className="mt-10 grid gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-sm font-semibold text-[#26352f] sm:col-span-2 lg:col-span-2">
+        <form onSubmit={submitFilters} className="mt-10 grid grid-cols-2 gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm lg:grid-cols-4">
+          <label className="col-span-2 text-sm font-semibold text-[#26352f] lg:col-span-2">
             Search
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search announcements" className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#b36b3c]" />
           </label>
@@ -67,7 +67,7 @@ export default function AnnouncementsPage() {
             To
             <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#b36b3c]" />
           </label>
-          <div className="flex gap-3 sm:col-span-2 lg:col-span-4">
+          <div className="col-span-2 flex gap-3 lg:col-span-4">
             <button type="submit" className="rounded-xl bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white hover:bg-[#96552e]">Search</button>
             <button type="button" onClick={clearFilters} className="rounded-xl border border-[#c9c5bb] px-5 py-3 text-sm font-semibold text-[#26352f] hover:border-[#b36b3c]">Clear</button>
           </div>

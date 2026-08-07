@@ -113,7 +113,7 @@ export default function Home() {
             </div>
             <ChurchLocation />
           </div>
-          <p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 SDA Loma Linda Meru</p>
+          <p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 SDA Church Lomalina, Meru</p>
         </div>
       </footer>
     </main>

@@ -45,3 +45,17 @@ body {
     transform: none;
   }
 }
+
+@media (max-width: 767px) {
+  #mobile-menu > a:not([href="/administration"]):not([href="/member"]):not([href="/login"]) {
+    border-radius: 0;
+    border-width: 0 0 1px;
+    border-color: rgba(255, 255, 255, 0.12);
+    background: transparent;
+    padding: 0.75rem 0.25rem;
+  }
+
+  #mobile-menu > a:not([href="/administration"]):not([href="/member"]):not([href="/login"]):hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}

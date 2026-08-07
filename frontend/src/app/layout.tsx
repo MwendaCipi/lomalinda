@@ -11,13 +11,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SDA Loma Linda Meru",
+  title: "SDA Church Lomalina, Meru",
   description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "SDA Loma Linda Meru",
+    title: "SDA Church Lomalina, Meru",
   },
   icons: {
     icon: [
