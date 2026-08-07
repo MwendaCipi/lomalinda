@@ -33,6 +33,18 @@ const fellowshipItems: FellowshipItem[] = [
     text: "Share a testimony online or request an opportunity to share during fellowship.",
     icon: "✨",
   },
+  {
+    href: "/share/bible-sop",
+    title: "Bible & EGW Writings",
+    text: "Read the Bible and explore the writings of Ellen G. White.",
+    icon: "books",
+  },
+  {
+    href: "/share/hymnal",
+    title: "SDA Hymnal",
+    text: "Find hymns and worship songs for personal and church devotion.",
+    icon: "music",
+  },
 ];
 
 export default function FellowshipPage() {
