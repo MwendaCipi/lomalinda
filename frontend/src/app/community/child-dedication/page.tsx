@@ -62,18 +62,15 @@ export default function ChildDedicationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-12 pb-10 text-[#26352f] sm:py-16">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pt-8 pb-8 text-[#26352f] sm:py-10">
       <div className="mx-auto max-w-3xl">
         <Link href="/requests" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span>
           <span>Back to Requests</span>
         </Link>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-5xl">Child dedication</h1>
-        <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">
-          Dedicating a child is a sacred opportunity to thank God for the gift of life and pledge to guide them in faith alongside your church family.
-        </p>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Child dedication</h1>
 
-        <section className="mt-8 rounded-3xl border border-[#dfdbd1] bg-[#ffffff] p-6 shadow-sm sm:p-10">
+        <section className="mt-5 rounded-3xl border border-[#dfdbd1] bg-[#ffffff] p-6 shadow-sm sm:p-10">
           <h2 className="text-xl font-semibold sm:text-2xl">Child dedication details</h2>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
             Please provide your child&apos;s information and contact details below.

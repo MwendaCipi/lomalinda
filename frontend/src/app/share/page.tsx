@@ -1,6 +1,14 @@
 import Link from "next/link";
 
-const fellowshipItems = [
+type FellowshipItem = {
+  href: string;
+  title: string;
+  text: string;
+  icon: string;
+  badge?: string;
+};
+
+const fellowshipItems: FellowshipItem[] = [
   {
     href: "/calendar",
     title: "Calendar",
@@ -22,7 +30,7 @@ const fellowshipItems = [
   {
     href: "/spiritual/testimonies",
     title: "Testimonies",
-    text: "Share how God has been working in your life, or read stories of faith.",
+    text: "Share a testimony online or request an opportunity to share during fellowship.",
     icon: "✨",
   },
 ];

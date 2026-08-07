@@ -22,7 +22,7 @@ const requestItems = [
   {
     href: "/enroll",
     title: "Membership requests",
-    text: "Request to join Loma Linda SDA Church through baptism or membership transfer.",
+    text: "Request to join Loma Linda SDA Church through baptism or transfer.",
     icon: "🤝",
   },
 ];

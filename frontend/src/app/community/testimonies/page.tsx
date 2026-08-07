@@ -94,20 +94,20 @@ export default function TestimoniesPage() {
           <span>Back to Fellowship</span>
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Testimonies</h1>
-        <p className="mt-2 text-sm leading-6 text-[#617068] sm:text-lg sm:leading-7">
-          Share how God has been working in your life to encourage and build up your church family.
-        </p>
-
-        <div className="mt-5 flex rounded-2xl border border-[#dfdbd1] bg-white p-1">
+        <div className="mt-4 flex rounded-2xl border border-[#dfdbd1] bg-white p-1">
           <button type="button" onClick={() => setMode("online")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${mode === "online" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Share online</button>
           <button type="button" onClick={() => setMode("fellowship")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${mode === "fellowship" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Request</button>
         </div>
 
         <form onSubmit={submitTestimony} className="mt-3 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
-          <h2 className="text-xl font-semibold sm:text-2xl">{mode === "online" ? "Share your testimony online" : "Request to share during fellowship"}</h2>
-          <p className="mt-2 text-sm leading-6 text-[#617068]">{mode === "online" ? "Your testimony will be reviewed before it is shared on the website." : "Tell us your name and any helpful details. A church leader will arrange an opportunity during fellowship."}</p>
+          {mode === "fellowship" && (
+            <>
+              <h2 className="text-xl font-semibold sm:text-2xl">Request to share during fellowship</h2>
+              <p className="mt-2 text-sm leading-6 text-[#617068]">Tell us your name and any helpful details. A church leader will arrange an opportunity during fellowship.</p>
+            </>
+          )}
 
-          <label className="mt-4 block text-sm font-medium">
+          <label className="mt-3 block text-sm font-medium">
             Your Name
             <input
               required

@@ -16,6 +16,7 @@ export default function EnrollPage() {
     phone_number: "",
     current_church: "",
   });
+  const [transferDirection, setTransferDirection] = useState<"incoming" | "outgoing">("incoming");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,23 +25,33 @@ export default function EnrollPage() {
     setLoading(true);
     setMessage("");
     try {
-      const payload: Record<string, string> = {
-        email: form.email,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        phone_number: form.phone_number,
-        enrollment_type: mode,
-      };
-      if (mode === "transfer") payload.current_church = form.current_church;
+      const endpoint = mode === "transfer"
+        ? `${API_URL}/api/members/transfers/`
+        : `${API_URL}/api/members/auth/enrollment-request/`;
+      const payload: Record<string, string> = mode === "transfer"
+        ? {
+            member_name: `${form.first_name} ${form.last_name}`.trim(),
+            transfer_type: transferDirection,
+            other_church: form.current_church,
+            phone_number: form.phone_number,
+          }
+        : {
+            email: form.email,
+            first_name: form.first_name,
+            last_name: form.last_name,
+            phone_number: form.phone_number,
+          };
 
-      const response = await fetch(`${API_URL}/api/members/auth/enrollment-request/`, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(Object.values(data).flat().join(" "));
-      setMessage(data.message ?? "Your request has been received. We will be in touch.");
+      setMessage(data.message ?? (mode === "transfer"
+        ? "Your transfer request has been received. The church office will be in touch."
+        : "Your request has been received. We will be in touch."));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to submit your request.");
     } finally {
@@ -59,8 +70,10 @@ export default function EnrollPage() {
           <span>Back to Requests</span>
         </Link>
         <h1 className="mt-2 text-3xl font-semibold">Request to join</h1>
-        <p className="mt-3 text-sm leading-6 text-[#617068]">
-          Fill in your details and we will reach out to walk you through the next steps.
+        <p className="mt-2 text-sm leading-6 text-[#617068]">
+          {mode === "transfer"
+            ? "For SDA members transferring from one church to another."
+            : "Fill in your details and we will reach out to walk you through the next steps."}
         </p>
 
         {/* Mode toggle */}
@@ -76,12 +89,12 @@ export default function EnrollPage() {
                   : "text-[#617068] hover:bg-[#f7f4ee]"
               }`}
             >
-              {m === "baptism" ? "Baptism" : "Membership transfer"}
+              {m === "baptism" ? "Baptism" : "Transfer"}
             </button>
           ))}
         </div>
 
-        <form onSubmit={submit} className="mt-6 space-y-5">
+        <form onSubmit={submit} className="mt-5 space-y-4">
           {/* First 4 fields in 1 row on large screens */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-sm font-medium">
@@ -129,16 +142,34 @@ export default function EnrollPage() {
 
           {/* Transfer-only: current church */}
           {mode === "transfer" && (
-            <label className="block text-sm font-medium">
-              Current church name
-              <input
-                required
-                placeholder="Name of your current church"
-                value={form.current_church}
-                onChange={(e) => setForm({ ...form, current_church: e.target.value })}
-                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-              />
-            </label>
+            <div className="space-y-4">
+              <div className="flex rounded-2xl border border-[#dfdbd1] p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTransferDirection("incoming")}
+                  className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${transferDirection === "incoming" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}
+                >
+                  Transfer in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransferDirection("outgoing")}
+                  className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${transferDirection === "outgoing" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}
+                >
+                  Transfer out
+                </button>
+              </div>
+              <label className="block text-sm font-medium">
+                {transferDirection === "incoming" ? "Previous church name" : "Destination church name"}
+                <input
+                  required
+                  placeholder={transferDirection === "incoming" ? "Name of your previous church" : "Name of your destination church"}
+                  value={form.current_church}
+                  onChange={(e) => setForm({ ...form, current_church: e.target.value })}
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+            </div>
           )}
 
           <button

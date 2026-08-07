@@ -78,7 +78,7 @@ export default function SabbathSchoolPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] lg:px-8">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-12 pt-6 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-4xl">
         <Link
           href="/share"
@@ -87,19 +87,16 @@ export default function SabbathSchoolPage() {
           &larr; Back to Fellowship
         </Link>
 
-        <div className="mt-4 max-w-3xl">
+        <div className="mt-3 max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
             Fellowship &amp; Study
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-5xl">
             Sabbath School
           </h1>
-          <p className="mt-2 text-base leading-7 text-[#617068]">
-            Access this quarter&apos;s Bible study guides and weekly mission stories for adults and children below.
-          </p>
         </div>
 
-        <div className="mt-10 flex flex-col gap-6">
+        <div className="mt-6 flex flex-col gap-4">
           {/* Section 3: Adult Lesson */}
           <section className="order-3 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
             <div className="flex items-center gap-3">
