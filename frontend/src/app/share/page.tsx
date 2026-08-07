@@ -22,7 +22,7 @@ const fellowshipItems: FellowshipItem[] = [
   },
   {
     href: "/share/hymnal",
-    title: "SDA Hymnal",
+    title: "Hymnal & NZK",
     text: "Find hymns and worship songs for personal and church devotion.",
   },
   {
