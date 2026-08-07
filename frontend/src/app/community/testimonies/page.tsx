@@ -13,6 +13,7 @@ interface ApprovedTestimony {
 }
 
 export default function TestimoniesPage() {
+  const [mode, setMode] = useState<"online" | "fellowship">("online");
   const [testimony, setTestimony] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
@@ -63,7 +64,7 @@ export default function TestimoniesPage() {
         method: "POST",
         headers,
         body: JSON.stringify({
-          testimony_text: testimony,
+          testimony_text: testimony.trim() || "I would like to request an opportunity to share my testimony during fellowship.",
           name: name.trim(),
         }),
       });
@@ -73,7 +74,7 @@ export default function TestimoniesPage() {
         throw new Error(Object.values(errorData).flat().join(" ") || "Could not submit your testimony.");
       }
 
-      setMessage("Thank you for sharing your testimony. Your testimony has been submitted for review by church leadership before being published.");
+      setMessage(mode === "online" ? "Thank you for sharing your testimony. It has been submitted for review before being published." : "Thank you. Your request to share during fellowship has been received. A church leader will follow up with you.");
       setTestimony("");
       if (!isLoggedIn) {
         setName("");
@@ -97,8 +98,14 @@ export default function TestimoniesPage() {
           Share how God has been working in your life to encourage and build up your church family.
         </p>
 
-        <form onSubmit={submitTestimony} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-          <h2 className="text-xl font-semibold sm:text-2xl">Share your testimony</h2>
+        <div className="mt-8 flex rounded-2xl border border-[#dfdbd1] bg-white p-1.5">
+          <button type="button" onClick={() => setMode("online")} className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${mode === "online" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Share online</button>
+          <button type="button" onClick={() => setMode("fellowship")} className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${mode === "fellowship" ? "bg-[#26352f] text-white" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Request during fellowship</button>
+        </div>
+
+        <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+          <h2 className="text-xl font-semibold sm:text-2xl">{mode === "online" ? "Share your testimony online" : "Request to share during fellowship"}</h2>
+          <p className="mt-2 text-sm leading-6 text-[#617068]">{mode === "online" ? "Your testimony will be reviewed before it is shared on the website." : "Tell us your name and any helpful details. A church leader will arrange an opportunity during fellowship."}</p>
 
           <label className="mt-6 block text-sm font-medium">
             Your Name
@@ -114,20 +121,20 @@ export default function TestimoniesPage() {
 
           <div className="mt-5">
             <div className="flex items-center justify-between text-sm font-medium">
-              <label htmlFor="testimony-text">Your Testimony</label>
+              <label htmlFor="testimony-text">{mode === "online" ? "Your Testimony" : "Message (optional)"}</label>
               <span className={`text-xs ${testimony.length >= 900 ? "text-[#b36b3c] font-semibold" : "text-[#617068]"}`}>
                 {testimony.length} / 1000 characters
               </span>
             </div>
             <textarea
               id="testimony-text"
-              required
+              required={mode === "online"}
               maxLength={1000}
               rows={4}
               value={testimony}
               onChange={(event) => setTestimony(event.target.value)}
               className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
-              placeholder="Tell us what God has done in your life..."
+              placeholder={mode === "online" ? "Tell us what God has done in your life..." : "Add any details you would like the church team to know..."}
             />
           </div>
 
@@ -135,7 +142,7 @@ export default function TestimoniesPage() {
             disabled={loading}
             className="mt-6 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
           >
-            {loading ? "Sending request..." : "Request to share"}
+            {loading ? "Sending..." : mode === "online" ? "Share testimony" : "Request to share"}
           </button>
 
           {message && (

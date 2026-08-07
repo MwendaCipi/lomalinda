@@ -62,7 +62,8 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
               <Image src="/adventist-logo-white.svg" alt="" width={180} height={49} className="h-10 max-w-none w-auto" priority />
             </span>
             <span className="text-sm leading-tight text-white">
-              <span className="block">SDA Church Lomalina, Meru</span>
+              <span className="block">SDA Church</span>
+              <span className="text-white/75">Loma Linda, Meru</span>
             </span>
           </Link>
 
