@@ -156,5 +156,10 @@ class ChurchNotificationSerializer(serializers.ModelSerializer):
 class VisitationRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = VisitationRequest
-        fields = ('id', 'requester_name', 'phone_number', 'email', 'visitation_type', 'preferred_date', 'preferred_time', 'location_description', 'latitude', 'longitude', 'notes', 'status', 'created_at')
+        fields = ('id', 'requester_name', 'phone_number', 'email', 'visitation_type', 'preferred_date', 'preferred_time', 'latitude', 'longitude', 'notes', 'status', 'created_at')
         read_only_fields = ('id', 'status', 'created_at')
+
+    def validate(self, attrs):
+        if attrs.get('latitude') is None or attrs.get('longitude') is None:
+            raise serializers.ValidationError({'location': 'Please pin your location on the map before submitting.'})
+        return attrs

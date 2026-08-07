@@ -16,7 +16,6 @@ export default function VisitationPage() {
     visitation_type: "pastoral",
     preferred_date: "",
     preferred_time: "",
-    location_description: "",
     latitude: null as number | null,
     longitude: null as number | null,
     notes: "",
@@ -31,6 +30,11 @@ export default function VisitationPage() {
     setMessage(null);
 
     try {
+      if (form.latitude === null || form.longitude === null) {
+        setMessage({ type: "error", text: "Please pin your location on the map before submitting." });
+        setLoading(false);
+        return;
+      }
       const response = await fetch(`${API_URL}/api/members/visitations/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,7 +53,6 @@ export default function VisitationPage() {
           visitation_type: "pastoral",
           preferred_date: "",
           preferred_time: "",
-          location_description: "",
           latitude: null,
           longitude: null,
           notes: "",
@@ -169,22 +172,9 @@ export default function VisitationPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-[#26352f]">Location Description & Directions</label>
-              <textarea
-                required
-                rows={3}
-                value={form.location_description}
-                onChange={(e) => setForm({ ...form, location_description: e.target.value })}
-                placeholder="Describe your location, landmarks, estate name, gate description, or hospital ward details..."
-                className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-              />
-            </div>
-
-            {/* Leaflet Location Map Picker */}
-            <div>
-              <label className="block text-sm font-semibold text-[#26352f] mb-2">Map Location Pin</label>
+              <label className="block text-sm font-semibold text-[#26352f] mb-2">Pin Location</label>
               <p className="mb-3 text-xs text-[#617068]">
-                Tap anywhere on the map or use your GPS location to drop a pin so our care team can easily find your location.
+                Use your GPS location or tap the map to drop a pin so our care team can easily find you.
               </p>
               <LocationMapPicker
                 latitude={form.latitude}

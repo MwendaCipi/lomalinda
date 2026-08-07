@@ -305,7 +305,6 @@ class VisitationRequest(models.Model):
     visitation_type = models.CharField(max_length=40, choices=VISITATION_TYPE_CHOICES, default='pastoral')
     preferred_date = models.DateField(null=True, blank=True)
     preferred_time = models.CharField(max_length=80, blank=True)
-    location_description = models.TextField(help_text="Landmarks or house address description")
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     notes = models.TextField(blank=True)
