@@ -124,9 +124,8 @@ export default function TestimoniesPage() {
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">&larr; Back to Fellowship</Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Testimonies</h1>
 
-        <section className="mt-6">
+        <section className="mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <h2 className="text-2xl font-semibold">Church testimonies</h2>
             <label className="block text-sm font-medium sm:w-72">Search testimonies
               <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by name or words" className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 outline-none focus:border-[#b36b3c]" />
             </label>
