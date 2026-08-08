@@ -83,8 +83,9 @@ export default function CampaignManagementPage() {
     const token = localStorage.getItem("access_token");
     if (!token) return;
 
-    if (!form.name.trim() || !form.target_amount) {
-      showAlert("Missing required fields", "Please fill in campaign name and target amount.", "error");
+    const numericTarget = parseFloat(form.target_amount);
+    if (!form.name.trim() || isNaN(numericTarget) || numericTarget <= 0) {
+      showAlert("Invalid input", "Please fill in a valid campaign name and a positive target amount greater than 0.", "error");
       return;
     }
 
@@ -241,7 +242,8 @@ export default function CampaignManagementPage() {
                   <input
                     type="number"
                     required
-                    min="100"
+                    min="1"
+                    step="any"
                     placeholder="e.g. 500000"
                     value={form.target_amount}
                     onChange={(e) => setForm({ ...form, target_amount: e.target.value })}

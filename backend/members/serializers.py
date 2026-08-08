@@ -332,8 +332,8 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by')
 
     def validate_target_amount(self, value):
-        if value < 100:
-            raise serializers.ValidationError('Target amount must be at least KES 100.')
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Target amount must be a positive number greater than zero.')
         return value
 
     def validate_name(self, value):
