@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const adultLessonLinks = [
   {
-    title: "Read Lesson Online",
+    title: "Youth & Adult Lesson",
     text: "Read the current Adult Bible Study Guide on Sabbath School Net.",
     href: `${API_URL}/api/members/lesson-reading/adult/`,
     icon: "📖",
@@ -94,7 +94,7 @@ export default function SabbathSchoolPage() {
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {/* Section 3: Adult Lesson */}
+          {/* Section 3: Youth & Adult Lesson */}
           <section className="order-4 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 lg:col-span-2">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-[#f7f4ee] border border-[#b36b3c]/30 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
@@ -102,7 +102,7 @@ export default function SabbathSchoolPage() {
               </span>
             </div>
             <h2 className="mt-3 text-2xl font-semibold text-[#26352f] flex items-center gap-2">
-              <span>📖</span> Adult Lesson
+              <span>📖</span> Youth &amp; Adult Lesson
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-[#617068]">
               Read the current lesson online without downloading a PDF.
