@@ -30,7 +30,7 @@ export default function Home() {
             <div className="hero-line mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-4">
               <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Location & Contacts</Link>
               <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">See Our Calendar</Link>
-              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Member Login</Link>
+              <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-6 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Sign in</Link>
             </div>
           </div>
           <div className="hero-card mt-6 sm:mt-0"><NextGatheringCard /></div>

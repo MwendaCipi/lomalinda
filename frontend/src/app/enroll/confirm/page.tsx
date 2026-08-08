@@ -16,6 +16,7 @@ function EnrollmentConfirmContent() {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [accountType, setAccountType] = useState("member");
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/auth/enrollment/verify/?token=${encodeURIComponent(token)}`)
@@ -23,6 +24,7 @@ function EnrollmentConfirmContent() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail);
         setEmail(data.email);
+        setAccountType(data.joining_mode === "friend" ? "friend" : "member");
       })
       .catch((error) => setMessage(error.message))
       .finally(() => setLoading(false));
@@ -50,7 +52,7 @@ function EnrollmentConfirmContent() {
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
-        <h1 className="text-3xl font-semibold">Set up your member account</h1>
+        <h1 className="text-3xl font-semibold">Set up your {accountType === "friend" ? "friend" : "church"} account</h1>
         {email && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}
         {!message && (
           <form onSubmit={submit} className="mt-8 space-y-5">

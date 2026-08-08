@@ -1,4 +1,8 @@
+import uuid
+from datetime import timedelta
+
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 
@@ -9,7 +13,29 @@ admin.site.register(ChurchBudget)
 admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
-admin.site.register(EnrollmentRequest)
+@admin.register(EnrollmentRequest)
+class EnrollmentRequestAdmin(admin.ModelAdmin):
+    list_display = ('email', 'first_name', 'last_name', 'joining_mode', 'status', 'created_at')
+    list_filter = ('joining_mode', 'status', 'created_at')
+    search_fields = ('email', 'first_name', 'last_name', 'phone_number')
+    actions = ['approve_requests', 'reject_requests']
+
+    @admin.action(description='Approve requests and send account emails')
+    def approve_requests(self, request, queryset):
+        approved = 0
+        for enrollment in queryset.filter(status='pending'):
+            enrollment.status = 'approved'
+            enrollment.token = uuid.uuid4()
+            enrollment.expires_at = timezone.now() + timedelta(hours=48)
+            enrollment.save(update_fields=['status', 'token', 'expires_at'])
+            from .views import send_enrollment_email
+            send_enrollment_email(enrollment)
+            approved += 1
+        self.message_user(request, f'{approved} request(s) approved and emailed.')
+
+    @admin.action(description='Reject selected requests')
+    def reject_requests(self, request, queryset):
+        queryset.filter(status='pending').update(status='rejected')
 admin.site.register(ExternalResourceLink)
 admin.site.register(Friend)
 admin.site.register(MembershipTransferRequest)

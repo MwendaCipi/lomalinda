@@ -8,10 +8,11 @@ from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBu
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='member_profile.role', read_only=True)
     phone_number = serializers.CharField(source='member_profile.phone_number', read_only=True)
+    account_type = serializers.CharField(source='member_profile.account_type', read_only=True)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone_number')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone_number', 'account_type')
 
 
 class RegisterSerializer(serializers.ModelSerializer):

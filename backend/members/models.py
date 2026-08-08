@@ -4,6 +4,7 @@ import uuid
 
 
 class MemberProfile(models.Model):
+    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of Loma Linda')]
     ROLE_CHOICES = [
         ('member', 'Member'),
         ('clerk', 'Church Clerk'),
@@ -21,6 +22,7 @@ class MemberProfile(models.Model):
     ]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_profile')
     phone_number = models.CharField(max_length=20, blank=True)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='member')
     role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -30,8 +32,8 @@ class MemberProfile(models.Model):
 
 
 class EnrollmentRequest(models.Model):
-    STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('expired', 'Expired')]
-    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer')]
+    STATUS_CHOICES = [('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
+    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of Loma Linda')]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)

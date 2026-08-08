@@ -271,7 +271,7 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
                 onClick={() => setOpen(false)}
                 className="flex w-full items-center justify-between rounded-2xl border border-[#b36b3c]/60 bg-[#b36b3c]/20 p-4 text-sm font-semibold text-[#f1c89e] transition hover:bg-[#b36b3c]/30"
               >
-                <span>Member Login</span>
+                <span>Sign in</span>
                 <span className="text-[#f1c89e]">&rarr;</span>
               </Link>
             )}

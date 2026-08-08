@@ -7,7 +7,7 @@ import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Tab = "join" | "transfer_out";
-type JoiningMode = "baptism" | "membership_transfer";
+type JoiningMode = "baptism" | "membership_transfer" | "friend";
 const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]";
 
 export default function EnrollPage() {
@@ -54,7 +54,7 @@ export default function EnrollPage() {
           <form onSubmit={step === 1 ? nextStep : submit} className="mt-5 space-y-4">
             {step === 1 ? <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Mode of joining<select value={joiningMode} onChange={(event) => setJoiningMode(event.target.value as JoiningMode)} className={inputClass}><option value="baptism">Baptism</option><option value="membership_transfer">Membership transfer</option></select></label>
+                <label className="block text-sm font-medium">Mode of joining<select value={joiningMode} onChange={(event) => setJoiningMode(event.target.value as JoiningMode)} className={inputClass}><option value="baptism">Baptism</option><option value="membership_transfer">Membership transfer</option><option value="friend">Friend of Loma Linda</option></select></label>
                 <label className="block text-sm font-medium">ID number<input required value={form.id_number} onChange={(event) => update("id_number", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
                 <label className="block text-sm font-medium">Surname<input required value={form.surname} onChange={(event) => update("surname", event.target.value)} className={inputClass} /></label>

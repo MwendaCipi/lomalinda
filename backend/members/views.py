@@ -20,6 +20,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
@@ -30,7 +31,8 @@ from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDe
 
 def send_enrollment_email(enrollment):
     link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
-    send_mail('Complete your Loma Linda Church member account', f"Hello {enrollment.first_name or 'there'},\n\nComplete your member account here:\n{link}\n\nThis link expires in 48 hours.", settings.DEFAULT_FROM_EMAIL, [enrollment.email], fail_silently=False)
+    account_label = 'friend account' if enrollment.joining_mode == 'friend' else 'church account'
+    send_mail('Complete your Loma Linda Church account', f"Hello {enrollment.first_name or 'there'},\n\nYour request for a Loma Linda Church {account_label} has been approved. Complete your account here:\n{link}\n\nThis link expires in 48 hours.", settings.DEFAULT_FROM_EMAIL, [enrollment.email], fail_silently=False)
 
 
 def send_password_reset_email(user, uid, token):
@@ -343,19 +345,18 @@ class EnrollmentRequestView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         validated_data = {key: value for key, value in serializer.validated_data.items() if key != 'privacy_accepted'}
         validated_data['privacy_accepted_at'] = timezone.now()
-        enrollment, _ = EnrollmentRequest.objects.update_or_create(email=validated_data['email'], defaults={**validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
-        send_enrollment_email(enrollment)
-        return Response({'message': 'If that email can receive member invitations, an enrollment link has been sent.'}, status=status.HTTP_202_ACCEPTED)
+        EnrollmentRequest.objects.update_or_create(email=validated_data['email'], defaults={**validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
+        return Response({'message': 'Your request has been submitted for approval. We will email you when it is approved.'}, status=status.HTTP_202_ACCEPTED)
 
 
 class EnrollmentVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status='pending', expires_at__gt=timezone.now()).first()
+        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status='approved', expires_at__gt=timezone.now()).first()
         if not enrollment:
             return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'email': enrollment.email, 'first_name': enrollment.first_name, 'last_name': enrollment.last_name})
+        return Response({'email': enrollment.email, 'first_name': enrollment.first_name, 'last_name': enrollment.last_name, 'joining_mode': enrollment.joining_mode})
 
 
 class EnrollmentCompleteView(APIView):
@@ -364,7 +365,7 @@ class EnrollmentCompleteView(APIView):
     def post(self, request):
         serializer = EnrollmentCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status='pending', expires_at__gt=timezone.now()).first()
+        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status='approved', expires_at__gt=timezone.now()).first()
         if not enrollment:
             return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(username=serializer.validated_data['username']).exists():
@@ -373,7 +374,7 @@ class EnrollmentCompleteView(APIView):
             return Response({'email': 'An account already exists for this email.'}, status=status.HTTP_400_BAD_REQUEST)
         user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'])
         from .models import MemberProfile
-        MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number)
+        MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number, account_type='friend' if enrollment.joining_mode == 'friend' else 'member')
         enrollment.status = 'completed'
         enrollment.privacy_accepted_at = timezone.now()
         enrollment.save(update_fields=['status', 'privacy_accepted_at'])
@@ -661,6 +662,8 @@ class TestimonyView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
+        if not user and self.request.data.get('request_type') != 'fellowship':
+            raise PermissionDenied('Please sign in before sharing a testimony.')
         name = serializer.validated_data.get('name', '')
         if user and not name:
             name = f"{user.first_name} {user.last_name}".strip() or user.username
