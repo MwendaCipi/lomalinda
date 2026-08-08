@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.core.validators import validate_email
 from django.http import HttpResponseRedirect
 from django.db import transaction
 from django.utils import timezone
@@ -21,7 +22,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
@@ -539,6 +540,15 @@ class InitiateContributionView(APIView):
             item_description=serializer.validated_data.get('item_description', ''),
             payment_method=serializer.validated_data.get('payment_method', 'mpesa'),
         )
+        donor_email = contribution.donor_email.strip().lower()
+        if donor_email:
+            friend = Friend.objects.filter(email__iexact=donor_email).first()
+            if friend:
+                friend.name = contribution.donor_name or friend.name
+                friend.phone_number = contribution.phone_number or friend.phone_number
+                friend.save(update_fields=['name', 'phone_number', 'updated_at'])
+            else:
+                Friend.objects.create(email=donor_email, name=contribution.donor_name, phone_number=contribution.phone_number)
         if contribution.giving_type == 'in_kind':
             return Response({'message': 'Thank you. The church will contact you about delivering this gift.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
         if contribution.payment_method == 'card':
@@ -654,7 +664,77 @@ class TestimonyView(generics.ListCreateAPIView):
         name = serializer.validated_data.get('name', '')
         if user and not name:
             name = f"{user.first_name} {user.last_name}".strip() or user.username
-        serializer.save(user=user, name=name, status='pending_review')
+        serializer.save(user=user, email=user.email if user else '', name=name, status='approved' if user else 'pending_review')
+
+
+def send_testimony_verification_email(pending):
+    link = f"{settings.FRONTEND_URL}/community/testimonies?token={pending.token}"
+    send_mail(
+        'Confirm your testimony submission',
+        f"Hello {pending.name or 'there'},\n\nConfirm your email and continue sharing your testimony with Loma Linda Church:\n{link}\n\nThis link expires in 30 minutes.",
+        settings.DEFAULT_FROM_EMAIL,
+        [pending.email],
+        fail_silently=False,
+    )
+
+
+class TestimonyVerificationStartView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        try:
+            validate_email(email)
+        except Exception:
+            return Response({'email': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        friend = Friend.objects.filter(email__iexact=email).first()
+        name = friend.name if friend and friend.name else (f"{user.first_name} {user.last_name}".strip() if user else '')
+        pending = PendingTestimony.objects.create(email=email, name=name)
+        try:
+            send_testimony_verification_email(pending)
+        except Exception:
+            pending.delete()
+            return Response({'detail': 'The confirmation email could not be sent.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({'message': 'If the email can receive messages, a confirmation link has been sent.'}, status=status.HTTP_202_ACCEPTED)
+
+
+class TestimonyVerificationView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def _pending(self, token):
+        pending = PendingTestimony.objects.filter(token=token, status='verification_sent', created_at__gt=timezone.now() - timedelta(minutes=30)).first()
+        if not pending:
+            raise ValueError('This confirmation link is invalid or expired.')
+        return pending
+
+    def get(self, request):
+        try:
+            pending = self._pending(request.query_params.get('token'))
+        except ValueError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'name': pending.name, 'requires_name': not bool(pending.name)})
+
+    def post(self, request):
+        try:
+            pending = self._pending(request.data.get('token'))
+        except ValueError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        name = str(request.data.get('name', '')).strip() or pending.name
+        testimony_text = str(request.data.get('testimony_text', '')).strip()
+        if not name:
+            return Response({'name': 'Enter your name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not testimony_text:
+            return Response({'testimony_text': 'Enter your testimony.'}, status=status.HTTP_400_BAD_REQUEST)
+        pending.name = name
+        pending.testimony_text = testimony_text
+        pending.status = 'pending_review'
+        pending.verified_at = timezone.now()
+        pending.save(update_fields=['name', 'testimony_text', 'status', 'verified_at'])
+        return Response({'message': 'Your testimony has been submitted for review.'}, status=status.HTTP_201_CREATED)
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):

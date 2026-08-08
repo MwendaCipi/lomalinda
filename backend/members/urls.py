@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -18,6 +18,8 @@ urlpatterns = [
     path('child-dedications/', ChildDedicationRequestView.as_view(), name='child-dedication'),
     path('visitations/', VisitationRequestView.as_view(), name='visitations'),
     path('testimonies/', TestimonyView.as_view(), name='testimonies'),
+    path('testimonies/verify/start/', TestimonyVerificationStartView.as_view(), name='testimony-verification-start'),
+    path('testimonies/verify/', TestimonyVerificationView.as_view(), name='testimony-verification'),
     path('transfers/', MembershipTransferRequestView.as_view(), name='transfers'),
     path('correspondence/', ChurchCorrespondenceView.as_view(), name='correspondence'),
     path('board-meetings/', BoardMeetingView.as_view(), name='board-meetings'),

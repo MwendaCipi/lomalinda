@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -11,6 +11,7 @@ admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
 admin.site.register(EnrollmentRequest)
 admin.site.register(ExternalResourceLink)
+admin.site.register(Friend)
 admin.site.register(MembershipTransferRequest)
 admin.site.register(ChurchCorrespondence)
 admin.site.register(BoardMeeting)
@@ -38,6 +39,32 @@ class TestimonyAdmin(admin.ModelAdmin):
     @admin.action(description='Reject selected testimonies')
     def reject_testimonies(self, request, queryset):
         queryset.update(status='rejected')
+
+
+@admin.register(PendingTestimony)
+class PendingTestimonyAdmin(admin.ModelAdmin):
+    list_display = ('email', 'name', 'status', 'created_at', 'reviewed_at')
+    list_filter = ('status', 'created_at', 'reviewed_at')
+    search_fields = ('email', 'name', 'testimony_text')
+    actions = ['approve_pending_testimonies', 'reject_pending_testimonies']
+
+    @admin.action(description='Approve pending testimonies')
+    def approve_pending_testimonies(self, request, queryset):
+        from django.utils import timezone
+        for pending in queryset.filter(status='pending_review'):
+            friend, _ = Friend.objects.get_or_create(email=pending.email, defaults={'name': pending.name, 'phone_number': pending.phone_number})
+            if pending.name and friend.name != pending.name:
+                friend.name = pending.name
+                friend.save(update_fields=['name', 'updated_at'])
+            Testimony.objects.create(friend=friend, email=pending.email, name=pending.name, phone_number=pending.phone_number, testimony_text=pending.testimony_text, status='approved')
+            pending.status = 'approved'
+            pending.reviewed_at = timezone.now()
+            pending.save(update_fields=['status', 'reviewed_at'])
+
+    @admin.action(description='Reject pending testimonies')
+    def reject_pending_testimonies(self, request, queryset):
+        from django.utils import timezone
+        queryset.filter(status='pending_review').update(status='rejected', reviewed_at=timezone.now())
 
 
 @admin.register(ChildDedicationRequest)

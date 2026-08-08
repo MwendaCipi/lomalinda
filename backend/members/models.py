@@ -97,6 +97,20 @@ class Contribution(models.Model):
         ordering = ['-created_at']
 
 
+class Friend(models.Model):
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=160, blank=True)
+    phone_number = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', 'email']
+
+    def __str__(self):
+        return self.name or self.email
+
+
 class GivingPurpose(models.Model):
     name = models.CharField(max_length=120, unique=True)
     active = models.BooleanField(default=True)
@@ -153,6 +167,8 @@ class PrayerRequest(models.Model):
 
 class Testimony(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    friend = models.ForeignKey('Friend', on_delete=models.SET_NULL, null=True, blank=True, related_name='testimonies')
+    email = models.EmailField(blank=True)
     name = models.CharField(max_length=160, blank=True)
     phone_number = models.CharField(max_length=40, blank=True)
     testimony_text = models.TextField(max_length=1000)
@@ -168,6 +184,31 @@ class Testimony(models.Model):
 
     def __str__(self):
         return f"Testimony by {self.name or self.user or 'Guest'} ({self.status})"
+
+
+class PendingTestimony(models.Model):
+    STATUS_CHOICES = [
+        ('verification_sent', 'Verification sent'),
+        ('pending_review', 'Pending review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    ]
+    email = models.EmailField()
+    name = models.CharField(max_length=160, blank=True)
+    phone_number = models.CharField(max_length=40, blank=True)
+    testimony_text = models.TextField(max_length=1000, blank=True)
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default='verification_sent')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Pending testimony from {self.email} ({self.status})"
 
 
 class ChildDedicationRequest(models.Model):
