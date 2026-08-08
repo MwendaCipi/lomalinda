@@ -54,7 +54,7 @@ export function PwaRegister() {
             LL
           </div>
           <div>
-            <h4 className="text-sm font-semibold">Install SDA Church Loma Linda, Meru</h4>
+            <h4 className="text-sm font-semibold">Install Loma Linda</h4>
             <p className="text-xs text-white/80">Add to your home screen for quick access & offline support.</p>
           </div>
         </div>
