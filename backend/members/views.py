@@ -86,6 +86,7 @@ MISSION_READING_SOURCES = {
     'adults': 'https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles',
 }
 SSNET_SOURCE = 'https://ssnet.org/'
+SSNET_WEEKLY_LESSON_URL = 'https://ssnet.org/lessons/current.html'
 ADULT_LESSON_SOURCE = SSNET_SOURCE
 CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
@@ -264,11 +265,7 @@ def save_resource_url(key, url):
 
 
 def current_adult_lesson_url():
-    return _current_ssnet_lesson_urls()[0]
-
-
-def current_adult_teacher_url():
-    return _current_ssnet_lesson_urls()[1]
+    return SSNET_WEEKLY_LESSON_URL
 
 
 def current_adult_pdf_url(kind):
@@ -452,20 +449,7 @@ class AdultLessonRedirectView(APIView):
         try:
             destination = destination or save_resource_url('adult_lesson', current_adult_lesson_url())
         except requests.RequestException:
-            destination = ADULT_LESSON_SOURCE
-        return HttpResponseRedirect(destination)
-
-
-class AdultTeacherRedirectView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request):
-        destination = cached_resource_url('adult_teacher')
-        try:
-            destination = destination or save_resource_url('adult_teacher', current_adult_teacher_url())
-        except requests.RequestException:
-            destination = 'https://ssnet.org/study-guides/adult-teacher-resources/'
+            destination = SSNET_WEEKLY_LESSON_URL
         return HttpResponseRedirect(destination)
 
 

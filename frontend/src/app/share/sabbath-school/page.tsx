@@ -8,17 +8,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const adultLessonLinks = [
   {
     title: "Lesson",
-    text: "Read the current Adult Bible Study Guide on Sabbath School Net.",
+    text: "Open the current Weekly Lesson on Sabbath School Net.",
     href: `${API_URL}/api/members/lesson-reading/adult/`,
     icon: "📖",
     buttonText: "Open Lesson",
-  },
-  {
-    title: "Teacher's Resources",
-    text: "Open the current teacher helps for this week's adult lesson.",
-    href: `${API_URL}/api/members/lesson-reading/adult/teachers/`,
-    icon: "Teacher",
-    buttonText: "Open Resources",
   },
 ];
 
