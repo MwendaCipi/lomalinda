@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -13,6 +14,7 @@ interface ApprovedTestimony {
 }
 
 export default function TestimoniesPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<"online" | "fellowship" | null>(null);
   const [testimony, setTestimony] = useState("");
   const [name, setName] = useState("");
@@ -106,7 +108,7 @@ export default function TestimoniesPage() {
         </section>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => isLoggedIn ? setMode("online") : setMessage("Please sign in before sharing a testimony.")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
+          <button type="button" onClick={() => isLoggedIn ? setMode("online") : router.push("/login?next=%2Fcommunity%2Ftestimonies%26intent%3Dshare")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
           <button type="button" onClick={() => setMode("fellowship")} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
         </div>
 
