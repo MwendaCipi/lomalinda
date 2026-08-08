@@ -104,7 +104,7 @@ export default function SabbathSchoolPage() {
               {adultLessonLinks.map((item) => (
                 <div
                   key={item.title}
-                  className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white"
+                  className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white sm:col-span-2"
                 >
                   <div>
                     <div className="flex items-center gap-2">
