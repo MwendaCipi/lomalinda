@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 import re
 import json
+import time
 from decimal import Decimal
 from html.parser import HTMLParser
 from urllib.parse import urljoin
@@ -211,8 +212,7 @@ class _SsnetLessonParser(HTMLParser):
 
 
 def current_ssnet_quarter_url():
-    response = requests.get(SSNET_SOURCE, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    response.raise_for_status()
+    response = _get_with_retries(SSNET_SOURCE)
     parser = _SsnetQuarterParser()
     parser.feed(response.text)
     today = timezone.localdate()
@@ -222,8 +222,7 @@ def current_ssnet_quarter_url():
 
 def _current_ssnet_lesson_urls():
     quarter_url = current_ssnet_quarter_url()
-    response = requests.get(quarter_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    response.raise_for_status()
+    response = _get_with_retries(quarter_url)
     parser = _SsnetLessonParser(quarter_url)
     parser.feed(response.text)
     lessons = [link for link in parser.links if not link.get('teacher')]
@@ -234,8 +233,7 @@ def _current_ssnet_lesson_urls():
     first_sabbath = quarter_start - timedelta(days=(quarter_start.weekday() - 5) % 7)
     current_number = min(max(((today - first_sabbath).days // 7) + 1, 1), 13)
     lesson = next((item for item in lessons if item['number'] == current_number), lessons[-1])
-    lesson_page = requests.get(lesson['url'], headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    lesson_page.raise_for_status()
+    lesson_page = _get_with_retries(lesson['url'])
     lesson_parser = _SsnetLessonParser(lesson['url'])
     lesson_parser.feed(lesson_page.text)
     teacher = next((item for item in lesson_parser.links if item.get('teacher') and item['number'] == lesson['number']), None)
@@ -245,7 +243,7 @@ def _current_ssnet_lesson_urls():
 def first_mission_story_url(audience):
     source_url = MISSION_READING_SOURCES[audience]
     path_fragment = '/children/' if audience == 'children' else '/youth-and-adult/'
-    response = requests.get(source_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    response = _get_with_retries(source_url)
     response.raise_for_status()
     parser = _MissionLinkParser(source_url, path_fragment)
     parser.feed(response.text)
@@ -254,6 +252,25 @@ def first_mission_story_url(audience):
     # The current Adventist Mission page places the adult weekly article
     # after one introductory article, while the children's weekly article is first.
     return parser.links[1] if audience == 'adults' and len(parser.links) > 1 else parser.links[0]
+
+
+def _get_with_retries(url, attempts=3):
+    headers = {'User-Agent': 'LomaLindaChurch/1.0'}
+    for attempt in range(attempts):
+        try:
+            response = requests.get(url, headers=headers, timeout=12)
+            if response.status_code not in (429, 500, 502, 503, 504):
+                response.raise_for_status()
+                return response
+            if attempt == attempts - 1:
+                response.raise_for_status()
+            retry_after = response.headers.get('Retry-After')
+            delay = min(int(retry_after), 60) if retry_after and retry_after.isdigit() else 5 * (attempt + 1)
+        except requests.RequestException:
+            if attempt == attempts - 1:
+                raise
+            delay = 5 * (attempt + 1)
+        time.sleep(delay)
 
 
 def cached_resource_url(key):
@@ -272,8 +289,7 @@ def current_adult_lesson_url():
 
 def current_adult_pdf_url(kind):
     lesson_url = current_adult_lesson_url()
-    page = requests.get(lesson_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    page.raise_for_status()
+    page = _get_with_retries(lesson_url)
     pdfs = [urljoin(lesson_url, href) for href in re.findall(r'href=["\']([^"\']+\.pdf)["\']', page.text, flags=re.IGNORECASE)]
     marker = 'EAQ' if kind == 'lesson' else 'ETQ'
     return next((url for url in pdfs if marker in url), ADULT_LESSON_SOURCE)
@@ -281,8 +297,7 @@ def current_adult_pdf_url(kind):
 
 def first_children_lesson_url(division, audience):
     source_url = CHILDREN_LESSON_SOURCES[division]
-    page = requests.get(source_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    page.raise_for_status()
+    page = _get_with_retries(source_url)
     if division in ('junior', 'teens'):
         parser = _WeeklyLessonParser(source_url)
         parser.feed(page.text)
@@ -303,8 +318,7 @@ def first_children_lesson_url(division, audience):
     pattern = re.compile(rf'https://{re.escape(target_host)}/resources/en/aij/(\d{{4}})-(\d{{2}})-([^/]+)/{current_week:02d}(?:"|,)')
     candidates = []
     for script_url in script_urls:
-        script = requests.get(urljoin(source_url, script_url), headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-        script.raise_for_status()
+        script = _get_with_retries(urljoin(source_url, script_url))
         candidates.extend(match.group(0)[:-1] for match in pattern.finditer(script.text))
     if not candidates:
         return source_url.replace('/students', f'/{audience}')
