@@ -446,6 +446,8 @@ class AdultLessonRedirectView(APIView):
 
     def get(self, request):
         destination = cached_resource_url('adult_lesson')
+        if destination and destination.startswith('https://sabbath.school'):
+            destination = None
         try:
             destination = destination or save_resource_url('adult_lesson', current_adult_lesson_url())
         except requests.RequestException:
