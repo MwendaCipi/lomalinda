@@ -876,6 +876,19 @@ class GivingPurposeListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return GivingPurpose.objects.filter(active=True)
 
+    def list(self, request, *args, **kwargs):
+        active_campaigns = list(FundraisingCampaign.objects.filter(is_active=True).values_list('name', flat=True))
+        for name in active_campaigns:
+            gp, created = GivingPurpose.objects.get_or_create(name=name)
+            if not gp.active:
+                gp.active = True
+                gp.save(update_fields=['active'])
+
+        queryset = list(self.get_queryset())
+        queryset.sort(key=lambda p: (0 if p.name in active_campaigns else 1, p.name))
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         if not is_finance_manager(self.request.user):
             from rest_framework.exceptions import PermissionDenied
