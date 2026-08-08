@@ -818,7 +818,7 @@ class TestimonyVerificationView(APIView):
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = ChurchFinancialReportSerializer
 
     def get_queryset(self):
@@ -830,7 +830,7 @@ class ChurchFinancialReportsView(generics.ListAPIView):
 
 
 class ChurchBudgetsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = ChurchBudgetSerializer
 
     def get_queryset(self):

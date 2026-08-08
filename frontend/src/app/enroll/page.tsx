@@ -16,7 +16,6 @@ export default function EnrollPage() {
   const [form, setForm] = useState({ email: "", first_name: "", surname: "", phone_number: "", current_church: "", destination_church: "", transfer_reason: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   function update(field: keyof typeof form, value: string) { setForm((current) => ({ ...current, [field]: value })); }
   function selectTab(nextTab: Tab) { setTab(nextTab); setMessage(""); }
@@ -50,7 +49,7 @@ export default function EnrollPage() {
     try {
       const endpoint = `${API_URL}/api/members/transfers/`;
       const payload = tab === "transfer_out"
-        ? { member_name: `${form.first_name} ${form.surname}`.trim(), transfer_type: "outgoing", other_church: form.destination_church, reason: form.transfer_reason, phone_number: form.phone_number, email: form.email, privacy_accepted: privacyAccepted }
+        ? { member_name: `${form.first_name} ${form.surname}`.trim(), transfer_type: "outgoing", other_church: form.destination_church, reason: form.transfer_reason, phone_number: form.phone_number, email: form.email }
         : {};
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
@@ -87,7 +86,6 @@ export default function EnrollPage() {
             {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
           </form>
         ) : <form onSubmit={submit} className="mt-5 space-y-4">
-          <p className="rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">For SDA members transferring from Loma Linda Church to another church.</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium">Surname<input required value={form.surname} onChange={(event) => update("surname", event.target.value)} className={inputClass} /></label>
@@ -96,7 +94,6 @@ export default function EnrollPage() {
             <label className="block text-sm font-medium sm:col-span-2">Destination church<input required value={form.destination_church} onChange={(event) => update("destination_church", event.target.value)} className={inputClass} /></label>
             <label className="block text-sm font-medium sm:col-span-2">Reason for transfer<textarea required rows={3} value={form.transfer_reason} onChange={(event) => update("transfer_reason", event.target.value)} className={inputClass} placeholder="Tell us why you are requesting the transfer" /></label>
           </div>
-          <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]"><input type="checkbox" required checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#9a741c]" /><span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span></label>
           <div className="grid gap-3 sm:grid-cols-2"><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#9a741c] px-5 font-medium text-white transition hover:bg-[#7c5d16] disabled:opacity-60 sm:col-start-2">{loading ? "Sending..." : "Request transfer out"}</button></div>
         </form>}
         {message && <p className="mt-5 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}

@@ -155,7 +155,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):
     reason = serializers.CharField(required=True, allow_blank=False)
 
-    privacy_accepted = serializers.BooleanField(write_only=True)
+    privacy_accepted = serializers.BooleanField(write_only=True, required=False)
 
     class Meta:
         model = MembershipTransferRequest
@@ -163,13 +163,14 @@ class MembershipTransferRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
     def validate_privacy_accepted(self, value):
-        if not value:
+        if value is False:
             raise serializers.ValidationError('You must agree to the Privacy Policy.')
         return value
 
     def create(self, validated_data):
-        validated_data.pop('privacy_accepted', None)
-        validated_data['privacy_accepted_at'] = timezone.now()
+        privacy_accepted = validated_data.pop('privacy_accepted', None)
+        if privacy_accepted:
+            validated_data['privacy_accepted_at'] = timezone.now()
         return super().create(validated_data)
 
 
