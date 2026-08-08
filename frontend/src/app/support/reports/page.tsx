@@ -52,13 +52,14 @@ export default function LiveReportsPage() {
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   async function loadData() {
     try {
       const [statsRes, recentRes] = await Promise.all([
-        fetch(`${API_URL}/api/members/contributions/live-stats/`),
-        fetch(`${API_URL}/api/members/contributions/recent/`),
+        fetch(`${API_URL}/api/members/contributions/live-stats/`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/members/contributions/recent/`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -72,16 +73,18 @@ export default function LiveReportsPage() {
   }
 
   useEffect(() => {
+    const accessToken = localStorage.getItem("access_token"); setToken(accessToken); if (!accessToken) return;
     loadData();
     intervalRef.current = setInterval(loadData, 30_000); // refresh every 30 s
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [token]);
 
   // Totals
   const grandTotal = stats.reduce((s, c) => s + c.total, 0);
 
+  if (token === null) return <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-[#26352f]"><div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]"><h1 className="text-2xl font-semibold">Sign in required</h1><p className="mt-3 text-sm leading-6 text-[#617068]">Please sign in to view church financial reports.</p><Link href="/login" className="mt-6 inline-block rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white">Sign in</Link></div></main>;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">

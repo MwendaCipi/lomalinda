@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -24,6 +24,8 @@ export default function VisitationPage() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  useEffect(() => setToken(localStorage.getItem("access_token")), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +40,7 @@ export default function VisitationPage() {
       }
       const response = await fetch(`${API_URL}/api/members/visitations/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
       });
 
@@ -71,6 +73,7 @@ export default function VisitationPage() {
     }
   };
 
+  if (token === null) return <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-[#26352f]"><div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]"><h1 className="text-2xl font-semibold">Sign in required</h1><p className="mt-3 text-sm leading-6 text-[#617068]">Please sign in to request a visitation.</p><Link href="/login" className="mt-6 inline-block rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white">Sign in</Link></div></main>;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-3xl">

@@ -11,15 +11,19 @@ const money = (value: string) => `KES ${Number(value).toLocaleString("en-KE", { 
 export default function ChurchBudgetPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/members/budgets/`)
+    const accessToken = localStorage.getItem("access_token"); setToken(accessToken);
+    if (!accessToken) { setLoading(false); return; }
+    fetch(`${API_URL}/api/members/budgets/`, { headers: { Authorization: `Bearer ${accessToken}` } })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setBudgets(data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  if (token === null) return <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-[#26352f]"><div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]"><h1 className="text-2xl font-semibold">Sign in required</h1><p className="mt-3 text-sm leading-6 text-[#617068]">Please sign in to view church budgets.</p><Link href="/login" className="mt-6 inline-block rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white">Sign in</Link></div></main>;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-16 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-4xl">

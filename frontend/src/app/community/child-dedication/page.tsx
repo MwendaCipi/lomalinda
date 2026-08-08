@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -17,6 +17,8 @@ export default function ChildDedicationPage() {
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  useEffect(() => setToken(localStorage.getItem("access_token")), []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +39,7 @@ export default function ChildDedicationPage() {
       };
       const response = await fetch(`${API_URL}/api/members/child-dedications/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
@@ -61,6 +63,7 @@ export default function ChildDedicationPage() {
     }
   }
 
+  if (token === null) return <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-[#26352f]"><div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]"><h1 className="text-2xl font-semibold">Sign in required</h1><p className="mt-3 text-sm leading-6 text-[#617068]">Please sign in to request a child dedication.</p><Link href="/login" className="mt-6 inline-block rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white">Sign in</Link></div></main>;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-8 pb-8 text-[#26352f] sm:py-10">
       <div className="mx-auto max-w-3xl">

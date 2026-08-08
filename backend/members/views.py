@@ -720,14 +720,14 @@ class PaystackWebhookView(APIView):
 
 
 class PrayerRequestView(generics.CreateAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = PrayerRequestSerializer
 
 
 class ChildDedicationRequestView(generics.CreateAPIView):
     queryset = ChildDedicationRequest.objects.all()
     serializer_class = ChildDedicationRequestSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class TestimonyView(generics.ListCreateAPIView):
@@ -818,7 +818,7 @@ class TestimonyVerificationView(APIView):
 
 
 class ChurchFinancialReportsView(generics.ListAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = ChurchFinancialReportSerializer
 
     def get_queryset(self):
@@ -830,7 +830,7 @@ class ChurchFinancialReportsView(generics.ListAPIView):
 
 
 class ChurchBudgetsView(generics.ListAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = ChurchBudgetSerializer
 
     def get_queryset(self):
@@ -923,7 +923,7 @@ class ChurchNotificationView(generics.ListAPIView):
 
 
 class VisitationRequestView(generics.ListCreateAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = VisitationRequestSerializer
 
     def get_queryset(self):
