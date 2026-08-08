@@ -86,9 +86,9 @@ export default function SabbathSchoolPage() {
           </h1>
         </div>
 
-        <div className="mt-6 flex flex-col gap-4">
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {/* Section 3: Adult Lesson */}
-          <section className="order-3 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+          <section className="order-4 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 lg:col-span-2">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-[#f7f4ee] border border-[#b36b3c]/30 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
                 Quarter {currentInfo.quarter}
@@ -128,7 +128,7 @@ export default function SabbathSchoolPage() {
           </section>
 
           {/* Section 4: Children's Lesson */}
-          <section className="order-4 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+          <section className="order-3 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 lg:col-span-2">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-[#f7f4ee] border border-[#b36b3c]/30 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
                 Quarter {currentInfo.quarter} · Week {currentInfo.week}
@@ -177,7 +177,7 @@ export default function SabbathSchoolPage() {
           </section>
 
           {/* Section 1: Adult Mission Story */}
-          <section className="order-1 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+          <section className="order-2 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
                 Sabbath Mission Reading
@@ -203,7 +203,7 @@ export default function SabbathSchoolPage() {
           </section>
 
           {/* Section 2: Children Mission Story */}
-          <section className="order-2 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
+          <section className="order-1 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
                 Sabbath Mission Reading
