@@ -7,7 +7,7 @@ const adultResources = [
   {
     title: "Lesson",
     text: "Open the current Weekly Lesson on Sabbath School Net.",
-    href: "https://ssnet.org/lessons/current.html",
+    href: "https://ssnet.org/lessons/26c/less06.html",
     icon: "📖",
     buttonText: "Open Lesson",
   },
