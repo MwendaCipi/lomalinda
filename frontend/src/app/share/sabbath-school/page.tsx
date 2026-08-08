@@ -87,7 +87,7 @@ export default function SabbathSchoolPage() {
             <p className="mt-1.5 text-sm leading-6 text-[#617068]">Weekly Bible study and mission resources for youth and adults.</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {adultResources.map((item) => (
-                <article key={item.title} className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white sm:col-span-2">
+                <article key={item.title} className={`flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white sm:col-span-2 ${item.title === "Mission Story" ? "order-first" : ""}`}>
                   <div>
                     <div className="flex items-center gap-2"><span className="text-xl">{item.icon}</span><h3 className="font-semibold">{item.title}</h3></div>
                     <p className="mt-1 text-xs leading-5 text-[#617068]">{item.text}</p>
@@ -114,7 +114,7 @@ export default function SabbathSchoolPage() {
                   </div>
                 </article>
               ))}
-              <article className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 sm:col-span-2">
+              <article className="order-first flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 sm:col-span-2">
                 <div><div className="flex items-center gap-2"><span className="text-xl">🎈</span><h3 className="font-semibold">Mission Story</h3></div><p className="mt-1 text-xs leading-5 text-[#617068]">Read this week&apos;s mission story specially written for children.</p></div>
                 <a href="https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/school-surprise" target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-center text-xs font-semibold text-white transition hover:bg-[#96552e]">Read Mission Story <span>&rarr;</span></a>
               </article>
