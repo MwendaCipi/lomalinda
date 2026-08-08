@@ -23,10 +23,10 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
-from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -590,6 +590,14 @@ class MyContributionsView(generics.ListAPIView):
 
     def get_queryset(self):
         return Contribution.objects.filter(member=self.request.user)
+
+
+class SupportSubmissionView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportSubmissionSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(member=self.request.user)
 
 
 class InitiateContributionView(APIView):

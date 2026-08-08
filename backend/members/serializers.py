@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -72,6 +72,13 @@ class ContributionSerializer(serializers.ModelSerializer):
         model = Contribution
         fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
+
+
+class SupportSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportSubmission
+        fields = ('id', 'submission_type', 'category', 'content', 'name', 'phone_number', 'email', 'anonymous', 'created_at')
+        read_only_fields = ('id', 'created_at')
 
 
 class ContributionInitiateSerializer(serializers.Serializer):

@@ -101,6 +101,22 @@ class Contribution(models.Model):
         ordering = ['-created_at']
 
 
+class SupportSubmission(models.Model):
+    TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support')]
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='support_submissions')
+    submission_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    category = models.CharField(max_length=80, blank=True)
+    content = models.TextField()
+    name = models.CharField(max_length=160, blank=True)
+    phone_number = models.CharField(max_length=40, blank=True)
+    email = models.EmailField(blank=True)
+    anonymous = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class Friend(models.Model):
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=160, blank=True)

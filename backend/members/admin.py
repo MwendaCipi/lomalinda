@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -47,6 +47,13 @@ admin.site.register(MembershipTransferRequest)
 admin.site.register(ChurchCorrespondence)
 admin.site.register(BoardMeeting)
 admin.site.register(ChurchNotification)
+
+
+@admin.register(SupportSubmission)
+class SupportSubmissionAdmin(admin.ModelAdmin):
+    list_display = ('submission_type', 'category', 'member', 'anonymous', 'created_at')
+    list_filter = ('submission_type', 'anonymous', 'created_at')
+    search_fields = ('content', 'category', 'member__username', 'member__email')
 
 
 @admin.register(VisitationRequest)
