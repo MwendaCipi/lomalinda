@@ -102,7 +102,6 @@ export default function SabbathSchoolPage() {
           <section className="order-2 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 lg:col-span-2">
             <span className="rounded-full border border-[#b36b3c]/30 bg-[#f7f4ee] px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">Quarter {currentInfo.quarter} · Week {currentInfo.week}</span>
             <h2 className="mt-3 flex items-center gap-2 text-2xl font-semibold"><span>👶</span> Children&apos;s Resources</h2>
-            <p className="mt-1.5 text-sm leading-6 text-[#617068]">Bible study guides and mission resources for each children&apos;s age division.</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {childrenDivisions.map((division) => (
                 <article key={division.division} className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5">
