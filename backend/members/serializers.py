@@ -142,7 +142,7 @@ class SabbathEventSerializer(serializers.ModelSerializer):
 class ChurchSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchSettings
-        fields = ('church_name', 'address', 'latitude', 'longitude', 'midweek_vespers_link', 'midweek_vespers_time', 'friday_vespers_time', 'sabbath_time')
+        fields = ('church_name', 'address', 'latitude', 'longitude', 'midweek_vespers_link', 'live_service_link', 'live_service_active', 'midweek_vespers_time', 'friday_vespers_time', 'sabbath_time')
 
 
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):

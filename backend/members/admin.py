@@ -115,6 +115,7 @@ class ChurchSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Church location', {'fields': ('church_name', 'address', 'latitude', 'longitude')}),
         ('Regular gatherings', {'fields': ('midweek_vespers_time', 'midweek_vespers_link', 'friday_vespers_time', 'sabbath_time')}),
+        ('Live service', {'fields': ('live_service_link', 'live_service_active')}),
     )
 
     def has_add_permission(self, request):

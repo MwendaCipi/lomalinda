@@ -259,6 +259,8 @@ class ChurchSettings(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     midweek_vespers_link = models.URLField(blank=True)
+    live_service_link = models.URLField(blank=True)
+    live_service_active = models.BooleanField(default=False)
     midweek_vespers_time = models.CharField(max_length=120, default='Wednesday · 8:00 PM – 9:00 PM')
     friday_vespers_time = models.CharField(max_length=120, default='Friday · 5:30 PM – 6:30 PM')
     sabbath_time = models.CharField(max_length=120, default='Saturday · 8:00 AM – 4:00 PM')
