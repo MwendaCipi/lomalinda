@@ -36,6 +36,46 @@ def send_password_reset_email(user, uid, token):
     send_mail('Reset your Loma Linda Church password', f"Hello {user.first_name or user.username},\n\nReset your password here:\n{link}\n\nIf you did not request this, you can ignore this email.", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
 
 
+def send_contribution_receipt(contribution):
+    if not contribution.donor_email or contribution.receipt_sent_at or contribution.status != 'completed':
+        return
+
+    local_now = timezone.localtime()
+    if local_now.weekday() == 5:
+        greeting = 'Happy Sabbath'
+    elif local_now.hour < 12:
+        greeting = 'Good morning'
+    elif local_now.hour < 18:
+        greeting = 'Good afternoon'
+    else:
+        greeting = 'Good evening'
+
+    receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
+    donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
+    body = (
+        f"{greeting} {donor_name},\n\n"
+        f"Thank you for giving towards {contribution.purpose}. Here is your receipt for the gift received by SDA Church Loma Linda, Meru.\n\n"
+        f"Amount: {contribution.currency} {contribution.amount:,.2f}\n"
+        f"Giving purpose: {contribution.purpose}\n"
+        f"Payment method: {contribution.get_payment_method_display()}\n"
+        f"Receipt reference: {receipt_reference}\n"
+        f"Date received: {timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')}\n\n"
+        "May God bless you for supporting the work of the church."
+    )
+    try:
+        send_mail(
+            f"Giving receipt — {contribution.purpose}",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [contribution.donor_email],
+            fail_silently=False,
+        )
+    except Exception:
+        return
+    contribution.receipt_sent_at = timezone.now()
+    contribution.save(update_fields=['receipt_sent_at'])
+
+
 def is_finance_manager(user):
     profile = getattr(user, 'member_profile', None)
     return bool(profile and profile.role in ('admin', 'leader', 'finance', 'treasurer'))
@@ -449,6 +489,7 @@ class MpesaCallbackView(APIView):
         else:
             contribution.status = 'failed'
         contribution.save()
+        send_contribution_receipt(contribution)
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
@@ -477,6 +518,7 @@ class PaystackWebhookView(APIView):
         elif event_type in ('charge.failed', 'transfer.failed'):
             contribution.status = 'failed'
         contribution.save(update_fields=['status', 'paid_at'])
+        send_contribution_receipt(contribution)
         return Response({'received': True})
 
 

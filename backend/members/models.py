@@ -90,6 +90,7 @@ class Contribution(models.Model):
     merchant_request_id = models.CharField(max_length=128, blank=True)
     paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    receipt_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
