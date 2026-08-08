@@ -1,4 +1,4 @@
 # Install this entry on the VPS with `crontab -e`.
 # Adjust the project and virtualenv paths to match the deployment.
 CRON_TZ=Africa/Nairobi
-0 0 * * 0 cd /var/www/lomalinda/backend && /var/www/lomalinda/backend/venv/bin/python manage.py refresh_resource_links >> /var/log/lomalinda-resource-links.log 2>&1
+0 12 * * * cd /var/www/lomalinda/backend && /var/www/lomalinda/backend/venv/bin/python manage.py refresh_resource_links >> /var/log/lomalinda-resource-links.log 2>&1

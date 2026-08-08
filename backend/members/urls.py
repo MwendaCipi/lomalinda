@@ -1,10 +1,11 @@
 from django.urls import path
-from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
+from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, AdultTeacherRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
 from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
+    path('lesson-reading/adult/teachers/', AdultTeacherRedirectView.as_view(), name='adult-teacher-redirect'),
     path('lesson-pdf/adult/<str:kind>/', AdultLessonPdfRedirectView.as_view(), name='adult-lesson-pdf-redirect'),
     path('lesson-reading/children/<str:division>/<str:audience>/', ChildrenLessonRedirectView.as_view(), name='children-lesson-redirect'),
     path('mission-reading/<str:audience>/', MissionReadingRedirectView.as_view(), name='mission-reading-redirect'),

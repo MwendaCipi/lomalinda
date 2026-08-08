@@ -85,7 +85,8 @@ MISSION_READING_SOURCES = {
     'children': 'https://adventistmission.org/mission-awareness/mission-quarterlies/children/articles/',
     'adults': 'https://adventistmission.org/mission-awareness/mission-quarterlies/youth-and-adult/articles',
 }
-ADULT_LESSON_SOURCE = 'https://sabbath.school'
+SSNET_SOURCE = 'https://ssnet.org/'
+ADULT_LESSON_SOURCE = SSNET_SOURCE
 CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
     'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
@@ -151,6 +152,97 @@ class _WeeklyLessonParser(HTMLParser):
         self.current_text = []
 
 
+class _SsnetQuarterParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.current_href = None
+        self.current_text = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            self.current_href = dict(attrs).get('href', '')
+            self.current_text = []
+
+    def handle_data(self, data):
+        if self.current_href is not None:
+            self.current_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag != 'a' or not self.current_href:
+            return
+        href = urljoin(SSNET_SOURCE, self.current_href)
+        text = ' '.join(''.join(self.current_text).split())
+        if re.search(r'/lessons/\d{2}[a-d]/?$', href) or re.search(r'20\d{2}\s+Q[1-4]', text, flags=re.IGNORECASE):
+            self.links.append({'url': href, 'text': text})
+        self.current_href = None
+        self.current_text = []
+
+
+class _SsnetLessonParser(HTMLParser):
+    def __init__(self, source_url):
+        super().__init__()
+        self.source_url = source_url
+        self.current_href = None
+        self.current_text = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            self.current_href = dict(attrs).get('href', '')
+            self.current_text = []
+
+    def handle_data(self, data):
+        if self.current_href is not None:
+            self.current_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag != 'a' or not self.current_href:
+            return
+        href = urljoin(self.source_url, self.current_href)
+        text = ' '.join(''.join(self.current_text).split())
+        lesson_match = re.search(r'/less(\d{2})\.html$', href)
+        if lesson_match:
+            self.links.append({'number': int(lesson_match.group(1)), 'url': href, 'text': text})
+        teacher_match = re.search(r'/helps/lesshp(\d+)\.html$', href)
+        if teacher_match:
+            self.links.append({'number': int(teacher_match.group(1)), 'url': href, 'text': text, 'teacher': True})
+        self.current_href = None
+        self.current_text = []
+
+
+def current_ssnet_quarter_url():
+    response = requests.get(SSNET_SOURCE, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    response.raise_for_status()
+    parser = _SsnetQuarterParser()
+    parser.feed(response.text)
+    today = timezone.localdate()
+    current = next((link['url'] for link in parser.links if re.search(rf'{today.year}\s+Q{((today.month - 1) // 3) + 1}', link['text'], flags=re.IGNORECASE)), None)
+    return current or (parser.links[-1]['url'] if parser.links else SSNET_SOURCE)
+
+
+def _current_ssnet_lesson_urls():
+    quarter_url = current_ssnet_quarter_url()
+    response = requests.get(quarter_url, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    response.raise_for_status()
+    parser = _SsnetLessonParser(quarter_url)
+    parser.feed(response.text)
+    lessons = [link for link in parser.links if not link.get('teacher')]
+    if not lessons:
+        return quarter_url, quarter_url
+    today = timezone.localdate()
+    quarter_start = today.replace(month=((today.month - 1) // 3) * 3 + 1, day=1)
+    first_sabbath = quarter_start - timedelta(days=(quarter_start.weekday() - 5) % 7)
+    current_number = min(max(((today - first_sabbath).days // 7) + 1, 1), 13)
+    lesson = next((item for item in lessons if item['number'] == current_number), lessons[-1])
+    lesson_page = requests.get(lesson['url'], headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
+    lesson_page.raise_for_status()
+    lesson_parser = _SsnetLessonParser(lesson['url'])
+    lesson_parser.feed(lesson_page.text)
+    teacher = next((item for item in lesson_parser.links if item.get('teacher') and item['number'] == lesson['number']), None)
+    return lesson['url'], teacher['url'] if teacher else quarter_url
+
+
 def first_mission_story_url(audience):
     source_url = MISSION_READING_SOURCES[audience]
     path_fragment = '/children/' if audience == 'children' else '/youth-and-adult/'
@@ -172,11 +264,11 @@ def save_resource_url(key, url):
 
 
 def current_adult_lesson_url():
-    response = requests.get(ADULT_LESSON_SOURCE, headers={'User-Agent': 'LomaLindaChurch/1.0'}, timeout=12)
-    response.raise_for_status()
-    parser = _MissionLinkParser(ADULT_LESSON_SOURCE, '/Lesson?')
-    parser.feed(response.text)
-    return parser.links[0] if parser.links else ADULT_LESSON_SOURCE
+    return _current_ssnet_lesson_urls()[0]
+
+
+def current_adult_teacher_url():
+    return _current_ssnet_lesson_urls()[1]
 
 
 def current_adult_pdf_url(kind):
@@ -361,6 +453,19 @@ class AdultLessonRedirectView(APIView):
             destination = destination or save_resource_url('adult_lesson', current_adult_lesson_url())
         except requests.RequestException:
             destination = ADULT_LESSON_SOURCE
+        return HttpResponseRedirect(destination)
+
+
+class AdultTeacherRedirectView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        destination = cached_resource_url('adult_teacher')
+        try:
+            destination = destination or save_resource_url('adult_teacher', current_adult_teacher_url())
+        except requests.RequestException:
+            destination = 'https://ssnet.org/study-guides/adult-teacher-resources/'
         return HttpResponseRedirect(destination)
 
 
