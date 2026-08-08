@@ -273,6 +273,7 @@ class MembershipTransferRequest(models.Model):
     member_name = models.CharField(max_length=160)
     transfer_type = models.CharField(max_length=20, choices=TRANSFER_TYPE_CHOICES, default='incoming')
     other_church = models.CharField(max_length=160, help_text="Previous or destination church name")
+    reason = models.TextField(blank=True, help_text="Reason for the transfer")
     phone_number = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)

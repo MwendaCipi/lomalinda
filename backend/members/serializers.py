@@ -146,11 +146,13 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 
 
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):
+    reason = serializers.CharField(required=True, allow_blank=False)
+
     privacy_accepted = serializers.BooleanField(write_only=True)
 
     class Meta:
         model = MembershipTransferRequest
-        fields = ('id', 'member_name', 'transfer_type', 'other_church', 'phone_number', 'email', 'status', 'clerk_notes', 'created_at')
+        fields = ('id', 'member_name', 'transfer_type', 'other_church', 'reason', 'phone_number', 'email', 'status', 'clerk_notes', 'created_at')
         read_only_fields = ('id', 'created_at')
 
     def validate_privacy_accepted(self, value):
