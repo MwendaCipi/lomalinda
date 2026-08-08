@@ -111,10 +111,8 @@ class _MissionLinkParser(HTMLParser):
         if not href or href.startswith('#'):
             return
         url = urljoin(self.source_url, href)
-        is_article_path = self.path_fragment in url
-        is_children_article = self.path_fragment == '/children/' and re.search(r'/v\d+n\d+(?:[-/]|$)', url) is not None
-        is_adult_article = self.path_fragment == '/youth-and-adult/' and re.search(r'/a\d+(?:[-/]|$)', url) is not None
-        if (is_article_path or is_children_article or is_adult_article) and url.rstrip('/') != self.source_url.rstrip('/') and url not in self.links:
+        is_article_path = self.path_fragment in url and re.search(r'/articles/[^/?#]+/?$', url) is not None
+        if is_article_path and url.rstrip('/') != self.source_url.rstrip('/') and url not in self.links:
             self.links.append(url)
 
 
@@ -251,7 +249,11 @@ def first_mission_story_url(audience):
     response.raise_for_status()
     parser = _MissionLinkParser(source_url, path_fragment)
     parser.feed(response.text)
-    return parser.links[0] if parser.links else source_url
+    if not parser.links:
+        return source_url
+    # The current Adventist Mission page places the adult weekly article
+    # after one introductory article, while the children's weekly article is first.
+    return parser.links[1] if audience == 'adults' and len(parser.links) > 1 else parser.links[0]
 
 
 def cached_resource_url(key):
@@ -433,6 +435,8 @@ class MissionReadingRedirectView(APIView):
             return HttpResponseRedirect(MISSION_READING_SOURCES['children'])
         key = f'mission_{audience}'
         destination = cached_resource_url(key)
+        if destination and not re.search(rf'/mission-quarterlies/{"children" if audience == "children" else "youth-and-adult"}/articles/[^/?#]+/?$', destination):
+            destination = None
         try:
             destination = destination or save_resource_url(key, first_mission_story_url(audience))
         except requests.RequestException:
