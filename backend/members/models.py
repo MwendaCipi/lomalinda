@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 import uuid
 
 
@@ -85,6 +86,7 @@ class Contribution(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=3, default='KES')
     purpose = models.CharField(max_length=120, default='General giving')
+    campaign = models.ForeignKey('FundraisingCampaign', on_delete=models.SET_NULL, null=True, blank=True, related_name='contributions')
     item_description = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
@@ -138,6 +140,27 @@ class GivingPurpose(models.Model):
 
     class Meta:
         ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class FundraisingCampaign(models.Model):
+    name = models.CharField(max_length=120, unique=True, help_text="Campaign name, also used as M-Pesa account reference name and giving purpose")
+    title = models.CharField(max_length=160, blank=True, help_text="Public display title")
+    description = models.TextField(blank=True)
+    target_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    start_date = models.DateField(default=timezone.now)
+    end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    generate_card = models.BooleanField(default=True)
+    custom_card_image = models.ImageField(upload_to='campaign_cards/', null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_campaigns')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name

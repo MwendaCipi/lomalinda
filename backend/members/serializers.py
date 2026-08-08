@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, FundraisingCampaign, GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -205,3 +205,40 @@ class VisitationRequestSerializer(serializers.ModelSerializer):
         if attrs.get('latitude') is None or attrs.get('longitude') is None:
             raise serializers.ValidationError({'location': 'Please pin your location on the map before submitting.'})
         return attrs
+
+
+class FundraisingCampaignSerializer(serializers.ModelSerializer):
+    total_raised = serializers.SerializerMethodField()
+    percentage_raised = serializers.SerializerMethodField()
+    donor_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FundraisingCampaign
+        fields = (
+            'id', 'name', 'title', 'description', 'target_amount', 'start_date',
+            'end_date', 'is_active', 'generate_card', 'custom_card_image',
+            'created_by', 'created_at', 'updated_at',
+            'total_raised', 'percentage_raised', 'donor_count'
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by')
+
+    def get_total_raised(self, obj):
+        from django.db.models import Sum
+        contributions = obj.contributions.filter(status='completed')
+        total = contributions.aggregate(Sum('amount'))['amount__sum'] or 0
+        if total == 0:
+            purpose_total = Contribution.objects.filter(purpose=obj.name, status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+            total += purpose_total
+        return float(total)
+
+    def get_percentage_raised(self, obj):
+        total = self.get_total_raised(obj)
+        target = float(obj.target_amount) if obj.target_amount else 0.0
+        if target > 0:
+            return round((total / target) * 100, 1)
+        return 0.0
+
+    def get_donor_count(self, obj):
+        count1 = obj.contributions.filter(status='completed').count()
+        count2 = Contribution.objects.filter(purpose=obj.name, status='completed').count()
+        return max(count1, count2)

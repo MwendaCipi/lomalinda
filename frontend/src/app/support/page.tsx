@@ -15,6 +15,16 @@ const supportCategories = [
     ),
   },
   {
+    title: "Fundraising Campaigns",
+    description: "View active fundraising projects, share digital cards, and track live goals.",
+    href: "/support/campaigns",
+    icon: (
+      <svg className="h-6 w-6 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.684A1.76 1.76 0 013 12.016v-2.032c0-.77.5-1.442 1.236-1.668l3.197-.978m7.567-1.458A5.002 5.002 0 0119.5 12c0 1.956-.84 3.716-2.185 4.954M12 12a3 3 0 100-6 3 3 0 000 6z" />
+      </svg>
+    ),
+  },
+  {
     title: "Give in Kind",
     description: "Pledge physical produce, equipment, building supplies, or professional skills.",
     href: "/support/in-kind",

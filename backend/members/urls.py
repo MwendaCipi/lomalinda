@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -32,6 +32,8 @@ urlpatterns = [
     path('church-settings/', ChurchSettingsView.as_view(), name='church-settings'),
     path('giving-purposes/', GivingPurposeListCreateView.as_view(), name='giving-purpose-list-create'),
     path('giving-purposes/<int:pk>/', GivingPurposeDetailView.as_view(), name='giving-purpose-detail'),
+    path('campaigns/', FundraisingCampaignListCreateView.as_view(), name='campaign-list-create'),
+    path('campaigns/<int:pk>/', FundraisingCampaignDetailView.as_view(), name='campaign-detail'),
     path('auth/enrollment-request/', EnrollmentRequestView.as_view(), name='enrollment-request'),
     path('auth/enrollment/oauth-verify/', EnrollmentOAuthVerifyView.as_view(), name='enrollment-oauth-verify'),
     path('auth/enrollment/verify/', EnrollmentVerifyView.as_view(), name='enrollment-verify'),
