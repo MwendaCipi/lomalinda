@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, CampaignCardAssignmentLookupView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyCampaignCardsView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -11,6 +11,7 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='member-register'),
     path('me/', MeView.as_view(), name='member-me'),
     path('me/enrollment-details/', EnrollmentDetailsView.as_view(), name='member-enrollment-details'),
+    path('me/campaign-cards/', MyCampaignCardsView.as_view(), name='my-campaign-cards'),
     path('contributions/', MyContributionsView.as_view(), name='member-contributions'),
     path('support-submissions/', SupportSubmissionView.as_view(), name='support-submissions'),
     path('contributions/initiate/', InitiateContributionView.as_view(), name='contribution-initiate'),
@@ -34,6 +35,7 @@ urlpatterns = [
     path('giving-purposes/<int:pk>/', GivingPurposeDetailView.as_view(), name='giving-purpose-detail'),
     path('campaigns/', FundraisingCampaignListCreateView.as_view(), name='campaign-list-create'),
     path('campaigns/<int:pk>/', FundraisingCampaignDetailView.as_view(), name='campaign-detail'),
+    path('campaign-cards/lookup/<str:token>/', CampaignCardAssignmentLookupView.as_view(), name='campaign-card-lookup'),
     path('auth/enrollment-request/', EnrollmentRequestView.as_view(), name='enrollment-request'),
     path('auth/enrollment/oauth-verify/', EnrollmentOAuthVerifyView.as_view(), name='enrollment-oauth-verify'),
     path('auth/enrollment/verify/', EnrollmentVerifyView.as_view(), name='enrollment-verify'),

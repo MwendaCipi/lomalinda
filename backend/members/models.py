@@ -87,6 +87,7 @@ class Contribution(models.Model):
     currency = models.CharField(max_length=3, default='KES')
     purpose = models.CharField(max_length=120, default='General giving')
     campaign = models.ForeignKey('FundraisingCampaign', on_delete=models.SET_NULL, null=True, blank=True, related_name='contributions')
+    card_assignment = models.ForeignKey('CampaignCardAssignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='contributions')
     item_description = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
@@ -154,6 +155,7 @@ class FundraisingCampaign(models.Model):
     end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     generate_card = models.BooleanField(default=True)
+    target_groups = models.JSONField(default=list, blank=True, help_text="List of assigned group/department keys")
     custom_card_image = models.ImageField(upload_to='campaign_cards/', null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_campaigns')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -164,6 +166,21 @@ class FundraisingCampaign(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CampaignCardAssignment(models.Model):
+    campaign = models.ForeignKey(FundraisingCampaign, on_delete=models.CASCADE, related_name='card_assignments')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='campaign_cards')
+    group_name = models.CharField(max_length=60, default='General Member')
+    referral_token = models.CharField(max_length=64, unique=True, default=uuid.uuid4)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('campaign', 'member')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.campaign.name} - {self.member.get_full_name() or self.member.username} ({self.group_name})"
 
 
 class ChurchFinancialReport(models.Model):

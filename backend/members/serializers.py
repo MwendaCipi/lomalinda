@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
-    Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget,
+    Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     ChurchSettings, Contribution, EnrollmentRequest, FundraisingCampaign,
     GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest,
@@ -316,18 +316,47 @@ class VisitationRequestSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class CampaignCardAssignmentSerializer(serializers.ModelSerializer):
+    member_name = serializers.SerializerMethodField()
+    member_email = serializers.SerializerMethodField()
+    campaign_name = serializers.CharField(source='campaign.name', read_only=True)
+    campaign_title = serializers.CharField(source='campaign.title', read_only=True)
+    total_raised = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CampaignCardAssignment
+        fields = ('id', 'campaign', 'campaign_name', 'campaign_title', 'member', 'member_name', 'member_email', 'group_name', 'referral_token', 'created_at', 'total_raised')
+        read_only_fields = ('id', 'referral_token', 'created_at')
+
+    def get_member_name(self, obj):
+        name = f"{obj.member.first_name} {obj.member.last_name}".strip()
+        return name or obj.member.username
+
+    def get_member_email(self, obj):
+        return obj.member.email
+
+    def get_total_raised(self, obj):
+        from django.db.models import Sum
+        total = obj.contributions.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+        return float(total)
+
+
 class FundraisingCampaignSerializer(serializers.ModelSerializer):
     total_raised = serializers.SerializerMethodField()
     percentage_raised = serializers.SerializerMethodField()
     donor_count = serializers.SerializerMethodField()
+    assigned_cards_count = serializers.SerializerMethodField()
+    group_breakdown = serializers.SerializerMethodField()
+    top_fundraisers = serializers.SerializerMethodField()
 
     class Meta:
         model = FundraisingCampaign
         fields = (
             'id', 'name', 'title', 'description', 'target_amount', 'start_date',
-            'end_date', 'is_active', 'generate_card', 'custom_card_image',
+            'end_date', 'is_active', 'generate_card', 'target_groups', 'custom_card_image',
             'created_by', 'created_at', 'updated_at',
-            'total_raised', 'percentage_raised', 'donor_count'
+            'total_raised', 'percentage_raised', 'donor_count',
+            'assigned_cards_count', 'group_breakdown', 'top_fundraisers'
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by')
 
@@ -343,6 +372,30 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         if attrs.get('end_date') and attrs.get('start_date') and attrs['end_date'] < attrs['start_date']:
             raise serializers.ValidationError({'end_date': 'End date cannot be before start date.'})
         return attrs
+
+    def get_assigned_cards_count(self, obj):
+        return obj.card_assignments.count()
+
+    def get_group_breakdown(self, obj):
+        from django.db.models import Sum
+        assignments = obj.card_assignments.all()
+        breakdown = {}
+        for a in assignments:
+            grp = a.group_name or 'General'
+            raised = a.contributions.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+            breakdown[grp] = float(breakdown.get(grp, 0) + raised)
+        return breakdown
+
+    def get_top_fundraisers(self, obj):
+        from django.db.models import Sum
+        top = []
+        for a in obj.card_assignments.all():
+            raised = a.contributions.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+            if raised > 0:
+                name = f"{a.member.first_name} {a.member.last_name}".strip() or a.member.username
+                top.append({'name': name, 'group': a.group_name, 'amount': float(raised)})
+        top.sort(key=lambda x: x['amount'], reverse=True)
+        return top[:10]
 
     def get_total_raised(self, obj):
         from django.db.models import Sum

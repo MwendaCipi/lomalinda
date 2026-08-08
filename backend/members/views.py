@@ -23,10 +23,10 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
-from .serializers import AnnouncementSerializer, BoardMeetingSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, BoardMeetingSerializer, CampaignCardAssignmentSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -618,10 +618,19 @@ class InitiateContributionView(APIView):
             item_description=serializer.validated_data.get('item_description', ''),
             payment_method=serializer.validated_data.get('payment_method', 'mpesa'),
         )
-        campaign = FundraisingCampaign.objects.filter(name=contribution.purpose).first()
-        if campaign:
-            contribution.campaign = campaign
-            contribution.save(update_fields=['campaign'])
+        referral_token = request.data.get('referral_token')
+        if referral_token:
+            card_assignment = CampaignCardAssignment.objects.filter(referral_token=referral_token).first()
+            if card_assignment:
+                contribution.card_assignment = card_assignment
+                contribution.campaign = card_assignment.campaign
+                contribution.purpose = card_assignment.campaign.name
+                contribution.save(update_fields=['card_assignment', 'campaign', 'purpose'])
+        elif not contribution.campaign:
+            campaign = FundraisingCampaign.objects.filter(name=contribution.purpose).first()
+            if campaign:
+                contribution.campaign = campaign
+                contribution.save(update_fields=['campaign'])
         donor_email = contribution.donor_email.strip().lower()
         if donor_email:
             friend = Friend.objects.filter(email__iexact=donor_email).first()
@@ -906,6 +915,62 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
         if not purpose.active:
             purpose.active = True
             purpose.save(update_fields=['active'])
+
+        group_role_map = {
+            'choir': ('choir_director', 'Choir Ministry'),
+            'youth': ('youth_leader', 'Youth Ministries'),
+            'children': ('children_ministry', 'Children Ministry'),
+            'men': ('men_ministry', 'Adventist Men Ministries'),
+            'women': ('women_ministry', 'Adventist Women Ministries'),
+            'chaplaincy': ('chaplaincy', 'Chaplaincy'),
+            'leaders': ('leader', 'Church Leaders'),
+        }
+
+        from django.contrib.auth.models import User
+        users_to_assign = set()
+        target_groups = campaign.target_groups or []
+
+        if 'all_members' in target_groups or not target_groups:
+            for u in User.objects.filter(is_active=True):
+                users_to_assign.add((u, 'General Member'))
+        else:
+            for grp_key in target_groups:
+                if grp_key in group_role_map:
+                    role_code, grp_label = group_role_map[grp_key]
+                    for u in User.objects.filter(member_profile__role=role_code):
+                        users_to_assign.add((u, grp_label))
+                else:
+                    for u in User.objects.filter(is_active=True):
+                        users_to_assign.add((u, grp_key.title()))
+
+        for u, grp_label in users_to_assign:
+            assignment, created = CampaignCardAssignment.objects.get_or_create(
+                campaign=campaign,
+                member=u,
+                defaults={'group_name': grp_label}
+            )
+            if created:
+                ChurchNotification.objects.create(
+                    title=f"Fundraising Card Assigned: {campaign.name}",
+                    message=f"You have been assigned a personal fundraising card for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
+                )
+
+
+class CampaignCardAssignmentLookupView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        assignment = generics.get_object_or_404(CampaignCardAssignment, referral_token=token)
+        serializer = CampaignCardAssignmentSerializer(assignment)
+        return Response(serializer.data)
+
+
+class MyCampaignCardsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CampaignCardAssignmentSerializer
+
+    def get_queryset(self):
+        return CampaignCardAssignment.objects.filter(member=self.request.user)
 
 
 class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CampaignDetailClient from "./campaign-detail-client";
 
 export function generateStaticParams() {
@@ -5,5 +6,9 @@ export function generateStaticParams() {
 }
 
 export default function CampaignDetailPage() {
-  return <CampaignDetailClient />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-[#617068]">Loading campaign...</div>}>
+      <CampaignDetailClient />
+    </Suspense>
+  );
 }

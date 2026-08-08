@@ -16,11 +16,24 @@ interface Campaign {
   end_date?: string | null;
   is_active: boolean;
   generate_card: boolean;
+  target_groups?: string[];
   custom_card_image?: string | null;
   total_raised: number;
   percentage_raised: number;
   donor_count: number;
+  assigned_cards_count?: number;
+  group_breakdown?: Record<string, number>;
 }
+
+const AVAILABLE_GROUPS = [
+  { key: "choir", label: "Choir Ministry" },
+  { key: "youth", label: "Youth Ministries" },
+  { key: "children", label: "Children Ministry" },
+  { key: "men", label: "Adventist Men Ministries" },
+  { key: "women", label: "Adventist Women Ministries" },
+  { key: "leaders", label: "Church Leaders & Elders" },
+  { key: "all_members", label: "All Members (Entire Congregation)" },
+];
 
 export default function CampaignManagementPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -37,6 +50,7 @@ export default function CampaignManagementPage() {
     start_date: todayStr,
     end_date: "",
     generate_card: true,
+    target_groups: ["all_members"] as string[],
     custom_card_image: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,7 +64,6 @@ export default function CampaignManagementPage() {
       return;
     }
 
-    // Check user profile
     fetch(`${API_URL}/api/members/me/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -78,6 +91,20 @@ export default function CampaignManagementPage() {
       .finally(() => setLoading(false));
   }
 
+  function handleGroupToggle(groupKey: string) {
+    setForm((current) => {
+      const exists = current.target_groups.includes(groupKey);
+      let updated: string[];
+      if (groupKey === "all_members") {
+        updated = exists ? [] : ["all_members"];
+      } else {
+        const filtered = current.target_groups.filter((g) => g !== "all_members");
+        updated = exists ? filtered.filter((g) => g !== groupKey) : [...filtered, groupKey];
+      }
+      return { ...current, target_groups: updated };
+    });
+  }
+
   async function handleCreateCampaign(e: FormEvent) {
     e.preventDefault();
     const token = localStorage.getItem("access_token");
@@ -101,10 +128,11 @@ export default function CampaignManagementPage() {
           name: form.name.trim(),
           title: form.title.trim() || form.name.trim(),
           description: form.description.trim(),
-          target_amount: parseFloat(form.target_amount),
+          target_amount: numericTarget,
           start_date: form.start_date || todayStr,
           end_date: form.end_date || null,
           generate_card: form.generate_card,
+          target_groups: form.target_groups.length > 0 ? form.target_groups : ["all_members"],
           custom_card_image: form.custom_card_image.trim() || null,
         }),
       });
@@ -112,7 +140,11 @@ export default function CampaignManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Failed to create campaign.");
 
-      showAlert("Campaign Created", `Fundraising campaign "${data.name}" was created successfully.`, "success");
+      showAlert(
+        "Campaign & Cards Created",
+        `Fundraising campaign "${data.name}" was created successfully, and personalized card notifications were dispatched to assigned groups.`,
+        "success"
+      );
       setForm({
         name: "",
         title: "",
@@ -121,6 +153,7 @@ export default function CampaignManagementPage() {
         start_date: todayStr,
         end_date: "",
         generate_card: true,
+        target_groups: ["all_members"],
         custom_card_image: "",
       });
       setShowCreateForm(false);
@@ -193,7 +226,9 @@ export default function CampaignManagementPage() {
               <span>Back to Stewardship</span>
             </Link>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">Fundraising Campaign Management</h1>
-            <p className="mt-1 text-sm text-[#617068]">Create campaigns, generate shareable digital cards, and monitor progress.</p>
+            <p className="mt-1 text-sm text-[#617068]">
+              Create campaigns, assign personalized cards to church groups &amp; members, and monitor group progress.
+            </p>
           </div>
           <button
             type="button"
@@ -204,15 +239,15 @@ export default function CampaignManagementPage() {
           </button>
         </div>
 
-        {/* Create Campaign Modal / Form Section */}
+        {/* Create Campaign Form Section */}
         {showCreateForm && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
             <h2 className="text-xl font-bold text-[#26352f]">New Fundraising Campaign</h2>
             <p className="mt-1 text-xs text-[#617068]">
-              The campaign name will automatically become the M-Pesa account reference name and will be listed under Giving Purposes.
+              Select which groups/ministries will receive personal cards. Each member in the group gets a personalized card link &amp; notification.
             </p>
 
-            <form onSubmit={handleCreateCampaign} className="mt-6 space-y-4">
+            <form onSubmit={handleCreateCampaign} className="mt-6 space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium text-[#26352f]">
                   Campaign Account Name (M-Pesa Reference) *
@@ -282,38 +317,49 @@ export default function CampaignManagementPage() {
                     className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
                   />
                 </label>
+              </div>
 
-                <label className="block text-sm font-medium sm:col-span-2">
-                  Campaign Description / Story
-                  <textarea
-                    rows={3}
-                    placeholder="Provide details about what this campaign aims to achieve..."
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
-                  />
-                </label>
+              {/* Group / Department Selection Checkboxes */}
+              <div className="rounded-2xl bg-[#faf9f5] p-5 ring-1 ring-[#dfdbd1]">
+                <label className="block text-sm font-bold text-[#26352f]">Assign Personal Cards to Groups / Ministries</label>
+                <p className="mt-0.5 text-xs text-[#617068]">Members in selected groups will receive personal fundraising card links and notifications.</p>
 
-                <div className="sm:col-span-2">
-                  <label className="flex items-center gap-3 text-sm text-[#26352f]">
-                    <input
-                      type="checkbox"
-                      checked={form.generate_card}
-                      onChange={(e) => setForm({ ...form, generate_card: e.target.checked })}
-                      className="h-4 w-4 rounded accent-[#5f8067]"
-                    />
-                    <span>Generate Digital Card &amp; Public Share Link</span>
-                  </label>
+                <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {AVAILABLE_GROUPS.map((g) => {
+                    const isChecked = form.target_groups.includes(g.key);
+                    return (
+                      <label key={g.key} className="flex items-center gap-2.5 rounded-xl bg-white p-3 text-xs font-medium text-[#26352f] ring-1 ring-[#dfdbd1] cursor-pointer hover:bg-[#f7f4ee]">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleGroupToggle(g.key)}
+                          className="h-4 w-4 rounded accent-[#5f8067]"
+                        />
+                        <span>{g.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="pt-2">
+              <label className="block text-sm font-medium">
+                Campaign Description / Story
+                <textarea
+                  rows={3}
+                  placeholder="Provide details about what this campaign aims to achieve..."
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+
+              <div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-6 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
                 >
-                  {isSubmitting ? "Creating..." : "Save & Launch Campaign"}
+                  {isSubmitting ? "Generating Cards & Notifications..." : "Save & Issue Personalized Cards"}
                 </button>
               </div>
             </form>
@@ -337,7 +383,7 @@ export default function CampaignManagementPage() {
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-[#e8f3ec] text-[#2d5d39]" : "bg-[#f3e8e8] text-[#8c2e2e]"}`}>
                         {c.is_active ? "Active" : "Ended"}
                       </span>
-                      <span className="text-xs text-[#617068]">Started: {c.start_date}</span>
+                      <span className="text-xs text-[#617068]">Cards Issued: <strong className="text-[#26352f]">{c.assigned_cards_count || 0}</strong></span>
                     </div>
 
                     <h3 className="text-lg font-bold text-[#26352f]">{c.title || c.name}</h3>
@@ -356,6 +402,20 @@ export default function CampaignManagementPage() {
                         />
                       </div>
                     </div>
+
+                    {/* Group Breakdown mini badge summary */}
+                    {c.group_breakdown && Object.keys(c.group_breakdown).length > 0 && (
+                      <div className="pt-2">
+                        <span className="text-[11px] font-semibold text-[#617068]">Group Raised Breakdown:</span>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {Object.entries(c.group_breakdown).map(([grp, amt]) => (
+                            <span key={grp} className="rounded-lg bg-[#f7f4ee] px-2 py-1 text-[10px] font-semibold text-[#26352f] ring-1 ring-[#dfdbd1]">
+                              {grp}: KES {Number(amt).toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-6 flex items-center justify-between border-t border-[#dfdbd1] pt-4">
@@ -363,7 +423,7 @@ export default function CampaignManagementPage() {
                       href={`/campaigns/${c.id}`}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#b36b3c] hover:underline"
                     >
-                      <span>🎴 View Card &amp; Share</span>
+                      <span>🎴 View Main Card &amp; Leaderboard</span>
                       <span>&rarr;</span>
                     </Link>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 
@@ -21,12 +21,27 @@ interface Campaign {
   total_raised: number;
   percentage_raised: number;
   donor_count: number;
+  assigned_cards_count?: number;
+  group_breakdown?: Record<string, number>;
+  top_fundraisers?: { name: string; group: string; amount: number }[];
+}
+
+interface CardAssignment {
+  id: number;
+  member_name: string;
+  group_name: string;
+  referral_token: string;
+  total_raised: number;
 }
 
 export default function CampaignDetailClient() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const campaignId = params?.id;
+  const refToken = searchParams?.get("ref");
+
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [cardAssignment, setCardAssignment] = useState<CardAssignment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,7 +64,16 @@ export default function CampaignDetailClient() {
       .then((data) => setCampaign(data))
       .catch((err) => setError(err.message || "Failed to load campaign details."))
       .finally(() => setLoading(false));
-  }, [campaignId]);
+
+    if (refToken) {
+      fetch(`${API_URL}/api/members/campaign-cards/lookup/${refToken}/`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) setCardAssignment(data);
+        })
+        .catch(() => {});
+    }
+  }, [campaignId, refToken]);
 
   async function handleDonate(e: FormEvent) {
     e.preventDefault();
@@ -78,6 +102,7 @@ export default function CampaignDetailClient() {
           donor_name: donorName,
           donor_email: donorEmail,
           payment_method: paymentMethod === "card" ? "card" : "mpesa",
+          referral_token: refToken || undefined,
         }),
       });
 
@@ -101,7 +126,8 @@ export default function CampaignDetailClient() {
   function handleShareWhatsApp() {
     if (!campaign) return;
     const shareUrl = window.location.href;
-    const text = `*Loma Linda SDA Church Fundraising Card*\n\nJoin us in supporting *${campaign.title || campaign.name}*!\n\nTarget Goal: KES ${Number(campaign.target_amount).toLocaleString()}\nRaised so far: KES ${Number(campaign.total_raised).toLocaleString()} (${campaign.percentage_raised}%)\n\nGive online or via M-Pesa here:\n${shareUrl}`;
+    const memberGreeting = cardAssignment ? `\nFundraising Card for *${cardAssignment.member_name}* (${cardAssignment.group_name})\n` : "";
+    const text = `*Loma Linda SDA Church Fundraising Card*${memberGreeting}\nJoin us in supporting *${campaign.title || campaign.name}*!\n\nTarget Goal: KES ${Number(campaign.target_amount).toLocaleString()}\nRaised so far: KES ${Number(campaign.total_raised).toLocaleString()} (${campaign.percentage_raised}%)\n\nGive online or via M-Pesa here:\n${shareUrl}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
   }
 
@@ -150,6 +176,25 @@ export default function CampaignDetailClient() {
           </span>
         </div>
 
+        {/* Personalized Card Owner Banner */}
+        {cardAssignment && (
+          <div className="flex items-center justify-between rounded-2xl bg-[#e8f3ec] p-4 text-[#2d5d39] ring-1 ring-[#5f8067]/30">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🎴</span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Personalized Fundraising Card</p>
+                <p className="text-sm font-semibold">
+                  Card issued to: <strong className="text-[#26352f]">{cardAssignment.member_name}</strong> ({cardAssignment.group_name})
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="block text-[11px] text-[#4a7256]">Raised via this link</span>
+              <span className="text-sm font-bold">KES {Number(cardAssignment.total_raised).toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+
         {/* Campaign Visual Card Container */}
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]">
           {campaign.custom_card_image ? (
@@ -164,7 +209,6 @@ export default function CampaignDetailClient() {
           ) : (
             /* Auto-Generated Digital Card */
             <div className="relative overflow-hidden bg-gradient-to-br from-[#1d2a25] via-[#26352f] to-[#3a4d44] p-6 text-white sm:p-8">
-              {/* Subtle Decorative Pattern Background */}
               <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-[#5f8067]/20 blur-3xl" />
               <div className="relative z-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
                 <div className="space-y-3 sm:max-w-xl">
@@ -173,9 +217,16 @@ export default function CampaignDetailClient() {
                     <span>•</span>
                     <span>Fundraising Card</span>
                   </div>
+
                   <h1 className="text-2xl font-bold tracking-tight text-white sm:text-4xl">{campaign.title || campaign.name}</h1>
                   {campaign.description && <p className="text-sm leading-relaxed text-[#d1d8d4]">{campaign.description}</p>}
                   
+                  {cardAssignment && (
+                    <div className="mt-2 inline-block rounded-xl bg-white/15 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+                      Fundraising link for <strong className="text-[#e4b568]">{cardAssignment.member_name}</strong> ({cardAssignment.group_name})
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-4 text-xs text-[#a3b8ac] pt-2">
                     <div><span className="font-semibold text-white">M-Pesa Acc Name:</span> <code className="rounded bg-white/10 px-2 py-1 text-[#e4b568] font-mono font-bold">{campaign.name}</code></div>
                     <div><span className="font-semibold text-white">Started:</span> {campaign.start_date}</div>
@@ -240,17 +291,55 @@ export default function CampaignDetailClient() {
                 onClick={handleCopyLink}
                 className="inline-flex items-center gap-2 rounded-full border border-[#dfdbd1] bg-white px-5 py-2.5 text-sm font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
               >
-                <span>{copySuccess ? "✓ Link Copied!" : "📋 Copy Share Link"}</span>
+                <span>{copySuccess ? "✓ Link Copied!" : "📋 Copy Personal Link"}</span>
               </button>
             </div>
           </div>
         </div>
 
+        {/* Group Breakdown & Top Fundraisers Leaderboard */}
+        {(campaign.group_breakdown || (campaign.top_fundraisers && campaign.top_fundraisers.length > 0)) && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {campaign.group_breakdown && Object.keys(campaign.group_breakdown).length > 0 && (
+              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
+                <h3 className="text-base font-bold text-[#26352f]">Group Breakdown</h3>
+                <div className="mt-4 space-y-3">
+                  {Object.entries(campaign.group_breakdown).map(([grp, amt]) => (
+                    <div key={grp} className="flex items-center justify-between text-sm border-b border-[#faf9f5] pb-2">
+                      <span className="font-medium text-[#26352f]">{grp}</span>
+                      <span className="font-bold text-[#5f8067]">KES {Number(amt).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {campaign.top_fundraisers && campaign.top_fundraisers.length > 0 && (
+              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
+                <h3 className="text-base font-bold text-[#26352f]">Top Fundraisers</h3>
+                <div className="mt-4 space-y-3">
+                  {campaign.top_fundraisers.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm border-b border-[#faf9f5] pb-2">
+                      <div>
+                        <span className="font-semibold text-[#26352f]">{i + 1}. {f.name}</span>
+                        <span className="block text-[11px] text-[#617068]">{f.group}</span>
+                      </div>
+                      <span className="font-bold text-[#9a741c]">KES {Number(f.amount).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Giving Widget Section */}
         {campaign.is_active && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
             <h2 className="text-xl font-bold tracking-tight text-[#26352f]">Support this Campaign</h2>
-            <p className="mt-1 text-sm text-[#617068]">Select your preferred contribution method to help us reach our target.</p>
+            <p className="mt-1 text-sm text-[#617068]">
+              {cardAssignment ? `Your contribution will be credited to ${cardAssignment.member_name}'s fundraising goal.` : "Select your preferred contribution method to help us reach our target."}
+            </p>
 
             {/* Payment Method Switcher Tabs */}
             <div className="mt-5 flex flex-wrap rounded-2xl border border-[#dfdbd1] p-1 gap-1">
