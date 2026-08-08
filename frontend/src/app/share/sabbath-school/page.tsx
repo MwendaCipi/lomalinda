@@ -84,10 +84,9 @@ export default function SabbathSchoolPage() {
           <section className="order-1 rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 lg:col-span-2">
             <span className="rounded-full border border-[#b36b3c]/30 bg-[#f7f4ee] px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">Quarter {currentInfo.quarter}</span>
             <h2 className="mt-3 flex items-center gap-2 text-2xl font-semibold"><span>📖</span> Youth &amp; Adult Resources</h2>
-            <p className="mt-1.5 text-sm leading-6 text-[#617068]">Weekly Bible study and mission resources for youth and adults.</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {adultResources.map((item) => (
-                <article key={item.title} className={`flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white sm:col-span-2 ${item.title === "Mission Story" ? "order-first" : ""}`}>
+                <article key={item.title} className={`flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-5 transition hover:border-[#b36b3c] hover:bg-white ${item.title === "Mission Story" ? "order-first" : ""}`}>
                   <div>
                     <div className="flex items-center gap-2"><span className="text-xl">{item.icon}</span><h3 className="font-semibold">{item.title}</h3></div>
                     <p className="mt-1 text-xs leading-5 text-[#617068]">{item.text}</p>
