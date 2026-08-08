@@ -106,7 +106,6 @@ export default function TestimoniesPage() {
           {mode === "fellowship" && (
             <>
               <h2 className="text-xl font-semibold sm:text-2xl">Request to share during fellowship</h2>
-              <p className="mt-2 text-sm leading-6 text-[#617068]">Tell us your name and any helpful details. A church leader will arrange an opportunity during fellowship.</p>
             </>
           )}
 
