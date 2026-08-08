@@ -32,7 +32,7 @@ class MemberProfile(models.Model):
 
 
 class EnrollmentRequest(models.Model):
-    STATUS_CHOICES = [('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
+    STATUS_CHOICES = [('verification_pending', 'Verification pending'), ('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
     JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of Loma Linda')]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
@@ -45,6 +45,7 @@ class EnrollmentRequest(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     county_of_birth = models.CharField(max_length=120, blank=True)
     current_church = models.CharField(max_length=160, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='enrollment_requests')
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

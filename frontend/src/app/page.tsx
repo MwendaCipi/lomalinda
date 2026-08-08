@@ -43,15 +43,6 @@ export default function Home() {
         <div className="mx-auto max-w-6xl"><p className="max-w-3xl text-2xl leading-relaxed tracking-tight sm:text-3xl">As a Seventh-day church, we honour the Sabbath, cherish Bible truth, and build a supportive community where everyone feels loved, valued, and remembered in prayer.</p></div>
       </section>
 
-      <section id="beliefs" className="mx-auto max-w-6xl px-6 py-20 lg:px-8">
-        <div className="max-w-2xl"><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">What guides us</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Faith that shapes everyday life</h2></div>
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">The Bible</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We look to Scripture as the foundation for knowing God and living with wisdom, grace, and purpose.</p></article>
-          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">The Sabbath</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We set apart the seventh day to worship, rest, remember God&apos;s goodness, and grow together.</p></article>
-          <article className="border-l-2 border-[#b36b3c] pl-6"><h3 className="text-xl font-semibold">Hope in Jesus</h3><p className="mt-3 text-sm leading-6 text-[#617068]">We believe Jesus brings forgiveness, healing, and the promise of a future filled with hope.</p></article>
-        </div>
-      </section>
-
       <section id="calendar" className="bg-white/60 px-6 py-20 lg:px-8">
         <div className="mx-auto max-w-6xl"><div className="flex flex-wrap items-end justify-between gap-6"><div><p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Weekly calendar</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Connect & worship with us</h2></div><Link href="/calendar" className="text-sm font-semibold text-[#b36b3c] hover:underline">See all Sabbaths &rarr;</Link></div>
           <div className="mt-10 grid gap-8 border-t border-[#dfdbd1] md:grid-cols-3 md:gap-0 md:divide-x md:divide-[#dfdbd1]">

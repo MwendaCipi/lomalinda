@@ -25,11 +25,16 @@ class EnrollmentRequestAdmin(admin.ModelAdmin):
         approved = 0
         for enrollment in queryset.filter(status='pending'):
             enrollment.status = 'approved'
-            enrollment.token = uuid.uuid4()
-            enrollment.expires_at = timezone.now() + timedelta(hours=48)
-            enrollment.save(update_fields=['status', 'token', 'expires_at'])
-            from .views import send_enrollment_email
-            send_enrollment_email(enrollment)
+            enrollment.save(update_fields=['status'])
+            if enrollment.user_id:
+                enrollment.user.is_active = True
+                enrollment.user.save(update_fields=['is_active'])
+            else:
+                enrollment.token = uuid.uuid4()
+                enrollment.expires_at = timezone.now() + timedelta(hours=48)
+                enrollment.save(update_fields=['token', 'expires_at'])
+                from .views import send_enrollment_email
+                send_enrollment_email(enrollment)
             approved += 1
         self.message_user(request, f'{approved} request(s) approved and emailed.')
 

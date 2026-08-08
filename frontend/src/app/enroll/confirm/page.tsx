@@ -13,6 +13,7 @@ function EnrollmentConfirmContent() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ function EnrollmentConfirmContent() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (password !== confirmPassword) { setMessage("Passwords do not match."); return; }
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/members/auth/enrollment/complete/`, {
@@ -58,6 +60,7 @@ function EnrollmentConfirmContent() {
           <form onSubmit={submit} className="mt-8 space-y-5">
             <label className="block text-sm font-medium">Username<input required value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label>
             <label className="block text-sm font-medium">Password<input type="password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label>
+            <label className="block text-sm font-medium">Confirm password<input type="password" minLength={8} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label>
             <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]"><input type="checkbox" required checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" /><span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span></label>
             <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white disabled:opacity-60">{loading ? "Saving..." : "Create account"}</button>
           </form>

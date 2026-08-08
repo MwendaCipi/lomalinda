@@ -80,9 +80,6 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
           </Link>
 
           <div className="hidden items-center gap-6 text-sm font-medium md:flex">
-            <Link href="/beliefs" className={navItemClass(pathname === "/beliefs")}>
-              Beliefs
-            </Link>
             <Link href="/about" className={navItemClass(pathname === "/about")}>
               About Us
             </Link>
@@ -160,17 +157,6 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
         {/* Mobile Navigation List */}
         {open && (
           <div id="mobile-menu" className="mt-3 flex max-h-[calc(100vh-100px)] flex-col overflow-y-auto border-t border-white/15 pt-3 pb-4 md:hidden">
-            <Link
-              href="/beliefs"
-              onClick={() => setOpen(false)}
-              className={`flex w-full items-center justify-between rounded-2xl border p-4 text-sm font-medium transition ${
-                pathname === "/beliefs" ? "border-[#b36b3c] bg-white/15 text-white" : "border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
-              }`}
-            >
-              <span>Beliefs</span>
-              <span className="text-[#b36b3c] font-semibold">&rarr;</span>
-            </Link>
-
             <Link
               href="/about"
               onClick={() => setOpen(false)}

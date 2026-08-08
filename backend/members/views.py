@@ -349,11 +349,55 @@ class EnrollmentRequestView(generics.CreateAPIView):
         return Response({'message': 'Your request has been submitted for approval. We will email you when it is approved.'}, status=status.HTTP_202_ACCEPTED)
 
 
+class EnrollmentOAuthVerifyView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        credential = str(request.data.get('credential', '')).strip()
+        client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
+        if not client_id:
+            return Response({'detail': 'Google verification has not been configured yet.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if not credential:
+            return Response({'detail': 'Complete Google verification to continue.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            verification = requests.get('https://oauth2.googleapis.com/tokeninfo', params={'id_token': credential}, timeout=10)
+            data = verification.json()
+        except (requests.RequestException, ValueError):
+            return Response({'detail': 'Google verification could not be completed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if verification.status_code != 200 or data.get('aud') != client_id or data.get('email_verified') != 'true':
+            return Response({'detail': 'Google verification could not be completed.'}, status=status.HTTP_400_BAD_REQUEST)
+        email = str(data.get('email', '')).lower().strip()
+        if email != str(request.data.get('email', '')).lower().strip():
+            return Response({'detail': 'The verified Google email must match the email entered above.'}, status=status.HTTP_400_BAD_REQUEST)
+        joining_mode = str(request.data.get('joining_mode', 'baptism'))
+        if joining_mode not in dict(EnrollmentRequest.JOINING_MODE_CHOICES):
+            return Response({'joining_mode': 'Choose a valid joining mode.'}, status=status.HTTP_400_BAD_REQUEST)
+        current_church = str(request.data.get('current_church', '')).strip()
+        if joining_mode == 'friend' and not current_church:
+            return Response({'current_church': 'Enter your current church.'}, status=status.HTTP_400_BAD_REQUEST)
+        enrollment, _ = EnrollmentRequest.objects.update_or_create(
+            email=email,
+            defaults={
+                'first_name': str(request.data.get('first_name', '')).strip(),
+                'last_name': str(request.data.get('last_name', '')).strip(),
+                'phone_number': str(request.data.get('phone_number', '')).strip(),
+                'joining_mode': joining_mode,
+                'current_church': current_church,
+                'privacy_accepted_at': None,
+                'token': uuid.uuid4(),
+                'status': 'verification_pending',
+                'expires_at': timezone.now() + timedelta(hours=1),
+            },
+        )
+        return Response({'token': enrollment.token}, status=status.HTTP_200_OK)
+
+
 class EnrollmentVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status='approved', expires_at__gt=timezone.now()).first()
+        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status__in=('verification_pending', 'approved'), expires_at__gt=timezone.now()).first()
         if not enrollment:
             return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'email': enrollment.email, 'first_name': enrollment.first_name, 'last_name': enrollment.last_name, 'joining_mode': enrollment.joining_mode})
@@ -365,20 +409,21 @@ class EnrollmentCompleteView(APIView):
     def post(self, request):
         serializer = EnrollmentCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status='approved', expires_at__gt=timezone.now()).first()
+        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status__in=('verification_pending', 'approved'), expires_at__gt=timezone.now()).first()
         if not enrollment:
             return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(username=serializer.validated_data['username']).exists():
             return Response({'username': 'That username is already in use.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(email__iexact=enrollment.email).exists():
             return Response({'email': 'An account already exists for this email.'}, status=status.HTTP_400_BAD_REQUEST)
-        user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'])
+        user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'], is_active=enrollment.status == 'approved')
         from .models import MemberProfile
         MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number, account_type='friend' if enrollment.joining_mode == 'friend' else 'member')
-        enrollment.status = 'completed'
+        enrollment.user = user
+        enrollment.status = 'completed' if user.is_active else 'pending'
         enrollment.privacy_accepted_at = timezone.now()
-        enrollment.save(update_fields=['status', 'privacy_accepted_at'])
-        return Response({'message': 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
+        enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at'])
+        return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
 
 
 class PasswordResetRequestView(APIView):
@@ -513,6 +558,30 @@ class MeView(APIView):
     def get(self, request):
         profile = getattr(request.user, 'member_profile', None)
         return Response({'id': request.user.id, 'username': request.user.username, 'email': request.user.email, 'first_name': request.user.first_name, 'last_name': request.user.last_name, 'phone_number': profile.phone_number if profile else '', 'role': profile.role if profile else 'member'})
+
+
+class EnrollmentDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _enrollment(self, request):
+        return EnrollmentRequest.objects.filter(user=request.user).order_by('-created_at').first()
+
+    def get(self, request):
+        enrollment = self._enrollment(request)
+        if not enrollment:
+            return Response({'detail': 'No enrollment request is linked to this account.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'date_of_birth': enrollment.date_of_birth, 'county_of_birth': enrollment.county_of_birth, 'education_level': enrollment.education_level, 'profession': enrollment.profession, 'current_church': enrollment.current_church})
+
+    def patch(self, request):
+        enrollment = self._enrollment(request)
+        if not enrollment:
+            return Response({'detail': 'No enrollment request is linked to this account.'}, status=status.HTTP_404_NOT_FOUND)
+        allowed = ('date_of_birth', 'county_of_birth', 'education_level', 'profession', 'current_church')
+        for field in allowed:
+            if field in request.data:
+                setattr(enrollment, field, request.data.get(field) or '')
+        enrollment.save(update_fields=[field for field in allowed if field in request.data])
+        return self.get(request)
 
 
 class MyContributionsView(generics.ListAPIView):

@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -10,6 +10,7 @@ urlpatterns = [
     path('mission-reading/<str:audience>/', MissionReadingRedirectView.as_view(), name='mission-reading-redirect'),
     path('register/', RegisterView.as_view(), name='member-register'),
     path('me/', MeView.as_view(), name='member-me'),
+    path('me/enrollment-details/', EnrollmentDetailsView.as_view(), name='member-enrollment-details'),
     path('contributions/', MyContributionsView.as_view(), name='member-contributions'),
     path('contributions/initiate/', InitiateContributionView.as_view(), name='contribution-initiate'),
     path('payments/mpesa/callback/', MpesaCallbackView.as_view(), name='mpesa-callback'),
@@ -31,6 +32,7 @@ urlpatterns = [
     path('giving-purposes/', GivingPurposeListCreateView.as_view(), name='giving-purpose-list-create'),
     path('giving-purposes/<int:pk>/', GivingPurposeDetailView.as_view(), name='giving-purpose-detail'),
     path('auth/enrollment-request/', EnrollmentRequestView.as_view(), name='enrollment-request'),
+    path('auth/enrollment/oauth-verify/', EnrollmentOAuthVerifyView.as_view(), name='enrollment-oauth-verify'),
     path('auth/enrollment/verify/', EnrollmentVerifyView.as_view(), name='enrollment-verify'),
     path('auth/enrollment/complete/', EnrollmentCompleteView.as_view(), name='enrollment-complete'),
     path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),

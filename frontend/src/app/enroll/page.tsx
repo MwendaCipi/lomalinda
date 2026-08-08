@@ -1,35 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { kenyaCounties } from "@/config/kenya-counties";
+import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Tab = "join" | "transfer_out";
 type JoiningMode = "baptism" | "membership_transfer" | "friend";
 const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]";
+declare global { interface Window { google?: { accounts: { id: { initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void; prompt: () => void } } } } }
 
 export default function EnrollPage() {
   const [tab, setTab] = useState<Tab>("join");
-  const [step, setStep] = useState(1);
   const [joiningMode, setJoiningMode] = useState<JoiningMode>("baptism");
-  const [form, setForm] = useState({ email: "", first_name: "", surname: "", phone_number: "", id_number: "", education_level: "", profession: "", date_of_birth: "", county_of_birth: "", current_church: "", destination_church: "", transfer_reason: "" });
+  const [form, setForm] = useState({ email: "", first_name: "", surname: "", phone_number: "", current_church: "", destination_church: "", transfer_reason: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   function update(field: keyof typeof form, value: string) { setForm((current) => ({ ...current, [field]: value })); }
-  function selectTab(nextTab: Tab) { setTab(nextTab); setStep(1); setMessage(""); }
-  function nextStep(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setStep(2); setMessage(""); }
+  function selectTab(nextTab: Tab) { setTab(nextTab); setMessage(""); }
+
+  useEffect(() => {
+    if (document.querySelector("script[data-google-identity]") || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return;
+    const script = document.createElement("script"); script.src = "https://accounts.google.com/gsi/client"; script.async = true; script.defer = true; script.dataset.googleIdentity = "true"; document.head.appendChild(script);
+  }, []);
+
+  function startGoogleVerification() {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) { showAlert("Verification unavailable", "Google OAuth has not been configured yet.", "error"); return; }
+    if (!window.google) { showAlert("Verification unavailable", "Google verification is still loading. Please try again.", "error"); return; }
+    window.google.accounts.id.initialize({ client_id: clientId, callback: completeGoogleVerification });
+    window.google.accounts.id.prompt();
+  }
+
+  async function completeGoogleVerification(response: { credential: string }) {
+    setLoading(true); setMessage("");
+    try {
+      const result = await fetch(`${API_URL}/api/members/auth/enrollment/oauth-verify/`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, last_name: form.surname, joining_mode: joiningMode, credential: response.credential }) });
+      const data = await result.json();
+      if (!result.ok) throw new Error(Object.values(data).flat().join(" ") || "Google verification failed.");
+      window.location.href = `/enroll/confirm?token=${encodeURIComponent(data.token)}`;
+    } catch (error) { const text = error instanceof Error ? error.message : "Google verification failed."; setMessage(text); showAlert("Verification error", text, "error"); }
+    finally { setLoading(false); }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setMessage("");
     try {
-      const endpoint = tab === "transfer_out" ? `${API_URL}/api/members/transfers/` : `${API_URL}/api/members/auth/enrollment-request/`;
+      const endpoint = `${API_URL}/api/members/transfers/`;
       const payload = tab === "transfer_out"
         ? { member_name: `${form.first_name} ${form.surname}`.trim(), transfer_type: "outgoing", other_church: form.destination_church, reason: form.transfer_reason, phone_number: form.phone_number, email: form.email, privacy_accepted: privacyAccepted }
-        : { email: form.email, first_name: form.first_name, last_name: form.surname, phone_number: form.phone_number, joining_mode: joiningMode, id_number: form.id_number, education_level: form.education_level, profession: form.profession, date_of_birth: form.date_of_birth || null, county_of_birth: form.county_of_birth, current_church: form.current_church, privacy_accepted: privacyAccepted };
+        : {};
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
@@ -51,29 +73,18 @@ export default function EnrollPage() {
         </div>
 
         {tab === "join" ? (
-          <form onSubmit={step === 1 ? nextStep : submit} className="mt-5 space-y-4">
-            {step === 1 ? <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Mode of joining<select value={joiningMode} onChange={(event) => setJoiningMode(event.target.value as JoiningMode)} className={inputClass}><option value="baptism">Baptism</option><option value="membership_transfer">Membership transfer</option><option value="friend">Friend of Loma Linda</option></select></label>
-                <label className="block text-sm font-medium">ID number<input required value={form.id_number} onChange={(event) => update("id_number", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">Surname<input required value={form.surname} onChange={(event) => update("surname", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">Phone number<input required placeholder="e.g. 07XX XXX XXX" value={form.phone_number} onChange={(event) => update("phone_number", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">Email address<input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2"><button className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] sm:col-start-2">Next</button></div>
-            </> : <>
-              <div><p className="text-sm font-semibold">Additional details</p><p className="mt-1 text-xs text-[#617068]">These details help the church prepare for the next step.</p></div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Date of birth<input required type="date" value={form.date_of_birth} onChange={(event) => update("date_of_birth", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">County of birth<select required value={form.county_of_birth} onChange={(event) => update("county_of_birth", event.target.value)} className={inputClass}><option value="">Select county</option>{kenyaCounties.map((county) => <option key={county} value={county}>{county}</option>)}</select></label>
-                <label className="block text-sm font-medium">Level of education<input required value={form.education_level} onChange={(event) => update("education_level", event.target.value)} className={inputClass} /></label>
-                <label className="block text-sm font-medium">Profession<input required value={form.profession} onChange={(event) => update("profession", event.target.value)} className={inputClass} /></label>
-                {joiningMode === "friend" && <label className="block text-sm font-medium sm:col-span-2">Current church<input required value={form.current_church} onChange={(event) => update("current_church", event.target.value)} className={inputClass} placeholder="Name of the church you currently attend" /></label>}
-              </div>
-              <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]"><input type="checkbox" required checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" /><span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span></label>
-              <div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setStep(1)} className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#c9c5bb] px-5 font-medium text-[#617068] transition hover:bg-[#f7f4ee]">Back</button><button disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Submit"}</button></div>
-            </>}
+          <form onSubmit={(event) => { event.preventDefault(); startGoogleVerification(); }} className="mt-5 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">Mode of joining<select value={joiningMode} onChange={(event) => setJoiningMode(event.target.value as JoiningMode)} className={inputClass}><option value="baptism">Baptism</option><option value="membership_transfer">Membership transfer</option><option value="friend">Friend of Loma Linda</option></select></label>
+              <label className="block text-sm font-medium">First name<input required value={form.first_name} onChange={(event) => update("first_name", event.target.value)} className={inputClass} /></label>
+              <label className="block text-sm font-medium">Surname<input required value={form.surname} onChange={(event) => update("surname", event.target.value)} className={inputClass} /></label>
+              <label className="block text-sm font-medium">Phone number<input required placeholder="e.g. 07XX XXX XXX" value={form.phone_number} onChange={(event) => update("phone_number", event.target.value)} className={inputClass} /></label>
+              <label className="block text-sm font-medium">Email address<input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
+              {joiningMode === "friend" && <label className="block text-sm font-medium sm:col-span-2">Current church<input required value={form.current_church} onChange={(event) => update("current_church", event.target.value)} className={inputClass} placeholder="Name of the church you currently attend" /></label>}
+            </div>
+            <p className="text-xs leading-5 text-[#617068]">Additional membership details, including national ID, will be collected later by an authorized church official or through your account.</p>
+            <div className="grid gap-3 sm:grid-cols-2"><button type="submit" disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] sm:col-start-2 disabled:opacity-60">{loading ? "Verifying..." : "Verify with Google"}</button></div>
+            {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
           </form>
         ) : <form onSubmit={submit} className="mt-5 space-y-4">
           <p className="rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">For SDA members transferring from Loma Linda Church to another church.</p>
