@@ -81,8 +81,7 @@ export default function GiveInKindPage() {
         </Link>
 
         <div className="mt-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">In-Kind Giving</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Physical &amp; Service Contributions</h1>
+          <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">In-kind giving</h2>
         </div>
 
         {/* Form Card */}
