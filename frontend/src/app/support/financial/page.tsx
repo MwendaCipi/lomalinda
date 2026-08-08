@@ -141,6 +141,20 @@ export default function FinancialGivingPage() {
               </div>
 
               <div>
+                <label className="block text-sm font-semibold text-[#26352f]">Email Address {paymentMethod === "card" ? "(Required)" : "(Optional)"}</label>
+                <input
+                  type="email"
+                  required={paymentMethod === "card"}
+                  value={donorEmail}
+                  onChange={(e) => setDonorEmail(e.target.value)}
+                  placeholder="For electronic receipt"
+                  className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
                 <label className="block text-sm font-semibold text-[#26352f]">{paymentMethod === "mpesa" ? "M-Pesa Phone Number" : "Phone Number"}</label>
                 <input
                   type="tel"
@@ -151,9 +165,6 @@ export default function FinancialGivingPage() {
                   className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
               </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-[#26352f]">Your Name (Optional)</label>
                 <input
@@ -161,18 +172,6 @@ export default function FinancialGivingPage() {
                   value={donorName}
                   onChange={(e) => setDonorName(e.target.value)}
                   placeholder="Full name"
-                  className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-[#26352f]">Email Address {paymentMethod === "card" ? "(Required)" : "(Optional)"}</label>
-                <input
-                  type="email"
-                  required={paymentMethod === "card"}
-                  value={donorEmail}
-                  onChange={(e) => setDonorEmail(e.target.value)}
-                  placeholder="For electronic receipt"
                   className="mt-2 w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
               </div>
