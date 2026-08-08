@@ -19,9 +19,12 @@ export default function TestimoniesPage() {
   const [testimony, setTestimony] = useState("");
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [requestedDate, setRequestedDate] = useState("");
+  const [requestedTime, setRequestedTime] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [approvedTestimonies, setApprovedTestimonies] = useState<ApprovedTestimony[]>([]);
 
@@ -65,6 +68,8 @@ export default function TestimoniesPage() {
           name: name.trim(),
           phone_number: phoneNumber.trim(),
           request_type: mode,
+          requested_date: requestedDate || null,
+          requested_time: requestedTime,
         }),
       });
       if (!response.ok) {
@@ -75,6 +80,9 @@ export default function TestimoniesPage() {
       setTestimony("");
       setName("");
       setPhoneNumber("");
+      setRequestedDate("");
+      setRequestedTime("");
+      if (mode === "fellowship") setRequestModalOpen(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "We could not submit your testimony. Please try again.");
     } finally {
@@ -107,22 +115,29 @@ export default function TestimoniesPage() {
           </div>
         </section>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => isLoggedIn ? setMode("online") : router.push("/login?next=%2Fcommunity%2Ftestimonies%26intent%3Dshare")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
-          <button type="button" onClick={() => setMode("fellowship")} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
-        </div>
+        {isLoggedIn && <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => setMode("online")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
+          <button type="button" onClick={() => { setMode("fellowship"); setRequestModalOpen(true); setMessage(""); }} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
+        </div>}
 
-
-        {(mode === "fellowship" || (mode === "online" && isLoggedIn)) && <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
-          {mode === "fellowship" && <h2 className="text-xl font-semibold sm:text-2xl">Request to share during fellowship</h2>}
+        {mode === "online" && isLoggedIn && <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
+          <h2 className="text-xl font-semibold sm:text-2xl">Share testimony</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Enter your name" /></label>
-            {mode === "fellowship" && <label className="block text-sm font-medium">Phone number<input required maxLength={40} type="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="07XX XXX XXX" /></label>}
           </div>
-          <div className="mt-4"><div className="flex items-center justify-between text-sm font-medium"><label htmlFor="testimony-text">{mode === "online" ? "Your Testimony" : "Message (optional)"}</label><span className="text-xs text-[#617068]">{testimony.length} / 1000 characters</span></div><textarea id="testimony-text" required={mode === "online"} maxLength={1000} rows={4} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder={mode === "online" ? "Tell us what God has done in your life..." : "Add any details you would like the church team to know..."} /></div>
-          <button disabled={loading} className="mt-6 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60">{loading ? "Sending..." : mode === "online" ? "Share testimony" : "Request"}</button>
+          <div className="mt-4"><div className="flex items-center justify-between text-sm font-medium"><label htmlFor="testimony-text">Your Testimony</label><span className="text-xs text-[#617068]">{testimony.length} / 1000 characters</span></div><textarea id="testimony-text" required maxLength={1000} rows={4} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Tell us what God has done in your life..." /></div>
+          <button disabled={loading} className="mt-6 w-full rounded-full bg-[#5f8067] px-6 py-3.5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Share testimony"}</button>
           {message && <p className="mt-5 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
         </form>}
+        {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#26352f]/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
+          <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
+            <div className="flex items-start justify-between gap-4"><div><h2 id="request-testimony-title" className="text-xl font-semibold sm:text-2xl">Request to share</h2><p className="mt-2 text-sm leading-6 text-[#617068]">Tell us when you would like to share during fellowship.</p></div><button type="button" onClick={() => setRequestModalOpen(false)} className="text-xl text-[#617068]" aria-label="Close">&times;</button></div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label><label className="block text-sm font-medium">Phone number<input required maxLength={40} type="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="07XX XXX XXX" /></label><label className="block text-sm font-medium">Preferred date<input type="date" value={requestedDate} onChange={(event) => setRequestedDate(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label><label className="block text-sm font-medium">Preferred time<input type="time" value={requestedTime} onChange={(event) => setRequestedTime(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label></div>
+            <label className="mt-4 block text-sm font-medium">Additional message<textarea rows={3} maxLength={1000} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Add any details for the church team..." /></label>
+            <button disabled={loading} className="mt-5 w-full rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white disabled:opacity-60">{loading ? "Sending..." : "Request"}</button>
+            {message && <p className="mt-4 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
+          </form>
+        </div>}
       </div>
     </main>
   );

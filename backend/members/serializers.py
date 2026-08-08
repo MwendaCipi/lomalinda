@@ -35,12 +35,17 @@ class EnrollmentRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EnrollmentRequest
-        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'privacy_accepted')
+        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'current_church', 'privacy_accepted')
 
     def validate_privacy_accepted(self, value):
         if not value:
             raise serializers.ValidationError('You must agree to the Privacy Policy.')
         return value
+
+    def validate(self, attrs):
+        if attrs.get('joining_mode') == 'friend' and not attrs.get('current_church', '').strip():
+            raise serializers.ValidationError({'current_church': 'Enter your current church.'})
+        return attrs
 
 
 class EnrollmentCompleteSerializer(serializers.Serializer):
@@ -112,7 +117,7 @@ class ChildDedicationRequestSerializer(serializers.ModelSerializer):
 class TestimonySerializer(serializers.ModelSerializer):
     class Meta:
         model = Testimony
-        fields = ('id', 'name', 'phone_number', 'testimony_text', 'status', 'created_at')
+        fields = ('id', 'name', 'phone_number', 'testimony_text', 'requested_date', 'requested_time', 'status', 'created_at')
         read_only_fields = ('id', 'status', 'created_at')
 
 

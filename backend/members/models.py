@@ -44,6 +44,7 @@ class EnrollmentRequest(models.Model):
     profession = models.CharField(max_length=120, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     county_of_birth = models.CharField(max_length=120, blank=True)
+    current_church = models.CharField(max_length=160, blank=True)
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -173,6 +174,8 @@ class Testimony(models.Model):
     email = models.EmailField(blank=True)
     name = models.CharField(max_length=160, blank=True)
     phone_number = models.CharField(max_length=40, blank=True)
+    requested_date = models.DateField(null=True, blank=True)
+    requested_time = models.CharField(max_length=80, blank=True)
     testimony_text = models.TextField(max_length=1000)
     status = models.CharField(
         max_length=20,

@@ -667,7 +667,7 @@ class TestimonyView(generics.ListCreateAPIView):
         name = serializer.validated_data.get('name', '')
         if user and not name:
             name = f"{user.first_name} {user.last_name}".strip() or user.username
-        serializer.save(user=user, email=user.email if user else '', name=name, status='approved' if user else 'pending_review')
+        serializer.save(user=user, email=user.email if user else '', name=name, status='approved' if user and self.request.data.get('request_type') != 'fellowship' else 'pending_review')
 
 
 def send_testimony_verification_email(pending):
