@@ -12,7 +12,7 @@ const fellowshipItems: FellowshipItem[] = [
   {
     href: "/share/sabbath-school",
     title: "Sabbath School",
-    text: "Access Adult Lesson, Children's Lesson, Adult Mission Story, and Children Mission Story.",
+    text: "Access Adult Lesson and Children's Bible study guides.",
     icon: "📖",
   },
   {
