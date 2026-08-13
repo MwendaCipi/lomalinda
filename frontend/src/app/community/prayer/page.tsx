@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function CommunityPrayerPage() {
+  const router = useRouter();
   const [requestText, setRequestText] = useState("");
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -17,6 +19,11 @@ export default function CommunityPrayerPage() {
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const storedToken = localStorage.getItem("access_token") || token;
+    if (!storedToken) {
+      router.push("/login");
+      return;
+    }
     const body: Record<string, unknown> = { request_text: requestText, anonymous };
     if (!anonymous) {
       if (name) body.name = name;
@@ -24,15 +31,13 @@ export default function CommunityPrayerPage() {
     }
     const response = await fetch(`${API_URL}/api/members/prayer-requests/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
       body: JSON.stringify(body),
     });
     const text = response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.";
     setMessage(text); showAlert(response.ok ? "Prayer request received" : "Request error", text, response.ok ? "success" : "error");
     if (response.ok) { setRequestText(""); setName(""); setPhoneNumber(""); }
   }
-
-  if (token === null) return <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-[#26352f]"><div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]"><h1 className="text-2xl font-semibold">Sign in required</h1><p className="mt-3 text-sm leading-6 text-[#617068]">Please sign in to submit a prayer request.</p><Link href="/login" className="mt-6 inline-block rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white">Sign in</Link></div></main>;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-10 pb-8 text-[#26352f] sm:py-12">
       <div className="mx-auto max-w-3xl">

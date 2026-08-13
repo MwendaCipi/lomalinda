@@ -70,9 +70,7 @@ const supportCategories = [
 ];
 
 export default function SupportHubPage() {
-  const [token, setToken] = useState<string | null>(null);
-  useEffect(() => setToken(localStorage.getItem("access_token")), []);
-  const visibleCategories = supportCategories.filter((category) => !("protected" in category) || !category.protected || Boolean(token));
+  const visibleCategories = supportCategories;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-10 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">

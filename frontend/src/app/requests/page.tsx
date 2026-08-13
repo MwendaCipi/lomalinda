@@ -34,9 +34,7 @@ const requestItems = [
 ];
 
 export default function RequestsPage() {
-  const [token, setToken] = useState<string | null>(null);
-  useEffect(() => setToken(localStorage.getItem("access_token")), []);
-  const visibleItems = requestItems.filter((item) => !("protected" in item) || !item.protected || Boolean(token));
+  const visibleItems = requestItems;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-10 text-[#26352f] sm:py-8 lg:px-8">
       <div className="mx-auto max-w-5xl">
