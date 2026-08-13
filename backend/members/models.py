@@ -106,7 +106,7 @@ class Contribution(models.Model):
 
 class SupportSubmission(models.Model):
     TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support')]
-    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='support_submissions')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='support_submissions')
     submission_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     category = models.CharField(max_length=80, blank=True)
     content = models.TextField()

@@ -81,7 +81,6 @@ export default function EnrollPage() {
               <label className="block text-sm font-medium">Email address<input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} className={inputClass} /></label>
               {joiningMode === "friend" && <label className="block text-sm font-medium sm:col-span-2">Current church<input required value={form.current_church} onChange={(event) => update("current_church", event.target.value)} className={inputClass} placeholder="Name of the church you currently attend" /></label>}
             </div>
-            <p className="text-xs leading-5 text-[#617068]">Additional membership details, including national ID, will be collected later by an authorized church official or through your account.</p>
             <div className="grid gap-3 sm:grid-cols-2"><button type="submit" disabled={loading} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] sm:col-start-2 disabled:opacity-60">{loading ? "Verifying..." : "Verify with Google"}</button></div>
             {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
           </form>

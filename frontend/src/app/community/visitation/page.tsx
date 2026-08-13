@@ -32,10 +32,6 @@ export default function VisitationPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const storedToken = localStorage.getItem("access_token") || token;
-    if (!storedToken) {
-      router.push("/login");
-      return;
-    }
     setLoading(true);
     setMessage(null);
 
@@ -45,9 +41,11 @@ export default function VisitationPage() {
         setLoading(false);
         return;
       }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
       const response = await fetch(`${API_URL}/api/members/visitations/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
+        headers,
         body: JSON.stringify(form),
       });
 

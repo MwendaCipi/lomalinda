@@ -20,18 +20,16 @@ export default function CommunityPrayerPage() {
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const storedToken = localStorage.getItem("access_token") || token;
-    if (!storedToken) {
-      router.push("/login");
-      return;
-    }
     const body: Record<string, unknown> = { request_text: requestText, anonymous };
     if (!anonymous) {
       if (name) body.name = name;
       if (phoneNumber) body.phone_number = phoneNumber;
     }
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
     const response = await fetch(`${API_URL}/api/members/prayer-requests/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
+      headers,
       body: JSON.stringify(body),
     });
     const text = response.ok ? "Your prayer request has been received. We will pray with you." : "We could not submit your request. Please try again.";

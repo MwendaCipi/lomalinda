@@ -25,10 +25,6 @@ export default function ChildDedicationPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const storedToken = localStorage.getItem("access_token") || token;
-    if (!storedToken) {
-      router.push("/login");
-      return;
-    }
     setLoading(true);
     setMessage("");
 
@@ -44,9 +40,11 @@ export default function ChildDedicationPage() {
         phone_number: form.phone_number.trim(),
         notes: form.notes.trim(),
       };
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
       const response = await fetch(`${API_URL}/api/members/child-dedications/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
+        headers,
         body: JSON.stringify(payload),
       });
       const data = await response.json();

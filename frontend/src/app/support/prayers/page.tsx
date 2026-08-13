@@ -21,17 +21,15 @@ export default function PrayersMoralSupportPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const storedToken = localStorage.getItem("access_token") || token;
-    if (!storedToken) {
-      router.push("/login");
-      return;
-    }
     setSubmitting(true);
     setMessage(null);
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
       const res = await fetch(`${API_URL}/api/members/support-submissions/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
+        headers,
         body: JSON.stringify({
           submission_type: "moral_support", content: pledgeText, name, phone_number: phoneNumber, email, anonymous,
         }),
