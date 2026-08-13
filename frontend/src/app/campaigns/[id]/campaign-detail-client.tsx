@@ -409,17 +409,6 @@ export default function CampaignDetailClient() {
                   )}
 
                   <label className="block text-sm font-medium text-[#26352f]">
-                    Your Name (Optional)
-                    <input
-                      type="text"
-                      placeholder="e.g. Jane Doe"
-                      value={donorName}
-                      onChange={(e) => setDonorName(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-medium text-[#26352f]">
                     Your Email (Optional for receipt)
                     <input
                       type="email"
