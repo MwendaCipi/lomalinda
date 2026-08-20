@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -27,9 +28,13 @@ export function AnnouncementManager() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Unable to post announcement.");
       setForm({ title: "", text: "", detail: "", href: "", visibility: "public", expires_at: "" });
-      setMessage("Announcement posted successfully.");
+      const successText = "Announcement posted successfully.";
+      setMessage(successText);
+      showAlert("Announcement Posted", successText, "success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to post announcement.");
+      const errorText = error instanceof Error ? error.message : "Unable to post announcement.";
+      setMessage(errorText);
+      showAlert("Post Error", errorText, "error");
     } finally {
       setLoading(false);
     }

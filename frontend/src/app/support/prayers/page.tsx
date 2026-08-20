@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { showAlert } from "@/lib/alerts";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -36,20 +37,26 @@ export default function PrayersMoralSupportPage() {
       });
 
       if (res.ok) {
+        const successText = "Thank you for supporting Loma Linda SDA Church in prayer and moral commitment! May God richly bless your faithful dedication.";
         setMessage({
           type: "success",
-          text: "Thank you for supporting Loma Linda SDA Church in prayer and moral commitment! May God richly bless your faithful dedication.",
+          text: successText,
         });
+        showAlert("Prayer & Support Received", successText, "success");
         setPledgeText("");
         setName("");
         setPhoneNumber("");
         setEmail("");
       } else {
-        const data = await res.json();
-        setMessage({ type: "error", text: data.detail || "Unable to record your pledge. Please check input." });
+        const data = await res.json().catch(() => ({}));
+        const errorText = data.detail || "Unable to record your pledge. Please check input.";
+        setMessage({ type: "error", text: errorText });
+        showAlert("Submission Error", errorText, "error");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+      const errorText = "Network error. Please try again.";
+      setMessage({ type: "error", text: errorText });
+      showAlert("Network Error", errorText, "error");
     } finally {
       setSubmitting(false);
     }

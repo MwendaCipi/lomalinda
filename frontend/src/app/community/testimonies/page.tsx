@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -77,7 +78,9 @@ export default function TestimoniesPage() {
         const errorDetail = errorData.detail || errorData.message || (typeof errorData === "object" ? Object.values(errorData).flat().join(" ") : "") || "Could not submit your testimony.";
         throw new Error(errorDetail);
       }
-      setMessage(mode === "online" ? (isLoggedIn ? "Thank you for sharing your testimony." : "Thank you. Your testimony has been submitted for admin approval.") : "Thank you. Your request to share during fellowship has been received. A church leader will follow up with you.");
+      const successText = mode === "online" ? (isLoggedIn ? "Thank you for sharing your testimony." : "Thank you. Your testimony has been submitted for admin approval.") : "Thank you. Your request to share during fellowship has been received. A church leader will follow up with you.";
+      setMessage(successText);
+      showAlert(mode === "online" ? "Testimony Submitted" : "Request Received", successText, "success");
       setTestimony("");
       setName("");
       setPhoneNumber("");
@@ -85,7 +88,9 @@ export default function TestimoniesPage() {
       setRequestedTime("");
       if (mode === "fellowship") setRequestModalOpen(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We could not submit your testimony. Please try again.");
+      const errorText = error instanceof Error ? error.message : "We could not submit your testimony. Please try again.";
+      setMessage(errorText);
+      showAlert("Submission Error", errorText, "error");
     } finally {
       setLoading(false);
     }

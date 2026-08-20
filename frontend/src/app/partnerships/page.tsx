@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -33,10 +34,14 @@ export default function PartnershipRequestPage() {
         }),
       });
       if (!response.ok) throw new Error();
-      setMessage({ type: "success", text: "Thank you. Your partnership request has been received, and our team will be in touch." });
+      const successText = "Thank you. Your partnership request has been received, and our team will be in touch.";
+      setMessage({ type: "success", text: successText });
+      showAlert("Partnership Request Received", successText, "success");
       setOrganization(""); setContactName(""); setEmail(""); setPhoneNumber(""); setProposal("");
     } catch {
-      setMessage({ type: "error", text: "We could not submit your request. Please check the form and try again." });
+      const errorText = "We could not submit your request. Please check the form and try again.";
+      setMessage({ type: "error", text: errorText });
+      showAlert("Submission Error", errorText, "error");
     } finally {
       setLoading(false);
     }

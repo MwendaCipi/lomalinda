@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { showAlert } from "@/lib/alerts";
 import { useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -45,24 +46,30 @@ export default function GiveInKindPage() {
       });
 
       if (res.ok) {
+        const successText = "Thank you! Your in-kind contribution pledge has been recorded. Our welfare & deaconry team will contact you shortly.";
         setMessage({
           type: "success",
-          text: "Thank you! Your in-kind contribution pledge has been recorded. Our welfare & deaconry team will contact you shortly.",
+          text: successText,
         });
+        showAlert("Pledge Recorded", successText, "success");
         setItemDescription("");
         setDonorName("");
         setPhoneNumber("");
         setDonorEmail("");
         setPurpose("General giving");
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        const errorText = data.detail || "Unable to submit in-kind contribution. Check form input.";
         setMessage({
           type: "error",
-          text: data.detail || "Unable to submit in-kind contribution. Check form input.",
+          text: errorText,
         });
+        showAlert("Submission Error", errorText, "error");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+      const errorText = "Network error. Please try again.";
+      setMessage({ type: "error", text: errorText });
+      showAlert("Network Error", errorText, "error");
     } finally {
       setSubmitting(false);
     }

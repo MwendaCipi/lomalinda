@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -60,9 +61,13 @@ export default function ChildDedicationPage() {
         phone_number: "",
         notes: "",
       });
-      setMessage("Thank you! Your child dedication request has been submitted. The church office will reach out to connect with you.");
+      const successText = "Thank you! Your child dedication request has been submitted. The church office will reach out to connect with you.";
+      setMessage(successText);
+      showAlert("Request Submitted", successText, "success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to submit request. Please try again.");
+      const errorText = error instanceof Error ? error.message : "Unable to submit request. Please try again.";
+      setMessage(errorText);
+      showAlert("Submission Error", errorText, "error");
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { showAlert } from "@/lib/alerts";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -35,18 +36,24 @@ export default function ShareIdeasPage() {
       });
 
       if (res.ok) {
+        const successText = "Thank you for sharing your ideas and suggestions for Loma Linda SDA Church! Our church board and ministry leaders will carefully review your feedback.";
         setMessage({
           type: "success",
-          text: "Thank you for sharing your ideas and suggestions for Loma Linda SDA Church! Our church board and ministry leaders will carefully review your feedback.",
+          text: successText,
         });
+        showAlert("Idea Submitted", successText, "success");
         setIdeaText("");
         setName("");
         setContact("");
       } else {
-        setMessage({ type: "error", text: "Unable to submit your idea. Please check form details." });
+        const errorText = "Unable to submit your idea. Please check form details.";
+        setMessage({ type: "error", text: errorText });
+        showAlert("Submission Error", errorText, "error");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+      const errorText = "Network error. Please try again.";
+      setMessage({ type: "error", text: errorText });
+      showAlert("Network Error", errorText, "error");
     } finally {
       setSubmitting(false);
     }
