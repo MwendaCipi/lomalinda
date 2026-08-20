@@ -74,9 +74,10 @@ export default function TestimoniesPage() {
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(Object.values(errorData).flat().join(" ") || "Could not submit your testimony.");
+        const errorDetail = errorData.detail || errorData.message || (typeof errorData === "object" ? Object.values(errorData).flat().join(" ") : "") || "Could not submit your testimony.";
+        throw new Error(errorDetail);
       }
-      setMessage(mode === "online" ? "Thank you for sharing your testimony." : "Thank you. Your request to share during fellowship has been received. A church leader will follow up with you.");
+      setMessage(mode === "online" ? (isLoggedIn ? "Thank you for sharing your testimony." : "Thank you. Your testimony has been submitted for admin approval.") : "Thank you. Your request to share during fellowship has been received. A church leader will follow up with you.");
       setTestimony("");
       setName("");
       setPhoneNumber("");
@@ -115,13 +116,18 @@ export default function TestimoniesPage() {
           </div>
         </section>
 
-        {isLoggedIn && <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={() => setMode("online")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
           <button type="button" onClick={() => { setMode("fellowship"); setRequestModalOpen(true); setMessage(""); }} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
-        </div>}
+        </div>
 
-        {mode === "online" && isLoggedIn && <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
+        {mode === "online" && <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
           <h2 className="text-xl font-semibold sm:text-2xl">Share testimony</h2>
+          {!isLoggedIn && (
+            <p className="mt-1 text-sm text-[#617068]">
+              Your testimony will be reviewed by church leadership before being published.
+            </p>
+          )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Enter your name" /></label>
           </div>

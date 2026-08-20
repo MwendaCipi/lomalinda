@@ -83,11 +83,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+import sys
+
 DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL:
+if not DATABASE_URL and 'test' not in sys.argv:
     raise ImproperlyConfigured('DATABASE_URL must be set to a PostgreSQL connection string.')
 DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
-DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)}
+if 'test' in sys.argv:
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+else:
+    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)}
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',') if origin.strip()]
 

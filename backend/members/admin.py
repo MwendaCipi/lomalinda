@@ -65,9 +65,9 @@ class VisitationRequestAdmin(admin.ModelAdmin):
 
 @admin.register(Testimony)
 class TestimonyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'testimony_text', 'status', 'created_at')
+    list_display = ('name', 'testimony_text', 'ip_address', 'status', 'created_at')
     list_filter = ('status', 'created_at')
-    search_fields = ('name', 'testimony_text')
+    search_fields = ('name', 'testimony_text', 'ip_address')
     actions = ['approve_testimonies', 'reject_testimonies']
 
     @admin.action(description='Approve selected testimonies for public display')

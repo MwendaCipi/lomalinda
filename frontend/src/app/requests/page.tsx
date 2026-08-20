@@ -31,6 +31,12 @@ const requestItems = [
     text: "Join Loma Linda SDA Church through baptism or membership transfer, or request a transfer out.",
     icon: "🤝",
   },
+  {
+    href: "/partnerships",
+    title: "Partnership requests",
+    text: "Explore a partnership with Loma Linda SDA Church for ministry, community impact, or shared initiatives.",
+    icon: "🌱",
+  },
 ];
 
 export default function RequestsPage() {

@@ -105,7 +105,7 @@ class Contribution(models.Model):
 
 
 class SupportSubmission(models.Model):
-    TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support')]
+    TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support'), ('partnership', 'Partnership request')]
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='support_submissions')
     submission_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     category = models.CharField(max_length=80, blank=True)
@@ -231,6 +231,7 @@ class Testimony(models.Model):
     email = models.EmailField(blank=True)
     name = models.CharField(max_length=160, blank=True)
     phone_number = models.CharField(max_length=40, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     requested_date = models.DateField(null=True, blank=True)
     requested_time = models.CharField(max_length=80, blank=True)
     testimony_text = models.TextField(max_length=1000)

@@ -18,9 +18,9 @@ from urllib.parse import urljoin
 import requests
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
@@ -744,6 +744,15 @@ class ChildDedicationRequestView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip or None
+
+
 class TestimonyView(generics.ListCreateAPIView):
     serializer_class = TestimonySerializer
     permission_classes = [AllowAny]
@@ -753,12 +762,19 @@ class TestimonyView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
-        if not user and self.request.data.get('request_type') != 'fellowship':
-            raise PermissionDenied('Please sign in before sharing a testimony.')
+        ip_address = get_client_ip(self.request)
+        if ip_address and Testimony.objects.filter(ip_address=ip_address, status='pending_review').exists():
+            raise ValidationError({'detail': 'You already have a testimony pending approval. Please wait until it is reviewed before submitting another.'})
         name = serializer.validated_data.get('name', '')
         if user and not name:
             name = f"{user.first_name} {user.last_name}".strip() or user.username
-        serializer.save(user=user, email=user.email if user else '', name=name, status='approved' if user and self.request.data.get('request_type') != 'fellowship' else 'pending_review')
+        serializer.save(
+            user=user,
+            email=user.email if user else '',
+            name=name,
+            ip_address=ip_address,
+            status='approved' if user and self.request.data.get('request_type') != 'fellowship' else 'pending_review'
+        )
 
 
 def send_testimony_verification_email(pending):

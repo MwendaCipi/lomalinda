@@ -40,4 +40,69 @@ class WeeklyLessonParserTests(TestCase):
         )
         self.assertIn('teens', CHILDREN_LESSON_SOURCES)
 
-# Create your tests here.
+from rest_framework.test import APITestCase
+from rest_framework import status
+from .models import Testimony
+
+
+class TestimonyAPITests(APITestCase):
+    def test_unauthenticated_user_can_submit_testimony_pending_approval(self):
+        response = self.client.post(
+            '/api/members/testimonies/',
+            {
+                'name': 'Visitor John',
+                'testimony_text': 'God has been faithful in providing for my family this year.',
+            },
+            REMOTE_ADDR='192.168.1.50',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        testimony = Testimony.objects.get(name='Visitor John')
+        self.assertEqual(testimony.status, 'pending_review')
+        self.assertEqual(testimony.ip_address, '192.168.1.50')
+
+        # Should not appear in public list
+        list_response = self.client.get('/api/members/testimonies/')
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_response.data), 0)
+
+    def test_same_ip_cannot_submit_twice_while_pending_approval(self):
+        # First submission
+        res1 = self.client.post(
+            '/api/members/testimonies/',
+            {
+                'name': 'Visitor 1',
+                'testimony_text': 'First testimony message from this IP.',
+            },
+            REMOTE_ADDR='192.168.1.100',
+        )
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+
+        # Second submission before first is approved
+        res2 = self.client.post(
+            '/api/members/testimonies/',
+            {
+                'name': 'Visitor 2',
+                'testimony_text': 'Second testimony message from same IP.',
+            },
+            REMOTE_ADDR='192.168.1.100',
+        )
+        self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already have a testimony pending', str(res2.data))
+
+        # Approve the first testimony
+        first_testimony = Testimony.objects.get(name='Visitor 1')
+        first_testimony.status = 'approved'
+        first_testimony.save()
+
+        # Third submission should now succeed
+        res3 = self.client.post(
+            '/api/members/testimonies/',
+            {
+                'name': 'Visitor 2',
+                'testimony_text': 'Second testimony message from same IP after approval.',
+            },
+            REMOTE_ADDR='192.168.1.100',
+        )
+        self.assertEqual(res3.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Testimony.objects.count(), 2)
