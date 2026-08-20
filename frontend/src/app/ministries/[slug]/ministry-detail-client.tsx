@@ -4,76 +4,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DepartmentCalendar } from "@/components/department-calendar";
+import { MINISTRIES } from "@/config/ministries";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const ministryDetails: Record<
-  string,
-  { title: string; description: string; department?: string; sections?: { id?: string; title: string; text: string }[] }
-> = {
-  "adventist-youth": {
-    title: "Adventist Youth Ministries",
-    description: "Helping young people grow in faith, friendship, leadership, and service.",
-    department: "Adventist Youth Ministries",
-  },
-  "possibility-ministries": {
-    title: "Adventist Possibility Ministries",
-    description: "Building belonging and meaningful participation for people with disabilities and special needs.",
-    department: "Adventist Possibility Ministries",
-  },
-  "adventist-men": {
-    title: "Adventist Men Ministries",
-    description: "Creating space for men to grow spiritually, build strong friendships, and serve the church and community.",
-    department: "Adventist men ministries",
-  },
-  "adventist-women": {
-    title: "Adventist Women Ministries",
-    description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach.",
-    department: "Adventist Women Ministries",
-  },
-  "personal-ministries": {
-    title: "Personal Ministries",
-    description: "Equipping every church member for active personal witnessing, Bible studies, and community evangelism.",
-    department: "Personal Ministries",
-    sections: [
-      { title: "Member Witnessing Training", text: "Providing practical tools and resources to help members share their faith confidently in daily life." },
-      { title: "Bible Study & Discipleship", text: "Organizing neighborhood small groups and personal Bible studies for seekers." },
-      { title: "Community Care & Missions", text: "Coordinating active local outreach, welfare support, and sharing literature." },
-    ],
-  },
-  "adventist-muslim-relations": {
-    title: "Adventist Muslim Relations",
-    description: "Building respectful bridges of understanding, dialogue, friendship, and shared truth with Muslim neighbors.",
-    department: "Adventist Muslim Relations",
-    sections: [
-      { title: "Bridge Building & Dialogue", text: "Fostering mutual respect, peaceful understanding, and friendly conversations on shared values." },
-      { title: "Community Friendship", text: "Engaging in joint community service, hospitality, and neighborly care." },
-      { title: "Sharing Hope", text: "Presenting spiritual truth with gentleness, clarity, and respect." },
-    ],
-  },
-  ensemble: {
-    title: "Loma Linda Ensemble",
-    description: "Leading the church family in worship through music, harmony, and joyful service.",
-    sections: [
-      { title: "Worship through music", text: "The Ensemble helps create a welcoming atmosphere for worship through songs that encourage faith, reflection, and praise." },
-      { title: "Growing together", text: "Members develop their musical gifts while building friendship, confidence, and a spirit of cooperation." },
-      { title: "Serving the church", text: "The Ensemble supports worship services and special gatherings, sharing music as a gift to the whole church family." },
-    ],
-  },
-  chaplaincy: {
-    title: "Chaplaincy",
-    description: "Offering a ministry of presence, comfort, prayer, and spiritual care in places of need.",
-    sections: [
-      { title: "A ministry of presence", text: "Chaplaincy meets people where they are, offering compassionate listening, encouragement, and prayer without pressure." },
-      { title: "Care in difficult moments", text: "We seek opportunities to support people in hospitals, schools, workplaces, and other settings during seasons of uncertainty or change." },
-      { title: "Hope and dignity", text: "Every person deserves care, respect, and the freedom to be heard. Chaplaincy points to hope while honouring each person’s story." },
-    ],
-  },
-};
-
 export default function MinistryDetailClient() {
   const { slug } = useParams<{ slug: string }>();
-  const ministry = ministryDetails[slug];
+  const ministry = MINISTRIES.find((m) => m.slug === slug);
   const year = new Date().getFullYear();
   const [events, setEvents] = useState<{ date: string; name: string; department?: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -109,9 +46,17 @@ export default function MinistryDetailClient() {
           <span>Back to Ministries</span>
         </Link>
 
-        <div className="mt-6 max-w-3xl">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{ministry.title}</h1>
-          <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">{ministry.description}</p>
+        <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{ministry.title}</h1>
+            <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">{ministry.description}</p>
+          </div>
+          <Link
+            href={`/give?purpose=${encodeURIComponent(ministry.givingPurpose)}`}
+            className="inline-flex items-center justify-center rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#96552e]"
+          >
+            Support this ministry
+          </Link>
         </div>
 
         {ministry.sections && (

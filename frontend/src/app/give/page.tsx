@@ -1,16 +1,44 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
+import { getMinistryGivingPurpose } from "@/config/ministries";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const defaultPurposes = ["General giving", "Tithe", "Church development", "Local Church Budget (LCB)", "Msamaria Mwema", "Missions"];
 
-export default function GivePage() {
+const defaultPurposes = [
+  "General giving",
+  "Tithe",
+  "Church development",
+  "Local Church Budget (LCB)",
+  "Children Ministry",
+  "Adventist Possibility Ministries (APM)",
+  "Adventist Youth Ministries (AY)",
+  "Adventist Men Ministries (AMM)",
+  "Adventist Women Ministries (AWM)",
+  "Personal Ministries",
+  "Adventist Muslim Relations (AMR)",
+  "Music & Choir Ministry",
+  "Chaplaincy Ministry",
+  "Msamaria Mwema",
+  "Missions",
+];
+
+function GivePageContent() {
+  const searchParams = useSearchParams();
+  const rawPurposeParam = searchParams.get("purpose");
+  const normalizedPurpose = rawPurposeParam ? getMinistryGivingPurpose(rawPurposeParam) : "General giving";
+
   const [givingType, setGivingType] = useState<"financial" | "in_kind">("financial");
   const [amount, setAmount] = useState("1000");
-  const [purpose, setPurpose] = useState("General giving");
-  const [purposes, setPurposes] = useState<string[]>(defaultPurposes);
+  const [purpose, setPurpose] = useState(normalizedPurpose);
+  const [purposes, setPurposes] = useState<string[]>(() => {
+    if (normalizedPurpose && !defaultPurposes.includes(normalizedPurpose)) {
+      return [normalizedPurpose, ...defaultPurposes];
+    }
+    return defaultPurposes;
+  });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [donorName, setDonorName] = useState("");
@@ -18,7 +46,28 @@ export default function GivePage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { fetch(`${API_URL}/api/members/giving-purposes/`).then((response) => response.ok ? response.json() : []).then((data: { name: string }[]) => { if (data.length) setPurposes(data.map((item) => item.name)); }).catch(() => undefined); }, []);
+  useEffect(() => {
+    if (rawPurposeParam) {
+      const mapped = getMinistryGivingPurpose(rawPurposeParam);
+      setPurpose(mapped);
+      setPurposes((prev) => (prev.includes(mapped) ? prev : [mapped, ...prev]));
+    }
+  }, [rawPurposeParam]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/members/giving-purposes/`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: { name: string }[]) => {
+        if (data.length) {
+          const apiNames = data.map((item) => item.name);
+          setPurposes((prev) => {
+            const combined = Array.from(new Set([purpose, ...apiNames, ...prev]));
+            return combined;
+          });
+        }
+      })
+      .catch(() => undefined);
+  }, [purpose]);
 
   async function submitGiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,7 +79,7 @@ export default function GivePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           giving_type: givingType,
@@ -39,8 +88,8 @@ export default function GivePage() {
           phone_number: phoneNumber,
           item_description: itemDescription,
           donor_name: donorName,
-          donor_email: donorEmail
-        })
+          donor_email: donorEmail,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "We could not start the giving request.");
@@ -55,5 +104,154 @@ export default function GivePage() {
       setLoading(false);
     }
   }
-  return <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-10 text-[#26352f] lg:px-8 lg:pt-14"><div className="mx-auto max-w-5xl"><div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-start"><div><h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">Systematic benevolence and donations</h1><p className="mt-6 max-w-md text-lg leading-8 text-[#617068]">Support worship, ministry, prayer, and care for our church family through financial or practical gifts.</p></div><form onSubmit={submitGiving} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7"><h2 className="text-2xl font-semibold">How would you like to give?</h2><div className="mt-4 flex rounded-full bg-[#eef2ed] p-1"><button type="button" onClick={() => setGivingType("financial")} className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition ${givingType === "financial" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}>Financially</button><button type="button" onClick={() => setGivingType("in_kind")} className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition ${givingType === "in_kind" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}>In kind</button></div>{givingType === "financial" ? <div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Amount (KES)<input type="number" min="1" step="1" required value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label><label className="block text-sm font-medium">Giving purpose<select required value={purpose} onChange={(event) => setPurpose(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3">{purposes.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div> : <div className="mt-5 space-y-4"><label className="block text-sm font-medium">Giving purpose<select required value={purpose} onChange={(event) => setPurpose(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3">{purposes.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="block text-sm font-medium">What would you like to give?<textarea required rows={2} value={itemDescription} onChange={(event) => setItemDescription(event.target.value)} placeholder="For example: 10 Bibles and 20 bags of maize flour" className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label></div>}<div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Phone number<input required placeholder="e.g. 01XX XXX XXX or 07XX XXX XXX" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label>{givingType === "in_kind" && <label className="block text-sm font-medium">Your name <span className="font-normal text-[#617068]">(optional)</span><input value={donorName} onChange={(event) => setDonorName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label>}<label className={`block text-sm font-medium ${givingType === "financial" ? "" : "sm:col-span-2"}`}>Email <span className="font-normal text-[#617068]">(optional)</span><input type="email" placeholder="Share your email if you need a receipt" value={donorEmail} onChange={(event) => setDonorEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" /></label></div><button disabled={loading} className="mt-5 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white disabled:opacity-60">{loading ? "Submitting..." : givingType === "financial" ? "Continue with M-Pesa" : "Submit Gift"}</button>{message && <p className="mt-4 rounded-xl bg-[#eef2ed] p-4 text-sm text-[#3d5148]">{message}</p>}</form></div></div></main>;
+
+  return (
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-10 text-[#26352f] lg:px-8 lg:pt-14">
+      <div className="mx-auto max-w-5xl">
+        <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+          <div>
+            <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">Systematic benevolence and donations</h1>
+            <p className="mt-6 max-w-md text-lg leading-8 text-[#617068]">
+              Support worship, ministry, prayer, and care for our church family through financial or practical gifts.
+            </p>
+          </div>
+          <form onSubmit={submitGiving} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
+            <h2 className="text-2xl font-semibold">How would you like to give?</h2>
+            <div className="mt-4 flex rounded-full bg-[#eef2ed] p-1">
+              <button
+                type="button"
+                onClick={() => setGivingType("financial")}
+                className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition ${givingType === "financial" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+              >
+                Financially
+              </button>
+              <button
+                type="button"
+                onClick={() => setGivingType("in_kind")}
+                className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition ${givingType === "in_kind" ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"}`}
+              >
+                In kind
+              </button>
+            </div>
+
+            {givingType === "financial" ? (
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium">
+                  Amount (KES)
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    required
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3"
+                  />
+                </label>
+                <label className="block text-sm font-medium">
+                  Giving purpose
+                  <select
+                    required
+                    value={purpose}
+                    onChange={(event) => setPurpose(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3"
+                  >
+                    {purposes.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                <label className="block text-sm font-medium">
+                  Giving purpose
+                  <select
+                    required
+                    value={purpose}
+                    onChange={(event) => setPurpose(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3"
+                  >
+                    {purposes.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium">
+                  What would you like to give?
+                  <textarea
+                    required
+                    rows={2}
+                    value={itemDescription}
+                    onChange={(event) => setItemDescription(event.target.value)}
+                    placeholder="For example: 10 Bibles and 20 bags of maize flour"
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3"
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Phone number
+                <input
+                  required
+                  placeholder="e.g. 01XX XXX XXX or 07XX XXX XXX"
+                  value={phoneNumber}
+                  onChange={(event) => setPhoneNumber(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3"
+                />
+              </label>
+              {givingType === "in_kind" && (
+                <label className="block text-sm font-medium">
+                  Your name <span className="font-normal text-[#617068]">(optional)</span>
+                  <input
+                    value={donorName}
+                    onChange={(event) => setDonorName(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3"
+                  />
+                </label>
+              )}
+              <label className={`block text-sm font-medium ${givingType === "financial" ? "" : "sm:col-span-2"}`}>
+                Email <span className="font-normal text-[#617068]">(optional)</span>
+                <input
+                  type="email"
+                  placeholder="Share your email if you need a receipt"
+                  value={donorEmail}
+                  onChange={(event) => setDonorEmail(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3"
+                />
+              </label>
+            </div>
+
+            <button
+              disabled={loading}
+              className="mt-5 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white disabled:opacity-60"
+            >
+              {loading ? "Submitting..." : givingType === "financial" ? "Continue with M-Pesa" : "Submit Gift"}
+            </button>
+            {message && <p className="mt-4 rounded-xl bg-[#eef2ed] p-4 text-sm text-[#3d5148]">{message}</p>}
+          </form>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function GivePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+          Loading giving options...
+        </main>
+      }
+    >
+      <GivePageContent />
+    </Suspense>
+  );
 }

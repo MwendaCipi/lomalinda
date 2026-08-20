@@ -1,17 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
-const ministries = [
-  { slug: "adventist-youth", title: "Adventist Youth Ministries", description: "Helping young people grow in faith, friendship, leadership, and service." },
-  { slug: "possibility-ministries", title: "Adventist Possibility Ministries", description: "Building belonging and meaningful participation for people with disabilities and special needs." },
-  { slug: "adventist-men", title: "Adventist Men Ministries", description: "Creating space for men to grow spiritually, build strong friendships, and serve the church and community." },
-  { slug: "adventist-women", title: "Adventist Women Ministries", description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach." },
-  { slug: "personal-ministries", title: "Personal Ministries", description: "Equipping every church member for active personal witnessing, Bible studies, and community evangelism." },
-  { slug: "adventist-muslim-relations", title: "Adventist Muslim Relations", description: "Building respectful bridges of understanding, dialogue, friendship, and shared truth with Muslim neighbors." },
-  { slug: "ensemble", title: "Church Choir", description: "Leading the church family in worship through music, harmony, and joyful service." },
-  { slug: "chaplaincy", title: "Chaplaincy", description: "Offering a ministry of presence, comfort, prayer, and spiritual care in places of need." },
-];
+import { MINISTRIES } from "@/config/ministries";
 
 export default function MinistriesPage() {
   return (
@@ -26,20 +16,39 @@ export default function MinistriesPage() {
         </Link>
         <div className="mt-4 max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Our ministries</h1>
+          <p className="mt-3 text-base text-[#617068]">
+            Explore our church ministries and support their mission and community programs.
+          </p>
         </div>
         <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-          {ministries.map((ministry) => (
-            <Link
+          {MINISTRIES.map((ministry) => (
+            <article
               key={ministry.slug}
-              href={`/ministries/${ministry.slug}`}
-              className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-sm sm:p-7"
+              className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-7"
             >
               <div>
-                <h2 className="text-xl font-semibold sm:text-2xl">{ministry.title}</h2>
+                <h2 className="text-xl font-semibold sm:text-2xl">
+                  <Link href={`/ministries/${ministry.slug}`} className="hover:text-[#b36b3c] hover:underline">
+                    {ministry.title}
+                  </Link>
+                </h2>
                 <p className="mt-2.5 text-sm leading-6 text-[#617068]">{ministry.description}</p>
               </div>
-              <span className="mt-5 inline-block text-sm font-semibold text-[#b36b3c]">Explore {ministry.title} &rarr;</span>
-            </Link>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#dfdbd1] pt-4">
+                <Link
+                  href={`/ministries/${ministry.slug}`}
+                  className="text-sm font-semibold text-[#b36b3c] hover:underline"
+                >
+                  Explore &rarr;
+                </Link>
+                <Link
+                  href={`/give?purpose=${encodeURIComponent(ministry.givingPurpose)}`}
+                  className="rounded-full bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+                >
+                  Support ministry
+                </Link>
+              </div>
+            </article>
           ))}
         </div>
       </div>

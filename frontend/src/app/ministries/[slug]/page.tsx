@@ -1,16 +1,8 @@
 import MinistryDetailClient from "./ministry-detail-client";
+import { MINISTRIES } from "@/config/ministries";
 
 export function generateStaticParams() {
-  return [
-    "adventist-youth",
-    "possibility-ministries",
-    "adventist-men",
-    "adventist-women",
-    "personal-ministries",
-    "adventist-muslim-relations",
-    "ensemble",
-    "chaplaincy",
-  ].map((slug) => ({ slug }));
+  return MINISTRIES.map((ministry) => ({ slug: ministry.slug }));
 }
 
 export default function MinistryDetailPage() {

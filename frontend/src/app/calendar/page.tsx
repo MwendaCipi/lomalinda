@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SabbathProgramModal, { SabbathProgramData } from "../components/sabbath-program-modal";
+import { getMinistryGivingPurpose } from "@/config/ministries";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -176,7 +177,7 @@ function CalendarPageContent() {
                             </a>
                           )}
                           <Link
-                            href={`/give?purpose=${encodeURIComponent(row.event.name)}`}
+                            href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.event.department || row.event.name))}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
                           >
