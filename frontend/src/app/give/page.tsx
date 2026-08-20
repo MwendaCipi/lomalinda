@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -162,16 +163,23 @@ function GivePageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] sm:pt-10 lg:px-8 lg:pt-14">
-      <div className="mx-auto max-w-5xl">
-        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Systematic benevolence and donations</h1>
-          </div>
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-6 text-[#26352f] sm:py-10 lg:px-8">
+      <div className="mx-auto max-w-2xl">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+        >
+          <span>&larr;</span>
+          <span>Back to Home</span>
+        </Link>
 
-          <form onSubmit={submitGiving} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
-            {/* 3 Toggles: M-Pesa, Card, In-Kind */}
-            <div className="flex rounded-2xl bg-[#eef2ed] p-1 gap-1">
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+          Systematic benevolence and donations
+        </h1>
+
+        <form onSubmit={submitGiving} className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+          {/* 3 Toggles: M-Pesa, Card, In-Kind */}
+          <div className="flex rounded-2xl bg-[#eef2ed] p-1 gap-1">
               <button
                 type="button"
                 onClick={() => setTab("mpesa")}
@@ -314,8 +322,7 @@ function GivePageContent() {
             {message && <p className="mt-4 rounded-xl bg-[#eef2ed] p-4 text-sm text-[#3d5148]">{message}</p>}
           </form>
         </div>
-      </div>
-    </main>
+      </main>
   );
 }
 
