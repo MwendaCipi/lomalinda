@@ -43,7 +43,7 @@ export default function CommunityPrayerPage() {
           <span>&larr;</span>
           <span>Back to Requests</span>
         </Link>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer</h1>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Prayer</h1>
         <p className="mt-3 text-lg leading-8 text-[#617068]">You do not have to carry it alone.</p>
         <form onSubmit={submitRequest} className="mt-5 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
           {/* Anonymous toggle */}

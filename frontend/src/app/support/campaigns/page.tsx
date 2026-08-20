@@ -225,7 +225,7 @@ export default function CampaignManagementPage() {
               <span>&larr;</span>
               <span>Back to Stewardship</span>
             </Link>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">Fundraising Campaign Management</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Fundraising Campaign Management</h1>
             <p className="mt-1 text-sm text-[#617068]">
               Create campaigns, assign personalized cards to church groups &amp; members, and monitor group progress.
             </p>

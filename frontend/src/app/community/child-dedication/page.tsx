@@ -74,7 +74,7 @@ export default function ChildDedicationPage() {
           <span>&larr;</span>
           <span>Back to Requests</span>
         </Link>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Child dedication</h1>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Child dedication</h1>
 
         <section className="mt-5 rounded-3xl border border-[#dfdbd1] bg-[#ffffff] p-6 shadow-sm sm:p-10">
           <h2 className="text-xl font-semibold sm:text-2xl">Child dedication details</h2>

@@ -68,7 +68,7 @@ export default function PrayersMoralSupportPage() {
 
         <div className="mt-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Church Encouragement</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Prayer & Moral Support for the Church</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Prayer & Moral Support for the Church</h1>
           <p className="mt-3 text-base leading-7 text-[#617068]">
             Support Loma Linda SDA Church through faithful intercessory prayer, pastoral encouragement, evangelism backing, and spiritual moral support.
           </p>

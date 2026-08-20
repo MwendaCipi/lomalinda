@@ -33,7 +33,7 @@ export default function HymnalPage() {
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">
           <span>&larr;</span><span>Back to Fellowship</span>
         </Link>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">Hymnal &amp; NZK</h1>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Hymnal &amp; NZK</h1>
 
         <section className="mt-6 rounded-3xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-8">
           <div className="flex rounded-2xl bg-[#eef2ed] p-1">

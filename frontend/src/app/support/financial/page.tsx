@@ -85,7 +85,7 @@ export default function FinancialGivingPage() {
         </Link>
 
         <div className="mt-4">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">Financial Giving</h1>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Financial Giving</h1>
         </div>
 
         {/* Giving Form Card */}

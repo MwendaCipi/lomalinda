@@ -100,7 +100,7 @@ export default function LiveReportsPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
               Financial Stewardship
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
               Live Reports
             </h1>
             <p className="mt-3 text-base leading-7 text-[#617068]">

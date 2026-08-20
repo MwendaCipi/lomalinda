@@ -89,7 +89,7 @@ export default function AdministrationPage() {
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Church Administration</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Leader Portal</h1>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Leader Portal</h1>
             <p className="mt-4 text-[#617068]">
               Welcome, <span className="font-semibold text-[#26352f]">{profile?.username}</span>. Role-based administration for your ministry duties.
             </p>

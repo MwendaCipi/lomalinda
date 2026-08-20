@@ -72,7 +72,7 @@ export default function SabbathSchoolPage() {
         </Link>
 
         <div className="mt-3 max-w-3xl">
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-5xl">Sabbath School</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Sabbath School</h1>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">

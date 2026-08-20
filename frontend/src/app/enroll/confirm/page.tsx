@@ -54,7 +54,7 @@ function EnrollmentConfirmContent() {
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
-        <h1 className="text-3xl font-semibold">Set up your {accountType === "friend" ? "friend" : "church"} account</h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Set up your {accountType === "friend" ? "friend" : "church"} account</h1>
         {email && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}
         {!message && (
           <form onSubmit={submit} className="mt-8 space-y-5">

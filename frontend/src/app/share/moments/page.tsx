@@ -42,7 +42,7 @@ export default function LiveServicesAndMomentsPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
               Fellowship
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
               Live Services &amp; Moments
             </h1>
           </div>

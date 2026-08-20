@@ -81,7 +81,7 @@ export default function GiveInKindPage() {
         </Link>
 
         <div className="mt-6">
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">In-kind giving</h2>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">In-kind giving</h1>
         </div>
 
         {/* Form Card */}

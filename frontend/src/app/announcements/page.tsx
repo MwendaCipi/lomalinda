@@ -50,7 +50,7 @@ export default function AnnouncementsPage() {
     <main className="min-h-screen bg-[#f7f4ee] px-6 py-12 text-[#26352f] sm:py-16">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">Announcements</h1>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Announcements</h1>
           <p className="mt-5 text-lg leading-8 text-[#617068]">Search the church announcement archive by keyword or date.</p>
         </div>
 

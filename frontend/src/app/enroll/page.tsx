@@ -64,7 +64,7 @@ export default function EnrollPage() {
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] sm:py-10">
       <section className="w-full max-w-md rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7 lg:max-w-3xl">
         <Link href="/requests" className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[#b36b3c]"><span>&larr;</span><span>Back to Requests</span></Link>
-        <h1 className="mt-2 text-3xl font-semibold">Membership requests</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Membership requests</h1>
         <p className="mt-2 text-sm leading-6 text-[#617068]">Choose whether you would like to join us or request a transfer out.</p>
         <div className="mt-5 flex gap-1 rounded-2xl border border-[#dfdbd1] p-1">
           <button type="button" onClick={() => selectTab("join")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold ${tab === "join" ? "bg-[#5f8067] text-white shadow-sm" : "text-[#617068] hover:bg-[#f7f4ee]"}`}>Join us</button>

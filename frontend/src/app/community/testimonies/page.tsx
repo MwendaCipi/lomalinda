@@ -103,7 +103,7 @@ export default function TestimoniesPage() {
             &larr; Back to Testimonies
           </button>
           <div className="mt-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-            <h1 className="text-2xl font-semibold tracking-tight text-[#26352f] sm:text-3xl">Share testimony</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#26352f] sm:text-4xl">Share testimony</h1>
             <p className="mt-1 text-sm text-[#617068]">Tell us what God has done in your life.</p>
             <form onSubmit={submitTestimony} className="mt-5 space-y-4">
               <div>
@@ -146,7 +146,7 @@ export default function TestimoniesPage() {
     <main className="min-h-screen bg-[#f7f4ee] px-6 pb-8 pt-6 text-[#26352f] sm:py-10">
       <div className="mx-auto max-w-4xl">
         <Link href="/share" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]">&larr; Back to Fellowship</Link>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Testimonies</h1>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Testimonies</h1>
 
         <section className="mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

@@ -64,7 +64,7 @@ export default function ShareIdeasPage() {
         </Link>
 
         <div className="mt-6">
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">Share Ideas & Suggestions</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Share Ideas & Suggestions</h1>
           <p className="mt-3 text-base leading-7 text-[#617068]">
             We value your insights! Share ideas, feedback, or innovative proposals to help Loma Linda SDA Church grow, improve ministry, and serve our community better.
           </p>
