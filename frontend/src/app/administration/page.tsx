@@ -151,14 +151,25 @@ export default function AdministrationPage() {
           )}
 
           {isFinance && (
-            <div
-              onClick={() => setActiveTab("finance")}
-              className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:border-[#b36b3c] hover:shadow-sm"
-            >
-              <h2 className="text-xl font-semibold">Financial Stewardship</h2>
-              <p className="mt-2 text-xs leading-5 text-[#617068]">Configure giving purposes and review tithes/offerings.</p>
-              <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c]">Giving Purposes &rarr;</span>
-            </div>
+            <>
+              <div
+                onClick={() => setActiveTab("finance")}
+                className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:border-[#b36b3c] hover:shadow-sm"
+              >
+                <h2 className="text-xl font-semibold">Giving Purposes</h2>
+                <p className="mt-2 text-xs leading-5 text-[#617068]">Configure active giving purposes and ministry accounts.</p>
+                <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c]">Manage Purposes &rarr;</span>
+              </div>
+
+              <Link
+                href="/support/campaigns"
+                className="rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:border-[#b36b3c] hover:shadow-sm"
+              >
+                <h2 className="text-xl font-semibold">Campaign Management</h2>
+                <p className="mt-2 text-xs leading-5 text-[#617068]">Create fundraising campaigns and assign pledge cards.</p>
+                <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c]">Manage Campaigns &rarr;</span>
+              </Link>
+            </>
           )}
         </div>
 

@@ -221,9 +221,9 @@ export default function CampaignManagementPage() {
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link href="/support" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] hover:underline">
+            <Link href="/administration" className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] hover:underline">
               <span>&larr;</span>
-              <span>Back to Stewardship</span>
+              <span>Back to Leader Portal</span>
             </Link>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Fundraising Campaign Management</h1>
             <p className="mt-1 text-sm text-[#617068]">
