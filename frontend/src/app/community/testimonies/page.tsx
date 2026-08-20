@@ -91,6 +91,57 @@ export default function TestimoniesPage() {
     }
   }
 
+  if (mode === "online") {
+    return (
+      <main className="min-h-screen bg-[#f7f4ee] px-6 pb-8 pt-6 text-[#26352f] sm:py-10">
+        <div className="mx-auto max-w-2xl">
+          <button
+            type="button"
+            onClick={() => { setMode(null); setMessage(""); }}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#96552e]"
+          >
+            &larr; Back to Testimonies
+          </button>
+          <div className="mt-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+            <h1 className="text-2xl font-semibold tracking-tight text-[#26352f] sm:text-3xl">Share testimony</h1>
+            <p className="mt-1 text-sm text-[#617068]">Tell us what God has done in your life.</p>
+            <form onSubmit={submitTestimony} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium">Your Name
+                  <input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Enter your name" />
+                </label>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <label htmlFor="testimony-text">Your Testimony</label>
+                  <span className="text-xs text-[#617068]">{testimony.length} / 1000 characters</span>
+                </div>
+                <textarea id="testimony-text" required maxLength={1000} rows={5} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Tell us what God has done in your life..." />
+              </div>
+              <div className="pt-2">
+                <button disabled={loading} className="w-full rounded-full bg-[#5f8067] px-6 py-3.5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60">
+                  {loading ? "Sending..." : "Share testimony"}
+                </button>
+              </div>
+              {message && (
+                <div className="mt-4 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">
+                  <p>{message}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setMode(null); setMessage(""); }}
+                    className="mt-3 inline-block font-semibold text-[#b36b3c] hover:underline"
+                  >
+                    &larr; Return to all testimonies
+                  </button>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pb-8 pt-6 text-[#26352f] sm:py-10">
       <div className="mx-auto max-w-4xl">
@@ -117,24 +168,10 @@ export default function TestimoniesPage() {
         </section>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => setMode("online")} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
+          <button type="button" onClick={() => { setMode("online"); setMessage(""); }} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
           <button type="button" onClick={() => { setMode("fellowship"); setRequestModalOpen(true); setMessage(""); }} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
         </div>
 
-        {mode === "online" && <form onSubmit={submitTestimony} className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
-          <h2 className="text-xl font-semibold sm:text-2xl">Share testimony</h2>
-          {!isLoggedIn && (
-            <p className="mt-1 text-sm text-[#617068]">
-              Your testimony will be reviewed by church leadership before being published.
-            </p>
-          )}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Enter your name" /></label>
-          </div>
-          <div className="mt-4"><div className="flex items-center justify-between text-sm font-medium"><label htmlFor="testimony-text">Your Testimony</label><span className="text-xs text-[#617068]">{testimony.length} / 1000 characters</span></div><textarea id="testimony-text" required maxLength={1000} rows={4} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Tell us what God has done in your life..." /></div>
-          <button disabled={loading} className="mt-6 w-full rounded-full bg-[#5f8067] px-6 py-3.5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Share testimony"}</button>
-          {message && <p className="mt-5 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
-        </form>}
         {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#26352f]/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
           <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
             <div className="flex items-start justify-between gap-4"><div><h2 id="request-testimony-title" className="text-xl font-semibold sm:text-2xl">Request to share</h2><p className="mt-2 text-sm leading-6 text-[#617068]">Tell us when you would like to share during fellowship.</p></div><button type="button" onClick={() => setRequestModalOpen(false)} className="text-xl text-[#617068]" aria-label="Close">&times;</button></div>
@@ -144,6 +181,9 @@ export default function TestimoniesPage() {
             {message && <p className="mt-4 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
           </form>
         </div>}
+        {message && !requestModalOpen && (
+          <p className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-[#617068] shadow-sm ring-1 ring-[#dfdbd1]">{message}</p>
+        )}
       </div>
     </main>
   );
