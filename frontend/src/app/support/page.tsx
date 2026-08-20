@@ -1,27 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 const supportCategories = [
   {
-    title: "Financial Giving",
-    description: "Give tithes, offerings, building funds, and mission gifts online via M-Pesa.",
-    href: "/support/financial",
+    title: "Giving & Donations",
+    description: "Give tithes, offerings, ministry support, building funds, or in-kind gifts via M-Pesa, Card, or physical pledge.",
+    href: "/give",
     icon: (
       <svg className="h-6 w-6 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 8v2m0-10a9 9 0 110 18 9 9 0 010-18z" />
       </svg>
     ),
   },
-
   {
-    title: "Give in Kind",
-    description: "Pledge physical produce, equipment, building supplies, or professional skills.",
-    href: "/support/in-kind",
+    title: "Ideas & Moral Support",
+    description: "Share creative proposals, ministry suggestions, or pledge prayer & moral backing for church leaders and projects.",
+    href: "/support/ideas",
     icon: (
       <svg className="h-6 w-6 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-4a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
       </svg>
     ),
   },
@@ -46,31 +44,18 @@ const supportCategories = [
     ),
   },
   {
-    title: "Prayers & Moral Support",
-    description: "Pledge intercessory prayer and moral support for church leaders and projects.",
-    href: "/support/prayers",
-    protected: true,
+    title: "Campaign Management",
+    description: "Create campaigns, assign cards to church groups & members, and monitor fundraising progress.",
+    href: "/support/campaigns",
     icon: (
       <svg className="h-6 w-6 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-      </svg>
-    ),
-  },
-  {
-    title: "Share Ideas",
-    description: "Submit creative ideas, suggestions, and feedback to help our church grow.",
-    href: "/support/ideas",
-    protected: true,
-    icon: (
-      <svg className="h-6 w-6 text-[#b36b3c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-4a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
     ),
   },
 ];
 
 export default function SupportHubPage() {
-  const visibleCategories = supportCategories;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-10 text-[#26352f] lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -86,9 +71,8 @@ export default function SupportHubPage() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Stewardship &amp; Support</h1>
         </div>
 
-        {/* 6 Category Cards Grid (2 per row on desktop) */}
         <div className="mt-6 grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-2">
-          {visibleCategories.map((cat) => (
+          {supportCategories.map((cat) => (
             <Link
               key={cat.href}
               href={cat.href}

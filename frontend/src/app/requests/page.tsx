@@ -1,46 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 const requestItems = [
   {
-    href: "/spiritual/prayer",
-    protected: true,
-    title: "Prayer requests",
-    text: "Share what is on your heart and let our church family pray with you.",
+    href: "/community/prayer",
+    title: "Prayer & Visitation Requests",
+    text: "Submit a prayer request for our prayer team or request a pastoral / home visit with map location.",
     icon: "🙏",
   },
   {
-    href: "/spiritual/visitation",
-    protected: true,
-    title: "Request visitation",
-    text: "Request church members, elders or pastor to visit or pray with you.",
-    icon: "🏠",
-  },
-  {
-    href: "/spiritual/child-dedication",
-    protected: true,
-    title: "Child dedication requests",
-    text: "Begin a conversation about dedicating your child during worship.",
+    href: "/community/child-dedication",
+    title: "Child Dedication Requests",
+    text: "Begin a conversation about dedicating your child during Sabbath worship.",
     icon: "👶",
   },
   {
     href: "/enroll",
-    title: "Membership requests",
+    title: "Membership Requests",
     text: "Join Loma Linda SDA Church through baptism or membership transfer, or request a transfer out.",
     icon: "🤝",
   },
   {
     href: "/partnerships",
-    title: "Partnership requests",
+    title: "Partnership Requests",
     text: "Explore a partnership with Loma Linda SDA Church for ministry, community impact, or shared initiatives.",
     icon: "🌱",
   },
 ];
 
 export default function RequestsPage() {
-  const visibleItems = requestItems;
   return (
     <main className="min-h-screen bg-[#f7f4ee] px-6 pt-6 pb-10 text-[#26352f] sm:py-8 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -57,7 +46,7 @@ export default function RequestsPage() {
         </div>
 
         <div className="mt-6 grid gap-4 sm:gap-5 md:grid-cols-2">
-          {visibleItems.map((item) => (
+          {requestItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
