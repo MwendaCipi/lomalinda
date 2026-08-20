@@ -32,7 +32,13 @@ from .serializers import AnnouncementSerializer, BoardMeetingSerializer, Campaig
 def send_enrollment_email(enrollment):
     link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
     account_label = 'friend account' if enrollment.joining_mode == 'friend' else 'church account'
-    send_mail('Complete your Loma Linda Church account', f"Hello {enrollment.first_name or 'there'},\n\nYour request for a Loma Linda Church {account_label} has been approved. Complete your account here:\n{link}\n\nThis link expires in 48 hours.", settings.DEFAULT_FROM_EMAIL, [enrollment.email], fail_silently=False)
+    send_mail(
+        'Verify your Loma Linda Church account',
+        f"Hello {enrollment.first_name or 'there'},\n\nThank you for choosing to join Loma Linda SDA Church as a {account_label}.\n\nPlease click the link below to verify your email and complete setting up your account:\n{link}\n\nThis link is valid for 48 hours.\n\nWarm regards,\nLoma Linda SDA Church",
+        settings.DEFAULT_FROM_EMAIL,
+        [enrollment.email],
+        fail_silently=True,
+    )
 
 
 def send_password_reset_email(user, uid, token):
@@ -345,8 +351,26 @@ class EnrollmentRequestView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         validated_data = {key: value for key, value in serializer.validated_data.items() if key != 'privacy_accepted'}
         validated_data['privacy_accepted_at'] = timezone.now()
-        EnrollmentRequest.objects.update_or_create(email=validated_data['email'], defaults={**validated_data, 'token': uuid.uuid4(), 'status': 'pending', 'expires_at': timezone.now() + timedelta(hours=48)})
-        return Response({'message': 'Your request has been submitted for approval. We will email you when it is approved.'}, status=status.HTTP_202_ACCEPTED)
+        email = validated_data['email'].lower().strip()
+        token = uuid.uuid4()
+        enrollment, _ = EnrollmentRequest.objects.update_or_create(
+            email=email,
+            defaults={
+                **validated_data,
+                'email': email,
+                'token': token,
+                'status': 'verification_pending',
+                'expires_at': timezone.now() + timedelta(hours=48),
+            }
+        )
+        try:
+            send_enrollment_email(enrollment)
+        except Exception:
+            pass
+        return Response({
+            'message': 'A verification link has been sent to your email. Please check your inbox (and spam folder) to complete your account setup.',
+            'token': str(enrollment.token)
+        }, status=status.HTTP_200_OK)
 
 
 class EnrollmentOAuthVerifyView(APIView):

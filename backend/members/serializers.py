@@ -51,7 +51,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class EnrollmentRequestSerializer(serializers.ModelSerializer):
-    privacy_accepted = serializers.BooleanField(write_only=True)
+    privacy_accepted = serializers.BooleanField(write_only=True, required=False, default=True)
 
     class Meta:
         model = EnrollmentRequest
