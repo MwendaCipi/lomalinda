@@ -161,8 +161,8 @@ function PrayerAndVisitationContent() {
         </h1>
         <p className="mt-3 text-lg leading-8 text-[#617068]">
           {tab === "prayer"
-            ? "You do not have to carry it alone. Share what is on your heart with our church family."
-            : "Request church elders, pastors, or care team members to visit and pray with you."}
+            ? "You do not have to carry it alone."
+            : "Request us to visit and pray with you."}
         </p>
 
         {/* 2 Toggles */}
