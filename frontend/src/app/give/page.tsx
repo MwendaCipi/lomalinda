@@ -162,21 +162,16 @@ function GivePageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-10 text-[#26352f] lg:px-8 lg:pt-14">
+    <main className="min-h-screen bg-[#f7f4ee] px-6 pb-16 pt-8 text-[#26352f] sm:pt-10 lg:px-8 lg:pt-14">
       <div className="mx-auto max-w-5xl">
-        <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <div>
-            <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">Systematic benevolence and donations</h1>
-            <p className="mt-6 max-w-md text-lg leading-8 text-[#617068]">
-              Support worship, ministry, prayer, and care for our church family through financial giving or practical in-kind gifts.
-            </p>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Systematic benevolence and donations</h1>
           </div>
 
           <form onSubmit={submitGiving} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
-            <h2 className="text-2xl font-semibold">How would you like to give?</h2>
-
             {/* 3 Toggles: M-Pesa, Card, In-Kind */}
-            <div className="mt-4 flex rounded-2xl bg-[#eef2ed] p-1 gap-1">
+            <div className="flex rounded-2xl bg-[#eef2ed] p-1 gap-1">
               <button
                 type="button"
                 onClick={() => setTab("mpesa")}
