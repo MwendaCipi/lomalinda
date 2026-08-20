@@ -16,14 +16,10 @@ const fellowshipItems: FellowshipItem[] = [
     icon: "📖",
   },
   {
-    href: "/share/bible-sop",
-    title: "Bible & EGW Writings",
-    text: "Read the Bible and explore the writings of Ellen G. White.",
-  },
-  {
-    href: "/share/hymnal",
-    title: "Hymnal & NZK",
-    text: "Find hymns and worship songs for personal and church devotion.",
+    href: "/share/materials",
+    title: "Materials",
+    text: "Access the Seventh-day Adventist Hymnal, Nyimbo za Kristo (NZK), Holy Bible, and Ellen G. White writings in one place.",
+    icon: "📚",
   },
   {
     href: "/share/moments",
