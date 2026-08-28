@@ -5,7 +5,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
-    ChurchSettings, Contribution, EnrollmentRequest, FundraisingCampaign,
+    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign,
     GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest,
     SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 )
@@ -107,6 +107,39 @@ class ContributionSerializer(serializers.ModelSerializer):
         model = Contribution
         fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
+
+
+class CashContributionSerializer(serializers.ModelSerializer):
+    received_by_name = serializers.CharField(source='received_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = CashContribution
+        fields = ('id', 'received_on', 'amount', 'purpose', 'donor_name', 'receipt_number', 'notes', 'received_by_name', 'created_at')
+        read_only_fields = ('id', 'received_by_name', 'created_at')
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Amount must be greater than zero.')
+        return value
+
+
+class ContributionReconciliationSerializer(serializers.ModelSerializer):
+    reconciled_by_name = serializers.CharField(source='reconciled_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = ContributionReconciliation
+        fields = ('reconciliation_date', 'digital_amount_confirmed', 'cash_amount_counted', 'notes', 'reconciled_by_name', 'reconciled_at')
+        read_only_fields = ('reconciliation_date', 'reconciled_by_name', 'reconciled_at')
+
+    def validate_digital_amount_confirmed(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Confirmed amount cannot be negative.')
+        return value
+
+    def validate_cash_amount_counted(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Counted amount cannot be negative.')
+        return value
 
 
 class SupportSubmissionSerializer(serializers.ModelSerializer):

@@ -23,10 +23,10 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
-from .serializers import AnnouncementSerializer, BoardMeetingSerializer, CampaignCardAssignmentSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, BoardMeetingSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -614,6 +614,87 @@ class MyContributionsView(generics.ListAPIView):
 
     def get_queryset(self):
         return Contribution.objects.filter(member=self.request.user)
+
+
+class TreasurerCashContributionView(generics.ListCreateAPIView):
+    serializer_class = CashContributionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def _require_finance_manager(self):
+        if not is_finance_manager(self.request.user):
+            raise PermissionDenied('Only finance managers can access cash contributions.')
+
+    def get_queryset(self):
+        self._require_finance_manager()
+        queryset = CashContribution.objects.all()
+        received_on = self.request.query_params.get('date')
+        if received_on:
+            try:
+                selected_date = datetime.strptime(received_on, '%Y-%m-%d').date()
+            except ValueError:
+                raise ValidationError({'date': 'Use YYYY-MM-DD.'})
+            queryset = queryset.filter(received_on=selected_date)
+        return queryset
+
+    def perform_create(self, serializer):
+        self._require_finance_manager()
+        serializer.save(received_by=self.request.user)
+
+
+class ContributionReconciliationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _selected_date(self, request):
+        value = request.query_params.get('date', timezone.localdate().isoformat())
+        try:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValidationError({'date': 'Use YYYY-MM-DD.'})
+
+    def _require_finance_manager(self, request):
+        if not is_finance_manager(request.user):
+            raise PermissionDenied('Only finance managers can reconcile contributions.')
+
+    def _response(self, selected_date):
+        from django.db.models import Sum
+        digital = Contribution.objects.filter(giving_type='financial', status='completed', paid_at__date=selected_date)
+        cash = CashContribution.objects.filter(received_on=selected_date)
+        digital_recorded = digital.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        cash_recorded = cash.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        reconciliation = ContributionReconciliation.objects.filter(reconciliation_date=selected_date).first()
+        result = {
+            'date': selected_date,
+            'digital_recorded': digital_recorded,
+            'cash_recorded': cash_recorded,
+            'total_recorded': digital_recorded + cash_recorded,
+            'digital_contribution_count': digital.count(),
+            'cash_contribution_count': cash.count(),
+            'reconciliation': ContributionReconciliationSerializer(reconciliation).data if reconciliation else None,
+        }
+        if reconciliation:
+            result.update({
+                'digital_variance': reconciliation.digital_amount_confirmed - digital_recorded,
+                'cash_variance': reconciliation.cash_amount_counted - cash_recorded,
+                'total_confirmed': reconciliation.digital_amount_confirmed + reconciliation.cash_amount_counted,
+                'total_variance': (reconciliation.digital_amount_confirmed + reconciliation.cash_amount_counted) - (digital_recorded + cash_recorded),
+            })
+        return Response(result)
+
+    def get(self, request):
+        self._require_finance_manager(request)
+        return self._response(self._selected_date(request))
+
+    def put(self, request):
+        self._require_finance_manager(request)
+        selected_date = self._selected_date(request)
+        reconciliation, _ = ContributionReconciliation.objects.get_or_create(
+            reconciliation_date=selected_date,
+            defaults={'reconciled_by': request.user},
+        )
+        serializer = ContributionReconciliationSerializer(reconciliation, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(reconciled_by=request.user)
+        return self._response(selected_date)
 
 
 class SupportSubmissionView(generics.CreateAPIView):

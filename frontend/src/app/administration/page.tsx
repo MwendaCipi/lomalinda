@@ -169,6 +169,15 @@ export default function AdministrationPage() {
                 <p className="mt-2 text-xs leading-5 text-[#617068]">Create fundraising campaigns and assign pledge cards.</p>
                 <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c]">Manage Campaigns &rarr;</span>
               </Link>
+
+              <Link
+                href="/administration/reconciliation"
+                className="rounded-2xl border border-[#dfdbd1] bg-white p-6 transition hover:border-[#b36b3c] hover:shadow-sm"
+              >
+                <h2 className="text-xl font-semibold">Contribution Reconciliation</h2>
+                <p className="mt-2 text-xs leading-5 text-[#617068]">Record cash receipts and reconcile them with verified M-Pesa and card giving.</p>
+                <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c]">Open Reconciliation &rarr;</span>
+              </Link>
             </>
           )}
         </div>

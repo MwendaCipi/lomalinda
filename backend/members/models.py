@@ -104,6 +104,34 @@ class Contribution(models.Model):
         ordering = ['-created_at']
 
 
+class CashContribution(models.Model):
+    """A cash receipt entered by an authorised member of the finance team."""
+    received_on = models.DateField(default=timezone.localdate)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    purpose = models.CharField(max_length=120, default='General giving')
+    donor_name = models.CharField(max_length=160, blank=True)
+    receipt_number = models.CharField(max_length=64, blank=True)
+    notes = models.TextField(blank=True)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='cash_contributions_entered')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-received_on', '-created_at']
+
+
+class ContributionReconciliation(models.Model):
+    """The amounts independently confirmed against a day's digital and cash ledgers."""
+    reconciliation_date = models.DateField(unique=True)
+    digital_amount_confirmed = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    cash_amount_counted = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    reconciled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='contribution_reconciliations')
+    reconciled_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-reconciliation_date']
+
+
 class SupportSubmission(models.Model):
     TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support'), ('partnership', 'Partnership request')]
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='support_submissions')

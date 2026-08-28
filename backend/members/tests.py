@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -42,7 +43,10 @@ class WeeklyLessonParserTests(TestCase):
 
 from rest_framework.test import APITestCase
 from rest_framework import status
-from .models import Testimony
+from django.contrib.auth.models import User
+from django.utils import timezone
+
+from .models import Contribution, MemberProfile, Testimony
 
 
 class TestimonyAPITests(APITestCase):
@@ -106,3 +110,44 @@ class TestimonyAPITests(APITestCase):
         )
         self.assertEqual(res3.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Testimony.objects.count(), 2)
+
+
+class ContributionReconciliationAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='treasurer', password='secure-password')
+        MemberProfile.objects.create(user=self.user, role='treasurer')
+        self.client.force_authenticate(self.user)
+        self.today = timezone.localdate()
+
+    def test_treasurer_can_record_cash_and_reconcile_daily_totals(self):
+        Contribution.objects.create(
+            amount='1500.00',
+            purpose='Tithe',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        cash_response = self.client.post('/api/members/treasury/cash-contributions/', {
+            'received_on': self.today.isoformat(),
+            'amount': '400.00',
+            'purpose': 'Local Church Budget',
+            'receipt_number': 'ENV-101',
+        }, format='json')
+        self.assertEqual(cash_response.status_code, status.HTTP_201_CREATED)
+
+        reconcile_response = self.client.put(
+            f'/api/members/treasury/reconciliation/?date={self.today.isoformat()}',
+            {'digital_amount_confirmed': '1500.00', 'cash_amount_counted': '400.00', 'notes': 'Counted by two officers.'},
+            format='json',
+        )
+        self.assertEqual(reconcile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(str(reconcile_response.data['digital_recorded'])), Decimal('1500.00'))
+        self.assertEqual(Decimal(str(reconcile_response.data['cash_recorded'])), Decimal('400.00'))
+        self.assertEqual(Decimal(str(reconcile_response.data['total_variance'])), Decimal('0.00'))
+
+    def test_member_cannot_access_treasury_reconciliation(self):
+        member = User.objects.create_user(username='member', password='secure-password')
+        MemberProfile.objects.create(user=member, role='member')
+        self.client.force_authenticate(member)
+        response = self.client.get('/api/members/treasury/reconciliation/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

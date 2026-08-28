@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, CampaignCardAssignmentLookupView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyCampaignCardsView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, VisitationRequestView
+from .views import AnnouncementView, BoardMeetingView, CampaignCardAssignmentLookupView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, ContributionReconciliationView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyCampaignCardsView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, TreasurerCashContributionView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -13,6 +13,8 @@ urlpatterns = [
     path('me/enrollment-details/', EnrollmentDetailsView.as_view(), name='member-enrollment-details'),
     path('me/campaign-cards/', MyCampaignCardsView.as_view(), name='my-campaign-cards'),
     path('contributions/', MyContributionsView.as_view(), name='member-contributions'),
+    path('treasury/cash-contributions/', TreasurerCashContributionView.as_view(), name='treasury-cash-contributions'),
+    path('treasury/reconciliation/', ContributionReconciliationView.as_view(), name='treasury-reconciliation'),
     path('support-submissions/', SupportSubmissionView.as_view(), name='support-submissions'),
     path('contributions/initiate/', InitiateContributionView.as_view(), name='contribution-initiate'),
     path('payments/mpesa/callback/', MpesaCallbackView.as_view(), name='mpesa-callback'),
