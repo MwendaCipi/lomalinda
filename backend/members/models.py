@@ -59,11 +59,15 @@ class EnrollmentRequest(models.Model):
 
 class Announcement(models.Model):
     VISIBILITY_CHOICES = [('public', 'Public'), ('members', 'Members only')]
+    ACTION_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]
     title = models.CharField(max_length=160)
     text = models.TextField()
     detail = models.TextField(blank=True)
     href = models.CharField(max_length=255, blank=True)
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES, default='acknowledge')
+    is_popup = models.BooleanField(default=True, help_text="Pop up automatically to users requiring action")
+    action_prompt = models.CharField(max_length=255, blank=True, help_text="Optional prompt for pledge or response")
     published = models.BooleanField(default=True)
     expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -73,6 +77,24 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class AnnouncementResponse(models.Model):
+    ACTION_TYPE_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='responses')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='announcement_responses')
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPE_CHOICES)
+    pledge_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    response_text = models.TextField(blank=True)
+    respondent_name = models.CharField(max_length=120, blank=True)
+    respondent_phone = models.CharField(max_length=30, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action_type} for {self.announcement.title} by {self.respondent_name or self.user or 'Guest'}"
 
 
 class Contribution(models.Model):

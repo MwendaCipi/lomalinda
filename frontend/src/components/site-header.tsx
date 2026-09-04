@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SiteNav } from "./site-nav";
+import { PopupAnnouncementModal } from "./popup-announcement-modal";
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -49,6 +50,7 @@ export function SiteHeader() {
   const isVisible = headerVisible || mobileMenuOpen;
   return (
     <>
+      <PopupAnnouncementModal />
       <div
         className={`fixed top-0 left-0 right-0 z-[70] shadow-md transition-transform duration-300 ease-in-out ${
           !isVisible ? "-translate-y-full" : "translate-y-0"

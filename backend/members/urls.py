@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView
 
-from .views import AnnouncementView, BoardMeetingView, CampaignCardAssignmentLookupView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, ContributionReconciliationView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyCampaignCardsView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, TreasurerCashContributionView, VisitationRequestView
+from .views import AnnouncementActionView, AnnouncementView, BoardMeetingView, CampaignCardAssignmentLookupView, ChildDedicationRequestView, ChurchBudgetsView, ChurchCorrespondenceView, ChurchFinancialReportsView, ChurchNotificationView, ChurchSettingsView, ContributionReconciliationView, EnrollmentCompleteView, EnrollmentDetailsView, EnrollmentOAuthVerifyView, EnrollmentRequestView, EnrollmentVerifyView, FundraisingCampaignDetailView, FundraisingCampaignListCreateView, GivingPurposeDetailView, GivingPurposeListCreateView, InitiateContributionView, MeView, MembershipTransferRequestView, MpesaCallbackView, MyCampaignCardsView, MyContributionsView, PaystackWebhookView, PasswordResetConfirmView, PasswordResetRequestView, PrayerRequestView, RegisterView, SabbathEventsView, SupportSubmissionView, TestimonyVerificationStartView, TestimonyVerificationView, TestimonyView, TreasurerCashContributionView, VisitationRequestView
 
 urlpatterns = [
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
@@ -45,4 +45,5 @@ urlpatterns = [
     path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('auth/password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('announcements/', AnnouncementView.as_view(), name='announcements'),
+    path('announcements/<int:pk>/action/', AnnouncementActionView.as_view(), name='announcement-action'),
 ]

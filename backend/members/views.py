@@ -23,10 +23,10 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, BoardMeeting, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
-from .serializers import AnnouncementSerializer, BoardMeetingSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 def send_enrollment_email(enrollment):
@@ -508,7 +508,40 @@ class AnnouncementView(generics.ListCreateAPIView):
         if getattr(getattr(self.request.user, 'member_profile', None), 'role', '') not in ('admin', 'leader'):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church leaders can post announcements.')
-        serializer.save()
+class AnnouncementActionView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, pk):
+        try:
+            announcement = Announcement.objects.get(pk=pk, published=True)
+        except Announcement.DoesNotExist:
+            return Response({'detail': 'Announcement not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        action_type = request.data.get('action_type', announcement.action_type)
+        pledge_amount = request.data.get('pledge_amount')
+        response_text = request.data.get('response_text', '')
+        respondent_name = request.data.get('respondent_name', '')
+        respondent_phone = request.data.get('respondent_phone', '')
+
+        user = request.user if request.user.is_authenticated else None
+        if user and not respondent_name:
+            respondent_name = user.get_full_name() or user.username
+
+        response_obj = AnnouncementResponse.objects.create(
+            announcement=announcement,
+            user=user,
+            action_type=action_type,
+            pledge_amount=pledge_amount if pledge_amount else None,
+            response_text=response_text,
+            respondent_name=respondent_name,
+            respondent_phone=respondent_phone,
+        )
+
+        return Response({
+            'detail': 'Action recorded successfully.',
+            'id': response_obj.id,
+            'action_type': response_obj.action_type,
+        }, status=status.HTTP_201_CREATED)
 
 
 class MissionReadingRedirectView(APIView):

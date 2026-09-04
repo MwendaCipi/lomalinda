@@ -70,12 +70,13 @@ export function SiteNav({ open: controlledOpen, setOpen: controlledSetOpen }: { 
       <nav ref={navRef} className="mx-auto max-w-6xl px-6 py-4 lg:px-8" aria-label="Main navigation">
         <div className="flex items-center justify-between gap-6">
           <Link href="/" className="flex min-w-0 items-center gap-3">
-            <span className="h-10 w-10 shrink-0 overflow-hidden" aria-hidden="true">
-              <Image src="/adventist-logo-white.svg" alt="" width={180} height={49} className="h-10 max-w-none w-auto" priority />
+            <span className="h-11 w-11 shrink-0 overflow-hidden" aria-hidden="true">
+              <Image src="/adventist-logo-white.svg" alt="" width={180} height={49} className="h-11 max-w-none w-auto" priority />
             </span>
-            <span className="text-sm leading-tight text-white">
-              <span className="block">SDA Church</span>
-              <span className="text-white/75">Loma Linda, Meru</span>
+            <span className="text-xs font-bold leading-none text-white tracking-tight sm:text-sm">
+              <span className="block text-[#f1c89e] uppercase tracking-wider">SDA</span>
+              <span className="block py-0.5">Loma Linda</span>
+              <span className="block font-medium text-white/80">Meru</span>
             </span>
           </Link>
 

@@ -6,7 +6,17 @@ import { showAlert } from "@/lib/alerts";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export function AnnouncementManager() {
-  const [form, setForm] = useState({ title: "", text: "", detail: "", href: "", visibility: "public", expires_at: "" });
+  const [form, setForm] = useState({
+    title: "",
+    text: "",
+    detail: "",
+    href: "",
+    visibility: "public",
+    action_type: "acknowledge",
+    is_popup: true,
+    action_prompt: "",
+    expires_at: "",
+  });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +37,17 @@ export function AnnouncementManager() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Unable to post announcement.");
-      setForm({ title: "", text: "", detail: "", href: "", visibility: "public", expires_at: "" });
+      setForm({
+        title: "",
+        text: "",
+        detail: "",
+        href: "",
+        visibility: "public",
+        action_type: "acknowledge",
+        is_popup: true,
+        action_prompt: "",
+        expires_at: "",
+      });
       const successText = "Announcement posted successfully.";
       setMessage(successText);
       showAlert("Announcement Posted", successText, "success");
@@ -44,7 +64,7 @@ export function AnnouncementManager() {
     <section className="rounded-2xl border border-[#dfdbd1] bg-white p-7">
       <h2 className="text-2xl font-semibold">Post an announcement</h2>
       <p className="mt-2 text-sm leading-6 text-[#617068]">
-        Set visibility and choose how long the announcement displays.
+        Set visibility, required user action, and pop-up modal settings.
       </p>
       <form onSubmit={submit} className="mt-6 grid gap-5 md:grid-cols-2">
         <label className="block text-sm font-medium">Title
@@ -56,18 +76,48 @@ export function AnnouncementManager() {
             <option value="members">Members only</option>
           </select>
         </label>
-        <label className="block text-sm font-medium md:col-span-2">Announcement
-          <textarea required value={form.text} onChange={(event) => setForm({ ...form, text: event.target.value })} rows={3} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" />
+        
+        <label className="block text-sm font-medium">Required User Action
+          <select value={form.action_type} onChange={(event) => setForm({ ...form, action_type: event.target.value })} className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3">
+            <option value="acknowledge">Acknowledge (Read & Confirm)</option>
+            <option value="pledge">Pledge (Requires amount entry)</option>
+            <option value="respond">Respond (Requires text message response)</option>
+          </select>
         </label>
+
         <label className="block text-sm font-medium">Display until (end date)
           <input type="date" value={form.expires_at} onChange={(event) => setForm({ ...form, expires_at: event.target.value })} className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3" />
         </label>
+
+        <label className="block text-sm font-medium md:col-span-2">Custom Action Prompt / Instructions (optional)
+          <input value={form.action_prompt} onChange={(event) => setForm({ ...form, action_prompt: event.target.value })} placeholder="e.g. 'Enter your building project pledge amount' or 'Share your feedback'" className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" />
+        </label>
+
+        <div className="flex items-center gap-3 md:col-span-2">
+          <input
+            type="checkbox"
+            id="is_popup"
+            checked={form.is_popup}
+            onChange={(e) => setForm({ ...form, is_popup: e.target.checked })}
+            className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c]"
+          />
+          <label htmlFor="is_popup" className="text-sm font-medium text-[#26352f]">
+            Pop up automatically as a modal overlay until user completes the required action
+          </label>
+        </div>
+
+        <label className="block text-sm font-medium md:col-span-2">Announcement Summary
+          <textarea required value={form.text} onChange={(event) => setForm({ ...form, text: event.target.value })} rows={3} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" />
+        </label>
+
         <label className="block text-sm font-medium">Link (optional)
           <input value={form.href} onChange={(event) => setForm({ ...form, href: event.target.value })} placeholder="/calendar" className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" />
         </label>
+
         <label className="block text-sm font-medium md:col-span-2">Details (optional)
           <textarea value={form.detail} onChange={(event) => setForm({ ...form, detail: event.target.value })} rows={2} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3" />
         </label>
+
         <div className="md:col-span-2">
           <button disabled={loading} className="rounded-full bg-[#b36b3c] px-6 py-3 font-semibold text-white disabled:opacity-60">
             {loading ? "Posting..." : "Post announcement"}

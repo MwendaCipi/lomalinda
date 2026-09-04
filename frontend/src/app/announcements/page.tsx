@@ -4,7 +4,18 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-type Announcement = { id: number; title: string; text: string; detail: string; href: string; visibility: string; expires_at?: string | null; created_at: string };
+type Announcement = {
+  id: number;
+  title: string;
+  text: string;
+  detail: string;
+  href: string;
+  visibility: string;
+  action_type?: "acknowledge" | "pledge" | "respond";
+  is_popup?: boolean;
+  expires_at?: string | null;
+  created_at: string;
+};
 
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -84,6 +95,8 @@ export default function AnnouncementsPage() {
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
                     <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(announcement.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
                     {announcement.visibility === "members" && <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">Members only</span>}
+                    {announcement.action_type === "pledge" && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Pledge Required</span>}
+                    {announcement.action_type === "respond" && <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Response Required</span>}
                     {announcement.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${announcement.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}
                   </div>
                   <h2 className="mt-3 text-2xl font-semibold">{announcement.title}</h2>

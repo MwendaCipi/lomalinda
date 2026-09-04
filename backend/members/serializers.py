@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
-    Announcement, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
+    Announcement, AnnouncementResponse, BoardMeeting, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign,
     GivingPurpose, MemberProfile, MembershipTransferRequest, PrayerRequest,
@@ -95,10 +95,22 @@ class EnrollmentCompleteSerializer(serializers.Serializer):
         return value
 
 
+class AnnouncementResponseSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True, default='')
+
+    class Meta:
+        model = AnnouncementResponse
+        fields = ('id', 'announcement', 'user', 'username', 'action_type', 'pledge_amount', 'response_text', 'respondent_name', 'respondent_phone', 'created_at')
+        read_only_fields = ('id', 'user', 'created_at')
+
+
 class AnnouncementSerializer(serializers.ModelSerializer):
+    responses = AnnouncementResponseSerializer(many=True, read_only=True)
+    responses_count = serializers.IntegerField(source='responses.count', read_only=True)
+
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'published', 'expires_at', 'created_at')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'is_popup', 'action_prompt', 'published', 'expires_at', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at')
 
 
