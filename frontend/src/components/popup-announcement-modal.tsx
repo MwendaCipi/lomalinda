@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -30,6 +31,7 @@ type Announcement = {
 };
 
 export function PopupAnnouncementModal() {
+  const pathname = usePathname();
   const [queue, setQueue] = useState<Announcement[]>([]);
   const [current, setCurrent] = useState<Announcement | null>(null);
   const [pledgeAmount, setPledgeAmount] = useState("");
@@ -64,7 +66,7 @@ export function PopupAnnouncementModal() {
       .catch(() => undefined);
   }, []);
 
-  if (!current) return null;
+  if (pathname === "/" || !current) return null;
 
   const actionType = current.action_type || "acknowledge";
 

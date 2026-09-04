@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { NextGatheringCard } from "@/components/next-gathering-card";
 import { ChurchGallery } from "@/components/church-gallery";
+import { HomepageAnnouncementHero } from "@/components/homepage-announcement-hero";
 
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
 
@@ -16,6 +17,7 @@ const weeklyCalendar = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <HomepageAnnouncementHero />
       <section id="top" className="mx-auto max-w-6xl px-6 pb-14 pt-6 sm:pt-10 lg:px-8 lg:pt-14">
         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
