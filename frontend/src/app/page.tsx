@@ -99,14 +99,14 @@ export default function Home() {
             </a>
           </div>
 
-          <div id="location" className="mt-10 grid gap-10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+          <div id="location" className="mt-10 grid gap-10 border-t border-white/10 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
               <h3 className="text-xl font-semibold">Visit us in person</h3>
               <p className="mt-3 text-sm leading-6 text-white/70">Use the map to find the church grounds and plan your visit.</p>
             </div>
             <ChurchLocation />
           </div>
-          <p className="mt-12 pt-5 text-xs text-white/50">&copy; 2026 SDA Church Loma Linda, Meru</p>
+          <p className="mt-12 border-t border-white/10 pt-5 text-xs text-white/50">&copy; 2026 SDA Church Loma Linda, Meru</p>
         </div>
       </footer>
     </main>
