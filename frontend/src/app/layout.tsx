@@ -12,6 +12,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  // Token-bearing pages (accept-invite, enroll confirm, password reset) read
+  // their secret from the query string; never name that URL in a Referer.
+  referrer: "no-referrer",
   title: "SDA Loma Linda",
   description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
   manifest: "/manifest.json",

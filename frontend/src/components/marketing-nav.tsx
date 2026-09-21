@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
+import { SiteNav } from "./site-nav";
 
 const marketingLinks = [
   { href: "/", label: "Home" },
@@ -34,6 +35,13 @@ export function MarketingNav() {
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // Materials and giving are also destinations in the signed-in app. Keep the
+  // public landing-page header for visitors, but restore the app chrome when a
+  // member reaches either section from the system navigation.
+  if (signedIn && (pathname.startsWith("/materials") || pathname.startsWith("/give"))) {
+    return <SiteNav />;
+  }
 
   const accountHref = signedIn ? "/dashboard" : "/login";
   const accountLabel = signedIn ? "Dashboard" : "Sign in";

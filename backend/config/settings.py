@@ -197,3 +197,72 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Secrets never in logs
+# ---------------------------------------------------------------------------
+# The site logs to stderr (gunicorn access log) and to the console, where
+# platform log drains keep every line. Invitation links and JWTs are bearer
+# secrets that must never land there, so a formatter scrubs them out of every
+# record before it is written, however it reaches the logging system.
+
+import re
+import logging
+
+
+def _redact_secret_query_values(message):
+    """Mask the values of secret-bearing query parameters in a log message.
+
+    Covers invitation tokens, password-reset/enrollment/testimony tokens, and
+    the JWT 'token' some links still carry. The parameter names stay visible
+    so the log remains useful for debugging.
+    """
+    return re.sub(
+        r"(?i)((?:[?&])(?:token|access_token|refresh_token)=)[^&\s'\"]+",
+        r"\1[REDACTED]",
+        message,
+    )
+
+
+class SecretRedactingFormatter(logging.Formatter):
+    """A logging.Formatter that keeps bearer secrets out of the written line."""
+
+    def format(self, record):
+        return _redact_secret_query_values(super().format(record))
+
+
+_REDACTING_FORMATTERS = {
+    'default': {
+        '()': 'config.settings.SecretRedactingFormatter',
+        'format': '[{asctime}] {levelname} {name} {message}',
+        'style': '{',
+    },
+    'access': {
+        '()': 'config.settings.SecretRedactingFormatter',
+        'format': '{message}',
+        'style': '{',
+    },
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': _REDACTING_FORMATTERS,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'default',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

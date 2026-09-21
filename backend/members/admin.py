@@ -17,6 +17,7 @@ from .roles import (
     normalize_roles,
     role_labels,
 )
+from .views import invitation_link_lifetime
 
 
 class RoleListFilter(admin.SimpleListFilter):
@@ -275,19 +276,18 @@ class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
     def invitation_link(self, obj):
         if not obj.pk:
             return 'The link appears here once the invitation is saved.'
-        url = f'{settings.FRONTEND_URL}/accept-invite?token={obj.token}'
-        return format_html('<a href="{0}" target="_blank" rel="noopener">{0}</a>', url)
+        # Tokens are stored hashed, so a saved invitation's raw link is gone
+        # for good; resend the invitation (action below) to issue a fresh one.
+        return 'Tokens are stored hashed, so the raw link is shown only right after the invitation is created. Use "Resend invitation emails" to issue a fresh one.'
 
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None
         if not obj.roles:
             obj.roles = 'member'
         if not obj.expires_at:
-            obj.expires_at = timezone.now() + timedelta(days=7)
+            obj.expires_at = timezone.now() + invitation_link_lifetime()
         if not obj.invited_by_id:
             obj.invited_by = request.user
-        if 'token' in form.initial or not obj.token:
-            obj.token = uuid.uuid4()
         super().save_model(request, obj, form, change)
         if is_new:
             from .views import send_invitation_email
@@ -307,9 +307,9 @@ class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
         from .views import send_invitation_email
         sent = failed = 0
         for invitation in queryset.exclude(status='accepted'):
-            invitation.token = uuid.uuid4()
+            invitation.set_token()
             invitation.status = 'pending'
-            invitation.expires_at = timezone.now() + timedelta(days=7)
+            invitation.expires_at = timezone.now() + invitation_link_lifetime()
             invitation.save(update_fields=['token', 'status', 'expires_at'])
             try:
                 send_invitation_email(invitation)

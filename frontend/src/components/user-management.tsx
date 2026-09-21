@@ -753,7 +753,9 @@ interface InvitationRow {
   sent_at: string | null;
   expires_at: string;
   created_at: string;
-  invite_url: string;
+  // The raw link exists only right after create/resend; older rows carry no
+  // link because tokens are stored hashed, so the copy button stays hidden.
+  invite_url: string | null;
 }
 
 const inviteFormInitial = {
@@ -1456,8 +1458,9 @@ export function UserManagement() {
   // ── Print handler ────────────────────────────────────────────────────────
   const handlePrintMemberList = () => {
     const token = localStorage.getItem("access_token");
-    window.open(`${API_URL}/api/members/users/list-pdf/?token=${token}`, "_blank");
-    // Alternatively, fetch with auth header and open blob
+    // Fetch with the Authorization header and open the blob: putting the JWT
+    // in the URL would leak it into browser history and the Referer of any
+    // request the PDF viewer tab makes.
     fetch(`${API_URL}/api/members/users/list-pdf/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -2096,10 +2099,12 @@ export function UserManagement() {
                       </div>
                       {invitation.status !== "accepted" && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url)}
-                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                            Copy link
-                          </button>
+                          {invitation.invite_url && (
+                            <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")}
+                              className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
+                              Copy link
+                            </button>
+                          )}
                           <button type="button" onClick={() => handleInviteAction(invitation.id, "resend")}
                             className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                             Resend

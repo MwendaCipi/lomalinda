@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from .views import CHILDREN_LESSON_SOURCES, _WeeklyLessonParser, first_children_lesson_url
+from .views import CHILDREN_LESSON_SOURCES, _WeeklyLessonParser, first_children_lesson_url, send_invitation_email
 
 
 class WeeklyLessonParserTests(TestCase):
@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, Testimony
+from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, MpesaRefund, Testimony
 
 
 class TestimonyAPITests(APITestCase):
@@ -242,6 +242,211 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(pending.donor_name, 'Samuel Oti Otieno')
 
 
+class MpesaRefundAPITests(APITestCase):
+    def setUp(self):
+        self.treasurer = User.objects.create_user(username='refund_treasurer', password='secure-password')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.member = User.objects.create_user(username='refund_member', password='secure-password')
+        MemberProfile.objects.create(user=self.member, role='member')
+        self.contribution = Contribution.objects.create(
+            amount=Decimal('1500.00'),
+            purpose='Tithe',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+            phone_number='254712345678',
+            donor_name='Grace Wambui',
+        )
+
+    def _refund_url(self):
+        return f'/api/members/treasury/contributions/{self.contribution.id}/refund/'
+
+    @patch('members.views.initiate_b2c_refund')
+    def test_treasurer_can_refund_completed_mpesa_contribution(self, mock_b2c):
+        mock_b2c.return_value = {
+            'ResponseCode': '0',
+            'ResponseDescription': 'Accept the service request successfully.',
+            'ConversationID': 'AG_20260921_0001',
+        }
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {
+            'phone_number': '0712345678',
+            'reason': 'Duplicate offering captured twice.',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        refund = MpesaRefund.objects.get(contribution=self.contribution)
+        self.assertEqual(refund.status, 'accepted')
+        self.assertEqual(refund.amount, Decimal('1500.00'))
+        self.assertEqual(refund.phone_number, '254712345678')
+        self.assertEqual(refund.initiated_by, self.treasurer)
+
+    def test_member_cannot_refund(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    def test_unauthenticated_user_cannot_refund(self):
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    def test_cannot_refund_non_mpesa_contribution(self):
+        self.contribution.payment_method = 'cash'
+        self.contribution.save(update_fields=['payment_method'])
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    def test_cannot_refund_pending_contribution(self):
+        self.contribution.status = 'pending'
+        self.contribution.save(update_fields=['status'])
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    def test_cannot_refund_twice(self):
+        MpesaRefund.objects.create(
+            contribution=self.contribution,
+            amount=self.contribution.amount,
+            phone_number='254712345678',
+            initiated_by=self.treasurer,
+            originator_conversation_id='origin-abc123',
+            status='accepted',
+        )
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MpesaRefund.objects.count(), 1)
+
+    @patch('members.views.initiate_b2c_refund')
+    def test_mpesa_rejection_deletes_refund_and_returns_502(self, mock_b2c):
+        mock_b2c.side_effect = Exception('M-Pesa rejected the request.')
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    @patch('members.views.initiate_b2c_refund')
+    def test_missing_b2c_config_returns_503(self, mock_b2c):
+        from .mpesa import MpesaConfigurationError
+        mock_b2c.side_effect = MpesaConfigurationError('M-Pesa B2C is not configured: missing MPESA_INITIATOR_NAME.')
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(self._refund_url(), {'phone_number': '0712345678'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(MpesaRefund.objects.count(), 0)
+
+    def test_b2c_result_completes_refund(self):
+        refund = MpesaRefund.objects.create(
+            contribution=self.contribution,
+            amount=self.contribution.amount,
+            phone_number='254712345678',
+            initiated_by=self.treasurer,
+            originator_conversation_id='origin-complete-1',
+            status='accepted',
+        )
+        payload = {
+            'OriginatorConversationID': 'origin-complete-1',
+            'ConversationID': 'AG_20260921_0001',
+            'Result': {
+                'ResultType': 0,
+                'ResultCode': 0,
+                'ResultDesc': 'The service request is processed successfully.',
+                'ResultParameters': {
+                    'ResultParameter': [
+                        {'Key': 'TransactionAmount', 'Value': 1500},
+                        {'Key': 'TransactionID', 'Value': 'SJK4Q1XYZ'},
+                    ]
+                },
+            },
+        }
+        response = self.client.post('/api/members/payments/mpesa/b2c/result/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        refund.refresh_from_db()
+        self.assertEqual(refund.status, 'completed')
+        self.assertEqual(refund.transaction_id, 'SJK4Q1XYZ')
+        self.assertIsNotNone(refund.completed_at)
+
+    def test_b2c_result_failure_marks_refund_failed(self):
+        refund = MpesaRefund.objects.create(
+            contribution=self.contribution,
+            amount=self.contribution.amount,
+            phone_number='254712345678',
+            initiated_by=self.treasurer,
+            originator_conversation_id='origin-fail-1',
+            status='accepted',
+        )
+        payload = {
+            'OriginatorConversationID': 'origin-fail-1',
+            'Result': {'ResultCode': 2001, 'ResultDesc': 'The initiator information is invalid.'},
+        }
+        response = self.client.post('/api/members/payments/mpesa/b2c/result/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        refund.refresh_from_db()
+        self.assertEqual(refund.status, 'failed')
+        self.assertIn('invalid', refund.outcome_description)
+
+    def test_b2c_result_for_unknown_conversation_is_still_accepted(self):
+        response = self.client.post('/api/members/payments/mpesa/b2c/result/', {
+            'OriginatorConversationID': 'does-not-exist',
+            'Result': {'ResultCode': 0, 'ResultDesc': 'Processed.'},
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+    def test_refundable_contributions_lists_completed_mpesa_with_refund_state(self):
+        refunded = Contribution.objects.create(
+            amount=Decimal('800.00'), purpose='Camp Offering', status='completed',
+            paid_at=timezone.now(), payment_method='mpesa', phone_number='254701111111',
+            donor_name='Refunded Giver',
+        )
+        MpesaRefund.objects.create(
+            contribution=refunded, amount=refunded.amount, phone_number='254701111111',
+            initiated_by=self.treasurer, originator_conversation_id='origin-ref-list', status='accepted',
+        )
+        bank = Contribution.objects.create(
+            amount=Decimal('900.00'), purpose='Tithe', status='completed',
+            paid_at=timezone.now(), payment_method='bank_transfer',
+        )
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/treasury/refundable-contributions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {row['id'] for row in response.data}
+        self.assertIn(self.contribution.id, ids)
+        self.assertIn(refunded.id, ids)
+        self.assertNotIn(bank.id, ids)
+        by_id = {row['id']: row for row in response.data}
+        self.assertFalse(by_id[self.contribution.id]['refund'])
+        self.assertEqual(by_id[refunded.id]['refund_status'], 'accepted')
+
+    def test_refundable_contributions_requires_treasurer(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/treasury/refundable-contributions/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_treasurer_can_list_refunds_but_member_cannot(self):
+        MpesaRefund.objects.create(
+            contribution=self.contribution,
+            amount=self.contribution.amount,
+            phone_number='254712345678',
+            initiated_by=self.treasurer,
+            originator_conversation_id='origin-list-1',
+            status='accepted',
+        )
+        self.client.force_authenticate(self.member)
+        member_response = self.client.get('/api/members/treasury/refunds/')
+        self.assertEqual(member_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.treasurer)
+        treasurer_response = self.client.get('/api/members/treasury/refunds/')
+        self.assertEqual(treasurer_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(treasurer_response.data), 1)
+        self.assertEqual(treasurer_response.data[0]['contribution_purpose'], 'Tithe')
+
+
 from .models import BusinessMeeting, BusinessMeetingAgenda, CashContribution
 
 class PdfGenerationAPITests(APITestCase):
@@ -425,7 +630,10 @@ class InvitationAPITests(APITestCase):
         self.assertIsNotNone(invitation.sent_at)
         recipient = mock_send.call_args[0][3]
         self.assertEqual(recipient, ['grace@example.com'])
-        self.assertIn(str(invitation.token), mock_send.call_args[0][1])
+        # The email carries the raw token even though the database stores only
+        # its hash: the link in the response must open the same invitation.
+        raw_token = response.data['invite_url'].split('token=')[1]
+        self.assertIn(raw_token, mock_send.call_args[0][1])
 
     def test_a_plain_member_cannot_invite(self):
         self.client.force_authenticate(user=self.member_user)
@@ -447,13 +655,13 @@ class InvitationAPITests(APITestCase):
         Group.objects.get_or_create(name='Administrators')
         invitation = self._invitation()
 
-        lookup = self.client.get(f'/api/members/auth/invitation/verify/?token={invitation.token}')
+        lookup = self.client.get(f'/api/members/auth/invitation/verify/?token={invitation.raw_token}')
         self.assertEqual(lookup.status_code, status.HTTP_200_OK)
         self.assertEqual(lookup.data['email'], 'invitee@example.com')
         self.assertEqual(lookup.data['roles'], ['admin'])
 
         accepted = self.client.post('/api/members/auth/invitation/accept/', {
-            'token': str(invitation.token),
+            'token': str(invitation.raw_token),
             'username': 'grace.wanjiku',
             'password': 'SabbathRest#2026',
             'confirm_password': 'SabbathRest#2026',
@@ -479,7 +687,7 @@ class InvitationAPITests(APITestCase):
 
         # And the link cannot be used twice.
         reuse = self.client.post('/api/members/auth/invitation/accept/', {
-            'token': str(invitation.token),
+            'token': str(invitation.raw_token),
             'username': 'someone.else',
             'password': 'AnotherPass#2026',
             'confirm_password': 'AnotherPass#2026',
@@ -489,7 +697,7 @@ class InvitationAPITests(APITestCase):
     def test_accept_guards_against_bad_input(self):
         invitation = self._invitation()
         mismatch = self.client.post('/api/members/auth/invitation/accept/', {
-            'token': str(invitation.token),
+            'token': str(invitation.raw_token),
             'username': 'grace.wanjiku',
             'password': 'SabbathRest#2026',
             'confirm_password': 'Something#Else1',
@@ -497,7 +705,7 @@ class InvitationAPITests(APITestCase):
         self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
 
         taken = self.client.post('/api/members/auth/invitation/accept/', {
-            'token': str(invitation.token),
+            'token': str(invitation.raw_token),
             'username': 'plain.member',
             'password': 'SabbathRest#2026',
             'confirm_password': 'SabbathRest#2026',
@@ -513,7 +721,7 @@ class InvitationAPITests(APITestCase):
         )
         self.assertEqual(
             self.client.post('/api/members/auth/invitation/accept/', {
-                'token': str(expired.token), 'username': 'late.comer',
+                'token': str(expired.raw_token), 'username': 'late.comer',
                 'password': 'SabbathRest#2026', 'confirm_password': 'SabbathRest#2026',
             }, format='json').status_code,
             status.HTTP_400_BAD_REQUEST,
@@ -528,7 +736,7 @@ class InvitationAPITests(APITestCase):
         revoked.refresh_from_db()
         self.assertEqual(revoked.status, 'revoked')
         self.assertEqual(
-            self.client.get(f'/api/members/auth/invitation/verify/?token={revoked.token}').status_code,
+            self.client.get(f'/api/members/auth/invitation/verify/?token={revoked.raw_token}').status_code,
             status.HTTP_400_BAD_REQUEST,
         )
 
@@ -544,6 +752,35 @@ class InvitationAPITests(APITestCase):
         invitation.refresh_from_db()
         self.assertNotEqual(invitation.token, original_token)
         self.assertEqual(invitation.status, 'pending')
+
+    def test_the_database_stores_only_the_hash(self):
+        invitation = self._invitation()
+
+        raw_token = invitation.raw_token
+        self.assertTrue(raw_token)
+        self.assertNotEqual(invitation.token, raw_token)
+        self.assertEqual(len(invitation.token), 64)
+
+        # The raw link opens the invitation; the stored hash and anything
+        # similar do not, so a leaked database dump cannot revive an invite.
+        self.assertEqual(Invitation.from_token(raw_token).pk, invitation.pk)
+        self.assertIsNone(Invitation.from_token(invitation.token))
+        self.assertIsNone(Invitation.from_token(f'{raw_token}x'))
+
+    def test_the_office_sets_how_long_invitations_last(self):
+        from .models import ChurchSettings
+
+        ChurchSettings.objects.create(invitation_link_lifetime_days=2)
+        self.client.force_authenticate(user=self.admin_user)
+        now = timezone.now()
+        with patch('members.views.timezone.now', return_value=now), patch('members.views.send_mail'):
+            response = self.client.post('/api/members/invitations/', {
+                'email': 'twodays@example.com', 'first_name': 'Grace', 'roles': ['member'],
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        invitation = Invitation.objects.get(email='twodays@example.com')
+        self.assertEqual(invitation.expires_at, now + timedelta(days=2))
 
 
 class ChurchRoleTests(APITestCase):
@@ -721,7 +958,7 @@ class PasswordPolicyTests(APITestCase):
 
     def _accept(self, password, username='policy.user'):
         return self.client.post('/api/members/auth/invitation/accept/', {
-            'token': str(self.invitation.token),
+            'token': str(self.invitation.raw_token),
             'username': username,
             'password': password,
             'confirm_password': password,
@@ -845,6 +1082,57 @@ class EmailBrandingTests(APITestCase):
         self.assertEqual(subject, f'Reset your {self.HEADER_NAME} password')
         self.assertIn(f'your {self.HEADER_NAME} account', body)
         self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
+
+    def test_a_plain_member_invitation_does_not_mention_access(self):
+        """A member carries no special access, so the email announces none.
+
+        Only an invitation that hands out a special role says so; a member (or
+        friend) is simply invited to create their own account.
+        """
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/invitations/', {
+                'email': 'plain.member@example.com', 'first_name': 'Grace', 'roles': ['member'],
+            }, format='json')
+
+        body = mock_send.call_args[0][1]
+        first_sentence = body.split('\n\n')[1]
+        self.assertEqual(
+            first_sentence,
+            f'{self.CHURCH}, has invited you to create your own account as a Member.',
+        )
+        self.assertNotIn('access', body)
+
+    def test_a_friend_invitation_does_not_mention_access_either(self):
+        invitation = Invitation.objects.create(
+            email='plain.friend@example.com', first_name='Grace',
+            account_type='friend', roles='member',
+            expires_at=timezone.now() + timedelta(days=2),
+        )
+        with patch('members.views.send_mail') as mock_send:
+            send_invitation_email(invitation)
+
+        body = mock_send.call_args[0][1]
+        first_sentence = body.split('\n\n')[1]
+        self.assertEqual(
+            first_sentence,
+            f'{self.CHURCH}, has invited you to create your own account as a Friend of SDA Loma Linda.',
+        )
+        self.assertNotIn('access', body)
+
+    def test_a_special_role_invitation_still_names_its_access(self):
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/invitations/', {
+                'email': 'clerk@example.com', 'first_name': 'Grace', 'roles': ['clerk'],
+            }, format='json')
+
+        body = mock_send.call_args[0][1]
+        self.assertIn(
+            f'{self.CHURCH}, has invited you to create your own account as a Member '
+            'with the following access: Church Clerk.',
+            body,
+        )
 
     def test_a_renamed_church_wins_over_the_default(self):
         """The office can rename the church in Church Settings without a code change."""

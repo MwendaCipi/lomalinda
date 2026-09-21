@@ -1,4 +1,5 @@
 import base64
+import uuid
 from datetime import datetime
 from os import environ
 from zoneinfo import ZoneInfo
@@ -17,7 +18,7 @@ def _setting(name):
     return value
 
 
-def _normalize_phone(value):
+def normalize_mpesa_phone(value):
     phone = value.replace(' ', '').replace('-', '')
     if phone.startswith('+254'):
         phone = phone[1:]
@@ -36,7 +37,7 @@ def initiate_stk_push(contribution):
     callback_url = _setting('MPESA_CALLBACK_URL')
     base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
 
-    phone_number = _normalize_phone(contribution.phone_number)
+    phone_number = normalize_mpesa_phone(contribution.phone_number)
     contribution.phone_number = phone_number
     contribution.save(update_fields=['phone_number'])
 
@@ -65,6 +66,67 @@ def initiate_stk_push(contribution):
     if result.get('ResponseCode') != '0':
         raise RuntimeError(result.get('ResponseDescription', 'M-Pesa rejected the request.'))
     return result
+
+
+def _b2c_settings():
+    """B2C payouts need extra credentials the collection APIs never use.
+
+    MPESA_SECURITY_CREDENTIAL is the initiator password encrypted with
+    Safaricom's public certificate (the "M-Pesa initiator security credential"
+    option in the Daraja portal, or the OpenSSL recipe in their B2C docs).
+    In the sandbox, credentials come from the test app page (initiator: testapi).
+    """
+    required = {
+        'MPESA_B2C_SHORTCODE': environ.get('MPESA_B2C_SHORTCODE') or environ.get('MPESA_SHORTCODE'),
+        'MPESA_INITIATOR_NAME': environ.get('MPESA_INITIATOR_NAME'),
+        'MPESA_SECURITY_CREDENTIAL': environ.get('MPESA_SECURITY_CREDENTIAL'),
+        'MPESA_B2C_RESULT_URL': environ.get('MPESA_B2C_RESULT_URL'),
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise MpesaConfigurationError(f'M-Pesa B2C is not configured: missing {", ".join(missing)}.')
+    return required
+
+
+def initiate_b2c_refund(refund):
+    """Request the B2C payout that refunds a member's contribution.
+
+    Daraja accepts the request synchronously but processes the payout
+    asynchronously: the final result (success receipt or failure reason)
+    arrives at MPESA_B2C_RESULT_URL, handled by MpesaB2CResultView.
+    """
+    settings_map = _b2c_settings()
+    base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
+
+    token_response = requests.get(
+        f'{base_url}/oauth/v1/generate?grant_type=client_credentials',
+        auth=(_setting('MPESA_CONSUMER_KEY'), _setting('MPESA_CONSUMER_SECRET')),
+        timeout=15,
+    )
+    token_response.raise_for_status()
+    access_token = token_response.json()['access_token']
+
+    payload = {
+        'OriginatorConversationID': refund.originator_conversation_id or uuid.uuid4().hex,
+        'InitiatorName': settings_map['MPESA_INITIATOR_NAME'],
+        'SecurityCredential': settings_map['MPESA_SECURITY_CREDENTIAL'],
+        'CommandID': 'BusinessPayment',
+        'Amount': int(refund.amount),
+        'PartyA': settings_map['MPESA_B2C_SHORTCODE'],
+        'PartyB': refund.phone_number,
+        'Remarks': f"Refund for contribution {refund.contribution_id}",
+        'QueueTimeOutURL': settings_map['MPESA_B2C_RESULT_URL'],
+        'ResultURL': settings_map['MPESA_B2C_RESULT_URL'],
+        'Occasion': 'Contribution refund',
+    }
+    response = requests.post(
+        f'{base_url}/mpesa/b2c/v3/paymentrequest',
+        json=payload,
+        headers={'Authorization': f'Bearer {access_token}'},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def register_c2b_urls(validation_url=None, confirmation_url=None):

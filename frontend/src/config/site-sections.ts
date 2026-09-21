@@ -1,14 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Baby,
-  BarChart3,
   Book,
   BookOpen,
   Building2,
   Calendar,
   Camera,
   CreditCard,
-  FileText,
   Gift,
   Handshake,
   Heart,
@@ -19,7 +17,6 @@ import {
   Sparkles,
   Sprout,
   Target,
-  TrendingUp,
   Users,
 } from "lucide-react";
 
@@ -204,27 +201,6 @@ export const stewardshipLinks: SectionLink[] = [
     label: "Fund Drives",
     description: "Active fundraising campaigns and how far along they are.",
     icon: Target,
-  },
-  {
-    key: "budget",
-    href: "/support/budget",
-    label: "Church Budget",
-    description: "How the church plans and spends its budget.",
-    icon: BarChart3,
-  },
-  {
-    key: "reports",
-    href: "/support/reports",
-    label: "Live Reports",
-    description: "Up-to-date giving and treasury figures.",
-    icon: TrendingUp,
-  },
-  {
-    key: "periodical-reports",
-    href: "/support/periodical-reports",
-    label: "Periodic Reports",
-    description: "Monthly and quarterly ministry reports.",
-    icon: FileText,
   },
 ];
 

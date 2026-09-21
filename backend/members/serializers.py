@@ -9,7 +9,7 @@ from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
-    GivingPurpose, InKindContribution, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
+    GivingPurpose, InKindContribution, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
@@ -194,7 +194,10 @@ class InvitationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_invite_url(self, obj):
-        return f"{settings.FRONTEND_URL}/accept-invite?token={obj.token}"
+        # The stored token is only a hash, so an invitation read back from the
+        # database cannot be turned into a link; the console gets the real link
+        # in the create/resend responses, while the token is still in memory.
+        return None
 
     def get_invited_by_name(self, obj):
         inviter = obj.invited_by
@@ -250,6 +253,33 @@ class ContributionSerializer(serializers.ModelSerializer):
         model = Contribution
         fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
+
+
+class MpesaRefundSerializer(serializers.ModelSerializer):
+    initiated_by_name = serializers.CharField(source='initiated_by.get_full_name', read_only=True)
+    contribution_purpose = serializers.CharField(source='contribution.purpose', read_only=True)
+    donor_name = serializers.CharField(source='contribution.donor_name', read_only=True)
+    contribution_receipt = serializers.CharField(source='contribution.mpesa_receipt_number', read_only=True)
+    # The URL identifies the contribution; the view injects it on save().
+    contribution = serializers.PrimaryKeyRelatedField(queryset=Contribution.objects.all(), required=False)
+
+    class Meta:
+        model = MpesaRefund
+        fields = (
+            'id', 'contribution', 'amount', 'phone_number', 'reason', 'status',
+            'outcome_description', 'transaction_id', 'initiated_by_name',
+            'contribution_purpose', 'donor_name', 'contribution_receipt', 'completed_at', 'created_at',
+        )
+        read_only_fields = ('id', 'amount', 'status', 'outcome_description', 'transaction_id', 'originator_conversation_id', 'initiated_by_name', 'contribution_purpose', 'completed_at', 'created_at')
+
+    def validate_phone_number(self, value):
+        return validate_phone_number(value)
+
+    def validate(self, data):
+        contribution = data.get('contribution') or getattr(self.instance, 'contribution', None)
+        if contribution and MpesaRefund.objects.filter(contribution=contribution).exists():
+            raise serializers.ValidationError({'contribution': 'This contribution has already been refunded.'})
+        return data
 
 
 class CashContributionSerializer(serializers.ModelSerializer):
@@ -482,6 +512,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
             'board_roles',
+            'invitation_link_lifetime_days',
             'bank_name', 'bank_account_name', 'bank_account_number',
             'bank_branch', 'bank_swift_code', 'bank_paybill_number'
         )

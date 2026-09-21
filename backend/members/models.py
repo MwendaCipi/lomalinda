@@ -1,9 +1,22 @@
+import hashlib
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-import uuid
 
 from .roles import ROLE_CHOICES, normalize_roles
+
+
+def invitation_token_hash(raw_token):
+    """The salted SHA-256 hex digest a raw invitation token is stored as.
+
+    The salt comes from the deployment's SECRET_KEY, so a stolen database dump
+    alone cannot be turned back into working invitation links; an attacker
+    would need the secret too. The digest keeps only the token out of the
+    database — the raw value still travels in the emailed link, exactly as before.
+    """
+    return hashlib.sha256(f'{settings.SECRET_KEY}:invitation:{raw_token}'.encode()).hexdigest()
 
 
 class MemberProfile(models.Model):
@@ -91,6 +104,11 @@ class Invitation(models.Model):
     emailed link to a page where they choose their own username and password,
     then signs in normally. Invitations carry the role(s) and account type the
     account should be created with, so the inviter decides accesses up front.
+
+    The token the link carries is stored only as a salted SHA-256 hash, so a
+    leaked database dump cannot revive a live invitation. Set the token with
+    set_token(raw_token) and look one up with from_token(raw_token); the raw
+    token is never persisted anywhere.
     """
 
     STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('revoked', 'Revoked')]
@@ -100,7 +118,7 @@ class Invitation(models.Model):
     phone_number = models.CharField(max_length=20, blank=True)
     account_type = models.CharField(max_length=20, choices=MemberProfile.ACCOUNT_TYPE_CHOICES, default='member')
     roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes the invited account will hold")
-    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    token = models.CharField(max_length=64, unique=True, editable=False, help_text="SHA-256 hash of the invitation link token")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_invitations')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='invitations')
@@ -111,6 +129,34 @@ class Invitation(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+    # The raw token only ever lives in memory: set_token() keeps it here so the
+    # response that created or resent the invitation can hand the real link to
+    # the inviter, while the database below stores only the hash.
+    raw_token = None
+
+    def save(self, *args, **kwargs):
+        # Every invitation must carry a usable token, even one created in the
+        # Django admin or the console before the form sets one explicitly.
+        if not self.token:
+            self.set_token()
+        super().save(*args, **kwargs)
+
+    def set_token(self, raw_token=None):
+        """Hash a fresh invitation token (or a given one) and store it."""
+        self.raw_token = str(raw_token or uuid.uuid4())
+        self.token = invitation_token_hash(self.raw_token)
+
+    @classmethod
+    def from_token(cls, raw_token):
+        """The invitation a raw link token belongs to, or None.
+
+        The raw token is only ever compared against stored hashes, so neither
+        the value nor a timing side channel reveals anything usable.
+        """
+        if not raw_token:
+            return None
+        return cls.objects.filter(token=invitation_token_hash(raw_token)).first()
 
     def role_codes(self):
         return [code.strip() for code in (self.roles or '').split(',') if code.strip()]
@@ -194,6 +240,38 @@ class Contribution(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class MpesaRefund(models.Model):
+    """A treasurer-initiated B2C payout returning part of a member's contribution.
+
+    A contribution may be refunded in several partial payouts, but the sum of
+    all non-failed refunds must never exceed the contribution amount.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted by M-Pesa'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    contribution = models.ForeignKey(Contribution, on_delete=models.PROTECT, related_name='refunds')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    phone_number = models.CharField(max_length=20, blank=True)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    outcome_description = models.CharField(max_length=255, blank=True)
+    originator_conversation_id = models.CharField(max_length=64, unique=True)
+    conversation_id = models.CharField(max_length=64, blank=True)
+    transaction_id = models.CharField(max_length=64, blank=True)
+    initiated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='mpesa_refunds_initiated')
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Refund {self.amount} to {self.phone_number} for contribution {self.contribution_id} ({self.status})"
 
 
 class CashContribution(models.Model):
@@ -532,6 +610,7 @@ class ChurchSettings(models.Model):
     bank_branch = models.CharField(max_length=120, default='Meru', blank=True)
     bank_swift_code = models.CharField(max_length=50, default='KCBKNEN', blank=True)
     bank_paybill_number = models.CharField(max_length=50, default='522522', blank=True)
+    invitation_link_lifetime_days = models.PositiveIntegerField(default=7, help_text="How many days an emailed invitation link stays usable before it expires")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

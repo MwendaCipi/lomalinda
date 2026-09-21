@@ -41,6 +41,7 @@ export function ChurchSettingsManager() {
   const [bankBranch, setBankBranch] = useState("Meru");
   const [bankSwiftCode, setBankSwiftCode] = useState("KCBKNEN");
   const [bankPaybillNumber, setBankPaybillNumber] = useState("522522");
+  const [invitationLinkLifetimeDays, setInvitationLinkLifetimeDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -77,6 +78,7 @@ export function ChurchSettingsManager() {
           if (data.bank_branch) setBankBranch(data.bank_branch);
           if (data.bank_swift_code) setBankSwiftCode(data.bank_swift_code);
           if (data.bank_paybill_number) setBankPaybillNumber(data.bank_paybill_number);
+          if (data.invitation_link_lifetime_days) setInvitationLinkLifetimeDays(data.invitation_link_lifetime_days);
         }
       })
       .catch(() => {})
@@ -119,6 +121,7 @@ export function ChurchSettingsManager() {
         bank_branch: bankBranch,
         bank_swift_code: bankSwiftCode,
         bank_paybill_number: bankPaybillNumber,
+        invitation_link_lifetime_days: invitationLinkLifetimeDays,
       };
 
       const res = await fetch(`${API_URL}/api/members/church-settings/`, {
@@ -484,6 +487,24 @@ export function ChurchSettingsManager() {
               onChange={(e) => setLiveServiceLink(e.target.value)}
               className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#26352f]">
+              Invitation Link Lifetime (days)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              required
+              value={invitationLinkLifetimeDays}
+              onChange={(e) => setInvitationLinkLifetimeDays(Math.max(1, Number(e.target.value) || 1))}
+              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+            />
+            <p className="mt-1 text-[11px] text-[#617068]">
+              How many days an emailed invitation link stays usable before it expires.
+            </p>
           </div>
         </div>
 

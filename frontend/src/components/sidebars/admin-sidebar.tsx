@@ -25,6 +25,7 @@ import {
   Heart,
   Award,
   BookOpen,
+  Undo2,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -481,6 +482,39 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
                 </div>
                 {isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
               </Link>
+
+              {onSelectTab && !isReconPage ? (
+                <button
+                  type="button"
+                  onClick={() => handleTabClick("refunds")}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
+                    currentTab === "refunds" && !isReconPage
+                      ? "bg-[#26352f] text-white shadow-sm"
+                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Undo2 className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <span>M-Pesa Refunds</span>
+                  </div>
+                  {currentTab === "refunds" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                </button>
+              ) : (
+                <Link
+                  href="/administration?tab=refunds"
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
+                    currentTab === "refunds" && !isReconPage
+                      ? "bg-[#26352f] text-white shadow-sm"
+                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Undo2 className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <span>M-Pesa Refunds</span>
+                  </div>
+                  {currentTab === "refunds" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                </Link>
+              )}
             </nav>
           </div>
         )}

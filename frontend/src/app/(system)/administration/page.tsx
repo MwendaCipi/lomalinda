@@ -14,6 +14,7 @@ import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
 import { ExpenditureManager } from "@/components/expenditure-manager";
+import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
@@ -130,7 +131,7 @@ function AdministrationContent() {
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
   const isFinance = hasAnyRole("finance", "treasurer", "admin", "leader");
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance", "refunds"];
 
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
@@ -437,6 +438,13 @@ function AdministrationContent() {
             {activeTab === "expenditures" && isFinance && (
               <div>
                 <ExpenditureManager />
+              </div>
+            )}
+
+            {/* M-Pesa Refund Manager */}
+            {activeTab === "refunds" && isFinance && (
+              <div>
+                <MpesaRefundManager />
               </div>
             )}
 

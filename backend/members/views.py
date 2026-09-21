@@ -29,11 +29,12 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .mpesa import MpesaConfigurationError, initiate_stk_push
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push, normalize_mpesa_phone
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .roles import (
+    DEFAULT_ROLE,
     ROLE_CODES,
     ROLE_GROUP_MAP,
     check_system_role_change,
@@ -43,7 +44,7 @@ from .roles import (
     sync_role_groups,
     unknown_role_codes,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -88,13 +89,24 @@ def send_enrollment_email(enrollment):
 # Church roles, their labels and their Django groups live in members/roles.py.
 # ROLE_GROUP_MAP is re-exported above for callers such as create_account.
 
-INVITATION_LIFETIME = timedelta(days=7)
-
-
 # How the church is named in every email: subject, body and signature. Church
 # Settings wins (so the office can rename the church without a code change);
 # this is the fallback used when no ChurchSettings row exists yet.
 CHURCH_DEFAULT_NAME = 'SDA Loma Linda, Meru'
+
+# Fallback for churches with no ChurchSettings row: invitations last a week.
+DEFAULT_INVITATION_LIFETIME = timedelta(days=7)
+
+
+def invitation_link_lifetime():
+    """How long an emailed invitation stays usable, as the office configured it."""
+    try:
+        church_settings = ChurchSettings.objects.first()
+        if church_settings and church_settings.invitation_link_lifetime_days:
+            return timedelta(days=church_settings.invitation_link_lifetime_days)
+    except Exception:
+        pass
+    return DEFAULT_INVITATION_LIFETIME
 
 
 def current_church_name():
@@ -131,19 +143,30 @@ def church_name_clause(name=None):
 
 
 def invitation_url(invitation):
-    return f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
+    """The accept-invite link carrying this invitation's raw token.
+
+    Only call this for a token the app itself has just generated: the raw value
+    exists in memory at that moment, while the database keeps only its hash.
+    """
+    return f"{settings.FRONTEND_URL}/accept-invite?token={invitation.raw_token}"
 
 
 def send_invitation_email(invitation):
     church_name = current_church_name()
-    roles_text = role_labels(invitation.role_codes()) or 'Member'
     invitee = invitation.display_name() or 'there'
     account_label = invitation.get_account_type_display()
+    # A plain member or friend carries no special access, so the email does not
+    # mention roles at all; only a special-role invitation names its access.
+    special_codes = [code for code in invitation.role_codes() if code != DEFAULT_ROLE]
+    access_clause = (
+        f" with the following access: {role_labels(special_codes)}."
+        if special_codes else '.'
+    )
     subject = f'You are invited to {church_name_plain(church_name)}'
     body = (
         f"Hello {invitee},\n\n"
-        f"{church_name_clause(church_name)} has invited you to create your own account as a {account_label} "
-        f"with the following access: {roles_text}.\n\n"
+        f"{church_name_clause(church_name)} has invited you to create your own account as a {account_label}"
+        f"{access_clause}\n\n"
         "Click the link below to choose your username and password:\n"
         f"{invitation_url(invitation)}\n\n"
         f"This invitation link is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
@@ -674,10 +697,10 @@ class InvitationListCreateView(generics.ListCreateAPIView):
         invitation.phone_number = str(request.data.get('phone_number') or '').strip()
         invitation.account_type = account_type
         invitation.roles = ', '.join(roles_param)
-        invitation.token = uuid.uuid4()
+        invitation.set_token()
         invitation.status = 'pending'
         invitation.invited_by = request.user
-        invitation.expires_at = timezone.now() + INVITATION_LIFETIME
+        invitation.expires_at = timezone.now() + invitation_link_lifetime()
         invitation.save()
 
         email_sent = False
@@ -729,9 +752,9 @@ class InvitationDetailView(APIView):
             return error
         if invitation.status == 'accepted':
             return Response({'detail': 'That invitation has already been accepted.'}, status=status.HTTP_400_BAD_REQUEST)
-        invitation.token = uuid.uuid4()
+        invitation.set_token()
         invitation.status = 'pending'
-        invitation.expires_at = timezone.now() + INVITATION_LIFETIME
+        invitation.expires_at = timezone.now() + invitation_link_lifetime()
         invitation.save()
         email_sent = False
         try:
@@ -755,13 +778,16 @@ class InvitationVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        invitation = Invitation.objects.filter(token=request.query_params.get('token')).first()
+        invitation = Invitation.from_token(request.query_params.get('token'))
         if invitation is None or invitation.status == 'revoked':
             return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.status == 'accepted':
             return Response({'detail': 'This invitation has already been used. You can sign in with your account.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.expires_at <= timezone.now():
             return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
+        # A plain member/friend invitation has no special access to announce,
+        # so the accept-invite page stays quiet about access for it.
+        special_codes = [code for code in invitation.role_codes() if code != DEFAULT_ROLE]
         return Response({
             'email': invitation.email,
             'first_name': invitation.first_name,
@@ -769,7 +795,7 @@ class InvitationVerifyView(APIView):
             'account_type': invitation.account_type,
             'account_type_display': invitation.get_account_type_display(),
             'roles': invitation.role_codes(),
-            'roles_display': role_labels(invitation.role_codes()),
+            'roles_display': role_labels(special_codes),
             'church_name': current_church_name(),
             'expires_at': invitation.expires_at,
         })
@@ -783,7 +809,7 @@ class InvitationAcceptView(APIView):
     def post(self, request):
         serializer = InvitationAcceptSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        invitation = Invitation.objects.filter(token=serializer.validated_data['token']).first()
+        invitation = Invitation.from_token(serializer.validated_data['token'])
         if invitation is None or invitation.status == 'revoked':
             return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.status == 'accepted':
@@ -1792,6 +1818,122 @@ class MpesaC2BConfirmationView(APIView):
         send_contribution_receipt(contribution)
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
+
+
+class MpesaB2CResultView(APIView):
+    """Receives the async outcome of a B2C refund request from Safaricom."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        payload = request.data or {}
+        originator_conversation_id = payload.get('OriginatorConversationID', '')
+        refund = MpesaRefund.objects.filter(originator_conversation_id=originator_conversation_id).first()
+        if not refund:
+            # Safaricom requires an immediate acknowledgement, even for
+            # payloads we cannot match, or it keeps retrying the callback.
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        result = payload.get('Result', {})
+        result_code = result.get('ResultCode')
+        result_params = {item.get('Key'): item.get('Value') for item in result.get('ResultParameters', {}).get('ResultParameter', [])}
+        refund.conversation_id = payload.get('ConversationID', '') or refund.conversation_id
+        refund.outcome_description = str(result.get('ResultDesc', ''))[:255]
+        refund.transaction_id = str(result_params.get('TransactionID', '') or '')
+        if result_code == 0:
+            refund.status = 'completed'
+            refund.completed_at = timezone.now()
+        else:
+            refund.status = 'failed'
+        refund.save(update_fields=['conversation_id', 'outcome_description', 'transaction_id', 'status', 'completed_at'])
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+class RefundableContributionsView(APIView):
+    """Completed M-Pesa contributions a treasurer can refund, annotated with refund state."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can view refundable contributions.')
+        contributions = (
+            Contribution.objects.filter(status='completed', payment_method='mpesa')
+            .select_related('member')
+            .order_by('-created_at')[:200]
+        )
+        refunds_by_contribution = {r.contribution_id: r for r in MpesaRefund.objects.all()}
+        results = []
+        for c in contributions:
+            donor_name = c.donor_name.strip() if c.donor_name else (c.member.get_full_name() if c.member and c.member.get_full_name() else (c.member.username if c.member else 'Anonymous Giver'))
+            refund = refunds_by_contribution.get(c.id)
+            results.append({
+                'id': c.id,
+                'amount': str(c.amount),
+                'purpose': c.purpose,
+                'donor_name': donor_name,
+                'phone_number': c.phone_number,
+                'mpesa_receipt_number': c.mpesa_receipt_number or '',
+                'paid_at': c.paid_at.isoformat() if c.paid_at else c.created_at.isoformat(),
+                'refund': refund is not None,
+                'refund_status': refund.status if refund else '',
+            })
+        return Response(results)
+
+
+class MpesaRefundListView(generics.ListAPIView):
+    """Treasurer/admin view of all M-Pesa refunds."""
+
+    serializer_class = MpesaRefundSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if not is_treasurer_or_admin(self.request.user):
+            raise PermissionDenied('Only church treasurers or administrators can view M-Pesa refunds.')
+        return MpesaRefund.objects.all()
+
+
+class MpesaRefundView(APIView):
+    """Treasurer-initiated B2C refund of a completed M-Pesa contribution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can refund contributions.')
+        contribution = generics.get_object_or_404(Contribution, pk=pk)
+        if contribution.payment_method != 'mpesa':
+            return Response({'detail': 'Only M-Pesa contributions can be refunded via B2C.'}, status=status.HTTP_400_BAD_REQUEST)
+        if contribution.status != 'completed':
+            return Response({'detail': 'Only completed contributions can be refunded.'}, status=status.HTTP_400_BAD_REQUEST)
+        if MpesaRefund.objects.filter(contribution=contribution).exists():
+            return Response({'detail': 'This contribution has already been refunded.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = MpesaRefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone_number = normalize_mpesa_phone(serializer.validated_data['phone_number'])
+        refund = serializer.save(
+            contribution=contribution,
+            amount=contribution.amount,
+            phone_number=phone_number,
+            initiated_by=request.user,
+            originator_conversation_id=uuid.uuid4().hex,
+        )
+        try:
+            result = initiate_b2c_refund(refund)
+        except MpesaConfigurationError as exc:
+            refund.delete()
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            refund.delete()
+            return Response({'detail': 'M-Pesa rejected the refund request. Verify the credentials and try again.'}, status=status.HTTP_502_BAD_GATEWAY)
+        refund.status = 'accepted' if result.get('ResponseCode') == '0' else 'failed'
+        refund.outcome_description = str(result.get('ResponseDescription', ''))[:255]
+        refund.conversation_id = str(result.get('ConversationID', '') or '')
+        refund.save(update_fields=['status', 'outcome_description', 'conversation_id'])
+        if refund.status != 'accepted':
+            return Response({'detail': result.get('ResponseDescription', 'M-Pesa rejected the refund request.'), 'refund': MpesaRefundSerializer(refund).data}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'detail': 'Refund request accepted by M-Pesa. The member will receive the money shortly.', 'refund': MpesaRefundSerializer(refund).data}, status=status.HTTP_201_CREATED)
 
 
 class PaystackWebhookView(APIView):

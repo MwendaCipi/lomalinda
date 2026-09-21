@@ -30,9 +30,6 @@ function AcceptInviteContent() {
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
-  const [rolesDisplay, setRolesDisplay] = useState("");
-  const [accountTypeDisplay, setAccountTypeDisplay] = useState("");
-  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,9 +53,6 @@ function AcceptInviteContent() {
         if (!response.ok) throw new Error(data.detail || "This invitation link is not valid.");
         setEmail(data.email ?? "");
         setFirstName(data.first_name ?? "");
-        setRolesDisplay(data.roles_display ?? "");
-        setAccountTypeDisplay(data.account_type_display ?? "");
-        if (data.church_name) setChurchName(data.church_name);
       })
       .catch((error) =>
         setLinkError(error instanceof Error ? error.message : "This invitation link is not valid.")
@@ -144,16 +138,6 @@ function AcceptInviteContent() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
           {firstName ? `${firstName}, create your account` : "Create your account"}
         </h1>
-        {!linkError && (
-          <p className="mt-2 text-sm text-[#617068]">
-            {/* 'SDA Loma Linda, Meru, has invited you…' — when the church's own name carries
-                a comma (church, town) the apposition it opens is closed here, exactly as the
-                invitation email words it. */}
-            {churchName.includes(",") ? `${churchName},` : churchName}
-            {accountTypeDisplay ? ` has invited you to join as a ${accountTypeDisplay}` : " has invited you to join"}
-            {rolesDisplay ? ` with access as ${rolesDisplay}` : ""}. Choose your own username and password below.
-          </p>
-        )}
         {email && !linkError && <p className="mt-2 text-xs text-[#617068]">Invitation email: {email}</p>}
 
         {loading && !linkError && <p className="mt-6 text-sm text-[#617068]">Checking your invitation…</p>}
