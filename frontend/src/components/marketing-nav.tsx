@@ -72,10 +72,10 @@ export function MarketingNav() {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="font-bold text-white text-sm sm:text-base tracking-tight leading-tight truncate">
-              SDA Loma Linda
+              Seventh-day Adventist Church
             </span>
             <span className="text-white/75 text-[11px] sm:text-xs leading-tight truncate">
-              Seventh-day Adventist Church
+              Loma Linda
             </span>
           </div>
         </Link>
