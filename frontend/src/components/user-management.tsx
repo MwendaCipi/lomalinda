@@ -1535,8 +1535,8 @@ export function UserManagement() {
                 <th className="pb-3 font-bold w-8">#</th>
                 <th className="pb-3 font-bold">Name</th>
                 <th className="pb-3 font-bold">Contact</th>
-                <th className="pb-3 font-bold">Role</th>
                 <th className="pb-3 font-bold">Sex</th>
+                <th className="pb-3 font-bold">Role</th>
                 <th className="pb-3 text-right font-bold">Actions</th>
               </tr>
             </thead>
