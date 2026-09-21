@@ -226,7 +226,7 @@ export function NextGatheringCard() {
         ) : (
           <>
             <p className="mt-3 text-lg leading-7 text-[#3d5148]">{gathering.time}</p>
-            <p className="mt-3 text-sm text-[#617068]">{gathering.online ? "Online" : "Loma Linda SDA Church grounds"}</p>
+            <p className="mt-3 text-sm text-[#617068]">{gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}</p>
           </>
         )}
       </div>
