@@ -739,6 +739,49 @@ const MINISTRIES = [
   { value: "children_ministry", label: "Children" },
 ];
 
+// Access levels an invited account can be created with (mirrors MemberProfile.ROLE_CHOICES).
+const INVITE_ROLES = [
+  { value: "member", label: "Member" },
+  { value: "clerk", label: "Church Clerk" },
+  { value: "elder", label: "Elder / First Elder" },
+  { value: "leader", label: "Church Leader" },
+  { value: "admin", label: "Administrator" },
+  { value: "treasurer", label: "Treasurer" },
+  { value: "finance", label: "Finance Team" },
+  { value: "youth_leader", label: "Youth Leader" },
+  { value: "choir_director", label: "Choir Director" },
+  { value: "children_ministry", label: "Children Leader" },
+  { value: "men_ministry", label: "AMM Leader" },
+  { value: "women_ministry", label: "AWM Leader" },
+  { value: "chaplaincy", label: "Chaplain" },
+];
+
+interface InvitationRow {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  account_type: string;
+  account_type_display: string;
+  roles: string;
+  role_codes: string[];
+  status: "pending" | "accepted" | "revoked";
+  invited_by_name: string;
+  sent_at: string | null;
+  expires_at: string;
+  created_at: string;
+  invite_url: string;
+}
+
+const inviteFormInitial = {
+  email: "",
+  first_name: "",
+  last_name: "",
+  phone_number: "",
+  account_type: "member",
+  role: "member",
+};
+
 const initialForm = {
   name: "",
   gender: "",
@@ -799,6 +842,11 @@ export function UserManagement() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
+  const [invitations, setInvitations] = useState<InvitationRow[]>([]);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteFormData, setInviteFormData] = useState(inviteFormInitial);
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [lastInviteLink, setLastInviteLink] = useState("");
 
   const friendFormInitial = {
     name: "",
@@ -895,8 +943,83 @@ export function UserManagement() {
       .finally(() => setLoading(false));
   };
 
+  const fetchInvitations = () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/members/invitations/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setInvitations(Array.isArray(data) ? data : data.results ?? []))
+      .catch(() => setInvitations([]));
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteSubmitting(true);
+    setMessage(null);
+    setLastInviteLink("");
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/invitations/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteFormData.email.trim(),
+          first_name: inviteFormData.first_name.trim(),
+          last_name: inviteFormData.last_name.trim(),
+          phone_number: (inviteFormData.phone_number || "").replace(/\D/g, "").slice(0, 10),
+          account_type: inviteFormData.account_type,
+          roles: [inviteFormData.role],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Could not send the invitation.");
+      setLastInviteLink(data.invite_url || "");
+      setMessage({
+        type: "success",
+        text: data.email_sent
+          ? `Invitation emailed to ${data.email}. They choose their own username and password from the link.`
+          : data.detail || "Invitation created, but the email could not be sent. Share the link below instead.",
+        credentials: data.invite_url,
+      });
+      setInviteFormData(inviteFormInitial);
+      setShowInviteForm(false);
+      fetchInvitations();
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Could not send the invitation." });
+    } finally {
+      setInviteSubmitting(false);
+    }
+  };
+
+  const handleInviteAction = async (id: number, action: "resend" | "revoke") => {
+    const token = localStorage.getItem("access_token");
+    setMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/members/invitations/${id}/`, action === "resend"
+        ? { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
+        : { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not update the invitation.");
+      if (action === "resend") {
+        setMessage({
+          type: "success",
+          text: data.email_sent ? "Invitation email re-sent." : data.detail || "Email could not be sent. Share the link below instead.",
+          credentials: data.invite_url,
+        });
+      } else {
+        setMessage({ type: "success", text: data.detail || "Invitation withdrawn." });
+      }
+      fetchInvitations();
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Could not update the invitation." });
+    }
+  };
+
   useEffect(() => {
     fetchMembers();
+    fetchInvitations();
     fetch(`${API_URL}/api/members/church-settings/`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setChurchName(data?.church_name || "this church"))
@@ -1584,6 +1707,17 @@ export function UserManagement() {
           >
             + Add New Friend
           </button>
+          <button
+            onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
+            className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+          >
+            ✉️ Invite by Email
+            {invitations.filter((invitation) => invitation.status === "pending").length > 0 && (
+              <span className="ml-2 rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148]">
+                {invitations.filter((invitation) => invitation.status === "pending").length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1856,6 +1990,143 @@ export function UserManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Invite by Email Modal ══ */}
+      {showInviteForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="invite-member-title"
+            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8">
+            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+              <div>
+                <h3 id="invite-member-title" className="text-xl font-bold text-[#26352f]">Invite by Email</h3>
+                <p className="mt-0.5 text-xs text-[#617068]">
+                  They receive a link, choose their own username and password, then sign in.
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowInviteForm(false)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+            </div>
+
+            <form onSubmit={handleSendInvite} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#26352f]">Email Address *</label>
+                <input type="email" required placeholder="leader@example.com" value={inviteFormData.email}
+                  onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">First Name *</label>
+                  <input type="text" required value={inviteFormData.first_name}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, first_name: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Last Name</label>
+                  <input type="text" value={inviteFormData.last_name}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, last_name: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Phone Number</label>
+                  <input type="tel" placeholder="07XXXXXXXX" value={inviteFormData.phone_number}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, phone_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Account Type</label>
+                  <select value={inviteFormData.account_type}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, account_type: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                    <option value="member">Church Member</option>
+                    <option value="friend">Friend of the Church</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-[#26352f]">Access / Role</label>
+                  <select value={inviteFormData.role}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, role: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                    {INVITE_ROLES.map((role) => (
+                      <option key={role.value} value={role.value}>{role.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {message && (
+                <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>
+                  {message.text}
+                  {lastInviteLink && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <code className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-[#26352f] select-all">
+                        {lastInviteLink}
+                      </code>
+                      <button type="button" onClick={() => navigator.clipboard?.writeText(lastInviteLink)}
+                        className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
+                        Copy link
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="submit" disabled={inviteSubmitting}
+                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60">
+                  {inviteSubmitting ? "Sending…" : "Send Invitation"}
+                </button>
+                <button type="button" onClick={() => setShowInviteForm(false)}
+                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  Cancel
+                </button>
+              </div>
+            </form>
+
+            {/* Pending, accepted and withdrawn invitations */}
+            {invitations.length > 0 && (
+              <div className="mt-6 border-t border-[#dfdbd1] pt-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#617068]">Invitations</p>
+                <div className="mt-3 space-y-2">
+                  {invitations.map((invitation) => (
+                    <div key={invitation.id} className="rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-[#26352f]">
+                            {[invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email}
+                          </p>
+                          <p className="truncate text-[11px] text-[#617068]">
+                            {invitation.email} · {invitation.role_codes.join(", ") || "member"} · {invitation.account_type_display}
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
+                          {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Accepted" : "Withdrawn"}
+                        </span>
+                      </div>
+                      {invitation.status !== "accepted" && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url)}
+                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
+                            Copy link
+                          </button>
+                          <button type="button" onClick={() => handleInviteAction(invitation.id, "resend")}
+                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
+                            Resend
+                          </button>
+                          <button type="button" onClick={() => handleInviteAction(invitation.id, "revoke")}
+                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]">
+                            Withdraw
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

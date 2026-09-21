@@ -4,22 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import get_tenant_model, schema_context
 
 from members.models import MemberProfile
-from members.views import generate_temporary_password
-
-# Church role code -> default Django group (created by migration 0009 / seed_defaults)
-ROLE_GROUP_MAP = {
-    'admin': 'Administrators',
-    'leader': 'Church Leaders',
-    'elder': 'Church Leaders',
-    'clerk': 'Church Leaders',
-    'treasurer': 'Finance Team',
-    'finance': 'Finance Team',
-    'choir_director': 'Choir Director',
-    'children_ministry': 'Children Ministry',
-    'men_ministry': 'Adventist Men Ministries',
-    'women_ministry': 'Adventist Women Ministries',
-    'chaplaincy': 'Chaplaincy',
-}
+from members.views import ROLE_GROUP_MAP, generate_temporary_password
 
 
 class Command(BaseCommand):

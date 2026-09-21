@@ -12,9 +12,12 @@ function LoginContent() {
   // Read ?next= after mount: useSearchParams would force this page to prerender as
   // an empty loading shell, so the sign-in form would not be in the served HTML.
   const [nextParam, setNextParam] = useState<string | null>(null);
+  const [justCreated, setJustCreated] = useState(false);
 
   useEffect(() => {
-    setNextParam(new URLSearchParams(window.location.search).get("next"));
+    const query = new URLSearchParams(window.location.search);
+    setNextParam(query.get("next"));
+    setJustCreated(query.get("created") === "1");
   }, []);
 
   const [username, setUsername] = useState("");
@@ -55,6 +58,11 @@ function LoginContent() {
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back</h1>
         <p className="mt-2 text-sm text-[#617068]">Sign in to your Loma Linda account.</p>
+        {justCreated && (
+          <p className="mt-4 rounded-xl bg-[#eef2ed] p-3 text-xs text-[#3d5148] sm:text-sm">
+            Your account is ready. Sign in with the username and password you just chose.
+          </p>
+        )}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm font-medium">
             Username

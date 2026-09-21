@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -45,10 +45,10 @@ class WeeklyLessonParserTests(TestCase):
 
 from rest_framework.test import APITestCase
 from rest_framework import status
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import Contribution, MemberProfile, Testimony
+from .models import Contribution, Invitation, MemberProfile, Testimony
 
 
 class TestimonyAPITests(APITestCase):
@@ -381,3 +381,166 @@ class PdfGenerationAPITests(APITestCase):
         self.assertEqual(acc1_reloaded.balance, Decimal('57000.00'))
 
 
+
+
+class InvitationAPITests(APITestCase):
+    """Email invitations: an admin invites, the invitee sets their own password."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user('linda.admin', 'linda.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin_user, role='admin', roles='admin', phone_number='0700000001')
+        self.member_user = User.objects.create_user('plain.member', 'plain@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member_user, role='member', roles='member')
+
+    def _invitation(self, **overrides):
+        values = {
+            'email': 'invitee@example.com',
+            'first_name': 'Grace',
+            'last_name': 'Wanjiku',
+            'roles': 'admin',
+            'account_type': 'member',
+            'expires_at': timezone.now() + timedelta(days=7),
+        }
+        values.update(overrides)
+        return Invitation.objects.create(**values)
+
+    def test_admin_can_invite_and_the_email_carries_the_link(self):
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            response = self.client.post('/api/members/invitations/', {
+                'email': 'grace@example.com',
+                'first_name': 'Grace',
+                'last_name': 'Wanjiku',
+                'roles': ['admin'],
+                'account_type': 'member',
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['email_sent'])
+        self.assertIn('/accept-invite?token=', response.data['invite_url'])
+        invitation = Invitation.objects.get(email='grace@example.com')
+        self.assertEqual(invitation.status, 'pending')
+        self.assertEqual(invitation.role_codes(), ['admin'])
+        self.assertEqual(invitation.invited_by, self.admin_user)
+        self.assertIsNotNone(invitation.sent_at)
+        recipient = mock_send.call_args[0][3]
+        self.assertEqual(recipient, ['grace@example.com'])
+        self.assertIn(str(invitation.token), mock_send.call_args[0][1])
+
+    def test_a_plain_member_cannot_invite(self):
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.post('/api/members/invitations/', {
+            'email': 'someone@example.com', 'first_name': 'Someone',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Invitation.objects.count(), 0)
+
+    def test_inviting_an_existing_account_email_is_refused(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post('/api/members/invitations/', {
+            'email': 'plain@example.com', 'first_name': 'Plain',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already exists', response.data['email'])
+
+    def test_invitee_sets_a_password_and_can_then_sign_in(self):
+        Group.objects.get_or_create(name='Administrators')
+        invitation = self._invitation()
+
+        lookup = self.client.get(f'/api/members/auth/invitation/verify/?token={invitation.token}')
+        self.assertEqual(lookup.status_code, status.HTTP_200_OK)
+        self.assertEqual(lookup.data['email'], 'invitee@example.com')
+        self.assertEqual(lookup.data['roles'], ['admin'])
+
+        accepted = self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(invitation.token),
+            'username': 'grace.wanjiku',
+            'password': 'SabbathRest#2026',
+            'confirm_password': 'SabbathRest#2026',
+        }, format='json')
+        self.assertEqual(accepted.status_code, status.HTTP_201_CREATED)
+
+        user = User.objects.get(username='grace.wanjiku')
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.email, 'invitee@example.com')
+        self.assertEqual(user.member_profile.roles, 'admin')
+        self.assertIn('Administrators', [group.name for group in user.groups.all()])
+
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'accepted')
+        self.assertEqual(invitation.user, user)
+
+        # The whole point: the invited person signs in with what they chose.
+        token_response = self.client.post('/api/auth/token/', {
+            'username': 'grace.wanjiku', 'password': 'SabbathRest#2026',
+        }, format='json')
+        self.assertEqual(token_response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', token_response.data)
+
+        # And the link cannot be used twice.
+        reuse = self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(invitation.token),
+            'username': 'someone.else',
+            'password': 'AnotherPass#2026',
+            'confirm_password': 'AnotherPass#2026',
+        }, format='json')
+        self.assertEqual(reuse.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_accept_guards_against_bad_input(self):
+        invitation = self._invitation()
+        mismatch = self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(invitation.token),
+            'username': 'grace.wanjiku',
+            'password': 'SabbathRest#2026',
+            'confirm_password': 'Something#Else1',
+        }, format='json')
+        self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
+
+        taken = self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(invitation.token),
+            'username': 'plain.member',
+            'password': 'SabbathRest#2026',
+            'confirm_password': 'SabbathRest#2026',
+        }, format='json')
+        self.assertEqual(taken.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', taken.data)
+
+    def test_expired_and_revoked_links_are_refused(self):
+        expired = self._invitation(email='late@example.com', expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(
+            self.client.get(f'/api/members/auth/invitation/verify/?token={expired.token}').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            self.client.post('/api/members/auth/invitation/accept/', {
+                'token': str(expired.token), 'username': 'late.comer',
+                'password': 'SabbathRest#2026', 'confirm_password': 'SabbathRest#2026',
+            }, format='json').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        revoked = self._invitation(email='revoked@example.com')
+        self.client.force_authenticate(user=self.admin_user)
+        self.assertEqual(
+            self.client.delete(f'/api/members/invitations/{revoked.pk}/').status_code,
+            status.HTTP_200_OK,
+        )
+        revoked.refresh_from_db()
+        self.assertEqual(revoked.status, 'revoked')
+        self.assertEqual(
+            self.client.get(f'/api/members/auth/invitation/verify/?token={revoked.token}').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_resend_issues_a_fresh_link(self):
+        invitation = self._invitation(email='resend@example.com')
+        original_token = invitation.token
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            response = self.client.post(f'/api/members/invitations/{invitation.pk}/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['email_sent'])
+        mock_send.assert_called_once()
+        invitation.refresh_from_db()
+        self.assertNotEqual(invitation.token, original_token)
+        self.assertEqual(invitation.status, 'pending')

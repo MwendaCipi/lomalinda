@@ -86,6 +86,47 @@ class EnrollmentRequest(models.Model):
         return self.email
 
 
+class Invitation(models.Model):
+    """An email invitation to create a church account.
+
+    A church administrator invites someone by email; the invitee follows the
+    emailed link to a page where they choose their own username and password,
+    then signs in normally. Invitations carry the role(s) and account type the
+    account should be created with, so the inviter decides accesses up front.
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('revoked', 'Revoked')]
+    email = models.EmailField()
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    account_type = models.CharField(max_length=20, choices=MemberProfile.ACCOUNT_TYPE_CHOICES, default='member')
+    roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes the invited account will hold")
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_invitations')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='invitations')
+    sent_at = models.DateTimeField(null=True, blank=True, help_text="When the invitation email was last sent")
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def role_codes(self):
+        return [code.strip() for code in (self.roles or '').split(',') if code.strip()]
+
+    def display_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def is_usable(self):
+        return self.status == 'pending' and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f"{self.email} ({self.get_status_display()})"
+
+
 class Announcement(models.Model):
     VISIBILITY_CHOICES = [('public', 'Public'), ('members', 'Members only')]
     ACTION_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]

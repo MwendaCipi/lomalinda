@@ -1,4 +1,6 @@
+import re
 from decimal import Decimal
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
@@ -6,7 +8,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign,
+    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
     GivingPurpose, InKindContribution, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
@@ -157,6 +159,56 @@ class EnrollmentCompleteSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError('You must agree to the Privacy Policy.')
         return value
+
+
+class InvitationSerializer(serializers.ModelSerializer):
+    """Read/summary form of an invitation, used by the church admin console."""
+
+    invited_by_name = serializers.SerializerMethodField()
+    role_codes = serializers.SerializerMethodField()
+    account_type_display = serializers.CharField(source='get_account_type_display', read_only=True)
+    invite_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Invitation
+        fields = (
+            'id', 'email', 'first_name', 'last_name', 'phone_number',
+            'account_type', 'account_type_display', 'roles', 'role_codes',
+            'status', 'invited_by_name', 'sent_at', 'accepted_at',
+            'expires_at', 'created_at', 'invite_url',
+        )
+        read_only_fields = fields
+
+    def get_invite_url(self, obj):
+        return f"{settings.FRONTEND_URL}/accept-invite?token={obj.token}"
+
+    def get_invited_by_name(self, obj):
+        inviter = obj.invited_by
+        if not inviter:
+            return ''
+        return f"{inviter.first_name} {inviter.last_name}".strip() or inviter.username
+
+    def get_role_codes(self, obj):
+        return obj.role_codes()
+
+
+class InvitationAcceptSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    username = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    def validate_username(self, value):
+        username = value.strip()
+        if not re.match(r'^[\w.@+-]+$', username):
+            raise serializers.ValidationError('Use letters, numbers and the characters . @ + - _ only.')
+        return username
+
+    def validate(self, attrs):
+        confirm = attrs.get('confirm_password')
+        if confirm and confirm != attrs['password']:
+            raise serializers.ValidationError({'confirm_password': 'The two passwords do not match.'})
+        return attrs
 
 
 class AnnouncementResponseSerializer(serializers.ModelSerializer):

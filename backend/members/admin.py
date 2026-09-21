@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -117,6 +117,68 @@ class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ('title', 'visibility', 'published', 'expires_at', 'created_at')
     list_filter = ('visibility', 'published', 'expires_at', 'created_at')
     search_fields = ('title', 'text')
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    """Platform console: invite a church administrator without a shell.
+
+    Saving a new invitation emails the invitation link, so the superuser can
+    onboard the first church administrator straight from this page.
+    """
+
+    list_display = ('email', 'first_name', 'last_name', 'account_type', 'roles', 'status', 'sent_at', 'expires_at')
+    list_filter = ('status', 'account_type', 'created_at')
+    search_fields = ('email', 'first_name', 'last_name')
+    readonly_fields = ('token', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at')
+    actions = ['resend_invitations', 'revoke_invitations']
+
+    def save_model(self, request, obj, form, change):
+        is_new = obj.pk is None
+        if not obj.roles:
+            obj.roles = 'member'
+        if not obj.expires_at:
+            obj.expires_at = timezone.now() + timedelta(days=7)
+        if not obj.invited_by_id:
+            obj.invited_by = request.user
+        if 'token' in form.initial or not obj.token:
+            obj.token = uuid.uuid4()
+        super().save_model(request, obj, form, change)
+        if is_new:
+            from .views import send_invitation_email
+            try:
+                send_invitation_email(obj)
+                obj.sent_at = timezone.now()
+                obj.save(update_fields=['sent_at'])
+                self.message_user(request, f'Invitation emailed to {obj.email}.')
+            except Exception:
+                self.message_user(
+                    request,
+                    'Invitation saved, but the email could not be sent. Check the EMAIL_* settings, then use the resend action.',
+                )
+
+    @admin.action(description='Resend invitation emails')
+    def resend_invitations(self, request, queryset):
+        from .views import send_invitation_email
+        sent = failed = 0
+        for invitation in queryset.exclude(status='accepted'):
+            invitation.token = uuid.uuid4()
+            invitation.status = 'pending'
+            invitation.expires_at = timezone.now() + timedelta(days=7)
+            invitation.save(update_fields=['token', 'status', 'expires_at'])
+            try:
+                send_invitation_email(invitation)
+                invitation.sent_at = timezone.now()
+                invitation.save(update_fields=['sent_at'])
+                sent += 1
+            except Exception:
+                failed += 1
+        self.message_user(request, f'{sent} invitation email(s) sent, {failed} failed.')
+
+    @admin.action(description='Revoke selected invitations')
+    def revoke_invitations(self, request, queryset):
+        updated = queryset.exclude(status='accepted').update(status='revoked')
+        self.message_user(request, f'{updated} invitation(s) revoked.')
 
 
 @admin.register(ChurchSettings)

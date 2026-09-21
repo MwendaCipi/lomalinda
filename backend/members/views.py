@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
@@ -28,10 +28,10 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -54,6 +54,74 @@ def send_enrollment_email(enrollment):
         [enrollment.email],
         fail_silently=True,
     )
+
+
+# Church role code -> default Django group (kept in step with migration 0009 / seed_defaults)
+ROLE_GROUP_MAP = {
+    'admin': 'Administrators',
+    'leader': 'Church Leaders',
+    'elder': 'Church Leaders',
+    'clerk': 'Church Leaders',
+    'treasurer': 'Finance Team',
+    'finance': 'Finance Team',
+    'choir_director': 'Choir Director',
+    'children_ministry': 'Children Ministry',
+    'men_ministry': 'Adventist Men Ministries',
+    'women_ministry': 'Adventist Women Ministries',
+    'chaplaincy': 'Chaplaincy',
+}
+
+INVITATION_LIFETIME = timedelta(days=7)
+
+
+def current_church_name():
+    """Church name for emails/PDFs, falling back to the deployed church's name."""
+    try:
+        church_settings = ChurchSettings.objects.first()
+        if church_settings and church_settings.church_name:
+            return church_settings.church_name
+    except Exception:
+        pass
+    return 'Loma Linda SDA Church, Meru'
+
+
+def role_labels(role_codes):
+    labels = dict(MemberProfile.ROLE_CHOICES)
+    return ', '.join(labels.get(code, code.replace('_', ' ').title()) for code in role_codes)
+
+
+def invitation_url(invitation):
+    return f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
+
+
+def send_invitation_email(invitation):
+    church_name = current_church_name()
+    roles_text = role_labels(invitation.role_codes()) or 'Member'
+    invitee = invitation.display_name() or 'there'
+    account_label = invitation.get_account_type_display()
+    subject = f'You are invited to {church_name}'
+    body = (
+        f"Hello {invitee},\n\n"
+        f"{church_name} has invited you to create your own account as a {account_label} "
+        f"with the following access: {roles_text}.\n\n"
+        "Click the link below to choose your username and password:\n"
+        f"{invitation_url(invitation)}\n\n"
+        f"This invitation link is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
+        "Once your account is ready you can sign in at "
+        f"{settings.FRONTEND_URL}/login\n\n"
+        f"Warm regards,\n{church_name}"
+    )
+    send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [invitation.email], fail_silently=False)
+
+
+def can_manage_invitations(user):
+    """Church administrators, clerks and leaders may invite accounts."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('admin', 'clerk', 'leader'))
 
 
 def send_password_reset_email(user, uid, token):
@@ -484,6 +552,236 @@ class EnrollmentCompleteView(APIView):
         enrollment.privacy_accepted_at = timezone.now()
         enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at'])
         return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
+
+
+class InvitationListCreateView(generics.ListCreateAPIView):
+    """Invite someone by email to create their own church account.
+
+    The inviter chooses the account type and role(s); the invitee follows the
+    emailed link to pick a username and password, then signs in normally.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = InvitationSerializer
+
+    def get_queryset(self):
+        if not can_manage_invitations(self.request.user):
+            return Invitation.objects.none()
+        return Invitation.objects.all()
+
+    def create(self, request, *args, **kwargs):
+        if not can_manage_invitations(request.user):
+            return Response({'detail': 'Only church administrators, clerks or leaders can invite accounts.'}, status=status.HTTP_403_FORBIDDEN)
+
+        email = str(request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'email': 'Enter an email address to invite.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_email(email)
+        except Exception:
+            return Response({'email': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response({'email': 'An account already exists for this email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        first_name = str(request.data.get('first_name') or '').strip()
+        last_name = str(request.data.get('last_name') or '').strip()
+        raw_name = str(request.data.get('name') or request.data.get('full_name') or '').strip()
+        if raw_name and not (first_name and last_name):
+            parts = raw_name.split()
+            if len(parts) == 1:
+                first_name, last_name = parts[0], ''
+            elif len(parts) == 2:
+                first_name, last_name = parts[0], parts[1]
+            else:
+                first_name, last_name = ' '.join(parts[:-1]), parts[-1]
+
+        if not first_name:
+            return Response({'first_name': 'Enter the name of the person you are inviting.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        roles_param = request.data.get('roles')
+        if isinstance(roles_param, str):
+            roles_param = [code.strip() for code in roles_param.split(',') if code.strip()]
+        if not roles_param:
+            roles_param = [str(request.data.get('role') or 'member').strip() or 'member']
+        valid_roles = {code for code, _ in MemberProfile.ROLE_CHOICES}
+        unknown = [code for code in roles_param if code not in valid_roles]
+        if unknown:
+            return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        account_type = str(request.data.get('account_type') or 'member').strip()
+        if account_type not in ('member', 'friend'):
+            account_type = 'member'
+
+        invitation = Invitation.objects.filter(email__iexact=email, status='pending').first()
+        if invitation is None:
+            invitation = Invitation(email=email)
+        invitation.first_name = first_name
+        invitation.last_name = last_name
+        invitation.phone_number = str(request.data.get('phone_number') or '').strip()
+        invitation.account_type = account_type
+        invitation.roles = ', '.join(roles_param)
+        invitation.token = uuid.uuid4()
+        invitation.status = 'pending'
+        invitation.invited_by = request.user
+        invitation.expires_at = timezone.now() + INVITATION_LIFETIME
+        invitation.save()
+
+        email_sent = False
+        try:
+            send_invitation_email(invitation)
+            email_sent = True
+            invitation.sent_at = timezone.now()
+            invitation.save(update_fields=['sent_at'])
+        except Exception:
+            email_sent = False
+
+        payload = InvitationSerializer(invitation).data
+        payload['invite_url'] = invitation_url(invitation)
+        payload['email_sent'] = email_sent
+        if not email_sent:
+            payload['detail'] = (
+                'The invitation was created but the email could not be sent. '
+                'Share the invitation link with them directly instead.'
+            )
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class InvitationDetailView(APIView):
+    """Withdraw a pending invitation, or resend its email."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get(self, request, pk):
+        if not can_manage_invitations(request.user):
+            return None, Response({'detail': 'Only church administrators, clerks or leaders can manage invitations.'}, status=status.HTTP_403_FORBIDDEN)
+        invitation = Invitation.objects.filter(pk=pk).first()
+        if invitation is None:
+            return None, Response({'detail': 'Invitation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return invitation, None
+
+    def delete(self, request, pk):
+        invitation, error = self._get(request, pk)
+        if error:
+            return error
+        if invitation.status == 'accepted':
+            return Response({'detail': 'That invitation has already been accepted.'}, status=status.HTTP_400_BAD_REQUEST)
+        invitation.status = 'revoked'
+        invitation.save(update_fields=['status'])
+        return Response({'detail': 'Invitation withdrawn.'})
+
+    def post(self, request, pk):
+        invitation, error = self._get(request, pk)
+        if error:
+            return error
+        if invitation.status == 'accepted':
+            return Response({'detail': 'That invitation has already been accepted.'}, status=status.HTTP_400_BAD_REQUEST)
+        invitation.token = uuid.uuid4()
+        invitation.status = 'pending'
+        invitation.expires_at = timezone.now() + INVITATION_LIFETIME
+        invitation.save()
+        email_sent = False
+        try:
+            send_invitation_email(invitation)
+            email_sent = True
+            invitation.sent_at = timezone.now()
+            invitation.save(update_fields=['sent_at'])
+        except Exception:
+            email_sent = False
+        payload = InvitationSerializer(invitation).data
+        payload['invite_url'] = invitation_url(invitation)
+        payload['email_sent'] = email_sent
+        if not email_sent:
+            payload['detail'] = 'The invitation is ready, but the email could not be sent. Share the link directly instead.'
+        return Response(payload)
+
+
+class InvitationVerifyView(APIView):
+    """Public: is this invitation link still usable, and who is it for?"""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        invitation = Invitation.objects.filter(token=request.query_params.get('token')).first()
+        if invitation is None or invitation.status == 'revoked':
+            return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
+        if invitation.status == 'accepted':
+            return Response({'detail': 'This invitation has already been used. You can sign in with your account.'}, status=status.HTTP_400_BAD_REQUEST)
+        if invitation.expires_at <= timezone.now():
+            return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'email': invitation.email,
+            'first_name': invitation.first_name,
+            'last_name': invitation.last_name,
+            'account_type': invitation.account_type,
+            'account_type_display': invitation.get_account_type_display(),
+            'roles': invitation.role_codes(),
+            'roles_display': role_labels(invitation.role_codes()),
+            'church_name': current_church_name(),
+            'expires_at': invitation.expires_at,
+        })
+
+
+class InvitationAcceptView(APIView):
+    """Public: the invitee sets their own username and password."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = InvitationAcceptSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invitation = Invitation.objects.filter(token=serializer.validated_data['token']).first()
+        if invitation is None or invitation.status == 'revoked':
+            return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
+        if invitation.status == 'accepted':
+            return Response({'detail': 'This invitation has already been used. You can sign in with your account.'}, status=status.HTTP_400_BAD_REQUEST)
+        if invitation.expires_at <= timezone.now():
+            return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        username = serializer.validated_data['username'].strip()
+        password = serializer.validated_data['password']
+        if User.objects.filter(username__iexact=username).exists():
+            return Response({'username': 'That username is already taken. Please choose another one.'}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email__iexact=invitation.email).exists():
+            return Response({'detail': 'An account already exists for this email address. Try signing in or resetting your password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        candidate = User(username=username, email=invitation.email, first_name=invitation.first_name, last_name=invitation.last_name)
+        try:
+            validate_password(password, candidate)
+        except Exception as error:
+            messages = getattr(error, 'messages', None) or [str(error)]
+            return Response({'password': messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                email=invitation.email,
+                first_name=invitation.first_name,
+                last_name=invitation.last_name,
+                password=password,
+            )
+            profile, _ = MemberProfile.objects.get_or_create(user=user)
+            codes = invitation.role_codes() or ['member']
+            profile.role = codes[0]
+            profile.roles = ', '.join(codes)
+            profile.account_type = invitation.account_type
+            if invitation.phone_number:
+                profile.phone_number = invitation.phone_number
+            profile.save()
+
+            group_names = sorted({ROLE_GROUP_MAP[code] for code in codes if code in ROLE_GROUP_MAP})
+            if group_names:
+                user.groups.set(Group.objects.filter(name__in=group_names))
+
+            invitation.user = user
+            invitation.status = 'accepted'
+            invitation.accepted_at = timezone.now()
+            invitation.save(update_fields=['user', 'status', 'accepted_at'])
+
+        return Response({
+            'message': 'Your account is ready. You can now sign in with your username and password.',
+            'username': user.username,
+        }, status=status.HTTP_201_CREATED)
 
 
 class PasswordResetRequestView(APIView):
