@@ -71,9 +71,11 @@ interface RolesComboboxProps {
   align?: "left" | "right";
   /** Roles that must stay ticked (e.g. Administrator already held). */
   lockedRoles?: string[];
+  /** Roles hidden from this picker when they are account types rather than permissions. */
+  hiddenRoles?: string[];
 }
 
-export function RolesCombobox({ selected, onChange, disabled = false, align = "left", lockedRoles = [] }: RolesComboboxProps) {
+export function RolesCombobox({ selected, onChange, disabled = false, align = "left", lockedRoles = [], hiddenRoles = [] }: RolesComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -130,7 +132,7 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
         className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         title={selected.map(roleLabel).join(", ")}
       >
-        <span className="max-w-[10rem] truncate">{formatRoles(selected)}</span>
+        <span className="max-w-[10rem] truncate">{selected.length ? formatRoles(selected) : "Select access"}</span>
         <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
@@ -146,7 +148,7 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
             align === "right" ? "right-0" : "left-0"
           }`}
         >
-          {ROLE_OPTIONS.map((r) => {
+          {ROLE_OPTIONS.filter((r) => !hiddenRoles.includes(r.value)).map((r) => {
             const checked = selected.includes(r.value);
             const locked = checked && lockedRoles.includes(r.value);
             return (

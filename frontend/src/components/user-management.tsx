@@ -765,8 +765,8 @@ const inviteFormInitial = {
   last_name: "",
   phone_number: "",
   account_type: "member",
-  // Roles are ticked from the fixed, hard-coded list shared with the backend.
-  roles: ["member"] as string[],
+  // Account type determines member/friend status; roles are permission assignments only.
+  roles: [] as string[],
 };
 
 const initialForm = {
@@ -1742,12 +1742,6 @@ export function UserManagement() {
         </p>
         <div className="flex items-center gap-2">
           <button
-            onClick={handlePrintMemberList}
-            className="rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
-          >
-            🖨️ Print User List
-          </button>
-          <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
             className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
@@ -1758,6 +1752,12 @@ export function UserManagement() {
             className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
           >
             + Add Manually
+          </button>
+          <button
+            onClick={handlePrintMemberList}
+            className="rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+          >
+            🖨️ Print User List
           </button>
         </div>
       </div>
@@ -2121,14 +2121,13 @@ export function UserManagement() {
             </div>
 
             <form onSubmit={handleSendInvite} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Email Address *</label>
-                <input type="email" required placeholder="leader@example.com" value={inviteFormData.email}
-                  onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
-              </div>
-
               <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Email Address *</label>
+                  <input type="email" required placeholder="leader@example.com" value={inviteFormData.email}
+                    onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">First Name *</label>
                   <input type="text" required value={inviteFormData.first_name}
@@ -2156,18 +2155,14 @@ export function UserManagement() {
                     <option value="friend">Friend of the Church</option>
                   </select>
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-[#26352f]">Access / Roles *</label>
-                  <p className="mt-0.5 text-[10px] text-[#617068]">
-                    Tick every role the invited account should hold. {SYSTEM_ROLE_HELP}
-                  </p>
-                  <div className="mt-2">
-                    <RolesCombobox
-                      selected={inviteFormData.roles}
-                      onChange={(roles) => setInviteFormData({ ...inviteFormData, roles })}
-                      align="left"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Access / Roles</label>
+                  <RolesCombobox
+                    selected={inviteFormData.roles}
+                    onChange={(roles) => setInviteFormData({ ...inviteFormData, roles })}
+                    align="left"
+                    hiddenRoles={["member"]}
+                  />
                 </div>
               </div>
 
