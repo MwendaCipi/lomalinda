@@ -817,6 +817,7 @@ export function UserManagement() {
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
   const [churchName, setChurchName] = useState("this church");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addStep, setAddStep] = useState<1 | 2>(1);
   const [addAccountType, setAddAccountType] = useState<"member" | "friend">("member");
   const [editingMember, setEditingMember] = useState<MemberUser | null>(null);
 
@@ -1747,16 +1748,16 @@ export function UserManagement() {
             🖨️ Print User List
           </button>
           <button
-            onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
-          >
-            + Add Person
-          </button>
-          <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
             className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
             ✉️ Invite by Email
+          </button>
+          <button
+            onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
+            className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+          >
+            + Add Manually
           </button>
         </div>
       </div>
@@ -1903,15 +1904,18 @@ export function UserManagement() {
             className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
               <div>
-                <h3 id="add-member-title" className="text-xl font-bold text-[#26352f]">Add Person</h3>
-                <p className="mt-0.5 text-xs text-[#617068]">Create a confirmed church member or friend record.</p>
+                <h3 id="add-member-title" className="text-xl font-bold text-[#26352f]">Add User</h3>
+                <p className="mt-0.5 text-xs text-[#617068]">Step {addStep} of 2 · {addStep === 1 ? "Basic account details" : "Additional details"}</p>
               </div>
               <button type="button" onClick={() => setShowAddForm(false)}
                 className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f] transition text-xl leading-none" aria-label="Close modal">✕</button>
             </div>
 
-            <form onSubmit={handleAddPerson} className="mt-3.5 space-y-4">
-              <div>
+            <form onSubmit={addStep === 1 ? (e) => { e.preventDefault(); setAddStep(2); } : handleAddPerson} className="mt-3.5 space-y-4">
+              {addStep === 1 && (
+                <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
                 <label className="block text-xs font-semibold text-[#26352f]">Account Type *</label>
                 <select
                   value={addAccountType}
@@ -1921,9 +1925,8 @@ export function UserManagement() {
                   <option value="member">Church Member</option>
                   <option value="friend">Friend of the Church</option>
                 </select>
-              </div>
+                </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
                 {/* Name */}
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Name *</label>
@@ -1934,7 +1937,9 @@ export function UserManagement() {
                     }}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 {/* Sex */}
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Sex</label>
@@ -1980,12 +1985,6 @@ export function UserManagement() {
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
-                {/* Profession */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Profession / Occupation</label>
-                  <ProfessionCombobox value={formData.profession} onChange={(val) => setFormData({ ...formData, profession: val })} />
-                </div>
-
                 {/* Date of Birth */}
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Date of Birth</label>
@@ -2002,29 +2001,40 @@ export function UserManagement() {
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
-                {/* Employment Status */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Employment Status</label>
-                  <select value={formData.employment_status}
-                    onChange={(e) => setFormData({ ...formData, employment_status: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
-                    <option value="">-- Select Employment Status --</option>
-                    {EMPLOYMENT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
-                  </select>
-                </div>
-
-                {/* Ministry / Role */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Ministry / Role</label>
-                  <select value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
-                    {getFilteredMinistries(formData.gender).map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
+              </>
+              )}
+
+              {addStep === 2 && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Profession follows age on the second step. */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#26352f]">Profession / Occupation</label>
+                      <ProfessionCombobox value={formData.profession} onChange={(val) => setFormData({ ...formData, profession: val })} />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#26352f]">Employment Status</label>
+                      <select value={formData.employment_status}
+                        onChange={(e) => setFormData({ ...formData, employment_status: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                        <option value="">-- Select Employment Status --</option>
+                        {EMPLOYMENT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#26352f]">Ministry / Role</label>
+                      <select value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                        {getFilteredMinistries(formData.gender).map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
               {addAccountType === "friend" && (
                 <div className="grid gap-4 sm:grid-cols-2 rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] p-4">
@@ -2065,6 +2075,10 @@ export function UserManagement() {
               )}
 
               <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setAddStep(1)}
+                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  Back
+                </button>
                 <button type="submit" disabled={submitting}
                   className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
                   {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
@@ -2074,6 +2088,18 @@ export function UserManagement() {
                   Cancel
                 </button>
               </div>
+                </>
+              )}
+              {addStep === 1 && (
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button type="submit" className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                    Next: Additional Details
+                  </button>
+                  <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                    Cancel
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
