@@ -32,7 +32,7 @@ function AcceptInviteContent() {
   const [firstName, setFirstName] = useState("");
   const [rolesDisplay, setRolesDisplay] = useState("");
   const [accountTypeDisplay, setAccountTypeDisplay] = useState("");
-  const [churchName, setChurchName] = useState("Loma Linda SDA Church");
+  const [churchName, setChurchName] = useState("SDA Loma Linda Meru");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

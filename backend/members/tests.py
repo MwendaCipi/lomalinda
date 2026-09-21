@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import Contribution, Invitation, MemberProfile, Testimony
+from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, Testimony
 
 
 class TestimonyAPITests(APITestCase):
@@ -781,3 +781,69 @@ class PasswordPolicyTests(APITestCase):
         self.assertEqual(weak.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('password', weak.data)
         self.assertFalse(User.objects.filter(username='weak.user').exists())
+
+
+class EmailBrandingTests(APITestCase):
+    """Every email names the church the same way: SDA Loma Linda Meru."""
+
+    CHURCH = 'SDA Loma Linda Meru'
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user('mailer.admin', 'mailer.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin_user, role='admin', roles='admin', phone_number='0700000009')
+
+    def test_invitation_email_says_who_is_inviting_them(self):
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/invitations/', {
+                'email': 'branding@example.com', 'first_name': 'Grace', 'roles': ['member'],
+            }, format='json')
+
+        subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
+        sender = mock_send.call_args[0][2]
+        self.assertEqual(subject, f'You are invited to {self.CHURCH}')
+        self.assertIn(self.CHURCH, sender)
+        # Straight after "Hello Grace," the church is the one doing the inviting.
+        greeting, first_sentence = body.split('\n\n')[:2]
+        self.assertEqual(greeting, 'Hello Grace,')
+        self.assertTrue(first_sentence.startswith(f'{self.CHURCH} has invited you'), first_sentence)
+        self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
+
+    def test_enrollment_email_uses_the_same_name(self):
+        from .views import send_enrollment_email
+
+        enrollment = EnrollmentRequest.objects.create(
+            first_name='Grace', last_name='Wanjiku',
+            email='branding2@example.com', phone_number='0700000010',
+            joining_mode='membership_transfer', current_church='Another SDA Church',
+            expires_at=timezone.now() + timedelta(days=2),
+        )
+        with patch('members.views.send_mail') as mock_send:
+            send_enrollment_email(enrollment)
+
+        subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
+        self.assertEqual(subject, f'Verify your {self.CHURCH} account')
+        self.assertIn(f'join {self.CHURCH} as a church account', body)
+        self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
+        self.assertNotIn('Loma Linda SDA Church', body)
+
+    def test_password_reset_email_uses_the_same_name(self):
+        User.objects.create_user('branding.user', 'branding3@example.com', 'MemberPass#2026')
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/auth/password-reset/', {'email': 'branding3@example.com'}, format='json')
+
+        subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
+        self.assertEqual(subject, f'Reset your {self.CHURCH} password')
+        self.assertIn(self.CHURCH, body)
+
+    def test_a_renamed_church_wins_over_the_default(self):
+        """The office can rename the church in Church Settings without a code change."""
+        from .models import ChurchSettings
+
+        ChurchSettings.objects.create(church_name='SDA Milimani, Meru')
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/invitations/', {
+                'email': 'renamed@example.com', 'first_name': 'Grace', 'roles': ['member'],
+            }, format='json')
+        self.assertEqual(mock_send.call_args[0][0], 'You are invited to SDA Milimani, Meru')

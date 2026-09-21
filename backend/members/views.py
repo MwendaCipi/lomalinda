@@ -69,11 +69,16 @@ def generate_temporary_password(length=12):
 
 
 def send_enrollment_email(enrollment):
+    church_name = current_church_name()
     link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
     account_label = 'friend account' if enrollment.joining_mode == 'friend' else 'church account'
     send_mail(
-        'Verify your Loma Linda SDA Church account',
-        f"Hello {enrollment.first_name or 'there'},\n\nThank you for choosing to join Loma Linda SDA Church as a {account_label}.\n\nPlease click the link below to verify your email and complete setting up your account:\n{link}\n\nThis link is valid for 48 hours.\n\nWarm regards,\nLoma Linda SDA Church",
+        f'Verify your {church_name} account',
+        f"Hello {enrollment.first_name or 'there'},\n\n"
+        f"Thank you for choosing to join {church_name} as a {account_label}.\n\n"
+        f"Please click the link below to verify your email and complete setting up your account:\n{link}\n\n"
+        f"This link is valid for 48 hours.\n\n"
+        f"Warm regards,\n{church_name}",
         settings.DEFAULT_FROM_EMAIL,
         [enrollment.email],
         fail_silently=True,
@@ -86,6 +91,12 @@ def send_enrollment_email(enrollment):
 INVITATION_LIFETIME = timedelta(days=7)
 
 
+# How the church is named in every email: subject, body and signature. Church
+# Settings wins (so the office can rename the church without a code change);
+# this is the fallback used when no ChurchSettings row exists yet.
+CHURCH_DEFAULT_NAME = 'SDA Loma Linda Meru'
+
+
 def current_church_name():
     """Church name for emails/PDFs, falling back to the deployed church's name."""
     try:
@@ -94,7 +105,7 @@ def current_church_name():
             return church_settings.church_name
     except Exception:
         pass
-    return 'Loma Linda SDA Church, Meru'
+    return CHURCH_DEFAULT_NAME
 
 
 def invitation_url(invitation):
@@ -132,8 +143,19 @@ def can_manage_invitations(user):
 
 
 def send_password_reset_email(user, uid, token):
+    church_name = current_church_name()
     link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
-    send_mail('Reset your Loma Linda SDA Church password', f"Hello {user.first_name or user.username},\n\nReset your password here:\n{link}\n\nIf you did not request this, you can ignore this email.", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+    send_mail(
+        f'Reset your {church_name} password',
+        f"Hello {user.first_name or user.username},\n\n"
+        f"We received a request to reset the password for your {church_name} account.\n"
+        f"Click the link below to choose a new one:\n{link}\n\n"
+        "If you did not request this, you can ignore this email — your password stays as it is.\n\n"
+        f"Warm regards,\n{church_name}",
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
 
 
 def send_contribution_receipt(contribution):
@@ -152,15 +174,17 @@ def send_contribution_receipt(contribution):
 
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
     donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
+    church_name = current_church_name()
     body = (
         f"{greeting} {donor_name},\n\n"
-        f"Thank you for giving towards {contribution.purpose}. Here is your receipt for the gift received by Loma Linda SDA Church, Meru.\n\n"
+        f"Thank you for giving towards {contribution.purpose}. Here is your receipt for the gift received by {church_name}.\n\n"
         f"Amount: {contribution.currency} {contribution.amount:,.2f}\n"
         f"Giving purpose: {contribution.purpose}\n"
         f"Payment method: {contribution.get_payment_method_display()}\n"
         f"Receipt reference: {receipt_reference}\n"
         f"Date received: {timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')}\n\n"
-        "May God bless you for supporting the work of the church."
+        "May God bless you for supporting the work of the church.\n\n"
+        f"Warm regards,\n{church_name}"
     )
     try:
         send_mail(
@@ -874,8 +898,9 @@ class AnnouncementView(generics.ListCreateAPIView):
                     .distinct()
                 )
                 if recipient_emails:
+                    church_name = current_church_name()
                     subject = f"Church Announcement: {announcement.title}"
-                    body = f"Hello Church Member,\n\n{announcement.title}\n\n{announcement.text}\n\n{announcement.detail}\n\nLoma Linda SDA Church"
+                    body = f"Hello Church Member,\n\n{announcement.title}\n\n{announcement.text}\n\n{announcement.detail}\n\n{church_name}"
                     send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipient_emails, fail_silently=True)
             except Exception:
                 pass
@@ -1458,7 +1483,8 @@ class ResendContributionReceiptView(APIView):
             return Response({'detail': 'source and id are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         church_settings = ChurchSettings.load()
-        custom_message = church_settings.default_receipt_message or "Thank you for your faithful contribution to Loma Linda SDA Church."
+        church_name = church_settings.church_name or CHURCH_DEFAULT_NAME
+        custom_message = church_settings.default_receipt_message or f"Thank you for your faithful contribution to {church_name}."
 
         now = timezone.now()
         sent_destinations = []
@@ -1483,7 +1509,7 @@ class ResendContributionReceiptView(APIView):
                     f"Payment Channel: {contribution.get_payment_method_display()}\n"
                     f"Receipt No: {receipt_ref}\n"
                     f"Date: {timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y')}\n\n"
-                    "Loma Linda SDA Church Treasury"
+                    f"Warm regards,\n{church_name} Treasury"
                 )
                 try:
                     send_mail(
@@ -1523,7 +1549,7 @@ class ResendContributionReceiptView(APIView):
                     f"Payment Channel: Cash\n"
                     f"Receipt No: {receipt_ref}\n"
                     f"Date: {cash.received_on}\n\n"
-                    "Loma Linda SDA Church Treasury"
+                    f"Warm regards,\n{church_name} Treasury"
                 )
                 try:
                     send_mail(
@@ -1835,10 +1861,14 @@ class TestimonyView(generics.ListCreateAPIView):
 
 
 def send_testimony_verification_email(pending):
+    church_name = current_church_name()
     link = f"{settings.FRONTEND_URL}/community/testimonies?token={pending.token}"
     send_mail(
         'Confirm your testimony submission',
-        f"Hello {pending.name or 'there'},\n\nConfirm your email and continue sharing your testimony with Loma Linda SDA Church:\n{link}\n\nThis link expires in 30 minutes.",
+        f"Hello {pending.name or 'there'},\n\n"
+        f"Confirm your email and continue sharing your testimony with {church_name}:\n{link}\n\n"
+        "This link expires in 30 minutes.\n\n"
+        f"Warm regards,\n{church_name}",
         settings.DEFAULT_FROM_EMAIL,
         [pending.email],
         fail_silently=False,
@@ -3190,6 +3220,7 @@ class UserRoleUpdateView(APIView):
                 )
                 if target_user.email:
                     try:
+                        church_name = current_church_name()
                         user_display_name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.username
                         send_mail(
                             f"Church Role Update — {role_display}",
@@ -3197,7 +3228,7 @@ class UserRoleUpdateView(APIView):
                             f"Your church roles have been updated to: {role_display}.\n\n"
                             f"You can log into your account to access your updated leadership workspace, responsibilities, and management tools.\n\n"
                             f"May God bless your service in church ministry.\n\n"
-                            f"Warm regards,\nLoma Linda SDA Church Leadership",
+                            f"Warm regards,\n{church_name} Leadership",
                             settings.DEFAULT_FROM_EMAIL,
                             [target_user.email],
                             fail_silently=True,
@@ -3232,19 +3263,20 @@ class UserRoleUpdateView(APIView):
             ChurchNotification.objects.create(
                 user=target_user,
                 title=f"New Church Role Assigned: {role_display}",
-                message=f"You have been assigned the role of '{role_display}' at Loma Linda SDA Church. Log into your account to access your updated workspace and leadership tools.",
+                message=f"You have been assigned the role of '{role_display}' at {current_church_name()}. Log into your account to access your updated workspace and leadership tools.",
             )
 
             if target_user.email:
                 try:
+                    church_name = current_church_name()
                     user_display_name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.username
                     send_mail(
                         f"Church Role Update — {role_display}",
                         f"Hello {user_display_name},\n\n"
-                        f"You have been assigned the role of '{role_display}' at Loma Linda SDA Church.\n\n"
+                        f"You have been assigned the role of '{role_display}' at {church_name}.\n\n"
                         f"You can log into your account to access your updated leadership workspace, responsibilities, and management tools.\n\n"
                         f"May God bless your service in church ministry.\n\n"
-                        f"Warm regards,\nLoma Linda SDA Church Leadership",
+                        f"Warm regards,\n{church_name} Leadership",
                         settings.DEFAULT_FROM_EMAIL,
                         [target_user.email],
                         fail_silently=True,
@@ -3418,7 +3450,7 @@ class ReconciliationPdfView(APIView):
                 })
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
         district = church_setting.district if church_setting else ""
         field_name = church_setting.field if church_setting else "North East Kenya Field"
 
@@ -3508,7 +3540,7 @@ class MemberGivingStatementPdfView(APIView):
         givings.sort(key=lambda x: x["date"], reverse=True)
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
         member_name = f"{member.first_name} {member.last_name}".strip() or member.username
 
         pdf_bytes = generate_member_giving_statement_pdf(
@@ -3547,7 +3579,7 @@ class BusinessMeetingPdfView(APIView):
             })
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
 
         pdf_bytes = generate_business_meeting_pdf(
             church_name=church_name,
