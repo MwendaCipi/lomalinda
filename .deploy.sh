@@ -15,12 +15,12 @@ if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/frontend/package.json" ] && [ "$P
   echo "⚙️ Installing backend dependencies & running migrations..."
   if [ -d "backend/venv" ]; then
     backend/venv/bin/pip install -r backend/requirements.txt
-    backend/venv/bin/python backend/manage.py migrate
-    backend/venv/bin/python backend/manage.py seed_demo_data
+    backend/venv/bin/python backend/manage.py migrate_schemas
+    backend/venv/bin/python backend/manage.py seed_defaults
   else
     python3 -m pip install -r backend/requirements.txt
-    python3 backend/manage.py migrate
-    python3 backend/manage.py seed_demo_data
+    python3 backend/manage.py migrate_schemas
+    python3 backend/manage.py seed_defaults
   fi
 
   echo "🏗️ Building frontend..."
@@ -36,6 +36,6 @@ if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/frontend/package.json" ] && [ "$P
 else
   # Executed locally: connect via SSH to deploy
   echo "🚀 Triggering deployment on ${SERVER_HOST}..."
-  ssh "${SERVER_HOST}" "cd ${PROJECT_DIR} && git pull origin main && ( [ -d backend/venv ] && backend/venv/bin/pip install -r backend/requirements.txt && backend/venv/bin/python backend/manage.py migrate && backend/venv/bin/python backend/manage.py seed_demo_data || ( python3 -m pip install -r backend/requirements.txt && python3 backend/manage.py migrate && python3 backend/manage.py seed_demo_data ) ) && cd frontend && npm install && npm run build && sudo systemctl restart loma_linda"
+  ssh "${SERVER_HOST}" "cd ${PROJECT_DIR} && git pull origin main && ( [ -d backend/venv ] && backend/venv/bin/pip install -r backend/requirements.txt && backend/venv/bin/python backend/manage.py migrate_schemas && backend/venv/bin/python backend/manage.py seed_defaults || ( python3 -m pip install -r backend/requirements.txt && python3 backend/manage.py migrate_schemas && python3 backend/manage.py seed_defaults ) ) && cd frontend && npm install && npm run build && sudo systemctl restart loma_linda"
   echo "✅ Deployment completed successfully on ${SERVER_HOST}!"
 fi
