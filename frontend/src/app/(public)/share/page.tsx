@@ -1,95 +1,55 @@
 import Link from "next/link";
-import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 
-type FellowshipItem = {
-  href: string;
-  title: string;
-  text: string;
-  icon?: string;
-  badge?: string;
-};
-
-const fellowshipItems: FellowshipItem[] = [
-  {
-    href: "/announcements",
-    title: "Announcements",
-    text: "Stay updated with church news, upcoming sabbath programs, and notices.",
-    icon: "📢",
-  },
-  {
-    href: "/share/moments",
-    title: "Live Services & Moments",
-    text: "Watch worship services and explore photos & videos of fellowship moments.",
-    icon: "📸",
-  },
-  {
-    href: "/spiritual/testimonies",
-    title: "Testimonies",
-    text: "Share a testimony online or request an opportunity to share during fellowship.",
-    icon: "✨",
-  },
-  {
-    href: "/calendar",
-    title: "Calendar",
-    text: "View upcoming Sabbath services, midweek vespers, and special church events.",
-    icon: "📅",
-  },
-];
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { fellowshipLinks } from "@/config/site-sections";
 
 export default function FellowshipPage() {
   return (
-    <main className="min-h-screen bg-white text-[#26352f]">
-      <div className="flex min-h-[calc(100vh-4rem)]">
-        <FellowshipSidebar />
-        <div className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
-          <div className="max-w-5xl mx-auto space-y-6">
-            <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Fellowship &amp; Community</h1>
-            <p className="hidden sm:block mt-2 text-base text-[#617068]">
-              Connect with SDA Loma Linda through announcements, live worship services, shared testimonies, and community fellowship.
-            </p>
-          </div>
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <section className="px-6 pt-14 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Fellowship hub</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Fellowship &amp; Community</h1>
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-[#617068]">
+            Connect with SDA Loma Linda through announcements, live worship services, shared testimonies, and the
+            everyday life of the church family.
+          </p>
+        </div>
+      </section>
 
-          {/* Desktop Section Overview Banner */}
-          <div className="mt-8 hidden rounded-3xl bg-[#26352f] p-8 text-white shadow-sm lg:block">
-            <span className="text-xs font-bold uppercase tracking-widest text-[#f1c89e]">Fellowship Hub</span>
-            <h2 className="mt-2 text-2xl font-semibold">Welcome to Fellowship &amp; Community</h2>
-            <p className="mt-3 text-sm leading-6 text-white/80 max-w-2xl">
-              Stay up-to-date with church announcements, watch live worship broadcasts, and read community testimonies.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <Link href="/announcements" className="rounded-full bg-[#b36b3c] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#96552e]">
-                View Announcements
-              </Link>
-              <Link href="/share/moments" className="rounded-full border border-white/30 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/10">
-                Live Services &amp; Moments
-              </Link>
-            </div>
-          </div>
-
-          {/* Mobile Cards View (hidden on desktop) */}
-          <div className="mt-6 grid gap-4 sm:gap-5 md:grid-cols-2 lg:hidden">
-            {fellowshipItems.map((item) => (
-              <Link key={item.href} href={item.href} className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-sm sm:p-6">
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    {item.icon && <span className="text-2xl" aria-hidden="true">{item.icon}</span>}
-                    {item.badge && (
-                      <span className="flex items-center gap-1.5 rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="mt-2 text-xl font-semibold text-[#26352f] group-hover:text-[#b36b3c]">{item.title}</h2>
-                  <p className="mt-1.5 text-xs leading-5 text-[#617068] sm:text-sm">{item.text}</p>
-                </div>
-                <span className="mt-4 inline-block text-xs font-semibold text-[#b36b3c] sm:text-sm">Explore &rarr;</span>
-              </Link>
-            ))}
-            </div>
+      <section className="px-6 py-12 lg:px-8 lg:py-14">
+        <div className="mx-auto max-w-6xl rounded-[2rem] bg-[#26352f] px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Stay connected</p>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome to fellowship</h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
+            Stay up to date with church announcements, watch live worship broadcasts, and read what God is doing among
+            us.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link
+              href="/announcements"
+              className="rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+            >
+              View announcements
+            </Link>
+            <Link
+              href="/share/moments"
+              className="rounded-full border border-white/25 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white/50"
+            >
+              Live services &amp; moments
+            </Link>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* The old Fellowship sidebar, now part of the page: the same destinations. */}
+      <PublicSectionNav
+        eyebrow="Explore"
+        title="Where the church family gathers"
+        description="Notices, worship services, photos, testimonies, the calendar and your ideas — open any of them."
+        links={fellowshipLinks}
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
     </main>
   );
 }

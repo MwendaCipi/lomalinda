@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getMinistryBySlug, CalendarEvent } from "@/config/ministries";
 import DepartmentCalendar from "@/components/department-calendar";
-import { MinistrySidebar } from "@/components/ministry-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { ministrySectionLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -39,14 +40,12 @@ export default function MinistryDetailClient() {
 
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <div className="flex min-h-[calc(100vh-89px)]">
-        <MinistrySidebar currentSlug={slug} />
-
-        <div className="flex-1 min-w-0 px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12">
           <div className="space-y-6">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{ministry.title}</h1>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Ministry</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{ministry.title}</h1>
                 <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">{ministry.description}</p>
               </div>
               <Link
@@ -76,8 +75,17 @@ export default function MinistryDetailClient() {
               </section>
             )}
           </div>
-        </div>
       </div>
+
+      {/* The old ministry sidebar, now part of the page. */}
+      <PublicSectionNav
+        eyebrow="Church ministries"
+        title="Explore our other ministries"
+        description="Each ministry has its own programme, leaders and calendar — open one to see what they do."
+        links={ministrySectionLinks}
+        activeKey={slug}
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
     </main>
   );
 }

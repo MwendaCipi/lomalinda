@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RequestsSidebar } from "@/components/sidebars/requests-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { requestsAndCareLinks } from "@/config/site-sections";
 import { EnrollmentForm } from "@/components/enrollment-form";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -50,15 +51,14 @@ export default function EnrollPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-white text-[#26352f]">
-      <div className="flex min-h-[calc(100vh-4rem)]">
-        <RequestsSidebar />
-        <div className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
-          <div className="max-w-5xl mx-auto space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12">
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Membership &amp; Transfers</h1>
-                <p className="mt-1 text-sm text-[#617068]">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Requests &amp; Care</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Membership &amp; Transfers</h1>
+                <p className="mt-2 max-w-2xl text-base leading-8 text-[#617068]">
                   Manage membership transfer requests to join SDA Loma Linda or move to another SDA church.
                 </p>
               </div>
@@ -161,9 +161,18 @@ export default function EnrollPage() {
                 )}
               </section>
             )}
-          </div>
         </div>
       </div>
+
+      {/* The old Requests sidebar, now part of the page. */}
+      <PublicSectionNav
+        eyebrow="Get started"
+        title="Other ways to reach the church"
+        description="Prayer, visitation, child dedication and partnerships all start with a short form."
+        links={requestsAndCareLinks}
+        activeKey="enroll"
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
     </main>
   );
 }

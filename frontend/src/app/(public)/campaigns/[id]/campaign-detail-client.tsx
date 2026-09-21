@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { stewardshipLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -176,11 +177,8 @@ export default function CampaignDetailClient() {
   if (loading) {
     return (
       <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-        <div className="flex min-h-[calc(100vh-89px)]">
-          <SupportSidebar />
-          <div className="flex-1 min-w-0 px-6 py-16 text-center">
-            <p className="text-sm font-medium text-[#617068]">Loading fund drive details...</p>
-          </div>
+        <div className="px-6 py-16 text-center">
+          <p className="text-sm font-medium text-[#617068]">Loading fund drive details...</p>
         </div>
       </main>
     );
@@ -188,10 +186,8 @@ export default function CampaignDetailClient() {
 
   if (error || !campaign) {
     return (
-      <main className="min-h-screen bg-white text-[#26352f]">
-        <div className="flex min-h-[calc(100vh-4rem)]">
-          <SupportSidebar />
-          <div className="flex-1 min-w-0 px-6 py-16">
+      <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+        <div className="px-6 py-16">
             <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]">
               <h1 className="text-2xl font-semibold">Fund Drive Not Found</h1>
               <p className="mt-2 text-sm text-[#617068]">{error || "The requested fund drive could not be found."}</p>
@@ -199,17 +195,14 @@ export default function CampaignDetailClient() {
                 Return to Fund Drives
               </Link>
             </div>
-          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-white text-[#26352f]">
-      <div className="flex min-h-[calc(100vh-4rem)]">
-        <SupportSidebar />
-        <div className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <div className="px-6 py-10 lg:px-8 lg:py-12">
           <div className="mx-auto max-w-4xl space-y-6">
             <div className="flex items-center justify-between">
               <Link
@@ -473,8 +466,17 @@ export default function CampaignDetailClient() {
               )}
             </div>
           </div>
-        </div>
       </div>
+
+      {/* The old Stewardship & Support sidebar, now part of the page. */}
+      <PublicSectionNav
+        eyebrow="Stewardship & support"
+        title="More ways to support the church"
+        description="In-kind gifts, fund drives, the church budget and the treasury's published figures."
+        links={stewardshipLinks}
+        activeKey="campaigns"
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
     </main>
   );
 }

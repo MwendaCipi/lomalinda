@@ -5,7 +5,8 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { stewardshipLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -289,17 +290,16 @@ function GivePageContent() {
   else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <SupportSidebar />
-        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 pb-28 sm:p-8 lg:p-10 border-b border-[#dfdbd1] md:overflow-y-auto custom-hover-scrollbar">
-          <div>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12">
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Stewardship</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
                   Tithes &amp; Offerings
                 </h1>
-                <p className="hidden sm:block mt-2 text-base text-[#617068]">
+                <p className="mt-2 max-w-2xl text-base leading-8 text-[#617068]">
                   Faithfully give tithes, offerings, ministry support, or church building funds.
                 </p>
               </div>
@@ -459,8 +459,17 @@ function GivePageContent() {
             )}
 
           </div>
-        </div>
       </div>
+
+      {/* The old Stewardship & Support sidebar, now part of the page. */}
+      <PublicSectionNav
+        eyebrow="Stewardship & support"
+        title="More ways to support the church"
+        description="Beyond tithes and offerings: in-kind gifts, fund drives, the church budget and the treasury's published figures."
+        links={stewardshipLinks}
+        activeKey="give"
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
 
       {/* ── Give Now modal ── */}
       {showGiveModal && (
