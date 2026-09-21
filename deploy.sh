@@ -5,16 +5,17 @@ echo "=========================================="
 echo "🚀 Loma Linda SDA Church Deployment Automation"
 echo "=========================================="
 
-COMMIT_MSG="${1:-"deploy: automated deployment update"}"
-
-# 1. Handle uncommitted local changes
-if [[ -n $(git status -s) ]]; then
-  echo "📦 Staging and committing local changes..."
-  git add .
-  git commit -m "$COMMIT_MSG"
-else
-  echo "✨ Workspace clean - no new local uncommitted changes."
+# 1. Refuse to deploy from a dirty tree.
+# Auto-committing here used to be convenient, but `git add .` swept stray
+# untracked files (and half-finished work) into deploy commits. Deploys now
+# require the changes to be committed deliberately first.
+if [[ -n $(git status --porcelain) ]]; then
+  echo "❌ Working tree is not clean - nothing was deployed."
+  echo "   Commit or stash these changes first, then re-run."
+  git status --short
+  exit 1
 fi
+echo "✨ Workspace clean."
 
 # 2. Push to GitHub repository
 echo "⬆️ Pushing latest code to GitHub (main branch)..."

@@ -45,5 +45,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Stray scratch copy of the report template; the one the backend loads is
+# tracked at backend/members/templates/nekf_template.xlsx
+/NEKF Template.xlsx
+
 # Freebuff local state
 .freebuff/
