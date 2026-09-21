@@ -301,7 +301,7 @@ export function SiteNav() {
               SDA Church
             </span>
             <span className="text-white/75 text-[11px] sm:text-xs leading-tight truncate">
-              Maranatha, Meru
+              Loma Linda, Meru
             </span>
           </div>
         </Link>

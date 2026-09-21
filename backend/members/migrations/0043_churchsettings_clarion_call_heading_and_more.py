@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='churchsettings',
             name='clarion_call_subtext',
-            field=models.TextField(default="Join SDA Church Maranatha, Nairobi as we study God's Word, support one another, and reach out to our community with faith and compassion."),
+            field=models.TextField(default="Join Loma Linda SDA Church, Meru as we study God's Word, support one another, and reach out to our community with faith and compassion."),
         ),
         migrations.AlterField(
             model_name='contribution',

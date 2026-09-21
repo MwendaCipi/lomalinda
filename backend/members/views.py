@@ -3077,7 +3077,7 @@ class ReconciliationPdfView(APIView):
                 })
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "SDA Church Maranatha, Meru"
+        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
         district = church_setting.district if church_setting else ""
         field_name = church_setting.field if church_setting else "North East Kenya Field"
 
@@ -3167,7 +3167,7 @@ class MemberGivingStatementPdfView(APIView):
         givings.sort(key=lambda x: x["date"], reverse=True)
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "SDA Church Maranatha, Meru"
+        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
         member_name = f"{member.first_name} {member.last_name}".strip() or member.username
 
         pdf_bytes = generate_member_giving_statement_pdf(
@@ -3206,7 +3206,7 @@ class BusinessMeetingPdfView(APIView):
             })
 
         church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else "SDA Church Maranatha, Meru"
+        church_name = church_setting.church_name if church_setting else "Loma Linda SDA Church, Meru"
 
         pdf_bytes = generate_business_meeting_pdf(
             church_name=church_name,

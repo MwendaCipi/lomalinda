@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
             name='ChurchSettings',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('church_name', models.CharField(default='SDA Church Maranatha, Nairobi', max_length=160)),
+                ('church_name', models.CharField(default='Loma Linda SDA Church, Meru', max_length=160)),
                 ('address', models.CharField(blank=True, max_length=255)),
                 ('latitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
                 ('longitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
