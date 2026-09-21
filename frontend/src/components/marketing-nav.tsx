@@ -39,7 +39,10 @@ export function MarketingNav() {
   // Materials and giving are also destinations in the signed-in app. Keep the
   // public landing-page header for visitors, but restore the app chrome when a
   // member reaches either section from the system navigation.
-  if (signedIn && (pathname.startsWith("/materials") || pathname.startsWith("/give"))) {
+  if (
+    signedIn &&
+    (pathname.startsWith("/materials") || pathname.startsWith("/give") || pathname.startsWith("/about"))
+  ) {
     return <SiteNav />;
   }
 
