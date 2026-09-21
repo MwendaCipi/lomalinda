@@ -1536,7 +1536,7 @@ export function UserManagement() {
                 <th className="pb-3 font-bold">Name</th>
                 <th className="pb-3 font-bold">Contact</th>
                 <th className="pb-3 font-bold">Role</th>
-                <th className="pb-3 font-bold">Profession</th>
+                <th className="pb-3 font-bold">Sex</th>
                 <th className="pb-3 text-right font-bold">Actions</th>
               </tr>
             </thead>
@@ -1576,7 +1576,7 @@ export function UserManagement() {
                         </div>
                       )}
                     </td>
-                    <td className="py-3 text-[#617068]">{m.profession || "—"}</td>
+                    <td className="py-3 text-[#617068]">{m.gender || "—"}</td>
                     <td className="py-3 text-right">
                       <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
                         <button
@@ -1656,7 +1656,7 @@ export function UserManagement() {
                       </span>
                     )}
                   </div>
-                  {m.profession && <p className="text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Profession:</span> {m.profession}</p>}
+                  {m.gender && <p className="text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>}
                   <div className="pt-2 border-t border-[#dfdbd1]/60 flex flex-wrap gap-2">
                     <button onClick={() => handleStartEdit(m)} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#b36b3c] hover:bg-[#f7f4ee]">✏️ Edit</button>
                     <button onClick={() => handleContactMember(m)} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]">📞 Contact</button>
