@@ -24,7 +24,7 @@ export function ChurchSettingsManager() {
   const [fridayVespersTime, setFridayVespersTime] = useState("Friday · 5:30 PM – 6:30 PM");
   const [sabbathTime, setSabbathTime] = useState("Saturday · 8:00 AM – 4:00 PM");
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
-  const [clarionCallSubtext, setClarionCallSubtext] = useState("Join Loma Linda SDA Church, Meru as we study God's Word, support one another, and reach out to our community with faith and compassion.");
+  const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda, Meru as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!");
   const [defaultBusinessMeetingInvitationMessage, setDefaultBusinessMeetingInvitationMessage] = useState(
     "Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!"

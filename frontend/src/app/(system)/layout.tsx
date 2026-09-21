@@ -17,7 +17,9 @@ export default function SystemLayout({ children }: { children: React.ReactNode }
       {/* System chrome: full header with account menu plus the mobile bottom
           tab bar. The bottom padding keeps content clear of that tab bar. */}
       <SiteHeader />
-      <div className="flex-1 min-h-0 flex flex-col pb-24 md:pb-0">
+      {/* `app-shell` is what locks outer scrolling on desktop (see globals.css) —
+          only the system's own panels scroll, never the public website. */}
+      <div className="app-shell flex-1 min-h-0 flex flex-col pb-24 md:pb-0">
         <SystemGate>{children}</SystemGate>
       </div>
     </>

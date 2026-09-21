@@ -46,7 +46,7 @@ export function MarketingNav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#26352f] text-white shadow-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-2.5 min-w-0 sm:gap-3">
           <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/10 p-1 border border-white/15">
@@ -70,12 +70,12 @@ export function MarketingNav() {
         </Link>
 
         {/* Desktop navigation */}
-        <nav className="hidden md:flex items-center gap-1" aria-label="Website">
+        <nav className="hidden md:flex items-center gap-2 lg:gap-4" aria-label="Website">
           {marketingLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-full px-3 py-2 text-sm font-semibold transition-colors ${
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 isActive(link.href)
                   ? "bg-white/15 text-white"
                   : "text-white/75 hover:bg-white/10 hover:text-white"
@@ -87,7 +87,7 @@ export function MarketingNav() {
         </nav>
 
         {/* Account action + mobile menu toggle */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <AccessibilityMenu buttonClassName="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors focus:outline-none" />
           <Link
             href={accountHref}

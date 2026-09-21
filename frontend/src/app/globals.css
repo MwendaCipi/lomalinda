@@ -11,9 +11,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* On desktop (md+), prevent the outer page from scrolling; only inner panels scroll */
+/* Inside the signed-in system the viewport is fixed on desktop and only the
+   shell's own panels scroll. That lock is scoped to the app shell (the class the
+   system layout puts on its wrapper) so the public website stays an ordinary
+   scrolling document. */
 @media (min-width: 768px) {
-  html, body {
+  html:has(.app-shell),
+  body:has(.app-shell) {
     overflow: hidden;
     height: 100%;
   }
