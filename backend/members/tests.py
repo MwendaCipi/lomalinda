@@ -49,6 +49,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
 from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, MpesaRefund, Testimony
+from .mpesa import account_reference_for_purpose
 
 
 class TestimonyAPITests(APITestCase):
@@ -179,6 +180,14 @@ class ContributionReconciliationAPITests(APITestCase):
         self.client.force_authenticate(member)
         response = self.client.get('/api/members/treasury/reconciliation/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MpesaPurposeReferenceTests(TestCase):
+    def test_account_reference_uses_compact_purpose(self):
+        self.assertEqual(account_reference_for_purpose('LCB'), 'LCB')
+        self.assertEqual(account_reference_for_purpose('Tithe'), 'TITHE')
+        self.assertEqual(account_reference_for_purpose('Local Church Budget'), 'LCB')
+        self.assertEqual(account_reference_for_purpose(''), 'GIVING')
 
 
 class MpesaC2BAPITests(APITestCase):
