@@ -5,7 +5,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
-import { AnnouncementsSidebar } from "@/components/sidebars/announcements-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { newsAndEventsLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -59,12 +60,19 @@ function CalendarPageContent() {
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <AnnouncementsSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
-          <div className="max-w-5xl mx-auto space-y-6">
-        <div className="grid grid-cols-2 gap-4 pt-2 pb-1 md:grid-cols-[150px_170px_1fr]">
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <section className="px-6 pt-14 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Church life</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
+          <p className="mt-4 max-w-2xl text-base leading-8 text-[#617068]">
+            Sabbaths, vespers, programmes and special events across the church year.
+          </p>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-6xl space-y-6 px-6 py-10 lg:px-8 lg:py-12">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-[150px_170px_1fr]">
           <label className="text-sm font-semibold">
             Year
             <select
@@ -316,9 +324,18 @@ function CalendarPageContent() {
         <p className="mt-4 text-xs text-[#617068]">
           Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}.
         </p>
-          </div>
-        </div>
       </div>
+
+      {/* The old News & Events sidebar, now part of the page body. */}
+      <PublicSectionNav
+        eyebrow="News & events"
+        title="More news and events"
+        description="Announcements, the church year, and the order of service for this Sabbath."
+        links={newsAndEventsLinks}
+        activeKey="calendar"
+        className="border-t border-[#dfdbd1] bg-white/60"
+      />
+
       <SabbathProgramModal program={activeProgram} onClose={() => setActiveProgram(null)} />
     </main>
   );

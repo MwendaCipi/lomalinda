@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ExternalLink } from "lucide-react";
-import { MaterialsSidebar, MaterialsMobileCards, materialSections, type MaterialSection } from "@/components/sidebars/materials-sidebar";
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { materialSections, materialSectionLinks, type MaterialSection } from "@/config/site-sections";
 import { fellowshipResources } from "@/config/fellowship-resources";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -119,83 +120,81 @@ function MaterialsContent() {
   const { heading, items } = itemsBySection[active];
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <MaterialsSidebar />
+    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <section className="px-6 pt-14 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">
+            Study &amp; worship resources
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Study Materials</h1>
+          <p className="mt-4 max-w-2xl text-base leading-8 text-[#617068]">
+            Sabbath School lessons, mission readings, Scripture and the Spirit of Prophecy — gathered in one place for
+            personal devotion, family worship and class preparation.
+          </p>
+        </div>
+      </section>
 
-        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] md:overflow-y-auto custom-hover-scrollbar">
-          <div className="mx-auto max-w-3xl space-y-6">
-            <div className="hidden border-b border-[#dfdbd1] pb-6 text-center sm:block">
-              <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-bold text-[#b36b3c]">
-                Study &amp; Worship Resources
-              </span>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
-                Church Study Materials
-              </h1>
-            </div>
+      {/* The old Study Materials sidebar, now part of the page body. */}
+      <PublicSectionNav
+        eyebrow="Sections"
+        title="Choose a study area"
+        description="Four collections, each with its own guides and readings."
+        links={materialSectionLinks}
+        activeKey={active}
+      />
 
-            {/* Mobile section cards (sidebar replacement) */}
-            <MaterialsMobileCards />
+      <section className="border-t border-[#dfdbd1] bg-white/60 px-6 py-12 lg:px-8 lg:py-14">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{heading}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-[#617068]">{sectionMeta.description}</p>
 
-            <section className="space-y-4">
-              <div>
-                <h2 className="text-lg font-bold text-[#26352f] sm:text-xl">{heading}</h2>
-                <p className="mt-1 text-xs text-[#617068] sm:text-sm">{sectionMeta.description}</p>
-              </div>
-
-              <div className="grid gap-4">
-                {items.map((item) => {
-                  const inner = (
-                    <>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl" aria-hidden="true">{item.icon}</span>
-                          <div>
-                            <h3 className="text-sm font-bold text-[#26352f]">{item.title}</h3>
-                            <p className="text-[11px] font-medium text-[#b36b3c]">{item.subtitle}</p>
-                          </div>
-                        </div>
-                        <span className="shrink-0 rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold text-[#3d5148]">
-                          {item.badge}
-                        </span>
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            {items.map((item) => {
+              const inner = (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl" aria-hidden="true">{item.icon}</span>
+                      <div>
+                        <h3 className="text-base font-semibold tracking-tight text-[#26352f]">{item.title}</h3>
+                        <p className="text-xs font-semibold text-[#b36b3c]">{item.subtitle}</p>
                       </div>
-                      <p className="mt-2 text-xs leading-relaxed text-[#617068]">{item.description}</p>
-                      <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#b36b3c]">
-                        {item.actionText}
-                        {item.isExternal ? (
-                          <ExternalLink className="h-3 w-3" />
-                        ) : (
-                          <span aria-hidden="true">&rarr;</span>
-                        )}
-                      </span>
-                    </>
-                  );
+                    </div>
+                    <span className="shrink-0 rounded-full bg-[#eef2ed] px-3 py-1 text-[10px] font-bold text-[#3d5148]">
+                      {item.badge}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-[#617068]">{item.description}</p>
+                  <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] group-hover:underline">
+                    {item.actionText}
+                    {item.isExternal ? <ExternalLink className="h-3.5 w-3.5" /> : <span aria-hidden="true">&rarr;</span>}
+                  </span>
+                </>
+              );
 
-                  const cls =
-                    "block rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md sm:p-5";
+              const cls =
+                "group flex flex-col rounded-[1.5rem] border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md";
 
-                  return item.isExternal ? (
-                    <a key={item.title} href={item.href} target="_blank" rel="noreferrer" className={cls}>
-                      {inner}
-                    </a>
-                  ) : (
-                    <Link key={item.title} href={item.href} className={cls}>
-                      {inner}
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
+              return item.isExternal ? (
+                <a key={item.title} href={item.href} target="_blank" rel="noreferrer" className={cls}>
+                  {inner}
+                </a>
+              ) : (
+                <Link key={item.title} href={item.href} className={cls}>
+                  {inner}
+                </Link>
+              );
+            })}
           </div>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
 
 export default function MaterialsOverviewPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-white" />}>
+    <Suspense fallback={<main className="min-h-screen bg-[#f7f4ee]" />}>
       <MaterialsContent />
     </Suspense>
   );
