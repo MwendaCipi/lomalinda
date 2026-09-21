@@ -10,9 +10,6 @@ import { AccessibilityMenu } from "./accessibility-menu";
 const marketingLinks = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/ministries", label: "Ministries" },
-  { href: "/materials", label: "Materials" },
   { href: "/give", label: "Give" },
   { href: "/#contact", label: "Contact" },
 ];
