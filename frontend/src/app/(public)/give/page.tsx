@@ -51,7 +51,7 @@ function GivePageContent() {
 
   const [purpose, setPurpose] = useState(normalizedPurpose);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("");
   const [purposes, setPurposes] = useState<string[]>([]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bankRefNumber, setBankRefNumber] = useState("");
