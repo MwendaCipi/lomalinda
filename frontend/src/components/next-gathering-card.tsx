@@ -172,6 +172,10 @@ export function NextGatheringCard() {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onFocusCapture={() => setIsInteracting(true)}
+      onBlurCapture={(event) => {
+        // Leaving the card (not just moving between its fields) resumes rotation.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsInteracting(false);
+      }}
       className="relative flex min-h-80 flex-col overflow-hidden rounded-[2rem] bg-[#d5dfd7] p-8 text-[#26352f] shadow-sm ring-1 ring-[#c9d5ca] sm:min-h-[28rem] sm:p-10"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
