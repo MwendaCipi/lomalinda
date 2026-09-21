@@ -254,7 +254,7 @@ export function MarketingHome() {
                   />
                 </div>
                 <div>
-                  <p className="font-bold leading-tight">Seventh-day Adventist Church</p>
+                  <p className="leading-tight">SDA Church</p>
                   <p className="text-xs text-white/60">Loma Linda</p>
                 </div>
               </div>
