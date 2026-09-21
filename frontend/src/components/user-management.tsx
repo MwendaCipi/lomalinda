@@ -28,6 +28,7 @@ export type MemberUser = {
 };
 
 type MemberFilter = "all" | "members" | "friends" | "ex_members";
+type InvitationFilter = "confirmed" | "pending";
 type RemovalReason = "disciplinary" | "death" | "transfer_out";
 
 export const AVAILABLE_GIFTS = [
@@ -813,8 +814,10 @@ export function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
+  const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
   const [churchName, setChurchName] = useState("this church");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addAccountType, setAddAccountType] = useState<"member" | "friend">("member");
   const [editingMember, setEditingMember] = useState<MemberUser | null>(null);
 
   const [formData, setFormData] = useState(initialForm);
@@ -1091,6 +1094,13 @@ export function UserManagement() {
     }
   };
 
+  const handleAddPerson = (e: React.FormEvent) => {
+    if (addAccountType === "friend") {
+      return handleAddFriend(e);
+    }
+    return handleAddMember(e);
+  };
+
   // ── Add Friend ──────────────────────────────────────────────────────────
   const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1300,6 +1310,8 @@ export function UserManagement() {
     return true;
   };
 
+  const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
+
   const filteredMembers = members.filter((m) => {
     const query = search.toLowerCase();
     const matchesSearch =
@@ -1484,15 +1496,27 @@ export function UserManagement() {
         </div>
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
           <select
-            value={memberFilter}
-            onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
+            value={invitationFilter}
+            onChange={(e) => setInvitationFilter(e.target.value as InvitationFilter)}
             className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+            aria-label="Account confirmation filter"
           >
-            <option value="all">All</option>
-            <option value="members">Members</option>
-            <option value="friends">Friends</option>
-            <option value="ex_members">Ex-members</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="pending">Pending</option>
           </select>
+          {invitationFilter === "confirmed" && (
+            <select
+              value={memberFilter}
+              onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
+              className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+              aria-label="Member type filter"
+            >
+              <option value="all">All types</option>
+              <option value="members">Members</option>
+              <option value="friends">Friends</option>
+              <option value="ex_members">Ex-members</option>
+            </select>
+          )}
           <input
             type="text"
             placeholder="Search by name, email, phone, gifts..."
@@ -1527,16 +1551,53 @@ export function UserManagement() {
 
       {/* ── Scrollable table area ── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-3 custom-table-scrollbar">
+        {invitationFilter === "pending" && (
+          <div className="space-y-3">
+            {pendingInvitations.length === 0 ? (
+              <div className="rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] p-8 text-center text-xs text-[#617068]">
+                No pending invitations found.
+              </div>
+            ) : (
+              pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#26352f]">
+                        {[invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email}
+                      </p>
+                      <p className="truncate text-xs text-[#617068]">
+                        {invitation.email} · {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
+                      {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Confirmed" : "Withdrawn"}
+                    </span>
+                  </div>
+                  {invitation.status !== "accepted" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {invitation.invite_url && (
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">Copy link</button>
+                      )}
+                      <button type="button" onClick={() => handleInviteAction(invitation.id, "resend")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">Resend</button>
+                      <button type="button" onClick={() => handleInviteAction(invitation.id, "revoke")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]">Withdraw</button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {/* Desktop Table */}
-        <div className="hidden md:block">
+        <div className={invitationFilter === "pending" ? "hidden" : "hidden md:block"}>
           <table className="w-full text-left text-xs">
             <thead className="sticky top-0 z-10 bg-white border-b border-[#dfdbd1]">
               <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
                 <th className="pb-3 font-bold w-8">#</th>
                 <th className="pb-3 font-bold">Name</th>
                 <th className="pb-3 font-bold">Contact</th>
-                <th className="pb-3 font-bold">Sex</th>
                 <th className="pb-3 font-bold">Role</th>
+                <th className="pb-3 font-bold">Sex</th>
                 <th className="pb-3 text-right font-bold">Actions</th>
               </tr>
             </thead>
@@ -1630,7 +1691,7 @@ export function UserManagement() {
         </div>
 
         {/* Mobile Cards */}
-        <div className="grid gap-3 md:hidden">
+        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3 md:hidden"}>
           {loading ? (
             <div className="py-8 text-center text-xs text-[#617068]">Loading members...</div>
           ) : filteredMembers.length === 0 ? (
@@ -1675,7 +1736,9 @@ export function UserManagement() {
 
       {/* ── Bottom bar: Print + Add ── */}
       <div className="shrink-0 border-t border-[#dfdbd1] bg-white px-6 py-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-[#617068]">{filteredMembers.length} of {members.length} members shown</p>
+        <p className="text-[11px] text-[#617068]">
+          {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${members.length} confirmed records shown`}
+        </p>
         <div className="flex items-center gap-2">
           <button
             onClick={handlePrintMemberList}
@@ -1684,33 +1747,22 @@ export function UserManagement() {
             🖨️ Print User List
           </button>
           <button
-            onClick={() => { setFormData(initialForm); setAge(""); setShowAddForm(true); setEditingMember(null); }}
+            onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
             className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
           >
-            + Add New Member
-          </button>
-          <button
-            onClick={() => { setFriendFormData(friendFormInitial); setShowAddFriendForm(true); }}
-            className="rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
-          >
-            + Add New Friend
+            + Add Person
           </button>
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
             className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
             ✉️ Invite by Email
-            {invitations.filter((invitation) => invitation.status === "pending").length > 0 && (
-              <span className="ml-2 rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148]">
-                {invitations.filter((invitation) => invitation.status === "pending").length}
-              </span>
-            )}
           </button>
         </div>
       </div>
 
-      {/* ══ Add Friend Modal ══ */}
-      {showAddFriendForm && (
+      {/* The friend fields now live in the shared Add Person modal. */}
+      {false && showAddFriendForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="add-friend-title"
             className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
@@ -1851,19 +1903,35 @@ export function UserManagement() {
             className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
               <div>
-                <h3 id="add-member-title" className="text-xl font-bold text-[#26352f]">Register New Church Member</h3>
+                <h3 id="add-member-title" className="text-xl font-bold text-[#26352f]">Add Person</h3>
+                <p className="mt-0.5 text-xs text-[#617068]">Create a confirmed church member or friend record.</p>
               </div>
               <button type="button" onClick={() => setShowAddForm(false)}
                 className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f] transition text-xl leading-none" aria-label="Close modal">✕</button>
             </div>
 
-            <form onSubmit={handleAddMember} className="mt-3.5 space-y-4">
+            <form onSubmit={handleAddPerson} className="mt-3.5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#26352f]">Account Type *</label>
+                <select
+                  value={addAccountType}
+                  onChange={(e) => setAddAccountType(e.target.value as "member" | "friend")}
+                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none"
+                >
+                  <option value="member">Church Member</option>
+                  <option value="friend">Friend of the Church</option>
+                </select>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Name */}
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Name *</label>
                   <input type="text" required placeholder="Enter full name" value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      setFriendFormData({ ...friendFormData, name: e.target.value });
+                    }}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
@@ -1884,7 +1952,11 @@ export function UserManagement() {
                   <label className="block text-xs font-semibold text-[#26352f]">Phone Number</label>
                   <input type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="e.g. 07XXXXXXXX"
                     value={formData.phone_number}
-                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    onChange={(e) => {
+                      const phone = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setFormData({ ...formData, phone_number: phone });
+                      setFriendFormData({ ...friendFormData, phone_number: phone });
+                    }}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
@@ -1899,9 +1971,12 @@ export function UserManagement() {
 
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Email Address *</label>
-                  <input type="email" required placeholder="member@example.com" value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  <label className="block text-xs font-semibold text-[#26352f]">Email Address {addAccountType === "member" ? "*" : ""}</label>
+                  <input type="email" required={addAccountType === "member"} placeholder="member@example.com" value={formData.email}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      setFriendFormData({ ...friendFormData, email: e.target.value });
+                    }}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
@@ -1951,6 +2026,28 @@ export function UserManagement() {
                 </div>
               </div>
 
+              {addAccountType === "friend" && (
+                <div className="grid gap-4 sm:grid-cols-2 rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] p-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#26352f]">Current Church *</label>
+                    <input type="text" required value={friendFormData.current_church}
+                      onChange={(e) => setFriendFormData({ ...friendFormData, current_church: e.target.value })}
+                      placeholder="Church they currently attend"
+                      className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3.5 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#26352f]">Baptismal Status</label>
+                    <select value={friendFormData.baptismal_status}
+                      onChange={(e) => setFriendFormData({ ...friendFormData, baptismal_status: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3.5 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none">
+                      <option value="baptised">Baptised</option>
+                      <option value="not_baptised">Not Baptised</option>
+                      <option value="transfer_pending">Transfer In Progress</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Gifts &amp; Talents</label>
@@ -1970,7 +2067,7 @@ export function UserManagement() {
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button type="submit" disabled={submitting}
                   className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
-                  {submitting ? "Registering Member..." : "Register New Member"}
+                  {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
                 </button>
                 <button type="button" onClick={() => setShowAddForm(false)}
                   className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
@@ -2078,7 +2175,7 @@ export function UserManagement() {
             </form>
 
             {/* Pending, accepted and withdrawn invitations */}
-            {invitations.length > 0 && (
+            {false && invitations.length > 0 && (
               <div className="mt-6 border-t border-[#dfdbd1] pt-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#617068]">Invitations</p>
                 <div className="mt-3 space-y-2">

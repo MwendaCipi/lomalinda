@@ -1,3 +1,4 @@
+import { AuthenticatedPublicShell } from "@/components/authenticated-public-shell";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PopupAnnouncementModal } from "@/components/popup-announcement-modal";
 
@@ -13,7 +14,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     <>
       <PopupAnnouncementModal />
       <MarketingNav />
-      <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+      <AuthenticatedPublicShell>
+        <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+      </AuthenticatedPublicShell>
     </>
   );
 }
