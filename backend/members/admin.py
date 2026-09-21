@@ -1,8 +1,10 @@
 import uuid
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import admin
 from django.utils import timezone
+from django.utils.html import format_html
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
@@ -130,8 +132,15 @@ class InvitationAdmin(admin.ModelAdmin):
     list_display = ('email', 'first_name', 'last_name', 'account_type', 'roles', 'status', 'sent_at', 'expires_at')
     list_filter = ('status', 'account_type', 'created_at')
     search_fields = ('email', 'first_name', 'last_name')
-    readonly_fields = ('token', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at')
+    readonly_fields = ('invitation_link', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at')
     actions = ['resend_invitations', 'revoke_invitations']
+
+    @admin.display(description='Invitation link (copy and share if email is unavailable)')
+    def invitation_link(self, obj):
+        if not obj.pk:
+            return 'The link appears here once the invitation is saved.'
+        url = f'{settings.FRONTEND_URL}/accept-invite?token={obj.token}'
+        return format_html('<a href="{0}" target="_blank" rel="noopener">{0}</a>', url)
 
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None
