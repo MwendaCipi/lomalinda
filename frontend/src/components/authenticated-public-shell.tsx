@@ -33,7 +33,7 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
   return (
     <div className="authenticated-public-shell app-shell flex min-h-0 flex-1 overflow-hidden pb-24 md:pb-0">
       <Sidebar />
-      <div className="min-w-0 min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">{children}</div>
+      <div className="min-w-0 min-h-0 h-full flex-1 overflow-y-auto custom-hover-scrollbar">{children}</div>
     </div>
   );
 }

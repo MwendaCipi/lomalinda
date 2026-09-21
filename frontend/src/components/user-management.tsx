@@ -1488,42 +1488,44 @@ export function UserManagement() {
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dfdbd1] px-6 py-4 shrink-0">
-        <div>
+      <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
           <h2 className="text-xl font-bold text-[#26352f]">Users</h2>
-          <p className="mt-0.5 text-xs text-[#617068]">
+          <p className="text-xs text-[#617068]">
             {members.length} records registered
           </p>
         </div>
-        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-          <select
-            value={invitationFilter}
-            onChange={(e) => setInvitationFilter(e.target.value as InvitationFilter)}
-            className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-            aria-label="Account confirmation filter"
-          >
-            <option value="confirmed">Confirmed</option>
-            <option value="pending">Pending</option>
-          </select>
-          {invitationFilter === "confirmed" && (
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <select
-              value={memberFilter}
-              onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
-              className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-              aria-label="Member type filter"
+              value={invitationFilter}
+              onChange={(e) => setInvitationFilter(e.target.value as InvitationFilter)}
+              className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+              aria-label="Account confirmation filter"
             >
-              <option value="all">All types</option>
-              <option value="members">Members</option>
-              <option value="friends">Friends</option>
-              <option value="ex_members">Ex-members</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
             </select>
-          )}
+            {invitationFilter === "confirmed" && (
+              <select
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
+                className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+                aria-label="Member type filter"
+              >
+                <option value="all">All types</option>
+                <option value="members">Members</option>
+                <option value="friends">Friends</option>
+                <option value="ex_members">Ex-members</option>
+              </select>
+            )}
+          </div>
           <input
             type="text"
             placeholder="Search by name, email, phone, gifts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="min-w-[180px] max-w-sm flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:min-w-[180px] sm:max-w-sm sm:flex-1"
           />
         </div>
       </div>
@@ -1551,7 +1553,7 @@ export function UserManagement() {
       )}
 
       {/* ── Scrollable table area ── */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-3 custom-table-scrollbar">
+      <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 pb-6 custom-table-scrollbar sm:px-6">
         {invitationFilter === "pending" && (
           <div className="space-y-3">
             {pendingInvitations.length === 0 ? (
