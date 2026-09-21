@@ -33,6 +33,7 @@ from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeeti
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push, normalize_mpesa_phone
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
+from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
     ROLE_CODES,
@@ -679,7 +680,9 @@ class InvitationListCreateView(generics.ListCreateAPIView):
         unknown = unknown_role_codes(submitted_roles)
         if unknown:
             return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
-        roles_param = normalize_roles(submitted_roles)
+        # Account type (member/friend) describes the person's status; only
+        # permission-bearing roles belong in the invitation's role list.
+        roles_param = [code for code in submitted_roles if code != DEFAULT_ROLE]
         # Administrator is a system role: only administrators may hand it out.
         error = check_system_role_change(request.user, None, [], roles_param)
         if error:
@@ -776,6 +779,11 @@ class InvitationVerifyView(APIView):
     """Public: is this invitation link still usable, and who is it for?"""
 
     permission_classes = [AllowAny]
+    # Public token lookups are rate limited per client address: the token is
+    # unguessable, but probing should not be free. Verify and accept share one
+    # budget so splitting attempts across the two endpoints buys nothing.
+    throttle_classes = [PublicTokenThrottle]
+    throttle_scope = 'invitation_public'
 
     def get(self, request):
         invitation = Invitation.from_token(request.query_params.get('token'))
@@ -805,6 +813,8 @@ class InvitationAcceptView(APIView):
     """Public: the invitee sets their own username and password."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [PublicTokenThrottle]
+    throttle_scope = 'invitation_public'
 
     def post(self, request):
         serializer = InvitationAcceptSerializer(data=request.data)
@@ -840,8 +850,8 @@ class InvitationAcceptView(APIView):
                 password=password,
             )
             profile, _ = MemberProfile.objects.get_or_create(user=user)
-            codes = invitation.role_codes() or ['member']
-            profile.role = codes[0]
+            codes = [code for code in invitation.role_codes() if code != DEFAULT_ROLE]
+            profile.role = codes[0] if codes else ''
             profile.roles = ', '.join(codes)
             profile.account_type = invitation.account_type
             if invitation.phone_number:

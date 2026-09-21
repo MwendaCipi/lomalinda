@@ -145,7 +145,18 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
+    'DEFAULT_THROTTLE_RATES': {
+        # Public invitation lookup/acceptance (members/throttling.py): plenty
+        # for one person clicking their emailed link — and re-pasting a
+        # mistyped token — far below what probing for 122-bit tokens needs.
+        'invitation_public': os.getenv('INVITATION_THROTTLE_RATE', '30/hour'),
+    },
 }
+
+# Requests reach Django through the Cloudflare edge (the frontend's Worker
+# proxies /api to the origin), so per-client throttling keys on the edge's
+# CF-Connecting-IP. Turn off only when the API is exposed without Cloudflare.
+TRUST_CF_CONNECTING_IP = os.getenv('TRUST_CF_CONNECTING_IP', 'true').lower() == 'true'
 
 from datetime import timedelta
 

@@ -190,7 +190,6 @@ class MpesaPurposeReferenceTests(TestCase):
         self.assertEqual(account_reference_for_purpose(''), 'GIVING')
 
 
-class MpesaC2BAPITests(APITestCase):
 class MpesaInitiationAPITests(APITestCase):
     @patch('members.views.initiate_stk_push')
     def test_stk_initiation_failure_does_not_create_completed_contribution(self, mock_stk):
@@ -209,6 +208,7 @@ class MpesaInitiationAPITests(APITestCase):
         self.assertIsNone(contribution.mpesa_receipt_number)
 
 
+class MpesaC2BAPITests(APITestCase):
     def test_c2b_validation_returns_accepted(self):
         response = self.client.post('/api/members/payments/mpesa/c2b/validation/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -808,6 +808,73 @@ class InvitationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         invitation = Invitation.objects.get(email='twodays@example.com')
         self.assertEqual(invitation.expires_at, now + timedelta(days=2))
+
+
+class InvitationThrottleTests(APITestCase):
+    """One address probing the public invitation endpoints meets a wall.
+
+    Verify and accept draw from one per-client budget, a fresh edge address
+    gets its own, and a client-supplied X-Forwarded-For header cannot buy a
+    new budget once spent (members/throttling.py).
+    """
+
+    def setUp(self):
+        from django.conf import settings as django_settings
+        from django.core.cache import cache
+
+        cache.clear()
+        # The throttle reads its rate on every request, so tightening it here
+        # keeps the test fast without touching the deployment default.
+        self.original_rates = django_settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']
+        django_settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {'invitation_public': '3/hour'}
+        self.addCleanup(
+            django_settings.REST_FRAMEWORK.__setitem__,
+            'DEFAULT_THROTTLE_RATES',
+            self.original_rates,
+        )
+        self.invitation = Invitation.objects.create(
+            email='throttled@example.com',
+            first_name='Grace',
+            last_name='Wanjiku',
+            roles='member',
+            account_type='member',
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+    def verify(self, **extra):
+        return self.client.get(
+            f'/api/members/auth/invitation/verify/?token={self.invitation.raw_token}', **extra
+        )
+
+    def accept(self, **extra):
+        return self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(self.invitation.raw_token),
+            'username': 'throttled.user',
+            'password': 'SabbathRest#2026',
+            'confirm_password': 'SabbathRest#2026',
+        }, format='json', **extra)
+
+    def test_verify_and_accept_draw_from_one_budget(self):
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.accept().status_code, 201)
+        self.assertEqual(self.verify().status_code, 429)
+
+    def test_a_fresh_address_gets_its_own_budget(self):
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 429)
+        behind_the_edge = self.verify(HTTP_CF_CONNECTING_IP='203.0.113.7')
+        self.assertEqual(behind_the_edge.status_code, 200)
+
+    def test_a_rolled_forwarded_for_header_does_not_reset_the_budget(self):
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 200)
+        self.assertEqual(self.verify().status_code, 429)
+        self.assertEqual(self.verify(HTTP_X_FORWARDED_FOR='198.51.100.9').status_code, 429)
+        self.assertEqual(self.verify(HTTP_X_FORWARDED_FOR='198.51.100.10, 198.51.100.9').status_code, 429)
 
 
 class ChurchRoleTests(APITestCase):
