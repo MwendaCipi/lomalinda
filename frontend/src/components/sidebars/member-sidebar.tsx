@@ -6,7 +6,7 @@ import { LayoutDashboard, User, BarChart3, HeartHandshake, Heart, ChevronRight, 
 import { triggerPwaInstall } from "../pwa-register";
 
 const memberLinks = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/member", label: "My Profile & Status", icon: User },
   { href: "/member/reports", label: "My Giving Statements", icon: BarChart3 },
   { href: "/community/welfare", label: "Member Welfare", icon: HeartHandshake },

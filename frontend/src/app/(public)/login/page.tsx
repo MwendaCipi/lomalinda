@@ -33,10 +33,9 @@ function LoginContent() {
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       setMessage("You are signed in.");
 
-      // Everyone lands on the system dashboard: the root route shows the
-      // marketing page to visitors and the signed-in dashboard to members,
-      // whose role-aware tiles link leaders on to Administration.
-      router.push(nextParam || "/");
+      // Everyone lands on the system dashboard, whose role-aware tiles link
+      // leaders on to Administration. The site home stays the marketing page.
+      router.push(nextParam || "/dashboard");
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unable to connect to the server.";
       setMessage(errorMsg);

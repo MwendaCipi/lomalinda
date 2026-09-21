@@ -65,7 +65,7 @@ export function MemberHome() {
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) {
-      router.replace("/login?next=/");
+      router.replace("/login?next=/dashboard");
       return;
     }
     const headers = { Authorization: `Bearer ${token}` };
@@ -74,9 +74,9 @@ export function MemberHome() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         setMe(data);
-        if (!data) router.replace("/login?next=/");
+        if (!data) router.replace("/login?next=/dashboard");
       })
-      .catch(() => router.replace("/login?next=/"));
+      .catch(() => router.replace("/login?next=/dashboard"));
 
     fetch(`${API_URL}/api/members/announcements/`, { headers })
       .then((res) => (res.ok ? res.json() : []))

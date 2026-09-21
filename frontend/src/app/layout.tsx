@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { SiteHeader } from "@/components/site-header";
 import { PwaRegister } from "@/components/pwa-register";
 import { AccessibilityProvider } from "@/context/accessibility-context";
 
@@ -33,10 +32,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="h-full flex flex-col pb-24 md:pb-0">
+      <body className="h-full flex flex-col">
         <AccessibilityProvider>
-          <SiteHeader />
-          <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+          {/* Chrome is per group: the public website renders MarketingNav,
+              the system area renders SiteHeader (header + mobile tab bar). */}
+          {children}
           <PwaRegister />
         </AccessibilityProvider>
       </body>

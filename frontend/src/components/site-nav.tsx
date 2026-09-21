@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Home,
   Users,
   BookOpen,
   HandHeart,
@@ -220,7 +219,7 @@ export function SiteNav() {
   // Desktop navigation items
   const desktopNavItems = [
     ...(userState.isLoggedIn
-      ? [{ href: "/", label: "Dashboard", active: pathname === "/" }]
+      ? [{ href: "/dashboard", label: "Dashboard", active: pathname.startsWith("/dashboard") }]
       : []),
     {
       href: "/announcements",

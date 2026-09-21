@@ -107,7 +107,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
         </div>
 
         <Link
-          href="/"
+          href="/dashboard"
           className="flex w-full items-center justify-between rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
         >
           <div className="flex items-center gap-2.5">
