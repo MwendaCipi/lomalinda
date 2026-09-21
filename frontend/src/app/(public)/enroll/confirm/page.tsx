@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PasswordRules } from "@/components/password-rules";
 import { FieldErrors, parseApiErrors } from "@/lib/form-errors";
+import { passwordProblems } from "@/lib/validation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -80,7 +82,10 @@ function EnrollmentConfirmContent() {
     if (!cleanUsername) nextErrors.username = "Choose a username you will sign in with.";
     else if (/\s/.test(cleanUsername)) nextErrors.username = "Usernames cannot contain spaces.";
     if (!password) nextErrors.password = "Choose a password.";
-    else if (password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else {
+      const problems = passwordProblems(password);
+      if (problems.length > 0) nextErrors.password = problems.join(" ");
+    }
     if (password && password !== confirmPassword) {
       nextErrors.confirmPassword = "The two passwords do not match. Please retype the confirmation.";
     }
@@ -201,6 +206,7 @@ function EnrollmentConfirmContent() {
               />
               <FieldError message={fieldErrors.confirmPassword} />
             </label>
+            <PasswordRules password={password} />
             <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
               <input
                 type="checkbox"

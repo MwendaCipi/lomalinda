@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FormEvent, Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PasswordRules } from "@/components/password-rules";
 import { showAlert } from "@/lib/alerts";
 import { FieldErrors, parseApiErrors } from "@/lib/form-errors";
+import { passwordProblems } from "@/lib/validation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -47,7 +49,10 @@ function ResetPasswordContent() {
     const nextErrors: FieldErrors = {};
 
     if (!password) nextErrors.password = "Choose a new password.";
-    else if (password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else {
+      const problems = passwordProblems(password);
+      if (problems.length > 0) nextErrors.password = problems.join(" ");
+    }
     if (password && password !== confirmPassword) {
       nextErrors.confirmPassword = "The two passwords do not match. Please retype the confirmation.";
     }
@@ -138,7 +143,7 @@ function ResetPasswordContent() {
             />
             <FieldError message={fieldErrors.confirmPassword} />
           </label>
-          <p className="text-xs text-[#617068]">Use at least 8 characters, and avoid a password that is easy to guess.</p>
+          <PasswordRules password={password} />
           <button
             type="submit"
             disabled={loading}

@@ -16,6 +16,7 @@ import re
 import json
 import os
 import io
+import secrets
 import time
 from decimal import Decimal
 from html.parser import HTMLParser
@@ -30,6 +31,7 @@ from rest_framework.views import APIView
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
+from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .roles import (
     ROLE_CODES,
@@ -48,10 +50,22 @@ from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer,
 # are generated straight from Django's crypto helpers instead. The alphabet skips
 # characters that are easy to confuse when a password is read out or typed (0/O, 1/l/I).
 TEMPORARY_PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+PASSWORD_UPPERCASE = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+PASSWORD_DIGITS = '23456789'
+PASSWORD_SYMBOLS = '@#!$%&*?'
 
 
 def generate_temporary_password(length=12):
-    return get_random_string(length, TEMPORARY_PASSWORD_ALPHABET)
+    """A generated password always satisfies the church's policy (members/password_policy.py)."""
+    length = max(length, PASSWORD_MIN_LENGTH)
+    characters = [
+        secrets.choice(PASSWORD_UPPERCASE),
+        secrets.choice(PASSWORD_DIGITS),
+        secrets.choice(PASSWORD_SYMBOLS),
+    ]
+    characters += [secrets.choice(TEMPORARY_PASSWORD_ALPHABET) for _ in range(length - len(characters))]
+    secrets.SystemRandom().shuffle(characters)
+    return ''.join(characters)
 
 
 def send_enrollment_email(enrollment):
@@ -2926,6 +2940,10 @@ class UserManagementView(generics.ListCreateAPIView):
         if not password:
             password = generate_temporary_password()
             password_generated = True
+        else:
+            problems = password_problems(password)
+            if problems:
+                return Response({'password': problems}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(username=username).exists():
             return Response({'detail': 'A user with this username already exists.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -703,3 +703,81 @@ class ChurchRoleRegistryTests(TestCase):
         expected = set(Permission.objects.filter(content_type__app_label='members').values_list('id', flat=True))
         self.assertTrue(expected)
         self.assertEqual(set(group.permissions.values_list('id', flat=True)), expected)
+
+
+class PasswordPolicyTests(APITestCase):
+    """Passwords only have to clear four rules: 8+ characters, a capital, a
+    number and a symbol. A name or a common word is allowed on purpose."""
+
+    def setUp(self):
+        self.invitation = Invitation.objects.create(
+            email='policy@example.com',
+            first_name='Grace',
+            last_name='Wanjiku',
+            roles='member',
+            account_type='member',
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+    def _accept(self, password, username='policy.user'):
+        return self.client.post('/api/members/auth/invitation/accept/', {
+            'token': str(self.invitation.token),
+            'username': username,
+            'password': password,
+            'confirm_password': password,
+        }, format='json')
+
+    def test_every_missing_requirement_is_reported(self):
+        for password, expected in (
+            ('Short1!', 'at least 8 characters'),
+            ('alllowercase1!', 'capital letter'),
+            ('NoNumbers!', 'number'),
+            ('NoSymbols12', 'symbol'),
+        ):
+            with self.subTest(password=password):
+                response = self._accept(password)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(expected, ' '.join(response.data['password']).lower())
+        self.assertFalse(User.objects.filter(username='policy.user').exists())
+
+    def test_the_persons_own_name_is_allowed(self):
+        """The similarity rule Django ships with is deliberately not used."""
+        response = self._accept('GraceWanjiku1!', username='grace.wanjiku')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(User.objects.filter(username='grace.wanjiku').exists())
+
+    def test_common_passwords_are_allowed(self):
+        response = self._accept('Password1!')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_the_api_and_django_share_one_policy(self):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+
+        from .password_policy import ChurchPasswordValidator, REQUIREMENTS_TEXT
+
+        validate_password('Ngari@2026')
+        with self.assertRaises(ValidationError):
+            validate_password('ngari2026')
+        self.assertEqual(ChurchPasswordValidator().get_help_text(), REQUIREMENTS_TEXT)
+
+    def test_generated_passwords_always_clear_the_policy(self):
+        from .password_policy import password_is_valid
+        from .views import generate_temporary_password
+
+        for length in (8, 12, 16):
+            for _ in range(50):
+                self.assertTrue(password_is_valid(generate_temporary_password(length)), length)
+
+    def test_the_console_refuses_a_weak_password_for_a_new_member(self):
+        admin_user = User.objects.create_user('policy.admin', 'policy.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=admin_user, role='admin', roles='admin')
+        self.client.force_authenticate(user=admin_user)
+
+        weak = self.client.post('/api/members/users/', {
+            'username': 'weak.user', 'name': 'Weak User', 'email': 'weak.user@example.com',
+            'password': 'weakpass',
+        }, format='json')
+        self.assertEqual(weak.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', weak.data)
+        self.assertFalse(User.objects.filter(username='weak.user').exists())

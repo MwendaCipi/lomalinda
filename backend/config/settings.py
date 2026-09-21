@@ -158,18 +158,13 @@ SIMPLE_JWT = {
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
+# The church's own rules (8+ characters with a capital, a number and a symbol).
+# Django's stock validators are deliberately *not* used: they reject common
+# passwords and anything resembling the person's own name, which kept turning
+# away ordinary members. See members/password_policy.py.
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'members.password_policy.ChurchPasswordValidator',
     },
 ]
 

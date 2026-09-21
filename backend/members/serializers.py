@@ -12,6 +12,7 @@ from .models import (
     GivingPurpose, InKindContribution, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
+from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
 from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_role_codes
 from .validators import (
     validate_future_or_today_date, validate_national_id,
@@ -78,7 +79,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True, min_length=PASSWORD_MIN_LENGTH, help_text=PASSWORD_REQUIREMENTS
+    )
     phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -93,6 +96,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate_last_name(self, value):
         return validate_text_min_length(value, 2, 'Last name')
+
+    def validate_password(self, value):
+        validate_church_password(value)
+        return value
 
     def create(self, validated_data):
         phone_number = validated_data.pop('phone_number', '')
@@ -153,8 +160,14 @@ class EnrollmentRequestSerializer(serializers.ModelSerializer):
 class EnrollmentCompleteSerializer(serializers.Serializer):
     token = serializers.UUIDField()
     username = serializers.CharField(max_length=150)
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True, min_length=PASSWORD_MIN_LENGTH, help_text=PASSWORD_REQUIREMENTS
+    )
     privacy_accepted = serializers.BooleanField(write_only=True)
+
+    def validate_password(self, value):
+        validate_church_password(value)
+        return value
 
     def validate_privacy_accepted(self, value):
         if not value:

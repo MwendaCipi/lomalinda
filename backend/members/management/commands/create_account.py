@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import get_tenant_model, schema_context
 
 from members.models import MemberProfile
+from members.password_policy import REQUIREMENTS_TEXT, password_problems
 from members.views import ROLE_GROUP_MAP, generate_temporary_password
 
 
@@ -64,6 +65,11 @@ class Command(BaseCommand):
             raise CommandError(
                 f"Unknown role code(s): {', '.join(unknown)}. Valid codes: {', '.join(sorted(valid_roles))}"
             )
+
+        if options['password']:
+            problems = password_problems(options['password'])
+            if problems:
+                raise CommandError(' '.join(problems) + f' {REQUIREMENTS_TEXT}')
 
         user = User.objects.filter(username=username).first()
         generated_password = None
