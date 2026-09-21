@@ -2,15 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  Calendar as CalendarIcon,
-  Users,
   Plus,
   Search,
   CheckCircle2,
   Clock,
   Building2,
   Heart,
-  BookOpen,
   Award,
   Shield,
   X,
@@ -219,12 +216,13 @@ const SAMPLE_EVENTS: Record<DepartmentKey, DeptEvent[]> = {
 
 interface DepartmentManagerProps {
   deptKey: DepartmentKey;
+  initialSubTab?: "members" | "calendar" | "activities";
 }
 
-export function DepartmentManager({ deptKey }: DepartmentManagerProps) {
+export function DepartmentManager({ deptKey, initialSubTab = "members" }: DepartmentManagerProps) {
   const config = DEPARTMENTS[deptKey] || DEPARTMENTS.amm;
 
-  const [activeSubTab, setActiveSubTab] = useState<"members" | "calendar" | "activities">("members");
+  const activeSubTab = initialSubTab;
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -321,39 +319,6 @@ export function DepartmentManager({ deptKey }: DepartmentManagerProps) {
               Target: {config.targetCriteria}
             </span>
           </div>
-        </div>
-
-        {/* Sub Navigation */}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/20 pt-4">
-          <button
-            onClick={() => setActiveSubTab("members")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeSubTab === "members" ? "bg-white text-[#26352f] shadow" : "bg-white/10 text-white hover:bg-white/20"
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            Department Members ({members.length})
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab("calendar")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeSubTab === "calendar" ? "bg-white text-[#26352f] shadow" : "bg-white/10 text-white hover:bg-white/20"
-            }`}
-          >
-            <CalendarIcon className="h-4 w-4" />
-            Events Calendar ({events.length})
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab("activities")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeSubTab === "activities" ? "bg-white text-[#26352f] shadow" : "bg-white/10 text-white hover:bg-white/20"
-            }`}
-          >
-            <BookOpen className="h-4 w-4" />
-            Activities &amp; Outreach
-          </button>
         </div>
       </div>
 

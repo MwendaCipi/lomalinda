@@ -474,7 +474,10 @@ function AdministrationContent() {
             {/* Department Manager (AMM, AWM, AYM, APM, Chaplaincy) */}
             {activeTab.startsWith("dept-") && (
               <div>
-                <DepartmentManager deptKey={activeTab.replace("dept-", "") as DepartmentKey} />
+                <DepartmentManager
+                  deptKey={activeTab.replace("dept-", "").replace(/-(members|calendar|activities)$/, "") as DepartmentKey}
+                  initialSubTab={(activeTab.match(/-(members|calendar|activities)$/)?.[1] as "members" | "calendar" | "activities") || "members"}
+                />
               </div>
             )}
             </div>

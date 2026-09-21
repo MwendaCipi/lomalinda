@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Users,
@@ -633,38 +634,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
               Adventist Men (AMM)
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("dept-amm")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-amm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="h-4 w-4 shrink-0 text-blue-800" />
-                    <span>Adventist Men</span>
-                  </div>
-                  {currentTab === "dept-amm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=dept-amm"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-amm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="h-4 w-4 shrink-0 text-blue-800" />
-                    <span>Adventist Men</span>
-                  </div>
-                  {currentTab === "dept-amm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
+              <DeptNavItem tab="dept-amm-members" label="Members" icon={Users} iconColor="text-blue-800" active={currentTab === "dept-amm-members" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-amm-calendar" label="Calendar" icon={CalendarIcon} iconColor="text-blue-800" active={currentTab === "dept-amm-calendar" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-amm-activities" label="Activities" icon={ClipboardList} iconColor="text-blue-800" active={currentTab === "dept-amm-activities" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
             </nav>
           </div>
         )}
@@ -676,38 +648,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
               Adventist Women (AWM)
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("dept-awm")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-awm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Heart className="h-4 w-4 shrink-0 text-rose-700" />
-                    <span>Adventist Women</span>
-                  </div>
-                  {currentTab === "dept-awm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=dept-awm"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-awm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Heart className="h-4 w-4 shrink-0 text-rose-700" />
-                    <span>Adventist Women</span>
-                  </div>
-                  {currentTab === "dept-awm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
+              <DeptNavItem tab="dept-awm-members" label="Members" icon={Heart} iconColor="text-rose-700" active={currentTab === "dept-awm-members" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-awm-calendar" label="Calendar" icon={CalendarIcon} iconColor="text-rose-700" active={currentTab === "dept-awm-calendar" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-awm-activities" label="Activities" icon={ClipboardList} iconColor="text-rose-700" active={currentTab === "dept-awm-activities" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
             </nav>
           </div>
         )}
@@ -719,38 +662,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
               Adventist Youth &amp; Children
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("dept-aym")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-aym" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Award className="h-4 w-4 shrink-0 text-amber-700" />
-                    <span>Youth &amp; Children</span>
-                  </div>
-                  {currentTab === "dept-aym" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=dept-aym"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-aym" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Award className="h-4 w-4 shrink-0 text-amber-700" />
-                    <span>Youth &amp; Children</span>
-                  </div>
-                  {currentTab === "dept-aym" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
+              <DeptNavItem tab="dept-aym-members" label="Members" icon={Award} iconColor="text-amber-700" active={currentTab === "dept-aym-members" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-aym-calendar" label="Calendar" icon={CalendarIcon} iconColor="text-amber-700" active={currentTab === "dept-aym-calendar" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-aym-activities" label="Activities" icon={ClipboardList} iconColor="text-amber-700" active={currentTab === "dept-aym-activities" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
             </nav>
           </div>
         )}
@@ -762,38 +676,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
               Adventist Possibility (APM)
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("dept-apm")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-apm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Shield className="h-4 w-4 shrink-0 text-teal-700" />
-                    <span>Possibility Ministry (APM)</span>
-                  </div>
-                  {currentTab === "dept-apm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=dept-apm"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-apm" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Shield className="h-4 w-4 shrink-0 text-teal-700" />
-                    <span>Possibility Ministry (APM)</span>
-                  </div>
-                  {currentTab === "dept-apm" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
+              <DeptNavItem tab="dept-apm-members" label="Members" icon={Shield} iconColor="text-teal-700" active={currentTab === "dept-apm-members" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-apm-calendar" label="Calendar" icon={CalendarIcon} iconColor="text-teal-700" active={currentTab === "dept-apm-calendar" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-apm-activities" label="Activities" icon={ClipboardList} iconColor="text-teal-700" active={currentTab === "dept-apm-activities" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
             </nav>
           </div>
         )}
@@ -805,43 +690,57 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
               Chaplaincy Ministry
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("dept-chaplaincy")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-chaplaincy" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <BookOpen className="h-4 w-4 shrink-0 text-indigo-800" />
-                    <span>Chaplaincy &amp; Pastoral Care</span>
-                  </div>
-                  {currentTab === "dept-chaplaincy" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=dept-chaplaincy"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "dept-chaplaincy" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <BookOpen className="h-4 w-4 shrink-0 text-indigo-800" />
-                    <span>Chaplaincy &amp; Pastoral Care</span>
-                  </div>
-                  {currentTab === "dept-chaplaincy" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
+              <DeptNavItem tab="dept-chaplaincy-members" label="Members" icon={BookOpen} iconColor="text-indigo-800" active={currentTab === "dept-chaplaincy-members" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-chaplaincy-calendar" label="Calendar" icon={CalendarIcon} iconColor="text-indigo-800" active={currentTab === "dept-chaplaincy-calendar" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
+              <DeptNavItem tab="dept-chaplaincy-activities" label="Activities" icon={ClipboardList} iconColor="text-indigo-800" active={currentTab === "dept-chaplaincy-activities" && !isReconPage} interactive={!!onSelectTab && !isReconPage} onSelect={handleTabClick} />
             </nav>
           </div>
         )}
 
       </div>
     </aside>
+  );
+}
+
+function DeptNavItem({
+  tab,
+  label,
+  icon: Icon,
+  iconColor,
+  active,
+  interactive,
+  onSelect,
+}: {
+  tab: string;
+  label: string;
+  icon: LucideIcon;
+  iconColor: string;
+  active: boolean;
+  interactive: boolean;
+  onSelect: (tab: string) => void;
+}) {
+  const inner = (
+    <div className="flex items-center gap-2.5">
+      <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
+      <span>{label}</span>
+    </div>
+  );
+  const chevron = active ? <ChevronRight className="h-3.5 w-3.5 font-bold" /> : null;
+  const cls = `flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+    active ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#dfd9cb]"
+  }`;
+  if (interactive) {
+    return (
+      <button type="button" onClick={() => onSelect(tab)} className={cls}>
+        {inner}
+        {chevron}
+      </button>
+    );
+  }
+  return (
+    <Link href={`/administration?tab=${tab}`} className={cls}>
+      {inner}
+      {chevron}
+    </Link>
   );
 }
