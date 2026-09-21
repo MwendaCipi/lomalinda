@@ -4,11 +4,13 @@ from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import get_tenant_model, schema_context
 
 from members.models import MemberProfile
+from members.views import generate_temporary_password
 
 # Church role code -> default Django group (created by migration 0009 / seed_defaults)
 ROLE_GROUP_MAP = {
     'admin': 'Administrators',
     'leader': 'Church Leaders',
+    'elder': 'Church Leaders',
     'clerk': 'Church Leaders',
     'treasurer': 'Finance Team',
     'finance': 'Finance Team',
@@ -82,7 +84,7 @@ class Command(BaseCommand):
         generated_password = None
 
         if user is None:
-            generated_password = options['password'] or User.objects.make_random_password(length=12)
+            generated_password = options['password'] or generate_temporary_password()
             user = User.objects.create_user(
                 username=username,
                 email=options['email'],
