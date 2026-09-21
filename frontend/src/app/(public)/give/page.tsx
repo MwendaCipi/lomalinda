@@ -65,9 +65,6 @@ function GivePageContent() {
   // Giving form modal (opened via Give Now or a ?purpose= deep link)
   const [showGiveModal, setShowGiveModal] = useState(false);
 
-  // M-Pesa STK Push Prompt state
-  const [showPromptModal, setShowPromptModal] = useState(false);
-  const [promptTimeoutSeconds, setPromptTimeoutSeconds] = useState(45);
 
   // ── My Givings ────────────────────────────────────────────────────────────
   const [signedIn, setSignedIn] = useState(false);
@@ -191,29 +188,6 @@ function GivePageContent() {
       .catch(() => setPurposes(defaultPurposes));
   }, []);
 
-  // Handle countdown timer for prompt timeout
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (showPromptModal && promptTimeoutSeconds > 0) {
-      timer = setInterval(() => {
-        setPromptTimeoutSeconds((prev) => prev - 1);
-      }, 1000);
-    } else if (showPromptModal && promptTimeoutSeconds === 0) {
-      setShowPromptModal(false);
-      setLoading(false);
-      setMessage("Cancelled");
-      showAlert("Cancelled", "Payment prompt timed out.", "warning");
-    }
-    return () => clearInterval(timer);
-  }, [showPromptModal, promptTimeoutSeconds]);
-
-  const handleCancelPrompt = () => {
-    setShowPromptModal(false);
-    setLoading(false);
-    setMessage("Cancelled");
-    showAlert("Cancelled", "Transaction cancelled.", "info");
-  };
-
   async function submitGiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -266,9 +240,17 @@ function GivePageContent() {
       }
 
       if (methodOfGiving === "mpesa") {
-        setPromptTimeoutSeconds(45);
+        const promptMessage = data.message ?? "M-Pesa prompt sent. Enter your PIN on your phone to complete the payment.";
         setShowGiveModal(false);
-        setShowPromptModal(true);
+        setLoading(false);
+        setMessage(promptMessage);
+        showAlert("M-Pesa prompt sent", promptMessage, "info", {
+          toast: true,
+          position: "top-end",
+          timer: 7000,
+          showConfirmButton: false,
+        });
+        loadMyGivings();
       } else {
         const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
         setMessage(successMsg);
@@ -674,40 +656,6 @@ function GivePageContent() {
         </div>
       )}
 
-      {/* M-Pesa STK Push Prompt Modal */}
-      {showPromptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in duration-150 border border-[#dfdbd1]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#f7f0e8] text-[#b36b3c]">
-              <span className="text-2xl animate-pulse">📲</span>
-            </div>
-            <h3 className="text-xl font-bold text-[#26352f]">M-Pesa Payment Prompt</h3>
-            <p className="text-xs leading-relaxed text-[#617068]">
-              A payment prompt for <strong className="text-[#26352f]">KES {Number(amount).toLocaleString()}</strong> ({purpose}) has been sent to phone <strong className="text-[#26352f]">{phoneNumber}</strong>.
-            </p>
-            <p className="text-xs font-semibold text-[#b36b3c]">
-              Please check your phone screen and enter your M-Pesa PIN.
-            </p>
-
-            <div className="py-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#f7f4ee] px-4 py-1.5 text-xs font-bold text-[#26352f]">
-                <span>Timeout in:</span>
-                <span className="font-mono text-[#b36b3c]">{promptTimeoutSeconds}s</span>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-[#dfdbd1]">
-              <button
-                type="button"
-                onClick={handleCancelPrompt}
-                className="w-full rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-bold text-[#b91c1c] transition hover:bg-[#fdf2f2]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

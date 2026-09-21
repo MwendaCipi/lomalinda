@@ -191,6 +191,24 @@ class MpesaPurposeReferenceTests(TestCase):
 
 
 class MpesaC2BAPITests(APITestCase):
+class MpesaInitiationAPITests(APITestCase):
+    @patch('members.views.initiate_stk_push')
+    def test_stk_initiation_failure_does_not_create_completed_contribution(self, mock_stk):
+        mock_stk.side_effect = RuntimeError('Safaricom unavailable')
+        response = self.client.post('/api/members/contributions/initiate/', {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'amount': '100.00',
+            'purpose': 'Tithe',
+            'phone_number': '0712345678',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        contribution = Contribution.objects.get(pk=response.data['contribution_id'])
+        self.assertEqual(contribution.status, 'failed')
+        self.assertIsNone(contribution.paid_at)
+        self.assertIsNone(contribution.mpesa_receipt_number)
+
+
     def test_c2b_validation_returns_accepted(self):
         response = self.client.post('/api/members/payments/mpesa/c2b/validation/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)

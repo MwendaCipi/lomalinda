@@ -1709,13 +1709,13 @@ class InitiateContributionView(APIView):
             contribution.merchant_request_id = result.get('MerchantRequestID', '')
             contribution.save(update_fields=['checkout_request_id', 'merchant_request_id'])
             return Response({'message': result.get('CustomerMessage', 'Paybill payment prompt sent to your phone. Enter PIN to complete.'), 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
-        except Exception:
-            import uuid
-            contribution.status = 'completed'
-            contribution.mpesa_receipt_number = f"PBL-{uuid.uuid4().hex[:6].upper()}"
-            contribution.paid_at = timezone.now()
-            contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
-            return Response({'message': 'Paybill giving request recorded successfully.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
+        except Exception as error:
+            contribution.status = 'failed'
+            contribution.save(update_fields=['status'])
+            return Response({
+                'detail': f'We could not send the M-Pesa prompt: {error}',
+                'contribution_id': str(contribution.id),
+            }, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class MpesaCallbackView(APIView):
