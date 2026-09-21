@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 function LoginContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextParam = searchParams.get("next");
+  // Read ?next= after mount: useSearchParams would force this page to prerender as
+  // an empty loading shell, so the sign-in form would not be in the served HTML.
+  const [nextParam, setNextParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNextParam(new URLSearchParams(window.location.search).get("next"));
+  }, []);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -81,17 +86,11 @@ function LoginContent() {
         </form>
         {message && <p className="mt-4 rounded-xl bg-[#f7f4ee] p-3 text-xs text-[#617068] sm:text-sm">{message}</p>}
         <p className="mt-6 border-t border-[#dfdbd1] pt-5 text-center text-xs leading-5 text-[#617068] sm:text-sm">
-          Need an account? <Link href="/enroll" className="font-semibold text-[#b36b3c] hover:underline">Create one as a member or Friend of Loma Linda SDA</Link>.
+          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one as a member or Friend of Loma Linda SDA</Link>.
         </p>
       </section>
     </main>
   );
 }
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center text-[#617068]">Loading...</main>}>
-      <LoginContent />
-    </Suspense>
-  );
-}
+export default LoginContent;

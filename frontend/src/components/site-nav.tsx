@@ -567,12 +567,12 @@ export function SiteNav() {
                       </Link>
 
                       <Link
-                        href="/enroll"
+                        href="/create-account"
                         onClick={() => setShowUserMenu(false)}
                         className="w-full flex items-center justify-center gap-2 border border-[#b36b3c] text-[#b36b3c] hover:bg-[#b36b3c]/10 py-2 px-3 rounded-xl text-xs font-semibold transition"
                       >
                         <UserPlus className="w-4 h-4" />
-                        <span>Member Enrollment</span>
+                        <span>Create Account</span>
                       </Link>
 
                       <button

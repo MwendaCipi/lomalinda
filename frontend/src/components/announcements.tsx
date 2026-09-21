@@ -36,7 +36,7 @@ export function AnnouncementBanner({ compact = false }: { compact?: boolean }) {
   }, [items.length, paused, dismissed]);
 
   const normalizedPath = (pathname ?? "").toLowerCase().replace(/\/$/, "");
-  const isAuthOrMember = normalizedPath === "/login" || normalizedPath.startsWith("/login/") || normalizedPath === "/member" || normalizedPath.startsWith("/member/") || normalizedPath === "/enroll" || normalizedPath.startsWith("/enroll/") || normalizedPath === "/forgot-password" || normalizedPath === "/reset-password";
+  const isAuthOrMember = normalizedPath === "/login" || normalizedPath.startsWith("/login/") || normalizedPath === "/member" || normalizedPath.startsWith("/member/") || normalizedPath === "/enroll" || normalizedPath.startsWith("/enroll/") || normalizedPath === "/create-account" || normalizedPath.startsWith("/create-account/") || normalizedPath === "/forgot-password" || normalizedPath === "/reset-password";
 
   if (isAuthOrMember || dismissed || items.length === 0) return null;
   const announcement = items[active] ?? items[0];
