@@ -784,9 +784,15 @@ class PasswordPolicyTests(APITestCase):
 
 
 class EmailBrandingTests(APITestCase):
-    """Every email names the church the same way: SDA Loma Linda Meru."""
+    """Every email names the church the same way: SDA Loma Linda, Meru.
 
-    CHURCH = 'SDA Loma Linda Meru'
+    Bodies, sentences and signatures carry the comma — 'SDA Loma Linda, Meru has
+    invited you…' — while email headers (From and Subject) use the comma-free
+    name, since a bare comma in a display name is an address separator.
+    """
+
+    CHURCH = 'SDA Loma Linda, Meru'
+    HEADER_NAME = 'SDA Loma Linda Meru'
 
     def setUp(self):
         self.admin_user = User.objects.create_user('mailer.admin', 'mailer.admin@example.com', 'ChurchAdmin#2026')
@@ -801,12 +807,15 @@ class EmailBrandingTests(APITestCase):
 
         subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
         sender = mock_send.call_args[0][2]
-        self.assertEqual(subject, f'You are invited to {self.CHURCH}')
-        self.assertIn(self.CHURCH, sender)
-        # Straight after "Hello Grace," the church is the one doing the inviting.
+        self.assertEqual(subject, f'You are invited to {self.HEADER_NAME}')
+        self.assertIn(self.HEADER_NAME, sender)
+        # Never a comma in the From display name: that is an address separator.
+        self.assertNotIn(',', sender.split('<')[0])
+        # Straight after "Hello Grace," the church is the one doing the inviting,
+        # and the apposition its own comma opens is closed before the verb.
         greeting, first_sentence = body.split('\n\n')[:2]
         self.assertEqual(greeting, 'Hello Grace,')
-        self.assertTrue(first_sentence.startswith(f'{self.CHURCH} has invited you'), first_sentence)
+        self.assertTrue(first_sentence.startswith(f'{self.CHURCH}, has invited you'), first_sentence)
         self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
 
     def test_enrollment_email_uses_the_same_name(self):
@@ -822,7 +831,7 @@ class EmailBrandingTests(APITestCase):
             send_enrollment_email(enrollment)
 
         subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
-        self.assertEqual(subject, f'Verify your {self.CHURCH} account')
+        self.assertEqual(subject, f'Verify your {self.HEADER_NAME} account')
         self.assertIn(f'join {self.CHURCH} as a church account', body)
         self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
         self.assertNotIn('Loma Linda SDA Church', body)
@@ -833,8 +842,9 @@ class EmailBrandingTests(APITestCase):
             self.client.post('/api/members/auth/password-reset/', {'email': 'branding3@example.com'}, format='json')
 
         subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
-        self.assertEqual(subject, f'Reset your {self.CHURCH} password')
-        self.assertIn(self.CHURCH, body)
+        self.assertEqual(subject, f'Reset your {self.HEADER_NAME} password')
+        self.assertIn(f'your {self.HEADER_NAME} account', body)
+        self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
 
     def test_a_renamed_church_wins_over_the_default(self):
         """The office can rename the church in Church Settings without a code change."""
@@ -846,4 +856,19 @@ class EmailBrandingTests(APITestCase):
             self.client.post('/api/members/invitations/', {
                 'email': 'renamed@example.com', 'first_name': 'Grace', 'roles': ['member'],
             }, format='json')
-        self.assertEqual(mock_send.call_args[0][0], 'You are invited to SDA Milimani, Meru')
+        self.assertEqual(mock_send.call_args[0][0], 'You are invited to SDA Milimani Meru')
+        self.assertIn('SDA Milimani, Meru, has invited you', mock_send.call_args[0][1])
+
+    def test_a_name_without_a_comma_reads_as_the_subject(self):
+        """A church the office names without a comma needs no closing comma."""
+        from .models import ChurchSettings
+
+        ChurchSettings.objects.create(church_name='SDA Milimani')
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            self.client.post('/api/members/invitations/', {
+                'email': 'plain@example.com', 'first_name': 'Grace', 'roles': ['member'],
+            }, format='json')
+        first_sentence = mock_send.call_args[0][1].split('\n\n')[1]
+        self.assertTrue(first_sentence.startswith('SDA Milimani has invited you'), first_sentence)
+        self.assertEqual(mock_send.call_args[0][0], 'You are invited to SDA Milimani')

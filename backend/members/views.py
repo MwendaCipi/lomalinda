@@ -73,7 +73,7 @@ def send_enrollment_email(enrollment):
     link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
     account_label = 'friend account' if enrollment.joining_mode == 'friend' else 'church account'
     send_mail(
-        f'Verify your {church_name} account',
+        f'Verify your {church_name_plain(church_name)} account',
         f"Hello {enrollment.first_name or 'there'},\n\n"
         f"Thank you for choosing to join {church_name} as a {account_label}.\n\n"
         f"Please click the link below to verify your email and complete setting up your account:\n{link}\n\n"
@@ -94,11 +94,11 @@ INVITATION_LIFETIME = timedelta(days=7)
 # How the church is named in every email: subject, body and signature. Church
 # Settings wins (so the office can rename the church without a code change);
 # this is the fallback used when no ChurchSettings row exists yet.
-CHURCH_DEFAULT_NAME = 'SDA Loma Linda Meru'
+CHURCH_DEFAULT_NAME = 'SDA Loma Linda, Meru'
 
 
 def current_church_name():
-    """Church name for emails/PDFs, falling back to the deployed church's name."""
+    """The church's name as it is written: email bodies, page copy, documents."""
     try:
         church_settings = ChurchSettings.objects.first()
         if church_settings and church_settings.church_name:
@@ -106,6 +106,28 @@ def current_church_name():
     except Exception:
         pass
     return CHURCH_DEFAULT_NAME
+
+
+def church_name_plain(name=None):
+    """Church name where it modifies what follows, or where it sits in a header.
+
+    'your SDA Loma Linda, Meru account' reads wrong — the comma there would
+    separate the name from the noun it owns — and a bare comma inside a From or
+    Subject header is an address-list separator, so the comma is dropped there.
+    A name the office wrote without a comma ('SDA Milimani') is returned as is.
+    """
+    return (name or current_church_name()).replace(',', '')
+
+
+def church_name_clause(name=None):
+    """Church name where it opens a clause and a verb follows it.
+
+    Reads 'SDA Loma Linda, Meru, has invited you…' — the apposition opened by
+    the name's own comma is closed here. A name without a comma ('SDA Milimani')
+    simply reads as the subject of the sentence.
+    """
+    name = name or current_church_name()
+    return f'{name},' if ',' in name else name
 
 
 def invitation_url(invitation):
@@ -117,10 +139,10 @@ def send_invitation_email(invitation):
     roles_text = role_labels(invitation.role_codes()) or 'Member'
     invitee = invitation.display_name() or 'there'
     account_label = invitation.get_account_type_display()
-    subject = f'You are invited to {church_name}'
+    subject = f'You are invited to {church_name_plain(church_name)}'
     body = (
         f"Hello {invitee},\n\n"
-        f"{church_name} has invited you to create your own account as a {account_label} "
+        f"{church_name_clause(church_name)} has invited you to create your own account as a {account_label} "
         f"with the following access: {roles_text}.\n\n"
         "Click the link below to choose your username and password:\n"
         f"{invitation_url(invitation)}\n\n"
@@ -146,9 +168,9 @@ def send_password_reset_email(user, uid, token):
     church_name = current_church_name()
     link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
     send_mail(
-        f'Reset your {church_name} password',
+        f'Reset your {church_name_plain(church_name)} password',
         f"Hello {user.first_name or user.username},\n\n"
-        f"We received a request to reset the password for your {church_name} account.\n"
+        f"We received a request to reset the password for your {church_name_plain(church_name)} account.\n"
         f"Click the link below to choose a new one:\n{link}\n\n"
         "If you did not request this, you can ignore this email — your password stays as it is.\n\n"
         f"Warm regards,\n{church_name}",
@@ -1509,7 +1531,7 @@ class ResendContributionReceiptView(APIView):
                     f"Payment Channel: {contribution.get_payment_method_display()}\n"
                     f"Receipt No: {receipt_ref}\n"
                     f"Date: {timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y')}\n\n"
-                    f"Warm regards,\n{church_name} Treasury"
+                    f"Warm regards,\n{church_name_plain(church_name)} Treasury"
                 )
                 try:
                     send_mail(
@@ -1549,7 +1571,7 @@ class ResendContributionReceiptView(APIView):
                     f"Payment Channel: Cash\n"
                     f"Receipt No: {receipt_ref}\n"
                     f"Date: {cash.received_on}\n\n"
-                    f"Warm regards,\n{church_name} Treasury"
+                    f"Warm regards,\n{church_name_plain(church_name)} Treasury"
                 )
                 try:
                     send_mail(
@@ -3228,7 +3250,7 @@ class UserRoleUpdateView(APIView):
                             f"Your church roles have been updated to: {role_display}.\n\n"
                             f"You can log into your account to access your updated leadership workspace, responsibilities, and management tools.\n\n"
                             f"May God bless your service in church ministry.\n\n"
-                            f"Warm regards,\n{church_name} Leadership",
+                            f"Warm regards,\n{church_name_plain(church_name)} Leadership",
                             settings.DEFAULT_FROM_EMAIL,
                             [target_user.email],
                             fail_silently=True,

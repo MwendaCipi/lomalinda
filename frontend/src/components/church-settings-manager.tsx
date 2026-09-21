@@ -13,7 +13,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const AVAILABLE_ROLES = ROLE_OPTIONS.map((role) => ({ key: role.value, label: role.label, system: role.system }));
 
 export function ChurchSettingsManager() {
-  const [churchName, setChurchName] = useState("Loma Linda SDA Church, Meru");
+  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
@@ -49,7 +49,7 @@ export function ChurchSettingsManager() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) {
-          setChurchName(data.church_name || "Loma Linda SDA Church, Meru");
+          setChurchName(data.church_name || "SDA Loma Linda, Meru");
           setAddress(data.address || "");
           if (data.latitude) setLatitude(Number(data.latitude));
           if (data.longitude) setLongitude(Number(data.longitude));

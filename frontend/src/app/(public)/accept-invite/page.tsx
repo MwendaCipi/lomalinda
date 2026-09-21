@@ -32,7 +32,7 @@ function AcceptInviteContent() {
   const [firstName, setFirstName] = useState("");
   const [rolesDisplay, setRolesDisplay] = useState("");
   const [accountTypeDisplay, setAccountTypeDisplay] = useState("");
-  const [churchName, setChurchName] = useState("SDA Loma Linda Meru");
+  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -146,7 +146,10 @@ function AcceptInviteContent() {
         </h1>
         {!linkError && (
           <p className="mt-2 text-sm text-[#617068]">
-            {churchName}
+            {/* 'SDA Loma Linda, Meru, has invited you…' — when the church's own name carries
+                a comma (church, town) the apposition it opens is closed here, exactly as the
+                invitation email words it. */}
+            {churchName.includes(",") ? `${churchName},` : churchName}
             {accountTypeDisplay ? ` has invited you to join as a ${accountTypeDisplay}` : " has invited you to join"}
             {rolesDisplay ? ` with access as ${rolesDisplay}` : ""}. Choose your own username and password below.
           </p>

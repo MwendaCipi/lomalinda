@@ -134,7 +134,10 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
-# The name members see in their inbox, so it must match the church's own name.
+# The name members see in their inbox, so it must match the church's own name —
+# spelled without the comma ('SDA Loma Linda Meru'), because a bare comma inside
+# a From display name is an address-list separator. Email subjects drop the
+# comma for the same reason; bodies and signatures carry it (members/views.py).
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SDA Loma Linda Meru <noreply@sdalomalinda.or.ke>')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
