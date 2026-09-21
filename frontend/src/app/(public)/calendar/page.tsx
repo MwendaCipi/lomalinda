@@ -181,14 +181,14 @@ function CalendarPageContent() {
                             Give support
                           </Link>
                           <a
-                            href={`mailto:hello@lomalindachurch.org?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
+                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
                           >
                             Contact department
                           </a>
                           <a
-                            href={`mailto:hello@lomalindachurch.org?subject=${encodeURIComponent(`Suggestion: ${row.event.name}`)}`}
+                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.event.name}`)}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
                           >
@@ -292,7 +292,7 @@ function CalendarPageContent() {
                           Give support
                         </Link>
                         <a
-                          href={`mailto:hello@lomalindachurch.org?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
+                          href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
                           onClick={() => setOpenActions(null)}
                           className="block rounded-lg px-3 py-2 text-xs hover:bg-[#f7f4ee]"
                         >

@@ -46,8 +46,8 @@ export default function PrivacyPage() {
                   <h2 className="text-xl font-semibold text-[#26352f]">Your rights</h2>
                   <p className="mt-2">
                     You may ask what personal information we hold about you, request correction of inaccurate information, ask us to delete information where appropriate, or raise a concern about how it is used. Contact us at{" "}
-                    <a className="font-semibold text-[#b36b3c] hover:underline" href="mailto:hello@lomalindachurch.org">
-                      hello@lomalindachurch.org
+                    <a className="font-semibold text-[#b36b3c] hover:underline" href="mailto:hello@sdalomalinda.or.ke">
+                      hello@sdalomalinda.or.ke
                     </a>
                     .
                   </p>

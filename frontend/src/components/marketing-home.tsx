@@ -47,7 +47,7 @@ export function MarketingHome() {
               <p className="hidden sm:block mt-4 max-w-xl text-sm leading-6 text-white/70">Questions, prayer needs, visits, or ways to serve? Reach out and our church family will be glad to connect with you.</p>
             </div>
             <div className="grid gap-3 text-sm">
-              <a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@lomalindachurch.org">hello@lomalindachurch.org</a>
+              <a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@sdalomalinda.or.ke">hello@sdalomalinda.or.ke</a>
               <Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link>
               <Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link>
             </div>
@@ -57,7 +57,7 @@ export function MarketingHome() {
           <div className="mt-10 flex flex-wrap items-center gap-4 border-t border-white/10 pt-8">
             <p className="text-sm font-semibold text-white/60 uppercase tracking-wider">Follow us</p>
             <a
-              href="https://www.tiktok.com/@lomalindachurch"
+              href="https://www.tiktok.com/@sdalomalinda"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
@@ -70,7 +70,7 @@ export function MarketingHome() {
               <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/50">Coming soon</span>
             </a>
             <a
-              href="https://www.youtube.com/@lomalindachurch"
+              href="https://www.youtube.com/@sdalomalinda"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"

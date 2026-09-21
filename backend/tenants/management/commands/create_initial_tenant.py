@@ -6,8 +6,8 @@ class Command(BaseCommand):
     help = "Creates the public schema tenant and the default church tenant."
 
     def add_arguments(self, parser):
-        parser.add_argument('--public-domain', type=str, default='lomalindachurch.org', help='Primary public domain')
-        parser.add_argument('--tenant-domain', type=str, default='church.lomalindachurch.org', help='First church tenant domain')
+        parser.add_argument('--public-domain', type=str, default='sdalomalinda.or.ke', help='Primary public domain')
+        parser.add_argument('--tenant-domain', type=str, default='church.sdalomalinda.or.ke', help='First church tenant domain')
         parser.add_argument('--tenant-name', type=str, default='Loma Linda SDA Church, Meru', help='First church tenant name')
 
     def handle(self, *args, **options):

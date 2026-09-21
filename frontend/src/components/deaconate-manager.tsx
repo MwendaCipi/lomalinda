@@ -176,11 +176,11 @@ const INITIAL_ROTA: RotaEntry[] = [
 ];
 
 const INITIAL_MEMBERS: DeaconMember[] = [
-  { id: "DEAC-1", name: "James Kiprono", role: "Head Deacon", phone: "+254 712 345 678", email: "james.k@lomalindachurch.org", assignedDutiesCount: 5 },
-  { id: "DEAC-2", name: "Mary Wambui", role: "Head Deaconess", phone: "+254 723 456 789", email: "mary.w@lomalindachurch.org", assignedDutiesCount: 4 },
-  { id: "DEAC-3", name: "David Miller", role: "Deacon", phone: "+254 734 567 890", email: "david.m@lomalindachurch.org", assignedDutiesCount: 3 },
-  { id: "DEAC-4", name: "Sarah Jenkins", role: "Deaconess", phone: "+254 745 678 901", email: "sarah.j@lomalindachurch.org", assignedDutiesCount: 3 },
-  { id: "DEAC-5", name: "Samuel Ochieng", role: "Deacon", phone: "+254 756 789 012", email: "samuel.o@lomalindachurch.org", assignedDutiesCount: 2 },
+  { id: "DEAC-1", name: "James Kiprono", role: "Head Deacon", phone: "+254 712 345 678", email: "james.k@sdalomalinda.or.ke", assignedDutiesCount: 5 },
+  { id: "DEAC-2", name: "Mary Wambui", role: "Head Deaconess", phone: "+254 723 456 789", email: "mary.w@sdalomalinda.or.ke", assignedDutiesCount: 4 },
+  { id: "DEAC-3", name: "David Miller", role: "Deacon", phone: "+254 734 567 890", email: "david.m@sdalomalinda.or.ke", assignedDutiesCount: 3 },
+  { id: "DEAC-4", name: "Sarah Jenkins", role: "Deaconess", phone: "+254 745 678 901", email: "sarah.j@sdalomalinda.or.ke", assignedDutiesCount: 3 },
+  { id: "DEAC-5", name: "Samuel Ochieng", role: "Deacon", phone: "+254 756 789 012", email: "samuel.o@sdalomalinda.or.ke", assignedDutiesCount: 2 },
 ];
 
 const INITIAL_EVENTS: DeaconateEvent[] = [
