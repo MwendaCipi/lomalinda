@@ -3,24 +3,13 @@ from django.db import models
 from django.utils import timezone
 import uuid
 
+from .roles import ROLE_CHOICES, normalize_roles
+
 
 class MemberProfile(models.Model):
     ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of Loma Linda SDA')]
-    ROLE_CHOICES = [
-        ('member', 'Member'),
-        ('clerk', 'Church Clerk'),
-        ('elder', 'Elder / First Elder'),
-        ('youth_leader', 'Youth Leader'),
-        ('choir_director', 'Choir Director'),
-        ('children_ministry', 'Children Leader'),
-        ('men_ministry', 'AMM Leader'),
-        ('women_ministry', 'AWM Leader'),
-        ('chaplaincy', 'Chaplain'),
-        ('finance', 'Finance Team'),
-        ('treasurer', 'Treasurer'),
-        ('leader', 'Church Leader'),
-        ('admin', 'Administrator'),
-    ]
+    # Hard-coded church roles; see members/roles.py for the full definitions.
+    ROLE_CHOICES = list(ROLE_CHOICES)
     BAPTISMAL_STATUS_CHOICES = [
         ('baptised', 'Baptised'),
         ('not_baptised', 'Not Baptised'),
@@ -51,6 +40,15 @@ class MemberProfile(models.Model):
         if legacy and legacy not in codes:
             codes.append(legacy)
         return codes or ['member']
+
+    def set_roles(self, codes, save=True):
+        """Store ``codes`` as this member's role set, keeping ``role`` in sync."""
+        role_codes = normalize_roles(codes)
+        self.roles = ', '.join(role_codes)
+        self.role = role_codes[0]
+        if save:
+            self.save(update_fields=['roles', 'role'])
+        return role_codes
 
     def has_role(self, *codes):
         """True if the member holds any of the given role codes."""

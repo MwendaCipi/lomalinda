@@ -39,15 +39,17 @@ class Command(BaseCommand):
                 self.seed_giving_purposes()
 
     def seed_role_groups(self):
-        """Create the church role groups with their permission sets (idempotent)."""
-        permissions = Permission.objects.filter(
-            content_type__app_label='members',
-            content_type__model__in=self.ROLE_PERMISSION_MODELS,
-        )
+        """Create the church role groups with their permission sets (idempotent).
+
+        Administrator is a system role, so its group holds every permission in
+        the church app; the rest are scoped to their ministry's models.
+        """
+        all_permissions = Permission.objects.filter(content_type__app_label='members')
+        permissions = all_permissions.filter(content_type__model__in=self.ROLE_PERMISSION_MODELS)
         view_permissions = permissions.filter(codename__startswith='view_')
 
         role_permissions = {
-            'Administrators': permissions,
+            'Administrators': all_permissions,
             'Church Leaders': permissions,
             'Finance Team': permissions.filter(content_type__model__in={'churchfinancialreport', 'churchbudget'}),
             'Choir Director': view_permissions.filter(content_type__model='sabbathevent'),

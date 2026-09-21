@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RolesCombobox, formatRoles, roleLabel, ROLE_OPTIONS } from "./roles-combobox";
+import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS } from "./roles-combobox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -230,6 +230,7 @@ export function LeaderManagement() {
                   selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                   onChange={(newRoles) => handleRolesChange(m.id, newRoles)}
                   disabled={updatingId === m.id}
+                  lockedRoles={heldSystemRoles(m.roles, m.role)}
                   align="right"
                 />
               </div>
@@ -281,6 +282,7 @@ export function LeaderManagement() {
                       selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                       onChange={(newRoles) => handleRolesChange(m.id, newRoles)}
                       disabled={updatingId === m.id}
+                      lockedRoles={heldSystemRoles(m.roles, m.role)}
                       align="right"
                     />
                   </td>

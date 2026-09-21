@@ -544,3 +544,162 @@ class InvitationAPITests(APITestCase):
         invitation.refresh_from_db()
         self.assertNotEqual(invitation.token, original_token)
         self.assertEqual(invitation.status, 'pending')
+
+
+class ChurchRoleTests(APITestCase):
+    """Church roles are hard-coded, and Administrator is a protected system role."""
+
+    def setUp(self):
+        for name in ('Administrators', 'Church Leaders', 'Finance Team'):
+            Group.objects.get_or_create(name=name)
+
+        self.admin_user = User.objects.create_user('role.admin', 'role.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin_user, role='admin', roles='admin')
+        self.clerk_user = User.objects.create_user('role.clerk', 'role.clerk@example.com', 'ChurchClerk#2026')
+        MemberProfile.objects.create(user=self.clerk_user, role='clerk', roles='clerk')
+        self.member_user = User.objects.create_user('role.member', 'role.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member_user, role='member', roles='member')
+
+    def _invite(self, actor, **overrides):
+        self.client.force_authenticate(user=actor)
+        payload = {'email': 'invitee@example.com', 'first_name': 'Grace', 'roles': ['member']}
+        payload.update(overrides)
+        with patch('members.views.send_mail'):
+            return self.client.post('/api/members/invitations/', payload, format='json')
+
+    def test_invitation_rejects_unknown_role_codes(self):
+        response = self._invite(self.admin_user, roles=['member', 'pope'])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('pope', response.data['roles'])
+
+    def test_invitation_keeps_every_ticked_role(self):
+        response = self._invite(self.admin_user, roles=['treasurer', 'clerk'])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        invitation = Invitation.objects.get(email='invitee@example.com')
+        # Stored in the canonical (hard-coded) order, not the order submitted.
+        self.assertEqual(invitation.role_codes(), ['clerk', 'treasurer'])
+
+    def test_clerk_cannot_invite_an_administrator(self):
+        response = self._invite(self.clerk_user, roles=['admin'])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Invitation.objects.filter(email='invitee@example.com').exists())
+
+    def test_clerk_can_still_invite_a_plain_role(self):
+        self.assertEqual(self._invite(self.clerk_user, roles=['member']).status_code, status.HTTP_201_CREATED)
+
+    def _set_roles(self, actor, target, roles):
+        self.client.force_authenticate(user=actor)
+        return self.client.patch(
+            f'/api/members/users/{target.pk}/role/', {'roles': roles}, format='json'
+        )
+
+    def test_role_update_stores_the_set_and_syncs_the_role_groups(self):
+        response = self._set_roles(self.admin_user, self.member_user, ['treasurer', 'clerk'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=self.member_user)
+        self.assertEqual(profile.roles, 'clerk, treasurer')
+        self.assertEqual(profile.role, 'clerk')
+        self.assertEqual(
+            sorted(self.member_user.groups.values_list('name', flat=True)),
+            ['Church Leaders', 'Finance Team'],
+        )
+
+    def test_role_update_rejects_unknown_codes(self):
+        response = self._set_roles(self.admin_user, self.member_user, ['member', 'wizard'])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('wizard', response.data['roles'])
+        profile = MemberProfile.objects.get(user=self.member_user)
+        self.assertEqual(profile.roles, 'member')
+
+    def test_clerk_cannot_strip_an_administrator(self):
+        response = self._set_roles(self.clerk_user, self.admin_user, ['member'])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(MemberProfile.objects.get(user=self.admin_user).get_roles(), ['admin'])
+
+    def test_clerk_cannot_promote_anyone_to_administrator(self):
+        response = self._set_roles(self.clerk_user, self.member_user, ['admin'])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_administrator_cannot_drop_their_own_administrator_role(self):
+        response = self._set_roles(self.admin_user, self.admin_user, ['member'])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(MemberProfile.objects.get(user=self.admin_user).get_roles(), ['admin'])
+
+    def test_administrator_can_promote_another_member(self):
+        response = self._set_roles(self.admin_user, self.member_user, ['admin', 'clerk'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Administrators', self.member_user.groups.values_list('name', flat=True))
+
+
+class ChurchRoleRegistryTests(TestCase):
+    """The hard-coded role registry, the admin tick list and full admin access."""
+
+    def test_role_helpers_normalize_codes(self):
+        """The backend role registry accepts strings or lists and drops junk."""
+        from .roles import normalize_roles, parse_role_codes, role_labels, unknown_role_codes
+
+        self.assertEqual(parse_role_codes('treasurer, clerk ,, treasurer'), ['clerk', 'treasurer'])
+        self.assertEqual(unknown_role_codes(parse_role_codes(['member', 'nope'])), ['nope'])
+        self.assertEqual(normalize_roles([]), ['member'])
+        self.assertEqual(normalize_roles('admin, member'), ['member', 'admin'])
+        self.assertEqual(role_labels(['clerk']), 'Church Clerk')
+
+    def test_admin_form_edits_roles_as_a_tick_list(self):
+        """Django admin shows the roles as checkboxes and protects the system role."""
+        from .admin import MemberProfileRolesForm
+
+        user = User.objects.create_user('form.member', 'form.member@example.com', 'MemberPass#2026')
+        profile = MemberProfile.objects.create(user=user, role='clerk', roles='clerk')
+
+        form = MemberProfileRolesForm(
+            data={'user': user.pk, 'account_type': 'member', 'roles': ['clerk', 'treasurer']},
+            instance=profile,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(saved.roles, 'clerk, treasurer')
+        self.assertEqual(saved.role, 'clerk')
+
+        profile.roles = 'admin'
+        profile.role = 'admin'
+        profile.save()
+        blocked = MemberProfileRolesForm(
+            data={'user': user.pk, 'account_type': 'member', 'roles': ['member']},
+            instance=profile,
+        )
+        self.assertFalse(blocked.is_valid())
+        self.assertIn('system role', str(blocked.errors['roles']))
+
+    def test_admin_change_form_shows_the_hard_coded_roles(self):
+        """Superusers can see and tick the church roles from the Django admin."""
+        from django.urls import reverse
+
+        superuser = User.objects.create_superuser('root.admin', 'root@example.com', 'RootPass#2026')
+        member = User.objects.create_user('render.member', 'render@example.com', 'MemberPass#2026')
+        profile = MemberProfile.objects.create(user=member, role='clerk', roles='clerk')
+        self.client.force_login(superuser)
+
+        response = self.client.get(reverse('admin:members_memberprofile_change', args=[profile.pk]))
+        self.assertEqual(response.status_code, 200)
+        for label in ('Member', 'Church Clerk', 'Administrator'):
+            self.assertContains(response, label)
+        self.assertContains(response, 'type="checkbox"')
+
+        filtered = self.client.get(reverse('admin:members_memberprofile_changelist'), {'role': 'admin'})
+        self.assertEqual(filtered.status_code, 200)
+        self.assertNotContains(filtered, 'render.member')
+
+    def test_administrators_group_holds_every_members_permission(self):
+        """The Administrator role is a system role: it carries full access."""
+        from importlib import import_module
+
+        from django.apps import apps as django_apps
+        from django.contrib.auth.models import Group, Permission
+
+        group, _ = Group.objects.get_or_create(name='Administrators')
+        migration = import_module('members.migrations.0076_administrators_full_permissions')
+        migration.grant_all_permissions(django_apps, None)
+
+        expected = set(Permission.objects.filter(content_type__app_label='members').values_list('id', flat=True))
+        self.assertTrue(expected)
+        self.assertEqual(set(group.permissions.values_list('id', flat=True)), expected)

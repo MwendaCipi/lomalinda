@@ -12,6 +12,7 @@ from .models import (
     GivingPurpose, InKindContribution, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
+from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_role_codes
 from .validators import (
     validate_future_or_today_date, validate_national_id,
     validate_past_or_today_date, validate_phone_number,
@@ -447,6 +448,17 @@ class SabbathEventSerializer(serializers.ModelSerializer):
 
 
 class ChurchSettingsSerializer(serializers.ModelSerializer):
+    def validate_board_roles(self, value):
+        """Board roles are chosen from the hard-coded role codes.
+
+        Administrator is a system role, so it is always on the board.
+        """
+        unknown = unknown_role_codes(parse_role_codes(value))
+        if unknown:
+            raise serializers.ValidationError(f"Unknown role code(s): {', '.join(unknown)}")
+        selected = set(parse_role_codes(value)) | {ADMIN_ROLE}
+        return [code for code in ROLE_CODES if code in selected]
+
     class Meta:
         model = ChurchSettings
         fields = (

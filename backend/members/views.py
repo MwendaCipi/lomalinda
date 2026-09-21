@@ -31,6 +31,16 @@ from rest_framework.views import APIView
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_stk_push
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
+from .roles import (
+    ROLE_CODES,
+    ROLE_GROUP_MAP,
+    check_system_role_change,
+    normalize_roles,
+    parse_role_codes,
+    role_labels,
+    sync_role_groups,
+    unknown_role_codes,
+)
 from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
@@ -56,20 +66,8 @@ def send_enrollment_email(enrollment):
     )
 
 
-# Church role code -> default Django group (kept in step with migration 0009 / seed_defaults)
-ROLE_GROUP_MAP = {
-    'admin': 'Administrators',
-    'leader': 'Church Leaders',
-    'elder': 'Church Leaders',
-    'clerk': 'Church Leaders',
-    'treasurer': 'Finance Team',
-    'finance': 'Finance Team',
-    'choir_director': 'Choir Director',
-    'children_ministry': 'Children Ministry',
-    'men_ministry': 'Adventist Men Ministries',
-    'women_ministry': 'Adventist Women Ministries',
-    'chaplaincy': 'Chaplaincy',
-}
+# Church roles, their labels and their Django groups live in members/roles.py.
+# ROLE_GROUP_MAP is re-exported above for callers such as create_account.
 
 INVITATION_LIFETIME = timedelta(days=7)
 
@@ -83,11 +81,6 @@ def current_church_name():
     except Exception:
         pass
     return 'Loma Linda SDA Church, Meru'
-
-
-def role_labels(role_codes):
-    labels = dict(MemberProfile.ROLE_CHOICES)
-    return ', '.join(labels.get(code, code.replace('_', ' ').title()) for code in role_codes)
 
 
 def invitation_url(invitation):
@@ -599,15 +592,15 @@ class InvitationListCreateView(generics.ListCreateAPIView):
         if not first_name:
             return Response({'first_name': 'Enter the name of the person you are inviting.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        roles_param = request.data.get('roles')
-        if isinstance(roles_param, str):
-            roles_param = [code.strip() for code in roles_param.split(',') if code.strip()]
-        if not roles_param:
-            roles_param = [str(request.data.get('role') or 'member').strip() or 'member']
-        valid_roles = {code for code, _ in MemberProfile.ROLE_CHOICES}
-        unknown = [code for code in roles_param if code not in valid_roles]
+        submitted_roles = parse_role_codes(request.data.get('roles') or request.data.get('role'))
+        unknown = unknown_role_codes(submitted_roles)
         if unknown:
             return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
+        roles_param = normalize_roles(submitted_roles)
+        # Administrator is a system role: only administrators may hand it out.
+        error = check_system_role_change(request.user, None, [], roles_param)
+        if error:
+            return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
 
         account_type = str(request.data.get('account_type') or 'member').strip()
         if account_type not in ('member', 'friend'):
@@ -2908,11 +2901,15 @@ class UserManagementView(generics.ListCreateAPIView):
             return Response({'detail': 'Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
         if account_type == 'member' and not email:
             return Response({'detail': 'Email address is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        roles_param = request.data.get('roles')
-        if isinstance(roles_param, str):
-            roles_param = [r.strip() for r in roles_param.split(',') if r.strip()]
-        if not roles_param:
-            roles_param = ['member']
+        submitted_roles = parse_role_codes(request.data.get('roles') or role or request.data.get('role'))
+        unknown = unknown_role_codes(submitted_roles)
+        if unknown:
+            return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
+        roles_param = normalize_roles(submitted_roles)
+        # Administrator is a system role: only administrators may hand it out.
+        error = check_system_role_change(request.user, None, [], roles_param)
+        if error:
+            return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
 
         if not username:
             clean_first = re.sub(r'[^a-zA-Z0-9]', '', first_name.lower().replace(' ', '.'))
@@ -2953,7 +2950,7 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj, _ = MemberProfile.objects.get_or_create(user=user)
         profile_obj.phone_number = phone_number
         profile_obj.whatsapp_number = whatsapp_number
-        profile_obj.role = role
+        profile_obj.role = roles_param[0]
         profile_obj.roles = ', '.join(roles_param)
         profile_obj.account_type = account_type
         profile_obj.current_church = current_church
@@ -2966,6 +2963,7 @@ class UserManagementView(generics.ListCreateAPIView):
         if date_of_birth:
             profile_obj.date_of_birth = date_of_birth
         profile_obj.save()
+        sync_role_groups(user, roles_param)
 
         response_data = UserDetailSerializer(user).data
         if password_generated:
@@ -3011,16 +3009,17 @@ class UserDetailUpdateView(APIView):
             target_profile.phone_number = request.data['phone_number']
         if 'whatsapp_number' in request.data:
             target_profile.whatsapp_number = request.data['whatsapp_number']
-        if 'roles' in request.data:
-            roles_val = request.data['roles']
-            if isinstance(roles_val, str):
-                roles_val = [r.strip() for r in roles_val.split(',') if r.strip()]
-            target_profile.roles = ', '.join(roles_val) if roles_val else 'member'
-            target_profile.role = roles_val[0] if roles_val else 'member'
-        if 'role' in request.data:
-            # Legacy single-role updates: replace the whole set with this one role
-            target_profile.role = request.data['role']
-            target_profile.roles = request.data['role']
+        if 'roles' in request.data or 'role' in request.data:
+            # Replaces the whole set: the legacy single 'role' is just a set of one.
+            submitted = request.data.get('roles') or request.data.get('role')
+            unknown = unknown_role_codes(parse_role_codes(submitted))
+            if unknown:
+                return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
+            error = check_system_role_change(request.user, target_user, target_profile.get_roles(), normalize_roles(submitted))
+            if error:
+                return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
+            roles_val = target_profile.set_roles(submitted, save=False)
+            sync_role_groups(target_user, roles_val)
         if 'employment_status' in request.data:
             target_profile.employment_status = request.data['employment_status']
         if 'profession' in request.data:
@@ -3148,19 +3147,23 @@ class UserRoleUpdateView(APIView):
         new_role = request.data.get('role')
         roles_param = request.data.get('roles')
         if roles_param is not None and not new_role:
-            if isinstance(roles_param, str):
-                roles_param = [r.strip() for r in roles_param.split(',') if r.strip()]
-            if not roles_param:
+            submitted = parse_role_codes(roles_param)
+            unknown = unknown_role_codes(submitted)
+            if unknown:
+                return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
+            if not submitted:
                 return Response({'detail': 'At least one role is required.'}, status=status.HTTP_400_BAD_REQUEST)
             # Replace the whole set with the provided list
             target_profile, _ = MemberProfile.objects.get_or_create(user=target_user)
             old_roles = set(target_profile.get_roles())
-            target_profile.roles = ', '.join(roles_param)
-            target_profile.role = roles_param[0]
-            target_profile.save(update_fields=['roles', 'role'])
+            error = check_system_role_change(request.user, target_user, old_roles, submitted)
+            if error:
+                return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
+            roles_param = target_profile.set_roles(submitted)
+            sync_role_groups(target_user, roles_param)
             added = [r for r in roles_param if r not in old_roles]
             removed = [r for r in old_roles if r not in roles_param and r != 'member']
-            role_display = ', '.join(dict(MemberProfile.ROLE_CHOICES).get(r, r) for r in roles_param)
+            role_display = role_labels(roles_param)
             if added or removed:
                 ChurchNotification.objects.create(
                     user=target_user,
@@ -3193,12 +3196,16 @@ class UserRoleUpdateView(APIView):
             })
         if not new_role:
             return Response({'detail': 'Role parameter is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_role not in ROLE_CODES:
+            return Response({'role': f"Unknown role code: {new_role}"}, status=status.HTTP_400_BAD_REQUEST)
 
         target_profile, _ = MemberProfile.objects.get_or_create(user=target_user)
         old_role = target_profile.role
-        target_profile.role = new_role
-        target_profile.roles = new_role
-        target_profile.save(update_fields=['role', 'roles'])
+        error = check_system_role_change(request.user, target_user, target_profile.get_roles(), [new_role])
+        if error:
+            return Response({'role': error}, status=status.HTTP_403_FORBIDDEN)
+        new_role = target_profile.set_roles([new_role])[0]
+        sync_role_groups(target_user, [new_role])
 
         role_display = target_profile.get_role_display()
 

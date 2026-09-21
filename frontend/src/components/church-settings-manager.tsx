@@ -3,25 +3,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
+import { ROLE_OPTIONS, SYSTEM_ROLE_CODES, SYSTEM_ROLE_HELP } from "./roles-combobox";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const AVAILABLE_ROLES = [
-  { key: "elder", label: "Elder / First Elder" },
-  { key: "clerk", label: "Church Clerk" },
-  { key: "treasurer", label: "Treasurer" },
-  { key: "leader", label: "Church Leader" },
-  { key: "finance", label: "Finance Team" },
-  { key: "admin", label: "Administrator" },
-  { key: "youth_leader", label: "Youth Ministries Leader" },
-  { key: "choir_director", label: "Choir Director" },
-  { key: "children_ministry", label: "Children Ministry" },
-  { key: "men_ministry", label: "Adventist Men Ministries" },
-  { key: "women_ministry", label: "Adventist Women Ministries" },
-  { key: "chaplaincy", label: "Chaplaincy" },
-];
+// Board roles are chosen from the same hard-coded role list as everywhere else.
+const AVAILABLE_ROLES = ROLE_OPTIONS.map((role) => ({ key: role.value, label: role.label, system: role.system }));
 
 export function ChurchSettingsManager() {
   const [churchName, setChurchName] = useState("Loma Linda SDA Church, Meru");
@@ -122,7 +111,8 @@ export function ChurchSettingsManager() {
         default_receipt_message: defaultReceiptMessage,
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
-        board_roles: boardRoles,
+        // System roles always stay on the board, whatever the tick boxes say.
+        board_roles: Array.from(new Set([...boardRoles, ...SYSTEM_ROLE_CODES])),
         bank_name: bankName,
         bank_account_name: bankAccountName,
         bank_account_number: bankAccountNumber,
@@ -321,11 +311,15 @@ export function ChurchSettingsManager() {
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {AVAILABLE_ROLES.map((roleObj) => {
-              const isChecked = boardRoles.includes(roleObj.key);
+              // Administrator is a system role, so it always sits on the board.
+              const isChecked = roleObj.system || boardRoles.includes(roleObj.key);
               return (
                 <label
                   key={roleObj.key}
-                  className={`flex items-center gap-2.5 rounded-xl border p-3 cursor-pointer transition text-xs font-semibold ${
+                  title={roleObj.system ? SYSTEM_ROLE_HELP : undefined}
+                  className={`flex items-center gap-2.5 rounded-xl border p-3 transition text-xs font-semibold ${
+                    roleObj.system ? "cursor-not-allowed" : "cursor-pointer"
+                  } ${
                     isChecked
                       ? "border-[#b36b3c] bg-white text-[#26352f] shadow-sm"
                       : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
@@ -334,10 +328,16 @@ export function ChurchSettingsManager() {
                   <input
                     type="checkbox"
                     checked={isChecked}
+                    disabled={roleObj.system}
                     onChange={() => toggleBoardRole(roleObj.key)}
-                    className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
+                    className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c] disabled:cursor-not-allowed"
                   />
                   <span>{roleObj.label}</span>
+                  {roleObj.system && (
+                    <span className="rounded bg-[#f0e6dc] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#96552c]">
+                      system
+                    </span>
+                  )}
                 </label>
               );
             })}

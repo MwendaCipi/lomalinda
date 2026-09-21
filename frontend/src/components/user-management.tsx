@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RolesCombobox, formatRoles, roleLabel, ROLE_OPTIONS } from "./roles-combobox";
+import { RolesCombobox, formatRoles, heldSystemRoles, SYSTEM_ROLE_HELP } from "./roles-combobox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -739,23 +739,6 @@ const MINISTRIES = [
   { value: "children_ministry", label: "Children" },
 ];
 
-// Access levels an invited account can be created with (mirrors MemberProfile.ROLE_CHOICES).
-const INVITE_ROLES = [
-  { value: "member", label: "Member" },
-  { value: "clerk", label: "Church Clerk" },
-  { value: "elder", label: "Elder / First Elder" },
-  { value: "leader", label: "Church Leader" },
-  { value: "admin", label: "Administrator" },
-  { value: "treasurer", label: "Treasurer" },
-  { value: "finance", label: "Finance Team" },
-  { value: "youth_leader", label: "Youth Leader" },
-  { value: "choir_director", label: "Choir Director" },
-  { value: "children_ministry", label: "Children Leader" },
-  { value: "men_ministry", label: "AMM Leader" },
-  { value: "women_ministry", label: "AWM Leader" },
-  { value: "chaplaincy", label: "Chaplain" },
-];
-
 interface InvitationRow {
   id: number;
   email: string;
@@ -779,7 +762,8 @@ const inviteFormInitial = {
   last_name: "",
   phone_number: "",
   account_type: "member",
-  role: "member",
+  // Roles are ticked from the fixed, hard-coded list shared with the backend.
+  roles: ["member"] as string[],
 };
 
 const initialForm = {
@@ -970,7 +954,7 @@ export function UserManagement() {
           last_name: inviteFormData.last_name.trim(),
           phone_number: (inviteFormData.phone_number || "").replace(/\D/g, "").slice(0, 10),
           account_type: inviteFormData.account_type,
-          roles: [inviteFormData.role],
+          roles: inviteFormData.roles,
         }),
       });
       const data = await res.json();
@@ -1579,6 +1563,7 @@ export function UserManagement() {
                             selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                             onChange={(newRoles) => handleQuickRolesChange(m.id, newRoles)}
                             disabled={updatingRoleId === m.id || m.account_type === "friend"}
+                            lockedRoles={heldSystemRoles(m.roles, m.role)}
                           />
                           {m.account_type === "friend" && (
                             <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-700">
@@ -2046,14 +2031,17 @@ export function UserManagement() {
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-[#26352f]">Access / Role</label>
-                  <select value={inviteFormData.role}
-                    onChange={(e) => setInviteFormData({ ...inviteFormData, role: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
-                    {INVITE_ROLES.map((role) => (
-                      <option key={role.value} value={role.value}>{role.label}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-semibold text-[#26352f]">Access / Roles *</label>
+                  <p className="mt-0.5 text-[10px] text-[#617068]">
+                    Tick every role the invited account should hold. {SYSTEM_ROLE_HELP}
+                  </p>
+                  <div className="mt-2">
+                    <RolesCombobox
+                      selected={inviteFormData.roles}
+                      onChange={(roles) => setInviteFormData({ ...inviteFormData, roles })}
+                      align="left"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2099,7 +2087,7 @@ export function UserManagement() {
                             {[invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email}
                           </p>
                           <p className="truncate text-[11px] text-[#617068]">
-                            {invitation.email} · {invitation.role_codes.join(", ") || "member"} · {invitation.account_type_display}
+                            {invitation.email} · {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
                           </p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
@@ -2278,9 +2266,16 @@ export function UserManagement() {
             <form onSubmit={handleLeadershipSubmit} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-[#26352f]">Leadership Roles *</label>
-                <p className="mt-0.5 text-[10px] text-[#617068]">Tick every role this person holds. A person can hold several roles.</p>
+                <p className="mt-0.5 text-[10px] text-[#617068]">
+                  Tick every role this person holds. A person can hold several roles. {SYSTEM_ROLE_HELP}
+                </p>
                 <div className="mt-2">
-                  <RolesCombobox selected={newRoles} onChange={setNewRoles} align="left" />
+                  <RolesCombobox
+                    selected={newRoles}
+                    onChange={setNewRoles}
+                    lockedRoles={heldSystemRoles(leadershipMember.roles, leadershipMember.role)}
+                    align="left"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-1">

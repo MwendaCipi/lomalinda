@@ -2,25 +2,55 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export const ROLE_OPTIONS = [
+export type RoleOption = {
+  value: string;
+  label: string;
+  /** Django group carrying this role's permissions. */
+  group?: string;
+  /** System roles carry every permission and cannot be removed once granted. */
+  system?: boolean;
+};
+
+/**
+ * The hard-coded church roles. This is the single frontend source of truth and
+ * mirrors ROLE_DEFINITIONS in backend/members/roles.py.
+ */
+export const ROLE_OPTIONS: RoleOption[] = [
   { value: "member", label: "Member" },
-  { value: "clerk", label: "Church Clerk" },
-  { value: "elder", label: "Elder / First Elder" },
+  { value: "clerk", label: "Church Clerk", group: "Church Leaders" },
+  { value: "elder", label: "Elder / First Elder", group: "Church Leaders" },
   { value: "youth_leader", label: "Youth Leader" },
-  { value: "choir_director", label: "Choir Director" },
-  { value: "children_ministry", label: "Children Leader" },
-  { value: "men_ministry", label: "AMM Leader" },
-  { value: "women_ministry", label: "AWM Leader" },
-  { value: "chaplaincy", label: "Chaplain" },
-  { value: "finance", label: "Finance Team" },
-  { value: "treasurer", label: "Treasurer" },
-  { value: "leader", label: "Church Leader" },
-  { value: "admin", label: "Administrator" },
+  { value: "choir_director", label: "Choir Director", group: "Choir Director" },
+  { value: "children_ministry", label: "Children Leader", group: "Children Ministry" },
+  { value: "men_ministry", label: "AMM Leader", group: "Adventist Men Ministries" },
+  { value: "women_ministry", label: "AWM Leader", group: "Adventist Women Ministries" },
+  { value: "chaplaincy", label: "Chaplain", group: "Chaplaincy" },
+  { value: "finance", label: "Finance Team", group: "Finance Team" },
+  { value: "treasurer", label: "Treasurer", group: "Finance Team" },
+  { value: "leader", label: "Church Leader", group: "Church Leaders" },
+  { value: "admin", label: "Administrator", group: "Administrators", system: true },
 ];
 
 export const ROLE_LABELS: Record<string, string> = Object.fromEntries(
   ROLE_OPTIONS.map((r) => [r.value, r.label])
 );
+
+export const SYSTEM_ROLE_CODES = ROLE_OPTIONS.filter((r) => r.system).map((r) => r.value);
+
+export function isSystemRole(code: string): boolean {
+  return SYSTEM_ROLE_CODES.includes(code);
+}
+
+/** System roles already held by an account — those cannot be dropped here. */
+export function heldSystemRoles(...roleSets: (string[] | string | undefined)[]): string[] {
+  const held = roleSets.flatMap((set) => (Array.isArray(set) ? set : set ? [set] : []));
+  return SYSTEM_ROLE_CODES.filter((code) => held.includes(code));
+}
+
+export const SYSTEM_ROLE_HELP =
+  "Administrator is a system role with every permission.";
+export const SYSTEM_ROLE_LOCKED_HELP =
+  "Administrator is a system role: it cannot be removed from this account.";
 
 export function roleLabel(code: string): string {
   return ROLE_LABELS[code] || code.replaceAll("_", " ");
@@ -39,9 +69,11 @@ interface RolesComboboxProps {
   onChange: (roles: string[]) => void;
   disabled?: boolean;
   align?: "left" | "right";
+  /** Roles that must stay ticked (e.g. Administrator already held). */
+  lockedRoles?: string[];
 }
 
-export function RolesCombobox({ selected, onChange, disabled = false, align = "left" }: RolesComboboxProps) {
+export function RolesCombobox({ selected, onChange, disabled = false, align = "left", lockedRoles = [] }: RolesComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,6 +97,7 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
   }, [isOpen]);
 
   const toggle = (value: string) => {
+    if (lockedRoles.includes(value)) return; // system role, cannot be dropped
     let next: string[];
     if (selected.includes(value)) {
       next = selected.filter((r) => r !== value);
@@ -115,16 +148,20 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
         >
           {ROLE_OPTIONS.map((r) => {
             const checked = selected.includes(r.value);
+            const locked = checked && lockedRoles.includes(r.value);
             return (
               <button
                 key={r.value}
                 type="button"
                 role="option"
                 aria-selected={checked}
+                aria-disabled={locked}
+                disabled={locked}
+                title={locked ? SYSTEM_ROLE_LOCKED_HELP : r.group ? `Group: ${r.group}` : undefined}
                 onClick={() => toggle(r.value)}
                 className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition ${
                   checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148] hover:bg-[#f7f4ee]"
-                }`}
+                } ${locked ? "cursor-not-allowed" : ""}`}
               >
                 <span
                   className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
@@ -137,7 +174,15 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
                     </svg>
                   )}
                 </span>
-                {r.label}
+                <span className="flex flex-1 items-center gap-1.5">
+                  <span>{r.label}</span>
+                  {r.system && (
+                    <span className="rounded bg-[#f0e6dc] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#96552c]">
+                      system
+                    </span>
+                  )}
+                  {locked && <span className="text-[10px]">🔒</span>}
+                </span>
               </button>
             );
           })}

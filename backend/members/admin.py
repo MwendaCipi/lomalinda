@@ -1,14 +1,149 @@
 import uuid
 from datetime import timedelta
 
+from django import forms
 from django.conf import settings
 from django.contrib import admin
+from django.db.models import Q
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import escape, format_html, mark_safe
 
 from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .roles import (
+    ADMIN_ROLE,
+    ROLE_CHOICES,
+    ROLE_GROUP_MAP,
+    is_system_role,
+    normalize_roles,
+    role_labels,
+)
 
-admin.site.register(MemberProfile)
+
+class RoleListFilter(admin.SimpleListFilter):
+    """Filter accounts by one of the hard-coded church roles."""
+
+    title = 'church role'
+    parameter_name = 'role'
+
+    def lookups(self, request, model_admin):
+        return ROLE_CHOICES
+
+    def queryset(self, request, queryset):
+        """Match a whole role code inside the comma-separated roles column."""
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(roles=value)
+            | Q(roles__startswith=f'{value},')
+            | Q(roles__endswith=f', {value}')
+            | Q(roles__contains=f', {value},')
+        )
+
+
+class ChurchRolesFormMixin(forms.ModelForm):
+    """Edit the church roles as a tick list of the fixed role codes.
+
+    The stored column is still the comma-separated ``roles`` string, but nobody
+    has to type role codes by hand - the Administrator system role cannot be
+    dropped by a non-superuser.
+    """
+
+    roles = forms.MultipleChoiceField(
+        choices=ROLE_CHOICES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='Church roles',
+        help_text='Hard-coded roles; Administrator always carries every permission.',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            existing = self.instance.get_roles() if hasattr(self.instance, 'get_roles') else self.instance.role_codes()
+            self.initial['roles'] = [code for code in existing if code in dict(ROLE_CHOICES)]
+
+    def clean_roles(self):
+        codes = normalize_roles(self.cleaned_data.get('roles'))
+        if self.instance and self.instance.pk:
+            existing = self.instance.get_roles() if hasattr(self.instance, 'get_roles') else self.instance.role_codes()
+            actor = getattr(self, 'request_user', None)
+            if ADMIN_ROLE in existing and ADMIN_ROLE not in codes and not getattr(actor, 'is_superuser', False):
+                raise forms.ValidationError(
+                    'Administrator is a system role: only a superuser can remove it.'
+                )
+        return codes
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        codes = normalize_roles(self.cleaned_data.get('roles'))
+        instance.roles = ', '.join(codes)
+        if hasattr(instance, 'role'):
+            instance.role = codes[0]
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class MemberProfileRolesForm(ChurchRolesFormMixin):
+    class Meta:
+        model = MemberProfile
+        exclude = ('role',)  # derived from the roles tick list
+
+
+class InvitationRolesForm(ChurchRolesFormMixin):
+    class Meta:
+        model = Invitation
+        fields = '__all__'
+
+
+class ChurchRolesAdminMixin:
+    """Show the roles an account holds, plus the full role list, in the admin."""
+
+    readonly_fields = ('roles_legend',)
+
+    @admin.display(description='Roles')
+    def role_display(self, obj):
+        codes = obj.get_roles() if hasattr(obj, 'get_roles') else obj.role_codes()
+        return role_labels(codes)
+
+    @admin.display(description='Church roles (hard-coded - edit members/roles.py)')
+    def roles_legend(self, obj=None):
+        rows = ''.join(
+            '<tr><td style="padding:2px 14px 2px 0"><strong>{}</strong></td>'
+            '<td style="padding:2px 14px 2px 0">{}</td><td>{}</td></tr>'.format(
+                escape(label),
+                escape(ROLE_GROUP_MAP.get(code) or '-'),
+                'System role - all permissions' if is_system_role(code) else '',
+            )
+            for code, label in ROLE_CHOICES
+        )
+        return format_html('<table style="border-collapse:collapse">{}</table>', mark_safe(rows))
+
+
+@admin.register(MemberProfile)
+class MemberProfileAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
+    """Church accounts: the roles list is ticked from the fixed role codes."""
+
+    form = MemberProfileRolesForm
+    list_display = ('user', 'role_display', 'account_type', 'is_disfellowshipped', 'updated_at')
+    list_filter = ('account_type', 'is_disfellowshipped', RoleListFilter)
+    list_select_related = ('user',)
+    search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name', 'phone_number')
+    fields = (
+        'user', 'account_type', 'roles', 'roles_legend', 'phone_number', 'whatsapp_number',
+        'current_church', 'baptismal_status', 'employment_status', 'profession', 'gender',
+        'date_of_birth', 'gifts', 'disability', 'is_disfellowshipped',
+    )
+
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        form_class = super().get_form(request, obj, change=change, **kwargs)
+        # The form needs to know who is editing, to protect the system role.
+        form_class.request_user = request.user
+        return form_class
+
+
 admin.site.register(Contribution)
 admin.site.register(ChurchFinancialReport)
 admin.site.register(ChurchBudget)
@@ -122,17 +257,18 @@ class AnnouncementAdmin(admin.ModelAdmin):
 
 
 @admin.register(Invitation)
-class InvitationAdmin(admin.ModelAdmin):
+class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
     """Platform console: invite a church administrator without a shell.
 
     Saving a new invitation emails the invitation link, so the superuser can
     onboard the first church administrator straight from this page.
     """
 
-    list_display = ('email', 'first_name', 'last_name', 'account_type', 'roles', 'status', 'sent_at', 'expires_at')
-    list_filter = ('status', 'account_type', 'created_at')
+    form = InvitationRolesForm
+    list_display = ('email', 'first_name', 'last_name', 'account_type', 'role_display', 'status', 'sent_at', 'expires_at')
+    list_filter = ('status', 'account_type', 'created_at', RoleListFilter)
     search_fields = ('email', 'first_name', 'last_name')
-    readonly_fields = ('invitation_link', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at')
+    readonly_fields = ('invitation_link', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at', 'roles_legend')
     actions = ['resend_invitations', 'revoke_invitations']
 
     @admin.display(description='Invitation link (copy and share if email is unavailable)')
