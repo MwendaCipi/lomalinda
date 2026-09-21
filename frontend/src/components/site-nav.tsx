@@ -403,7 +403,17 @@ export function SiteNav() {
           </div>
 
           {/* User Account / Profile Button & Menu */}
-          <div className="relative">
+          <div className="relative flex items-center gap-2">
+            {!userState.isLoggedIn && (
+              <Link
+                href="/login"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-[#f1c89e] px-3 py-2 text-xs font-bold text-[#26352f] transition-colors hover:bg-white"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign in</span>
+              </Link>
+            )}
+
             {userState.isLoggedIn ? (
               <button
                 type="button"
