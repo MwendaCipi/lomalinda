@@ -1,0 +1,91 @@
+import Link from "next/link";
+import { AboutSidebar } from "@/components/sidebars/about-sidebar";
+
+const values = [
+  ["Faith", "We follow Jesus, trust Scripture, and make room for questions, growth, and grace."],
+  ["Belonging", "Everyone should find a welcoming church family where they are known, valued, and remembered in prayer."],
+  ["Service", "We put faith into action by caring for our neighbours and responding to practical needs with compassion."],
+  ["Hope", "We share the hope of the gospel and encourage one another through every season of life."],
+];
+
+export default function AboutPage() {
+  return (
+    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
+      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
+        <AboutSidebar />
+        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] md:overflow-y-auto custom-hover-scrollbar">
+          <div className="max-w-5xl mx-auto space-y-8">
+            <div className="max-w-3xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">About Loma Linda SDA Church</h1>
+              <p className="hidden sm:block mt-4 text-lg leading-8 text-[#617068]">
+                A welcoming Seventh-day church family in Meru, growing together in faith, hope, and love.
+              </p>
+            </div>
+
+            <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+              <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-semibold">Our history</h2>
+                <p className="mt-4 text-base leading-8 text-[#617068]">
+                  Loma Linda SDA Church is a community shaped by worship, prayer, Bible study, fellowship, and service. Our story continues through the people who gather here, the families we support, and the neighbours we serve.
+                </p>
+                <p className="mt-4 text-base leading-8 text-[#617068]">
+                  As the church grows, we remain committed to remembering where we have come from while making room for new people, new ministries, and new ways to share God&apos;s love in Meru and beyond.
+                </p>
+              </section>
+
+              <section className="rounded-3xl bg-[#26352f] p-6 text-white shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#f1c89e]">Our purpose</p>
+                <h2 className="mt-4 text-3xl font-semibold">A church for faith, friendship, and service.</h2>
+                <p className="mt-5 text-sm leading-7 text-white/75">
+                  We worship God, nurture disciples, care for people, and take the hope of Jesus into our community.
+                </p>
+              </section>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-semibold">Our mission</h2>
+                <p className="mt-4 text-base leading-8 text-[#617068]">
+                  Make disciples of Jesus Christ who live as His loving witnesses and proclaim to all people the everlasting gospel of the Three Angels&apos; Messages in preparation for His soon return (Matt 28:18-20, Acts 1:8, Rev 14:6-12).
+                </p>
+              </section>
+              <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-semibold">Our vision</h2>
+                <p className="mt-4 text-base leading-8 text-[#617068]">
+                  In harmony with Bible revelation, Seventh-day Adventists see as the climax of God&apos;s plan the restoration of all His creation to full harmony with His perfect will and righteousness.
+                </p>
+              </section>
+            </div>
+
+            <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-2xl font-semibold">What guides us</h2>
+              <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                {values.map(([title, text]) => (
+                  <article key={title} className="border-l-2 border-[#b36b3c] pl-6">
+                    <h3 className="text-xl font-semibold">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-[#617068]">{text}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-2xl font-semibold">Come and be part of the story</h2>
+              <p className="mt-4 max-w-2xl text-base leading-8 text-[#617068]">
+                Join us for worship, explore our ministries, or reach out when you need prayer and care.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-4">
+                <Link href="/calendar" className="rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white hover:bg-[#96552e]">
+                  See our calendar
+                </Link>
+                <Link href="/community/prayer" className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-semibold hover:border-[#26352f]">
+                  Community care
+                </Link>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type AnnouncementResponseItem = {
   id: number;
@@ -152,12 +152,6 @@ export function PopupAnnouncementModal() {
           <p className="mt-3 text-sm leading-relaxed text-[#415047]">
             {current.text}
           </p>
-
-          {current.detail && (
-            <div className="mt-3 rounded-2xl bg-[#f7f4ee] p-4 text-xs leading-relaxed text-[#617068]">
-              {current.detail}
-            </div>
-          )}
         </div>
 
         <form onSubmit={handleActionSubmit} className="mt-6 space-y-4">

@@ -5,13 +5,16 @@ export interface Ministry {
   description: string;
   department?: string;
   sections?: { id?: string; title: string; text: string }[];
+  summary?: string;
+  schedule?: string;
+  leaderName?: string;
 }
 
 export const MINISTRIES: Ministry[] = [
   {
     slug: "children-ministry",
     title: "Children Ministry",
-    givingPurpose: "Children Ministry",
+    givingPurpose: "Children",
     description: "Nurturing children into a loving, lifelong relationship with Jesus through Bible learning, worship, and fun fellowship.",
     department: "Children Ministry",
     sections: [
@@ -23,7 +26,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "possibility-ministries",
     title: "Adventist Possibility Ministries (APM)",
-    givingPurpose: "Adventist Possibility Ministries (APM)",
+    givingPurpose: "Possibility",
     description: "Building belonging and meaningful participation for people with disabilities, special needs, orphans, widows, and caregivers.",
     department: "Adventist Possibility Ministries",
     sections: [
@@ -35,7 +38,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-youth",
     title: "Adventist Youth Ministries (AY)",
-    givingPurpose: "Adventist Youth Ministries (AY)",
+    givingPurpose: "Youth",
     description: "Helping young people grow in faith, friendship, leadership, and missionary service.",
     department: "Adventist Youth Ministries",
     sections: [
@@ -47,7 +50,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-men",
     title: "Adventist Men Ministries (AMM)",
-    givingPurpose: "Adventist Men Ministries (AMM)",
+    givingPurpose: "Men",
     description: "Creating space for men to grow spiritually, build strong friendships, and serve the church and community.",
     department: "Adventist men ministries",
     sections: [
@@ -59,7 +62,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-women",
     title: "Adventist Women Ministries (AWM)",
-    givingPurpose: "Adventist Women Ministries (AWM)",
+    givingPurpose: "Women",
     description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach.",
     department: "Adventist Women Ministries",
     sections: [
@@ -71,7 +74,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "personal-ministries",
     title: "Personal Ministries",
-    givingPurpose: "Personal Ministries",
+    givingPurpose: "Personal",
     description: "Equipping every church member for active personal witnessing, Bible studies, and community evangelism.",
     department: "Personal Ministries",
     sections: [
@@ -83,7 +86,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-muslim-relations",
     title: "Adventist Muslim Relations (AMR)",
-    givingPurpose: "Adventist Muslim Relations (AMR)",
+    givingPurpose: "Personal",
     description: "Building respectful bridges of understanding, dialogue, friendship, and shared truth with Muslim neighbors.",
     department: "Adventist Muslim Relations",
     sections: [
@@ -93,21 +96,9 @@ export const MINISTRIES: Ministry[] = [
     ],
   },
   {
-    slug: "ensemble",
-    title: "Music & Choir Ministry",
-    givingPurpose: "Music & Choir Ministry",
-    description: "Leading the church family in worship through sacred music, choral harmony, and joyful praise.",
-    department: "Music & Choir Ministry",
-    sections: [
-      { title: "Worship through music", text: "Creating a sacred atmosphere for worship through songs that encourage faith, reflection, and praise." },
-      { title: "Growing together", text: "Members develop their musical gifts while building friendship, confidence, and a spirit of cooperation." },
-      { title: "Serving the church", text: "Supporting Sabbath worship services, live broadcasts, and special musical presentations." },
-    ],
-  },
-  {
     slug: "chaplaincy",
     title: "Chaplaincy Ministry",
-    givingPurpose: "Chaplaincy Ministry",
+    givingPurpose: "Chaplaincy",
     description: "Offering a ministry of presence, comfort, prayer, and spiritual care in places of need.",
     department: "Chaplaincy Ministry",
     sections: [
@@ -118,29 +109,34 @@ export const MINISTRIES: Ministry[] = [
   },
 ];
 
+export type CalendarEvent = { date: string; name: string; department?: string };
+
+export function getMinistryBySlug(slug: string): Ministry | undefined {
+  return MINISTRIES.find((m) => m.slug === slug);
+}
+
 export function getMinistryGivingPurpose(departmentOrName?: string): string {
-  if (!departmentOrName) return "General giving";
+  if (!departmentOrName) return "Tithe";
   const lower = departmentOrName.toLowerCase().trim();
 
   // Match against known keywords
-  if (lower.includes("youth") || lower.includes("ay") || lower.includes("ambassador")) return "Adventist Youth Ministries (AY)";
-  if (lower.includes("possibility") || lower.includes("apm") || lower.includes("special need") || lower.includes("disabilit")) return "Adventist Possibility Ministries (APM)";
-  if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children Ministry";
-  if (lower.includes("men") || lower.includes("amm") || lower.includes("amo")) return "Adventist Men Ministries (AMM)";
-  if (lower.includes("women") || lower.includes("awm") || lower.includes("dorcas")) return "Adventist Women Ministries (AWM)";
-  if (lower.includes("personal") || lower.includes("witness") || lower.includes("evangelism")) return "Personal Ministries";
-  if (lower.includes("muslim") || lower.includes("amr")) return "Adventist Muslim Relations (AMR)";
-  if (lower.includes("music") || lower.includes("choir") || lower.includes("ensemble") || lower.includes("sing")) return "Music & Choir Ministry";
-  if (lower.includes("chaplain")) return "Chaplaincy Ministry";
-  if (lower.includes("prayer")) return "Prayer Ministry";
-  if (lower.includes("worship")) return "Worship Ministry";
-  if (lower.includes("welfare") || lower.includes("deacon") || lower.includes("samaria")) return "Church Welfare Ministry";
-  if (lower.includes("family") || lower.includes("couple") || lower.includes("marriage")) return "Family Life Ministry";
-  if (lower.includes("health") || lower.includes("temperance") || lower.includes("medical")) return "Health Ministry";
-  if (lower.includes("pathfinder") || lower.includes("adventurer")) return "Pathfinders & Adventurers";
-  if (lower.includes("communicat") || lower.includes("media") || lower.includes("sound") || lower.includes("tech")) return "Communication & Media";
-  if (lower.includes("development") || lower.includes("building") || lower.includes("project")) return "Church development";
-  if (lower.includes("budget") || lower.includes("lcb") || lower.includes("whole church")) return "Local Church Budget (LCB)";
+  if (lower.includes("youth") || lower.includes("ay") || lower.includes("ambassador")) return "Youth";
+  if (lower.includes("possibility") || lower.includes("apm") || lower.includes("special need") || lower.includes("disabilit")) return "Possibility";
+  if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children";
+  if (lower.includes("men") || lower.includes("amm") || lower.includes("amo")) return "Men";
+  if (lower.includes("women") || lower.includes("awm") || lower.includes("dorcas")) return "Women";
+  if (lower.includes("personal") || lower.includes("witness") || lower.includes("evangelism") || lower.includes("muslim") || lower.includes("amr")) return "Personal";
+  if (lower.includes("music") || lower.includes("choir") || lower.includes("ensemble") || lower.includes("sing")) return "Choir";
+  if (lower.includes("chaplain")) return "Chaplaincy";
+  if (lower.includes("prayer")) return "Prayer";
+  if (lower.includes("worship")) return "Worship";
+  if (lower.includes("welfare") || lower.includes("deacon") || lower.includes("samaria")) return "Msamaria Mwema";
+  if (lower.includes("family") || lower.includes("couple") || lower.includes("marriage")) return "Family Life";
+  if (lower.includes("health") || lower.includes("temperance") || lower.includes("medical")) return "Health";
+  if (lower.includes("pathfinder") || lower.includes("adventurer")) return "Pathfinders";
+  if (lower.includes("communicat") || lower.includes("media") || lower.includes("sound") || lower.includes("tech")) return "Media";
+  if (lower.includes("development") || lower.includes("building") || lower.includes("project")) return "Development";
+  if (lower.includes("budget") || lower.includes("lcb") || lower.includes("whole church")) return "Budget";
   if (lower.includes("tithe")) return "Tithe";
 
   return departmentOrName;

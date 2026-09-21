@@ -11,6 +11,14 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* On desktop (md+), prevent the outer page from scrolling; only inner panels scroll */
+@media (min-width: 768px) {
+  html, body {
+    overflow: hidden;
+    height: 100%;
+  }
+}
+
 @keyframes hero-image-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
@@ -59,3 +67,243 @@ body {
     background: rgba(255, 255, 255, 0.06);
   }
 }
+
+/* ==========================================================================
+   Accessibility (A11y) Global System Rules (afyarex-offline standard)
+   ========================================================================== */
+
+/* 1. Font Size Scaling */
+html[data-font-size="large"] {
+  font-size: 115% !important;
+}
+
+html[data-font-size="xlarge"] {
+  font-size: 130% !important;
+}
+
+/* 2. High Contrast Theme (#000000 / #ffff00 / #00ffff) */
+html[data-high-contrast="true"] {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+html[data-high-contrast="true"] body,
+html[data-high-contrast="true"] div:not(.a11y-popover-card *):not(.a11y-popover-card),
+html[data-high-contrast="true"] section,
+html[data-high-contrast="true"] article,
+html[data-high-contrast="true"] main,
+html[data-high-contrast="true"] aside,
+html[data-high-contrast="true"] nav,
+html[data-high-contrast="true"] footer {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffff00 !important;
+}
+
+html[data-high-contrast="true"] header {
+  background-color: #0a0a0a !important;
+  border-bottom: 2px solid #ffff00 !important;
+}
+
+html[data-high-contrast="true"] h1,
+html[data-high-contrast="true"] h2,
+html[data-high-contrast="true"] h3,
+html[data-high-contrast="true"] h4,
+html[data-high-contrast="true"] h5,
+html[data-high-contrast="true"] h6,
+html[data-high-contrast="true"] strong,
+html[data-high-contrast="true"] th,
+html[data-high-contrast="true"] label {
+  color: #ffff00 !important;
+}
+
+html[data-high-contrast="true"] p,
+html[data-high-contrast="true"] span:not(.a11y-popover-card *),
+html[data-high-contrast="true"] td,
+html[data-high-contrast="true"] li {
+  color: #ffffff !important;
+}
+
+html[data-high-contrast="true"] a {
+  color: #00ffff !important;
+  text-decoration: underline !important;
+}
+
+html[data-high-contrast="true"] button:not(.a11y-popover-card *) {
+  background-color: #111111 !important;
+  color: #00ffff !important;
+  border-color: #00ffff !important;
+}
+
+html[data-high-contrast="true"] input:not([type="checkbox"]):not([type="radio"]):not(.a11y-popover-card *),
+html[data-high-contrast="true"] select:not(.a11y-popover-card *),
+html[data-high-contrast="true"] textarea:not(.a11y-popover-card *) {
+  background-color: #050505 !important;
+  color: #ffffff !important;
+  border-color: #ffff00 !important;
+}
+
+html[data-high-contrast="true"] button:focus-visible,
+html[data-high-contrast="true"] input:focus-visible,
+html[data-high-contrast="true"] select:focus-visible {
+  outline: 3px solid #ffff00 !important;
+  outline-offset: 2px !important;
+}
+
+/* 3. Dyslexia-Friendly Font Stack */
+html[data-dyslexic-font="true"] body,
+html[data-dyslexic-font="true"] input,
+html[data-dyslexic-font="true"] select,
+html[data-dyslexic-font="true"] textarea,
+html[data-dyslexic-font="true"] button,
+html[data-dyslexic-font="true"] p,
+html[data-dyslexic-font="true"] h1,
+html[data-dyslexic-font="true"] h2,
+html[data-dyslexic-font="true"] h3,
+html[data-dyslexic-font="true"] h4,
+html[data-dyslexic-font="true"] h5,
+html[data-dyslexic-font="true"] h6 {
+  font-family: 'OpenDyslexic', 'Comic Sans MS', 'Lexend', 'Segoe UI', sans-serif !important;
+  letter-spacing: 0.03em !important;
+  word-spacing: 0.08em !important;
+  line-height: 1.65 !important;
+}
+
+/* 4. High-Visibility Keyboard Focus Ring */
+html[data-focus-ring="high"] *:focus-visible {
+  outline: 3px solid #06b6d4 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 5px rgba(6, 182, 212, 0.35) !important;
+}
+
+/* 5. Reduced Motion */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+/* 6. Always-Visible Custom Scrollbar */
+.custom-hover-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #a8a297 transparent;
+  -ms-overflow-style: auto;
+}
+.custom-hover-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-hover-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-hover-scrollbar::-webkit-scrollbar-thumb {
+  background: #a8a297;
+  border-radius: 9999px;
+}
+
+/* 7. Always-Visible Table Scrollbar */
+.custom-table-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #c9c5bb transparent;
+  -ms-overflow-style: auto;
+}
+.custom-table-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-table-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-table-scrollbar::-webkit-scrollbar-thumb {
+  background: #c9c5bb;
+  border-radius: 9999px;
+}
+.custom-table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a297;
+}
+
+/* ==========================================================================
+   Global Table Scrollability & Layout Protection
+   ========================================================================== */
+.table-responsive,
+.table-container,
+[class*="overflow-x-auto"] {
+  max-width: 100% !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent tables from expanding full HTML body or page viewport width */
+table {
+  max-width: 100%;
+}
+
+@media screen and (max-width: 768px) {
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal scrolling protection on mobile */
+  .fixed.inset-0 {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ==========================================================================
+   Print / PDF Report System Styles
+   ========================================================================== */
+@media print {
+  nav,
+  aside,
+  header,
+  .no-print,
+  button,
+  input,
+  select {
+    display: none !important;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main, div {
+    max-width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 6px 10px !important;
+    color: #000 !important;
+  }
+
+  thead {
+    background-color: #f2f2f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  tfoot {
+    background-color: #e6e6e6 !important;
+    font-weight: bold !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+

@@ -8,9 +8,10 @@ def validate_phone_number(value):
     if not value:
         return value
     cleaned = re.sub(r'[\s\-\(\)]', '', str(value))
-    # Match Kenyan format (07... / 01... / +254... / 254...) or standard international phone (+X...)
-    if not re.match(r'^\+?[0-9]{9,15}$', cleaned):
-        raise ValidationError('Enter a valid phone number (e.g., 0712345678 or +254712345678).')
+    if re.match(r'^(?:\+254|254)([0-9]{9})$', cleaned):
+        cleaned = '0' + re.match(r'^(?:\+254|254)([0-9]{9})$', cleaned).group(1)
+    if not re.match(r'^[0-9]{10}$', cleaned):
+        raise ValidationError('Enter a valid 10-digit phone number (e.g., 0712345678).')
     return cleaned
 
 

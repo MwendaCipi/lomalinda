@@ -7,7 +7,7 @@ def seed_giving_purposes(apps, schema_editor):
     GivingPurpose = apps.get_model('members', 'GivingPurpose')
     GivingPurpose.objects.bulk_create([
         GivingPurpose(name=name)
-        for name in ('General giving', 'Tithe', 'Church development', 'Local Church Budget (LCB)', 'Msamaria Mwema', 'Missions')
+        for name in ('Combined Offering', 'Tithe', 'Church development', 'Local Church Budget (LCB)', 'Msamaria Mwema', 'Missions')
     ])
 
 

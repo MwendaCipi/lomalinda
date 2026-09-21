@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipTransferRequest, PendingTestimony, PrayerRequest, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, GivingPurpose, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
 
 admin.site.register(MemberProfile)
 admin.site.register(Contribution)
@@ -13,6 +13,7 @@ admin.site.register(ChurchBudget)
 admin.site.register(PrayerRequest)
 admin.site.register(SabbathEvent)
 admin.site.register(GivingPurpose)
+admin.site.register(Profession)
 @admin.register(EnrollmentRequest)
 class EnrollmentRequestAdmin(admin.ModelAdmin):
     list_display = ('email', 'first_name', 'last_name', 'joining_mode', 'status', 'created_at')
@@ -44,6 +45,7 @@ class EnrollmentRequestAdmin(admin.ModelAdmin):
 admin.site.register(ExternalResourceLink)
 admin.site.register(Friend)
 admin.site.register(MembershipTransferRequest)
+admin.site.register(MembershipRemovalRequest)
 admin.site.register(ChurchCorrespondence)
 admin.site.register(BoardMeeting)
 admin.site.register(ChurchNotification)
@@ -120,7 +122,7 @@ class AnnouncementAdmin(admin.ModelAdmin):
 @admin.register(ChurchSettings)
 class ChurchSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
-        ('Church location', {'fields': ('church_name', 'address', 'latitude', 'longitude')}),
+        ('Church location', {'fields': ('church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude')}),
         ('Regular gatherings', {'fields': ('midweek_vespers_time', 'midweek_vespers_link', 'friday_vespers_time', 'sabbath_time')}),
         ('Live service', {'fields': ('live_service_link', 'live_service_active')}),
     )

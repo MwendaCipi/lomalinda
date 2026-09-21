@@ -1,0 +1,509 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { showAlert } from "@/lib/alerts";
+import { RequestsSidebar } from "@/components/sidebars/requests-sidebar";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+type TransferDirection = "transfer_in" | "transfer_out";
+type JoiningMode = "baptism" | "membership_transfer" | "friend";
+
+const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]";
+
+type TransferRecord = {
+  id: number;
+  name: string;
+  phone_number?: string;
+  email?: string;
+  transfer_type?: string;
+  other_church?: string;
+  joining_mode?: string;
+  reason?: string;
+  created_at?: string;
+  status?: string;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+function parseFullName(fullName: string): { first_name: string; last_name: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first_name: "", last_name: "" };
+  if (parts.length === 1) return { first_name: parts[0], last_name: parts[0] };
+  const last_name = parts[parts.length - 1];
+  const first_name = parts.slice(0, -1).join(" ");
+  return { first_name, last_name };
+}
+
+export default function EnrollPage() {
+  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [fetchingList, setFetchingList] = useState(true);
+
+  const [transferDirection, setTransferDirection] = useState<TransferDirection>("transfer_in");
+  const [joiningMode, setJoiningMode] = useState<JoiningMode>("baptism");
+  const [form, setForm] = useState({
+    email: "",
+    name: "",
+    phone_number: "",
+    current_church: "",
+    destination_church: "",
+    transfer_reason: "",
+  });
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function update(field: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  const fetchTransfers = async () => {
+    setFetchingList(true);
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const res = await fetch(`${API_URL}/api/members/transfers/`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setTransfers(Array.isArray(data) ? data : []);
+      } else {
+        setTransfers([]);
+      }
+    } catch {
+      setTransfers([]);
+    } finally {
+      setFetchingList(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransfers();
+    if (document.querySelector("script[data-google-identity]") || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return;
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = "true";
+    document.head.appendChild(script);
+  }, []);
+
+  function startGoogleVerification() {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      showAlert("Verification unavailable", "Google OAuth has not been configured yet.", "error");
+      return;
+    }
+    if (!window.google) {
+      showAlert("Verification unavailable", "Google verification is still loading. Please try again.", "error");
+      return;
+    }
+    window.google.accounts.id.initialize({ client_id: clientId, callback: completeGoogleVerification });
+    window.google.accounts.id.prompt();
+  }
+
+  async function completeGoogleVerification(response: { credential: string }) {
+    const { first_name, last_name } = parseFullName(form.name);
+    setLoading(true);
+    setMessage("");
+    try {
+      const result = await fetch(`${API_URL}/api/members/auth/enrollment/oauth-verify/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          name: form.name.trim(),
+          first_name,
+          last_name,
+          joining_mode: joiningMode,
+          credential: response.credential,
+        }),
+      });
+      const data = await result.json();
+      if (!result.ok) throw new Error(Object.values(data).flat().join(" ") || "Google verification failed.");
+      window.location.href = `/enroll/confirm?token=${encodeURIComponent(data.token)}`;
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Google verification failed.";
+      setMessage(text);
+      showAlert("Verification error", text, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!form.name.trim() || !form.phone_number.trim() || !form.email.trim()) {
+      showAlert("Missing information", "Please fill in your name, phone number, and email address.", "warning");
+      return;
+    }
+    const cleanPhone = form.phone_number.replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      showAlert("Invalid Phone Number", "Please enter a valid 10-digit phone number (e.g., 0712345678).", "warning");
+      return;
+    }
+
+    if (transferDirection === "transfer_in") {
+      if ((joiningMode === "friend" || joiningMode === "membership_transfer") && !form.current_church.trim()) {
+        showAlert("Missing information", "Please specify the name of your current/previous church.", "warning");
+        return;
+      }
+      const { first_name, last_name } = parseFullName(form.name);
+      setLoading(true);
+      setMessage("");
+      try {
+        const response = await fetch(`${API_URL}/api/members/auth/enrollment-request/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.name.trim(),
+            first_name,
+            last_name,
+            phone_number: cleanPhone,
+            email: form.email.trim(),
+            joining_mode: joiningMode,
+            current_church: form.current_church.trim(),
+            privacy_accepted: true,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
+        const successMsg =
+          data.message ||
+          "A verification link has been sent to your email. Please check your inbox (and spam folder) to complete your account setup.";
+        setMessage(successMsg);
+        showAlert("Verification Email Sent", successMsg, "success");
+        setShowForm(false);
+        fetchTransfers();
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Unable to submit your enrollment request.";
+        setMessage(text);
+        showAlert("Submission error", text, "error");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // transfer_out
+      if (!form.destination_church.trim()) {
+        showAlert("Missing information", "Please specify the destination church.", "warning");
+        return;
+      }
+      if (!form.transfer_reason.trim()) {
+        showAlert("Missing information", "Please state your reason for requesting a transfer out.", "warning");
+        return;
+      }
+      setLoading(true);
+      setMessage("");
+      try {
+        const endpoint = `${API_URL}/api/members/transfers/`;
+        const payload = {
+          name: form.name.trim(),
+          member_name: form.name.trim(),
+          transfer_type: "outgoing",
+          other_church: form.destination_church.trim(),
+          reason: form.transfer_reason.trim(),
+          phone_number: cleanPhone,
+          email: form.email.trim(),
+        };
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
+        const text = "Your transfer-out request has been received. The church office will be in touch.";
+        setMessage(text);
+        showAlert("Request Received", text, "success");
+        setShowForm(false);
+        fetchTransfers();
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Unable to submit your request.";
+        setMessage(text);
+        showAlert("Request error", text, "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-white text-[#26352f]">
+      <div className="flex min-h-[calc(100vh-4rem)]">
+        <RequestsSidebar />
+        <div className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Membership &amp; Transfers</h1>
+              <p className="mt-1 text-sm text-[#617068]">
+                Manage membership transfer requests to join Loma Linda SDA Church or move to another SDA church.
+              </p>
+            </div>
+            {!showForm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(true);
+                  setMessage("");
+                }}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#b36b3c] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#96552e]"
+              >
+                + Add Membership / Transfer Request
+              </button>
+            )}
+          </div>
+
+          {message && <p className="mt-6 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
+
+          {showForm ? (
+            <section className="mt-6 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#dfdbd1] sm:p-7">
+              <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4 mb-6">
+                <h2 className="text-xl font-semibold text-[#26352f]">New Request Form</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="text-sm font-semibold text-[#b36b3c] hover:underline"
+                >
+                  &larr; Back to Requests
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Transfer Direction Combobox */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#26352f]">
+                    Transfer Direction / Request Type
+                  </label>
+                  <select
+                    value={transferDirection}
+                    onChange={(e) => {
+                      setTransferDirection(e.target.value as TransferDirection);
+                      setMessage("");
+                    }}
+                    className="mt-1.5 w-full rounded-xl border border-[#b36b3c] bg-[#f7f4ee] px-4 py-3 text-sm font-semibold text-[#26352f] outline-none focus:ring-2 focus:ring-[#b36b3c]"
+                  >
+                    <option value="transfer_in">Transfer In — Join Loma Linda SDA Church</option>
+                    <option value="transfer_out">Transfer Out — Move to Another Church</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                  <label className="block text-sm font-medium sm:col-span-2">
+                    Full Name
+                    <input
+                      required
+                      placeholder="Enter full name (e.g. Cyprian Mwenda Muriuki)"
+                      value={form.name}
+                      onChange={(event) => update("name", event.target.value)}
+                      className={inputClass}
+                    />
+                  </label>
+
+                  <label className="block text-sm font-medium">
+                    Phone Number
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                      minLength={10}
+                      required
+                      placeholder="e.g. 0712345678 (10 digits)"
+                      value={form.phone_number}
+                      onChange={(event) => update("phone_number", event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      className={inputClass}
+                    />
+                  </label>
+
+                  <label className="block text-sm font-medium">
+                    Email Address
+                    <input
+                      required
+                      type="email"
+                      placeholder="yourname@example.com"
+                      value={form.email}
+                      onChange={(event) => update("email", event.target.value)}
+                      className={inputClass}
+                    />
+                  </label>
+
+                  {transferDirection === "transfer_in" && (
+                    <>
+                      <label className="block text-sm font-medium sm:col-span-2">
+                        Mode of Joining
+                        <select
+                          value={joiningMode}
+                          onChange={(event) => setJoiningMode(event.target.value as JoiningMode)}
+                          className={inputClass}
+                        >
+                          <option value="baptism">Baptism</option>
+                          <option value="membership_transfer">Membership Transfer</option>
+                          <option value="friend">Friend of Loma Linda SDA</option>
+                        </select>
+                      </label>
+
+                      {(joiningMode === "membership_transfer" || joiningMode === "friend") && (
+                        <label className="block text-sm font-medium sm:col-span-2">
+                          Current / Previous Church Name
+                          <input
+                            required
+                            value={form.current_church}
+                            onChange={(event) => update("current_church", event.target.value)}
+                            className={inputClass}
+                            placeholder="Name of your current or former SDA church"
+                          />
+                        </label>
+                      )}
+                    </>
+                  )}
+
+                  {transferDirection === "transfer_out" && (
+                    <>
+                      <label className="block text-sm font-medium sm:col-span-2">
+                        Destination Church Name
+                        <input
+                          required
+                          placeholder="Name of destination church"
+                          value={form.destination_church}
+                          onChange={(event) => update("destination_church", event.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+
+                      <label className="block text-sm font-medium sm:col-span-2">
+                        Reason for Transfer
+                        <textarea
+                          required
+                          rows={3}
+                          value={form.transfer_reason}
+                          onChange={(event) => update("transfer_reason", event.target.value)}
+                          className={inputClass}
+                          placeholder="Tell us why you are requesting the transfer..."
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                {transferDirection === "transfer_in" ? (
+                  <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#26352f] bg-white px-5 font-semibold text-[#26352f] transition hover:bg-[#eae6de] disabled:opacity-60"
+                    >
+                      {loading ? "Submitting..." : "Submit (Verify via Email)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startGoogleVerification}
+                      disabled={loading}
+                      className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+                    >
+                      {loading ? "Verifying..." : "Verify with Google"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 pt-3">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-[#9a741c] px-5 font-semibold text-white transition hover:bg-[#7c5d16] disabled:opacity-60"
+                    >
+                      {loading ? "Sending..." : "Request Transfer Out"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(false)}
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-[#c9c5bb] px-5 font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </form>
+            </section>
+          ) : (
+            <section className="mt-6">
+              {fetchingList ? (
+                <div className="rounded-3xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
+                  Loading membership &amp; transfer requests...
+                </div>
+              ) : transfers.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-[#c9c5bb] bg-white p-8 sm:p-12 text-center">
+                  <span className="text-4xl" aria-hidden="true">
+                    🤝
+                  </span>
+                  <h3 className="mt-3 text-lg font-semibold text-[#26352f]">
+                    No membership or transfer requests submitted yet
+                  </h3>
+                  <p className="mt-1 text-sm text-[#617068]">
+                    Submit a request to join Loma Linda SDA Church through baptism or transfer, or request a transfer out.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(true)}
+                    className="mt-5 rounded-full bg-[#b36b3c] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+                  >
+                    + Add Membership / Transfer Request
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {transfers.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-3"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-[#617068]">
+                          <span className="font-semibold text-[#26352f]">{item.name}</span>
+                          <span className="capitalize rounded-full bg-[#f7f4ee] px-2.5 py-1 text-[11px] font-semibold text-[#b36b3c]">
+                            {item.transfer_type || "Transfer Request"}
+                          </span>
+                        </div>
+                        {item.phone_number && (
+                          <p className="mt-2 text-xs text-[#617068]">
+                            📞 {item.phone_number} {item.email ? `• ✉️ ${item.email}` : ""}
+                          </p>
+                        )}
+                        {item.other_church && (
+                          <p className="mt-1 text-xs text-[#617068]">
+                            ⛪ Church: <strong>{item.other_church}</strong>
+                          </p>
+                        )}
+                        {item.reason && (
+                          <p className="mt-2 text-xs leading-relaxed text-[#26352f] italic">
+                            &ldquo;{item.reason}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-[#617068] pt-2 border-t border-[#dfdbd1]">
+                        <span>Status: <strong className="capitalize text-[#5f8067]">{item.status || "Pending Board Review"}</strong></span>
+                        {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

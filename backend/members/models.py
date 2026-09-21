@@ -5,28 +5,57 @@ import uuid
 
 
 class MemberProfile(models.Model):
-    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of Loma Linda')]
+    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of Loma Linda SDA')]
     ROLE_CHOICES = [
         ('member', 'Member'),
         ('clerk', 'Church Clerk'),
         ('elder', 'Elder / First Elder'),
-        ('youth_leader', 'Youth Ministries Leader'),
+        ('youth_leader', 'Youth Leader'),
         ('choir_director', 'Choir Director'),
-        ('children_ministry', 'Children Ministry'),
-        ('men_ministry', 'Adventist Men Ministries'),
-        ('women_ministry', 'Adventist Women Ministries'),
-        ('chaplaincy', 'Chaplaincy'),
+        ('children_ministry', 'Children Leader'),
+        ('men_ministry', 'AMM Leader'),
+        ('women_ministry', 'AWM Leader'),
+        ('chaplaincy', 'Chaplain'),
         ('finance', 'Finance Team'),
         ('treasurer', 'Treasurer'),
         ('leader', 'Church Leader'),
         ('admin', 'Administrator'),
     ]
+    BAPTISMAL_STATUS_CHOICES = [
+        ('baptised', 'Baptised'),
+        ('not_baptised', 'Not Baptised'),
+        ('transfer_pending', 'Transfer In Progress'),
+    ]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_profile')
     phone_number = models.CharField(max_length=20, blank=True)
+    whatsapp_number = models.CharField(max_length=20, blank=True, default='')
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='member')
-    role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES)
+    role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES, help_text="Primary/legacy role kept in sync with 'roles'")
+    roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes; a member can hold several roles")
+    current_church = models.CharField(max_length=160, blank=True, help_text="Church the person currently attends (mainly for friends)")
+    baptismal_status = models.CharField(max_length=30, choices=BAPTISMAL_STATUS_CHOICES, blank=True, help_text="Baptismal status (mainly for friends)")
+    employment_status = models.CharField(max_length=80, blank=True)
+    profession = models.CharField(max_length=120, blank=True)
+    gender = models.CharField(max_length=20, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gifts = models.TextField(blank=True, default='', help_text="Spiritual gifts and talents of the member")
+    disability = models.TextField(blank=True, default='', help_text="Disability or special needs of the member")
+    is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def get_roles(self):
+        """Return the list of role codes this member holds (roles + legacy role)."""
+        codes = [c.strip() for c in (self.roles or '').split(',') if c.strip()]
+        legacy = (self.role or '').strip()
+        if legacy and legacy not in codes:
+            codes.append(legacy)
+        return codes or ['member']
+
+    def has_role(self, *codes):
+        """True if the member holds any of the given role codes."""
+        member_roles = set(self.get_roles())
+        return bool(member_roles.intersection(codes))
 
     def __str__(self):
         return f"{self.user.get_username()} ({self.get_role_display()})"
@@ -34,7 +63,7 @@ class MemberProfile(models.Model):
 
 class EnrollmentRequest(models.Model):
     STATUS_CHOICES = [('verification_pending', 'Verification pending'), ('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
-    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of Loma Linda')]
+    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of Loma Linda SDA')]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
@@ -60,13 +89,15 @@ class EnrollmentRequest(models.Model):
 class Announcement(models.Model):
     VISIBILITY_CHOICES = [('public', 'Public'), ('members', 'Members only')]
     ACTION_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]
+    SHARING_CHOICES = [('site', 'On the Site'), ('sms', 'Through SMS'), ('email', 'Through Email'), ('all', 'All')]
     title = models.CharField(max_length=160)
     text = models.TextField()
     detail = models.TextField(blank=True)
     href = models.CharField(max_length=255, blank=True)
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
     action_type = models.CharField(max_length=20, choices=ACTION_CHOICES, default='acknowledge')
-    is_popup = models.BooleanField(default=True, help_text="Pop up automatically to users requiring action")
+    sharing_option = models.CharField(max_length=100, default='site', blank=True)
+    is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")
     action_prompt = models.CharField(max_length=255, blank=True, help_text="Optional prompt for pledge or response")
     published = models.BooleanField(default=True)
     expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
@@ -98,16 +129,16 @@ class AnnouncementResponse(models.Model):
 
 
 class Contribution(models.Model):
-    GIVING_TYPE_CHOICES = [('financial', 'Financial'), ('in_kind', 'In-kind')]
-    PAYMENT_METHOD_CHOICES = [('mpesa', 'M-Pesa'), ('card', 'Card')]
+    GIVING_TYPE_CHOICES = [('financial', 'Financial')]
     STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')]
+    PAYMENT_METHOD_CHOICES = [('mpesa', 'M-Pesa'), ('bank_transfer', 'Bank-to-Bank'), ('cheque', 'Cheque'), ('cash', 'Cash')]
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='contributions', null=True, blank=True)
     donor_name = models.CharField(max_length=160, blank=True)
     donor_email = models.EmailField(blank=True)
     giving_type = models.CharField(max_length=20, choices=GIVING_TYPE_CHOICES, default='financial')
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=3, default='KES')
-    purpose = models.CharField(max_length=120, default='General giving')
+    purpose = models.CharField(max_length=120, default='Combined Offering')
     campaign = models.ForeignKey('FundraisingCampaign', on_delete=models.SET_NULL, null=True, blank=True, related_name='contributions')
     card_assignment = models.ForeignKey('CampaignCardAssignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='contributions')
     item_description = models.TextField(blank=True)
@@ -127,18 +158,56 @@ class Contribution(models.Model):
 
 
 class CashContribution(models.Model):
-    """A cash receipt entered by an authorised member of the finance team."""
+    """A receipt entered manually by an authorised member of the finance team."""
+    ENTRY_TYPE_CHOICES = [
+        ('individual', 'Individual Member'),
+        ('anonymous', 'Anonymous Giver'),
+        ('collection', 'General Collection'),
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('mpesa', 'M-Pesa'),
+        ('bank_transfer', 'Bank-to-Bank'),
+    ]
+
     received_on = models.DateField(default=timezone.localdate)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    purpose = models.CharField(max_length=120, default='General giving')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    purpose = models.CharField(max_length=120, default='Combined Offering')
+    entry_type = models.CharField(max_length=20, choices=ENTRY_TYPE_CHOICES, default='individual')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='cash')
+    item_description = models.TextField(blank=True, default='')
     donor_name = models.CharField(max_length=160, blank=True)
+    giver_phone = models.CharField(max_length=30, blank=True)
+    giver_email = models.EmailField(blank=True)
     receipt_number = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='cash_contributions_entered')
+    receipt_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-received_on', '-created_at']
+
+
+class InKindContribution(models.Model):
+    """Non-monetary giving (goods, materials, produce). Items are recorded one per row."""
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name='in_kind_contributions', null=True, blank=True)
+    donor_name = models.CharField(max_length=160, blank=True)
+    donor_email = models.EmailField(blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    items = models.TextField(help_text="Donated items, one per row")
+    purpose = models.CharField(max_length=120, default='In-Kind Offering')
+    notes = models.TextField(blank=True)
+    received_on = models.DateField(default=timezone.localdate)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'in-kind contributions'
+
+    def __str__(self):
+        first_item = (self.items or '').strip().splitlines()[0] if (self.items or '').strip() else 'In-kind gift'
+        return f"{self.donor_name or 'Anonymous'} — {first_item[:40]}"
 
 
 class ContributionReconciliation(models.Model):
@@ -186,6 +255,7 @@ class Friend(models.Model):
 
 class GivingPurpose(models.Model):
     name = models.CharField(max_length=120, unique=True)
+    account_name = models.CharField(max_length=60, blank=True, help_text="M-Pesa / Giving account reference name (e.g. tithe, offering)")
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -196,17 +266,44 @@ class GivingPurpose(models.Model):
         return self.name
 
 
+class Profession(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    is_default = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class FundraisingCampaign(models.Model):
-    name = models.CharField(max_length=120, unique=True, help_text="Campaign name, also used as M-Pesa account reference name and giving purpose")
+    MESSAGE_FREQ_CHOICES = [
+        ('once', 'One-time broadcast'),
+        ('daily', 'Daily reminder'),
+        ('weekly', 'Weekly (Every Sabbath)'),
+        ('biweekly', 'Bi-weekly reminder'),
+    ]
+
+    name = models.CharField(max_length=120, unique=True, help_text="Campaign name, also used as default giving purpose")
     title = models.CharField(max_length=160, blank=True, help_text="Public display title")
+    account_name = models.CharField(max_length=60, blank=True, help_text="M-Pesa / Giving account reference name (e.g. CAMP2026)")
     description = models.TextField(blank=True)
     target_amount = models.DecimalField(max_digits=12, decimal_places=2)
     start_date = models.DateField(default=timezone.now)
     end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    is_temporary = models.BooleanField(default=True, help_text="Designates whether this is a temporary campaign with a specific timeline")
     generate_card = models.BooleanField(default=True)
     target_groups = models.JSONField(default=list, blank=True, help_text="List of assigned group/department keys")
     custom_card_image = models.ImageField(upload_to='campaign_cards/', null=True, blank=True)
+    member_message = models.TextField(blank=True, help_text="Broadcast notification message sent to church members")
+    schedule_message = models.BooleanField(default=False, help_text="Whether to schedule the member message for automatic dispatch")
+    scheduled_at = models.DateTimeField(null=True, blank=True, help_text="Scheduled date and time to broadcast to members")
+    message_frequency = models.CharField(max_length=20, choices=MESSAGE_FREQ_CHOICES, default='once')
+    message_sent = models.BooleanField(default=False, help_text="Whether the campaign message has been broadcast")
+    last_message_sent_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_campaigns')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -362,6 +459,9 @@ class SabbathEvent(models.Model):
 
 class ChurchSettings(models.Model):
     church_name = models.CharField(max_length=160, default='Loma Linda SDA Church, Meru')
+    district = models.CharField(max_length=160, blank=True, help_text='NEKF district name, e.g. "Meru Central"')
+    field = models.CharField(max_length=160, blank=True, default='North East Kenya Field', help_text='SDA Field name, e.g. "North East Kenya Field"')
+    conference = models.CharField(max_length=160, blank=True, default='East Africa Division', help_text='SDA Conference/Division name')
     address = models.CharField(max_length=255, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -371,6 +471,28 @@ class ChurchSettings(models.Model):
     midweek_vespers_time = models.CharField(max_length=120, default='Wednesday · 8:00 PM – 9:00 PM')
     friday_vespers_time = models.CharField(max_length=120, default='Friday · 5:30 PM – 6:30 PM')
     sabbath_time = models.CharField(max_length=120, default='Saturday · 8:00 AM – 4:00 PM')
+    clarion_call_heading = models.TextField(default='A place to belong.\nA faith to share.\nA hope that transforms lives.')
+    clarion_call_subtext = models.TextField(default="Join Loma Linda SDA Church, Meru as we study God's Word, support one another, and reach out to our community with faith and compassion.")
+    default_receipt_message = models.TextField(default="Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!", blank=True)
+    default_business_meeting_invitation_message = models.TextField(
+        default="Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!",
+        blank=True
+    )
+    default_board_meeting_invitation_message = models.TextField(
+        default="Dear Church Board Member, you are hereby invited to attend the Church Board Meeting: '{title}' scheduled for {meeting_date} at {location}. Please review the agendas and attached documents.",
+        blank=True
+    )
+    board_roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of role keys that belong to the church board"
+    )
+    bank_name = models.CharField(max_length=160, default='KCB Bank Kenya', blank=True)
+    bank_account_name = models.CharField(max_length=160, default='SDA Church Main Account', blank=True)
+    bank_account_number = models.CharField(max_length=80, default='1122334455', blank=True)
+    bank_branch = models.CharField(max_length=120, default='Meru', blank=True)
+    bank_swift_code = models.CharField(max_length=50, default='KCBKNEN', blank=True)
+    bank_paybill_number = models.CharField(max_length=50, default='522522', blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -384,6 +506,7 @@ class MembershipTransferRequest(models.Model):
     transfer_type = models.CharField(max_length=20, choices=TRANSFER_TYPE_CHOICES, default='incoming')
     other_church = models.CharField(max_length=160, help_text="Previous or destination church name")
     reason = models.TextField(blank=True, help_text="Reason for the transfer")
+    remain_friend = models.BooleanField(null=True, blank=True, help_text="Whether an outgoing member wants to remain a friend of the church")
     phone_number = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
@@ -396,6 +519,32 @@ class MembershipTransferRequest(models.Model):
 
     def __str__(self):
         return f"{self.get_transfer_type_display()}: {self.member_name} ({self.status})"
+
+
+class MembershipRemovalRequest(models.Model):
+    REASON_CHOICES = [
+        ('disciplinary', 'Disciplinary'),
+        ('death', 'Death'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending elder approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='membership_removal_requests')
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='requested_membership_removals')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_membership_removals')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.member.get_username()} removal ({self.status})"
 
 
 class ChurchCorrespondence(models.Model):
@@ -418,10 +567,14 @@ class BoardMeeting(models.Model):
     STATUS_CHOICES = [('upcoming', 'Upcoming'), ('completed', 'Completed'), ('archived', 'Archived')]
     title = models.CharField(max_length=160)
     meeting_date = models.DateField()
-    agenda = models.TextField(help_text="Meeting agenda items")
+    meeting_time = models.CharField(max_length=80, blank=True, default='5:00 PM')
+    location = models.CharField(max_length=160, blank=True, default='Board Room / Main Sanctuary')
+    agenda = models.TextField(blank=True, help_text="Meeting agenda summary")
     minutes = models.TextField(blank=True, help_text="Recorded board meeting minutes")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
     reference_file = models.FileField(upload_to='board-materials/', blank=True, null=True)
+    notify_sms = models.BooleanField(default=True)
+    notify_email = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -429,6 +582,22 @@ class BoardMeeting(models.Model):
 
     def __str__(self):
         return f"Board Meeting: {self.title} ({self.meeting_date})"
+
+
+class BoardMeetingAgenda(models.Model):
+    meeting = models.ForeignKey(BoardMeeting, on_delete=models.CASCADE, related_name='agendas')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    order = models.PositiveIntegerField(default=1)
+    document = models.FileField(upload_to='board-meeting-docs/', blank=True, null=True)
+    document_name = models.CharField(max_length=160, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"Board Agenda: {self.title} ({self.meeting.title})"
 
 
 class ChurchNotification(models.Model):
@@ -485,3 +654,119 @@ class ExternalResourceLink(models.Model):
 
     def __str__(self):
         return self.key
+
+
+class BusinessMeeting(models.Model):
+    STATUS_CHOICES = [('upcoming', 'Upcoming'), ('completed', 'Completed'), ('archived', 'Archived')]
+    title = models.CharField(max_length=160)
+    meeting_date = models.DateField()
+    meeting_time = models.CharField(max_length=80, blank=True, default='2:00 PM')
+    location = models.CharField(max_length=160, blank=True, default='Main Sanctuary')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
+    minutes = models.TextField(blank=True, default='')
+    notify_sms = models.BooleanField(default=True)
+    notify_email = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-meeting_date']
+
+    def __str__(self):
+        return f"Business Meeting: {self.title} ({self.meeting_date})"
+
+
+class BusinessMeetingAgenda(models.Model):
+    meeting = models.ForeignKey(BusinessMeeting, on_delete=models.CASCADE, related_name='agendas')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    order = models.PositiveIntegerField(default=1)
+    document = models.FileField(upload_to='business-meeting-docs/', blank=True, null=True)
+    document_name = models.CharField(max_length=160, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"Agenda: {self.title} ({self.meeting.title})"
+
+
+class TreasuryAccount(models.Model):
+    ACCOUNT_TYPE_CHOICES = [
+        ('bank', 'Bank Account'),
+        ('mobile_money', 'Mobile Money / Paybill'),
+        ('cash', 'Cash / Petty Cash'),
+        ('other', 'Other Account'),
+    ]
+    name = models.CharField(max_length=160)
+    account_number = models.CharField(max_length=80, blank=True, default='')
+    account_type = models.CharField(max_length=30, choices=ACCOUNT_TYPE_CHOICES, default='bank')
+    balance = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_account_type_display()}) - KES {self.balance}"
+
+
+class TreasuryAccountTransaction(models.Model):
+    TRANSACTION_TYPE_CHOICES = [
+        ('credit', 'Credit (Deposit / Inflow)'),
+        ('debit', 'Debit (Expenditure / Outflow)'),
+        ('transfer_in', 'Transfer In'),
+        ('transfer_out', 'Transfer Out'),
+    ]
+    account = models.ForeignKey(TreasuryAccount, on_delete=models.CASCADE, related_name='transactions')
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    description = models.CharField(max_length=255)
+    reference = models.CharField(max_length=100, blank=True, default='')
+    related_account = models.ForeignKey(TreasuryAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='related_transactions')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_transaction_type_display()}: KES {self.amount} - {self.account.name}"
+
+
+class Expenditure(models.Model):
+    CATEGORY_CHOICES = [
+        ('operations', 'Church Operations'),
+        ('evangelism', 'Evangelism & Missions'),
+        ('utilities', 'Utilities (Water, Power, Net)'),
+        ('maintenance', 'Maintenance & Repairs'),
+        ('welfare', 'Welfare & Assistance'),
+        ('sabbath_school', 'Sabbath School Materials'),
+        ('building', 'Building & Development'),
+        ('other', 'Other Expenditure'),
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('mpesa', 'M-Pesa / Mobile'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('cheque', 'Cheque'),
+    ]
+    title = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    category = models.CharField(max_length=40, choices=CATEGORY_CHOICES, default='operations')
+    account = models.ForeignKey(TreasuryAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenditures')
+    payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default='cash')
+    vendor_payee = models.CharField(max_length=160, blank=True, default='')
+    receipt_number = models.CharField(max_length=80, blank=True, default='')
+    expenditure_date = models.DateField(default=timezone.localdate)
+    notes = models.TextField(blank=True, default='')
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-expenditure_date', '-created_at']
+
+    def __str__(self):
+        return f"Expenditure: {self.title} (KES {self.amount})"

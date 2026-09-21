@@ -3,6 +3,7 @@ import "./globals.css";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { SiteHeader } from "@/components/site-header";
 import { PwaRegister } from "@/components/pwa-register";
+import { AccessibilityProvider } from "@/context/accessibility-context";
 
 export const viewport: Viewport = {
   themeColor: "#26352f",
@@ -12,13 +13,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SDA Church Loma Linda, Meru",
+  title: "Loma Linda SDA Church, Meru",
   description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "SDA Church Loma Linda, Meru",
+    title: "Loma Linda SDA Church, Meru",
   },
   icons: {
     icon: [
@@ -31,11 +32,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
-        <SiteHeader />
-        <div>{children}</div>
-        <PwaRegister />
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <body className="h-full flex flex-col pb-24 md:pb-0">
+        <AccessibilityProvider>
+          <SiteHeader />
+          <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+          <PwaRegister />
+        </AccessibilityProvider>
       </body>
     </html>
   );

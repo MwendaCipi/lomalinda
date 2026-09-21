@@ -32,12 +32,14 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-only-change-this-secret')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host.strip()]
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,lomalindachurch.org').split(',') if host.strip()]
 
 
 # Application definition
 
-INSTALLED_APPS = [
+SHARED_APPS = (
+    'django_tenants',
+    'tenants',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -46,10 +48,21 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+)
+
+TENANT_APPS = (
+    'django.contrib.contenttypes',
     'members',
-]
+)
+
+INSTALLED_APPS = list(dict.fromkeys(list(SHARED_APPS) + list(TENANT_APPS)))
+
+TENANT_MODEL = 'tenants.ChurchTenant'
+TENANT_DOMAIN_MODEL = 'tenants.Domain'
+DATABASE_ROUTERS = ('django_tenants.routers.TenantSyncRouter',)
 
 MIDDLEWARE = [
+    'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -86,13 +99,28 @@ WSGI_APPLICATION = 'config.wsgi.application'
 import sys
 
 DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL and 'test' not in sys.argv:
-    raise ImproperlyConfigured('DATABASE_URL must be set to a PostgreSQL connection string.')
-DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
 if 'test' in sys.argv:
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+    INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'django_tenants']
+    MIDDLEWARE = [m for m in MIDDLEWARE if m != 'django_tenants.middleware.main.TenantMainMiddleware']
+    DATABASE_ROUTERS = ()
+elif DATABASE_URL:
+    DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
+    db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)
+    db_config['ENGINE'] = 'django_tenants.postgresql_backend'
+    DATABASES = {'default': db_config}
+
 else:
-    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)}
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django_tenants.postgresql_backend',
+            'NAME': os.getenv('POSTGRES_DB', 'loma_linda'),
+            'USER': os.getenv('POSTGRES_USER', 'postgres'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        }
+    }
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',') if origin.strip()]
 
@@ -106,13 +134,24 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Loma Linda Church <no-reply@lomalindachurch.org>')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Loma Linda SDA Church <no-reply@lomalindachurch.org>')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
+}
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=14),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 

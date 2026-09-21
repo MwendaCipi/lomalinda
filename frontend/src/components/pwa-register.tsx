@@ -7,11 +7,30 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+let globalDeferredPrompt: BeforeInstallPromptEvent | null = null;
+
+export function triggerPwaInstall() {
+  if (globalDeferredPrompt) {
+    globalDeferredPrompt.prompt().then(() => {
+      globalDeferredPrompt?.userChoice.then((choice) => {
+        if (choice.outcome === "accepted") {
+          globalDeferredPrompt = null;
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("pwa-state-changed"));
+          }
+        }
+      });
+    });
+  } else if (typeof window !== "undefined") {
+    alert("To install this app on your PC or Mobile device:\n\nChrome / Edge on Desktop: Click the Install icon (💻) in your browser address bar.\n\nSafari on iPhone / Mac: Tap Share -> Add to Home Screen.");
+  }
+}
+
 export function PwaRegister() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showMobileBanner, setShowMobileBanner] = useState(false);
 
   useEffect(() => {
+    // Register Service Worker
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
@@ -23,54 +42,74 @@ export function PwaRegister() {
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setShowInstallBanner(true);
+      globalDeferredPrompt = e as BeforeInstallPromptEvent;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("pwa-state-changed"));
+
+        // Only show floating banner on small mobile screens (< 768px) AND if not dismissed before
+        const isMobile = window.innerWidth < 768;
+        const isDismissed = localStorage.getItem("pwa_install_dismissed") === "true";
+
+        if (isMobile && !isDismissed) {
+          setShowMobileBanner(true);
+        }
+      }
+    };
+
+    const handleTriggerInstall = () => {
+      triggerPwaInstall();
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("trigger-pwa-install", handleTriggerInstall);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("trigger-pwa-install", handleTriggerInstall);
     };
   }, []);
 
-  async function handleInstallClick() {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setShowInstallBanner(false);
+  const handleDismiss = () => {
+    setShowMobileBanner(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pwa_install_dismissed", "true");
     }
-    setDeferredPrompt(null);
-  }
+  };
 
-  if (!showInstallBanner) return null;
+  const handleInstall = () => {
+    setShowMobileBanner(false);
+    triggerPwaInstall();
+  };
+
+  if (!showMobileBanner) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-[100] mx-auto max-w-md rounded-2xl border border-[#c9c5bb] bg-[#26352f] p-4 text-white shadow-2xl sm:bottom-6 sm:right-6 sm:left-auto">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#b36b3c] font-bold text-white">
-            LL
+    <div className="fixed bottom-[68px] md:bottom-4 left-4 right-4 z-[100] mx-auto max-w-md rounded-2xl border border-[#c9c5bb] bg-[#26352f] p-3.5 text-white shadow-2xl">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#b36b3c] font-bold text-white text-xs">
+            SDA
           </div>
-          <div>
-            <h4 className="text-sm font-semibold">Install Loma Linda</h4>
-            <p className="text-xs text-white/80">Add to your home screen for quick access & offline support.</p>
+          <div className="min-w-0">
+            <h4 className="text-xs font-bold text-white truncate">Install Loma Linda SDA App</h4>
+            <p className="text-[11px] text-white/80 truncate">Quick access &amp; offline support.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={handleInstallClick}
-            className="rounded-full bg-[#b36b3c] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[#96552e]"
+            type="button"
+            onClick={handleInstall}
+            className="rounded-xl bg-[#b36b3c] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#96552e]"
           >
             Install
           </button>
           <button
-            onClick={() => setShowInstallBanner(false)}
-            className="text-xs text-white/60 hover:text-white"
+            type="button"
+            onClick={handleDismiss}
+            className="p-1 text-xs text-white/60 hover:text-white"
             aria-label="Dismiss banner"
           >
-            &times;
+            ✕
           </button>
         </div>
       </div>

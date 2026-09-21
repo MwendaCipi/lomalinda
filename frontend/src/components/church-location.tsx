@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import "leaflet/dist/leaflet.css";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type ChurchSettings = { church_name: string; address: string; latitude: string | null; longitude: string | null };
 
 export default function ChurchLocation() {

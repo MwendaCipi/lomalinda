@@ -56,7 +56,7 @@ def initiate_stk_push(contribution):
         'PartyB': shortcode,
         'PhoneNumber': phone_number,
         'CallBackURL': callback_url,
-        'AccountReference': f'LL-{str(contribution.id)[:8]}',
+        'AccountReference': environ.get('MPESA_ACCOUNT_REFERENCE', '7602643'),
         'TransactionDesc': contribution.purpose,
     }
     response = requests.post(f'{base_url}/mpesa/stkpush/v1/processrequest', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
@@ -65,3 +65,30 @@ def initiate_stk_push(contribution):
     if result.get('ResponseCode') != '0':
         raise RuntimeError(result.get('ResponseDescription', 'M-Pesa rejected the request.'))
     return result
+
+
+def register_c2b_urls(validation_url=None, confirmation_url=None):
+    consumer_key = _setting('MPESA_CONSUMER_KEY')
+    consumer_secret = _setting('MPESA_CONSUMER_SECRET')
+    shortcode = _setting('MPESA_SHORTCODE')
+    base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
+
+    val_url = validation_url or environ.get('MPESA_C2B_VALIDATION_URL')
+    conf_url = confirmation_url or environ.get('MPESA_C2B_CONFIRMATION_URL')
+    if not val_url or not conf_url:
+        raise MpesaConfigurationError('Missing MPESA_C2B_VALIDATION_URL or MPESA_C2B_CONFIRMATION_URL.')
+
+    token_response = requests.get(f'{base_url}/oauth/v1/generate?grant_type=client_credentials', auth=(consumer_key, consumer_secret), timeout=15)
+    token_response.raise_for_status()
+    access_token = token_response.json()['access_token']
+
+    payload = {
+        'ShortCode': shortcode,
+        'ResponseType': 'Completed',
+        'ValidationURL': val_url,
+        'ConfirmationURL': conf_url,
+    }
+    response = requests.post(f'{base_url}/mpesa/c2b/v1/registerurl', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
