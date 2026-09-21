@@ -28,7 +28,7 @@ export function PublicSectionNav({
   className?: string;
 }) {
   return (
-    <section className={`px-6 py-14 lg:px-8 lg:py-16 ${className}`}>
+    <section className={`public-section-nav px-6 py-14 lg:px-8 lg:py-16 ${className}`}>
       <div className="mx-auto max-w-6xl">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">{eyebrow}</p>
         <h2 className="mt-3 max-w-3xl text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h2>

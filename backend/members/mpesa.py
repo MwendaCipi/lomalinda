@@ -1,4 +1,5 @@
 import base64
+import re
 import uuid
 from datetime import datetime
 from os import environ
@@ -29,6 +30,16 @@ def normalize_mpesa_phone(value):
     return phone
 
 
+def account_reference_for_purpose(purpose):
+    """Create Safaricom's short account reference from the giving purpose."""
+    reference = re.sub(r'[^A-Za-z0-9]', '', str(purpose or '')).upper()
+    aliases = {
+        'LOCALCHURCHBUDGET': 'LCB',
+        'LOCALBUDGET': 'LCB',
+    }
+    return aliases.get(reference, reference[:12]) or 'GIVING'
+
+
 def initiate_stk_push(contribution):
     consumer_key = _setting('MPESA_CONSUMER_KEY')
     consumer_secret = _setting('MPESA_CONSUMER_SECRET')
@@ -57,7 +68,7 @@ def initiate_stk_push(contribution):
         'PartyB': shortcode,
         'PhoneNumber': phone_number,
         'CallBackURL': callback_url,
-        'AccountReference': environ.get('MPESA_ACCOUNT_REFERENCE', '7602643'),
+        'AccountReference': account_reference_for_purpose(contribution.purpose),
         'TransactionDesc': contribution.purpose,
     }
     response = requests.post(f'{base_url}/mpesa/stkpush/v1/processrequest', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)

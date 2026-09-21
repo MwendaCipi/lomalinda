@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { materialSections, materialSectionLinks, type MaterialSection } from "@/config/site-sections";
@@ -114,15 +115,20 @@ const itemsBySection: Record<MaterialSection, { heading: string; items: Material
 
 function MaterialsContent() {
   const searchParams = useSearchParams();
+  const [signedIn, setSignedIn] = useState(false);
   const raw = searchParams.get("section") as MaterialSection | null;
+
+  useEffect(() => {
+    setSignedIn(Boolean(localStorage.getItem("access_token")));
+  }, []);
   const active: MaterialSection = raw && itemsBySection[raw] ? raw : "bible-egw";
   const sectionMeta = materialSections.find((s) => s.value === active)!;
   const { heading, items } = itemsBySection[active];
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <section className="px-6 pt-14 lg:px-8">
-        <div className="mx-auto max-w-6xl">
+    <main className={signedIn ? "min-h-full bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+      <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
+        <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">
             Study &amp; worship resources
           </p>
@@ -143,8 +149,8 @@ function MaterialsContent() {
         activeKey={active}
       />
 
-      <section className="border-t border-[#dfdbd1] bg-white/60 px-6 py-12 lg:px-8 lg:py-14">
-        <div className="mx-auto max-w-6xl">
+      <section className={signedIn ? "border-t border-[#dfdbd1] bg-white px-5 py-8 sm:px-8 lg:px-10" : "border-t border-[#dfdbd1] bg-white/60 px-6 py-12 lg:px-8 lg:py-14"}>
+        <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{heading}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-7 text-[#617068]">{sectionMeta.description}</p>
 

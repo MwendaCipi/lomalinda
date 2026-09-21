@@ -290,8 +290,8 @@ function GivePageContent() {
   else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
-      <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12">
+    <main className={signedIn ? "min-h-full bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+      <div className={signedIn ? "max-w-none px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className="space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
@@ -368,12 +368,12 @@ function GivePageContent() {
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-[#dfdbd1]">
                         <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
-                          <th className="pb-3 font-bold w-8">#</th>
-                          <th className="pb-3 font-bold">Date</th>
-                          <th className="pb-3 font-bold">Purpose</th>
-                          <th className="pb-3 font-bold">Method</th>
-                          <th className="pb-3 font-bold">Receipt</th>
-                          <th className="pb-3 text-right font-bold">Amount</th>
+                          <th className="pb-3 pr-4 font-bold w-8">#</th>
+                          <th className="pb-3 pr-4 font-bold">Date</th>
+                          <th className="pb-3 pr-4 font-bold">Purpose</th>
+                          <th className="pb-3 pr-4 font-bold">Method</th>
+                          <th className="pb-3 pr-4 font-bold">Receipt</th>
+                          <th className="pb-3 pr-4 text-right font-bold">Amount</th>
                           <th className="pb-3 font-bold">Status</th>
                         </tr>
                       </thead>
@@ -390,12 +390,12 @@ function GivePageContent() {
                         ) : (
                           filteredGivings.map((g, idx) => (
                             <tr key={g.id} className="hover:bg-[#f7f4ee]">
-                              <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
-                              <td className="py-3 text-[#617068]">{fmtGivingDate(g)}</td>
-                              <td className="py-3 font-semibold text-[#26352f]">{g.purpose || "—"}</td>
-                              <td className="py-3 text-[#617068]">{methodLabel(g.payment_method)}</td>
-                              <td className="py-3 font-mono text-[#617068]">{g.mpesa_receipt_number || "—"}</td>
-                              <td className="py-3 text-right font-semibold text-[#26352f]">KES {Number(g.amount || 0).toLocaleString()}</td>
+                              <td className="py-3 pr-4 text-[#617068] w-8">{idx + 1}</td>
+                              <td className="py-3 pr-4 text-[#617068]">{fmtGivingDate(g)}</td>
+                              <td className="py-3 pr-4 font-semibold text-[#26352f]">{g.purpose || "—"}</td>
+                              <td className="py-3 pr-4 text-[#617068]">{methodLabel(g.payment_method)}</td>
+                              <td className="py-3 pr-4 font-mono text-[#617068]">{g.mpesa_receipt_number || "—"}</td>
+                              <td className="py-3 pr-4 text-right font-semibold text-[#26352f]">KES {Number(g.amount || 0).toLocaleString()}</td>
                               <td className="py-3">
                                 {(g.status || "").toLowerCase() === "completed" ? (
                                   <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold text-[#3d7146]">Completed</span>
@@ -461,14 +461,14 @@ function GivePageContent() {
           </div>
       </div>
 
-      {/* The old Stewardship & Support sidebar, now part of the page. */}
+      {/* The public landing page offers the wider stewardship navigation; the authenticated shell hides it. */}
       <PublicSectionNav
         eyebrow="Stewardship & support"
         title="More ways to support the church"
         description="Beyond tithes and offerings: in-kind gifts, fund drives, the church budget and the treasury's published figures."
         links={stewardshipLinks}
         activeKey="give"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="public-section-nav border-t border-[#dfdbd1] bg-white/60"
       />
 
       {/* ── Give Now modal ── */}
