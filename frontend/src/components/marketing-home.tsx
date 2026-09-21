@@ -50,6 +50,7 @@ export function MarketingHome() {
               <a className="font-semibold text-[#f1c89e] hover:underline" href="mailto:hello@sdalomalinda.or.ke">hello@sdalomalinda.or.ke</a>
               <Link href="/community" className="text-white/75 hover:text-white">Community care &rarr;</Link>
               <Link href="/calendar" className="text-white/75 hover:text-white">See our calendar &rarr;</Link>
+              <Link href="/login" className="text-white/75 hover:text-white">Member sign in &rarr;</Link>
             </div>
           </div>
 

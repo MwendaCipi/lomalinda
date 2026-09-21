@@ -326,10 +326,9 @@ export function HeroAnnouncementSection() {
         </div>
 
         {/* CTA links available below announcement */}
-        <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4 sm:max-w-xl">
+        <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4 sm:max-w-xl">
           <Link href="#contact" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Location & Contacts</Link>
           <Link href="/calendar" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">See Our Calendar</Link>
-          <Link href="/login" className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base">Sign in</Link>
         </div>
       </div>
     );
@@ -363,7 +362,7 @@ export function HeroAnnouncementSection() {
       <p className="hero-line hidden sm:block mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">
         {subtext}
       </p>
-      <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-9 sm:grid-cols-3 sm:gap-4 sm:max-w-xl">
+      <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-9 sm:grid-cols-2 sm:gap-4 sm:max-w-xl">
         <Link
           href="#contact"
           className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base"
@@ -375,12 +374,6 @@ export function HeroAnnouncementSection() {
           className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base"
         >
           See Our Calendar
-        </Link>
-        <Link
-          href="/login"
-          className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base"
-        >
-          Sign in
         </Link>
       </div>
     </div>
