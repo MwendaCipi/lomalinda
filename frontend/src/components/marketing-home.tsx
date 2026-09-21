@@ -99,7 +99,7 @@ export function MarketingHome() {
           </h2>
           <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:gap-10">
             <p className="text-base leading-8 text-[#617068]">
-              SDA Loma Linda, Meru is a congregation shaped by worship, prayer, Bible study, fellowship and
+              SDA Loma Linda is a congregation shaped by worship, prayer, Bible study, fellowship and
               service. We keep the Sabbath as a gift, study Scripture seriously, and carry the hope of
               Christ&apos;s return into everyday life in Meru and beyond.
             </p>
@@ -254,7 +254,7 @@ export function MarketingHome() {
                   />
                 </div>
                 <div>
-                  <p className="font-bold leading-tight">SDA Loma Linda, Meru</p>
+                  <p className="font-bold leading-tight">SDA Loma Linda</p>
                   <p className="text-xs text-white/60">Seventh-day Adventist Church</p>
                 </div>
               </div>
@@ -320,7 +320,7 @@ export function MarketingHome() {
           </div>
 
           <p className="mt-10 border-t border-white/10 pt-5 text-xs text-white/50">
-            &copy; 2026 SDA Loma Linda, Meru · Meru, Kenya
+            &copy; 2026 SDA Loma Linda · Meru, Kenya
           </p>
         </div>
       </footer>

@@ -47,7 +47,7 @@ export default function PeriodicalReportsPage() {
                 Periodic Reports
               </h1>
               <p className="mt-3 text-base leading-7 text-[#617068]">
-                Published weekly, monthly, quarterly, and annual financial statements for Loma Linda SDA Church.
+                Published weekly, monthly, quarterly, and annual financial statements for SDA Loma Linda.
               </p>
             </div>
 

@@ -872,3 +872,34 @@ class EmailBrandingTests(APITestCase):
         first_sentence = mock_send.call_args[0][1].split('\n\n')[1]
         self.assertTrue(first_sentence.startswith('SDA Milimani has invited you'), first_sentence)
         self.assertEqual(mock_send.call_args[0][0], 'You are invited to SDA Milimani')
+
+
+class BrandNamingTests(TestCase):
+    """The church is branded 'SDA Loma Linda' — that word order, not 'Loma Linda SDA'.
+
+    'Meru' belongs to the church's email identity ('SDA Loma Linda, Meru' in a
+    sentence, 'SDA Loma Linda Meru' in a header) and stays out of the site's own
+    name, so the copy reads as a church rather than as a branch.
+    """
+
+    def test_the_welcome_line_names_the_church_without_the_town(self):
+        from .models import ChurchSettings
+
+        subtext = ChurchSettings._meta.get_field('clarion_call_subtext').get_default()
+        self.assertTrue(subtext.startswith('Join SDA Loma Linda '), subtext)
+        self.assertNotIn('Meru', subtext)
+
+    def test_the_church_name_default_keeps_meru_for_email(self):
+        from .models import ChurchSettings
+        from .views import CHURCH_DEFAULT_NAME, church_name_plain
+
+        self.assertEqual(ChurchSettings._meta.get_field('church_name').get_default(), 'SDA Loma Linda, Meru')
+        self.assertEqual(CHURCH_DEFAULT_NAME, 'SDA Loma Linda, Meru')
+        self.assertEqual(church_name_plain('SDA Loma Linda, Meru'), 'SDA Loma Linda Meru')
+
+    def test_the_friend_label_reads_sda_loma_linda(self):
+        from .models import EnrollmentRequest, Invitation, MemberProfile
+
+        self.assertEqual(dict(MemberProfile.ACCOUNT_TYPE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
+        self.assertEqual(dict(EnrollmentRequest.JOINING_MODE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
+        self.assertEqual(dict(Invitation._meta.get_field('account_type').choices)['friend'], 'Friend of SDA Loma Linda')

@@ -46,7 +46,7 @@ export default function FellowshipPage() {
             <div className="max-w-3xl">
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Fellowship &amp; Community</h1>
             <p className="hidden sm:block mt-2 text-base text-[#617068]">
-              Connect with Loma Linda SDA Church through announcements, live worship services, shared testimonies, and community fellowship.
+              Connect with SDA Loma Linda through announcements, live worship services, shared testimonies, and community fellowship.
             </p>
           </div>
 

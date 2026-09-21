@@ -16,7 +16,7 @@ export default function AboutPage() {
         <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-8">
             <div className="max-w-3xl">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">About Loma Linda SDA Church</h1>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">About SDA Loma Linda</h1>
               <p className="hidden sm:block mt-4 text-lg leading-8 text-[#617068]">
                 A welcoming Seventh-day church family in Meru, growing together in faith, hope, and love.
               </p>
@@ -26,7 +26,7 @@ export default function AboutPage() {
               <section className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-8">
                 <h2 className="text-2xl font-semibold">Our history</h2>
                 <p className="mt-4 text-base leading-8 text-[#617068]">
-                  Loma Linda SDA Church is a community shaped by worship, prayer, Bible study, fellowship, and service. Our story continues through the people who gather here, the families we support, and the neighbours we serve.
+                  SDA Loma Linda is a community shaped by worship, prayer, Bible study, fellowship, and service. Our story continues through the people who gather here, the families we support, and the neighbours we serve.
                 </p>
                 <p className="mt-4 text-base leading-8 text-[#617068]">
                   As the church grows, we remain committed to remembering where we have come from while making room for new people, new ministries, and new ways to share God&apos;s love in Meru and beyond.

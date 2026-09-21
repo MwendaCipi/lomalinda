@@ -2,9 +2,9 @@ import Link from "next/link";
 import { EnrollmentForm } from "@/components/enrollment-form";
 
 export const metadata = {
-  title: "Create your account — Loma Linda SDA Church",
+  title: "Create your account — SDA Loma Linda",
   description:
-    "Create your Loma Linda SDA Church account as a church member or as a friend of the church, and get access to announcements, giving and events.",
+    "Create your SDA Loma Linda account as a church member or as a friend of the church, and get access to announcements, giving and events.",
 };
 
 export default function CreateAccountPage() {

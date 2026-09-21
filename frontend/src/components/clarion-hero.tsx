@@ -17,7 +17,7 @@ const defaultHeadingLines = [
 ];
 
 const defaultSubtext =
-  "Join SDA Loma Linda, Meru as we study God's Word, support one another, and reach out to our community with faith and compassion.";
+  "Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.";
 
 /**
  * The church's clarion call — the standing welcome at the top of the site.

@@ -23,13 +23,13 @@ const requestItems = [
   {
     href: "/enroll",
     title: "Membership & Transfers",
-    text: "Join Loma Linda SDA Church through baptism or membership transfer, or request a transfer out.",
+    text: "Join SDA Loma Linda through baptism or membership transfer, or request a transfer out.",
     icon: "🤝",
   },
   {
     href: "/partnerships",
     title: "Partnership Requests",
-    text: "Explore a partnership with Loma Linda SDA Church for ministry, community impact, or shared initiatives.",
+    text: "Explore a partnership with SDA Loma Linda for ministry, community impact, or shared initiatives.",
     icon: "🌱",
   },
 ];

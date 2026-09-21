@@ -115,7 +115,7 @@ export default function IdeasPage() {
 
       if (res.ok) {
         const successText =
-          "Thank you for sharing your ideas and suggestions for Loma Linda SDA Church! Our church board and ministry leaders will carefully review your feedback.";
+          "Thank you for sharing your ideas and suggestions for SDA Loma Linda! Our church board and ministry leaders will carefully review your feedback.";
         setMessage({ type: "success", text: successText });
         showAlert("Idea Submitted", successText, "success");
         setIdeaText("");
@@ -149,7 +149,7 @@ export default function IdeasPage() {
                 Ideas &amp; Suggestions
               </h1>
               <p className="hidden sm:block mt-2 text-sm leading-6 text-[#617068]">
-                Share ideas, feedback, or innovative proposals to help Loma Linda SDA Church grow and improve ministry.
+                Share ideas, feedback, or innovative proposals to help SDA Loma Linda grow and improve ministry.
               </p>
             </div>
             {!showForm && (

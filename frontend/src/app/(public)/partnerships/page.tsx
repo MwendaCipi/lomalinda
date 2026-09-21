@@ -110,7 +110,7 @@ export default function PartnershipRequestPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Partnership Requests</h1>
               <p className="mt-1 text-sm text-[#617068]">
-                Tell us how your organization, group, or business would like to partner with Loma Linda SDA Church.
+                Tell us how your organization, group, or business would like to partner with SDA Loma Linda.
               </p>
             </div>
             {!showForm && (
@@ -173,7 +173,7 @@ export default function PartnershipRequestPage() {
                 <div className="rounded-3xl border border-dashed border-[#c9c5bb] bg-white p-8 sm:p-12 text-center">
                   <span className="text-4xl" aria-hidden="true">🌱</span>
                   <h3 className="mt-3 text-lg font-semibold text-[#26352f]">No partnership requests submitted yet</h3>
-                  <p className="mt-1 text-sm text-[#617068]">Tell us how your organization or business would like to partner with Loma Linda SDA Church.</p>
+                  <p className="mt-1 text-sm text-[#617068]">Tell us how your organization or business would like to partner with SDA Loma Linda.</p>
                   <button
                     type="button"
                     onClick={() => setShowForm(true)}

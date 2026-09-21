@@ -57,7 +57,7 @@ function LoginContent() {
     <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-[#f7f4ee] px-6 pt-6 text-[#26352f] sm:items-center sm:py-8">
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back</h1>
-        <p className="mt-2 text-sm text-[#617068]">Sign in to your Loma Linda account.</p>
+        <p className="mt-2 text-sm text-[#617068]">Sign in to your SDA Loma Linda account.</p>
         {justCreated && (
           <p className="mt-4 rounded-xl bg-[#eef2ed] p-3 text-xs text-[#3d5148] sm:text-sm">
             Your account is ready. Sign in with the username and password you just chose.
@@ -94,7 +94,7 @@ function LoginContent() {
         </form>
         {message && <p className="mt-4 rounded-xl bg-[#f7f4ee] p-3 text-xs text-[#617068] sm:text-sm">{message}</p>}
         <p className="mt-6 border-t border-[#dfdbd1] pt-5 text-center text-xs leading-5 text-[#617068] sm:text-sm">
-          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one as a member or Friend of Loma Linda SDA</Link>.
+          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one as a member or Friend of SDA Loma Linda</Link>.
         </p>
       </section>
     </main>

@@ -163,7 +163,7 @@ export default function CampaignDetailClient() {
     if (!campaign) return;
     const shareUrl = window.location.href;
     const memberGreeting = cardAssignment ? `\nFundraising link for *${cardAssignment.member_name}* (${cardAssignment.group_name})\n` : "";
-    const text = `*Loma Linda SDA Church Fund Drive*${memberGreeting}\nJoin us in supporting *${campaign.title || campaign.name}*!\n\nTarget Goal: KES ${Number(campaign.target_amount).toLocaleString()}\nRaised so far: KES ${Number(campaign.total_raised).toLocaleString()} (${campaign.percentage_raised}%)\n\nGive online or via mobile money here:\n${shareUrl}`;
+    const text = `*SDA Loma Linda Fund Drive*${memberGreeting}\nJoin us in supporting *${campaign.title || campaign.name}*!\n\nTarget Goal: KES ${Number(campaign.target_amount).toLocaleString()}\nRaised so far: KES ${Number(campaign.total_raised).toLocaleString()} (${campaign.percentage_raised}%)\n\nGive online or via mobile money here:\n${shareUrl}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
   }
 
@@ -276,7 +276,7 @@ export default function CampaignDetailClient() {
                     <h3 className="font-semibold text-[#26352f]">How to give manually via Paybill:</h3>
                     <ol className="list-decimal space-y-2.5 pl-5 text-sm text-[#4a5851]">
                       <li>Go to <strong>M-Pesa / Mobile Money menu</strong> on your phone and select <strong>Lipa na M-Pesa</strong> &rarr; <strong>Paybill</strong>.</li>
-                      <li>Enter Business Number: <code className="rounded bg-white px-2 py-0.5 font-bold text-[#b36b3c] ring-1 ring-[#dfdbd1]">247247</code> (Loma Linda SDA Church).</li>
+                      <li>Enter Business Number: <code className="rounded bg-white px-2 py-0.5 font-bold text-[#b36b3c] ring-1 ring-[#dfdbd1]">247247</code> (SDA Loma Linda).</li>
                       <li>
                         Enter Account Number: <code className="rounded bg-white px-2 py-0.5 font-bold text-[#b36b3c] ring-1 ring-[#dfdbd1]">{campaign.name}</code>
                       </li>

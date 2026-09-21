@@ -91,7 +91,7 @@ export function PwaRegister() {
             SDA
           </div>
           <div className="min-w-0">
-            <h4 className="text-xs font-bold text-white truncate">Install Loma Linda SDA App</h4>
+            <h4 className="text-xs font-bold text-white truncate">Install SDA Loma Linda App</h4>
             <p className="text-[11px] text-white/80 truncate">Quick access &amp; offline support.</p>
           </div>
         </div>

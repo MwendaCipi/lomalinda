@@ -10,12 +10,12 @@ export default function PrivacyPage() {
           <div className="flex-1 min-w-0">
             <article className="rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-10">
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Privacy Policy</h1>
-              <p className="mt-3 text-sm leading-6 text-[#617068]">Loma Linda SDA Church, Meru</p>
+              <p className="mt-3 text-sm leading-6 text-[#617068]">SDA Loma Linda</p>
               <div className="mt-8 space-y-7 text-sm leading-7 text-[#617068]">
                 <section>
                   <h2 className="text-xl font-semibold text-[#26352f]">Who we are</h2>
                   <p className="mt-2">
-                    This website is operated by Loma Linda SDA Church, Meru, Kenya. We are responsible for the personal information submitted through our church forms and member services.
+                    This website is operated by SDA Loma Linda, Meru, Kenya. We are responsible for the personal information submitted through our church forms and member services.
                   </p>
                 </section>
                 <section>

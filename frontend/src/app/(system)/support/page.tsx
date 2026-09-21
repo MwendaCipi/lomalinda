@@ -71,7 +71,7 @@ export default function SupportHubPage() {
             {/* Desktop Section Overview Banner */}
             <div className="mt-8 hidden rounded-3xl bg-[#26352f] p-8 text-white shadow-sm lg:block">
               <span className="text-xs font-bold uppercase tracking-widest text-[#f1c89e]">Stewardship Hub</span>
-              <h2 className="mt-2 text-2xl font-semibold">Supporting Loma Linda SDA Church</h2>
+              <h2 className="mt-2 text-2xl font-semibold">Supporting SDA Loma Linda</h2>
               <p className="mt-3 text-sm leading-6 text-white/80 max-w-2xl">
                 Use the left navigation sidebar to give tithes and offerings online, submit ministry ideas and proposals, view published annual church budgets, or access financial transparency reports.
               </p>
