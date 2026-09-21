@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  LayoutDashboard,
   Users,
   Crown,
   Briefcase,
@@ -104,6 +105,17 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
             Logged in as <span className="font-semibold text-[#26352f]">{profile?.username || "Staff"}</span>
           </p>
         </div>
+
+        <Link
+          href="/"
+          className="flex w-full items-center justify-between rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+        >
+          <div className="flex items-center gap-2.5">
+            <LayoutDashboard className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+            <span>Dashboard</span>
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 font-bold" />
+        </Link>
 
         {/* Elders' Desk Section */}
         {(isElder || isClerk || isAdmin) && (

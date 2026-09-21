@@ -7,21 +7,6 @@ import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const officialRoles = [
-  "admin",
-  "leader",
-  "clerk",
-  "elder",
-  "youth_leader",
-  "choir_director",
-  "children_ministry",
-  "men_ministry",
-  "women_ministry",
-  "chaplaincy",
-  "finance",
-  "treasurer",
-];
-
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,28 +33,10 @@ function LoginContent() {
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       setMessage("You are signed in.");
 
-      try {
-        const meRes = await fetch(`${API_URL}/api/members/me/`, {
-          headers: { Authorization: `Bearer ${data.access}` },
-        });
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          const userRoles: string[] = Array.isArray(meData.roles) && meData.roles.length > 0 ? meData.roles : [(meData.role || "").toLowerCase().trim()];
-          const isLeader = userRoles.some((r) => officialRoles.includes(r as never)) || meData.is_staff || meData.is_superuser;
-          if (nextParam) {
-            router.push(nextParam);
-            return;
-          }
-          if (isLeader && userRoles.some((r) => r !== "member")) {
-            router.push("/administration");
-            return;
-          }
-        }
-      } catch {
-        // Fallback to nextParam or member
-      }
-
-      router.push(nextParam || "/member");
+      // Everyone lands on the system dashboard: the root route shows the
+      // marketing page to visitors and the signed-in dashboard to members,
+      // whose role-aware tiles link leaders on to Administration.
+      router.push(nextParam || "/");
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unable to connect to the server.";
       setMessage(errorMsg);

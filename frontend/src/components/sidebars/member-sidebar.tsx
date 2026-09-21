@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, BarChart3, HeartHandshake, Heart, ChevronRight, Download } from "lucide-react";
+import { LayoutDashboard, User, BarChart3, HeartHandshake, Heart, ChevronRight, Download } from "lucide-react";
 import { triggerPwaInstall } from "../pwa-register";
 
 const memberLinks = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/member", label: "My Profile & Status", icon: User },
   { href: "/member/reports", label: "My Giving Statements", icon: BarChart3 },
   { href: "/community/welfare", label: "Member Welfare", icon: HeartHandshake },
