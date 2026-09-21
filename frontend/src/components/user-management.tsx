@@ -796,7 +796,7 @@ export function UserManagement() {
   const [editDisability, setEditDisability] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
 
@@ -959,7 +959,15 @@ export function UserManagement() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: `Member '${data.username}' registered successfully with full record.` });
+        setMessage(
+          data.temporary_password
+            ? {
+                type: "success",
+                text: `Member '${data.username}' registered. Share these sign-in details now — the password is shown only once.`,
+                credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
+              }
+            : { type: "success", text: `Member '${data.username}' registered successfully with full record.` },
+        );
         setFormData(initialForm);
         setAge("");
         setShowAddForm(false);
@@ -1025,7 +1033,15 @@ export function UserManagement() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: `Friend '${data.username}' added successfully.` });
+        setMessage(
+          data.temporary_password
+            ? {
+                type: "success",
+                text: `Friend '${data.username}' added. Share these sign-in details now — the password is shown only once.`,
+                credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
+              }
+            : { type: "success", text: `Friend '${data.username}' added successfully.` },
+        );
         setFriendFormData(friendFormInitial);
         setShowAddFriendForm(false);
         fetchMembers();
@@ -1382,6 +1398,20 @@ export function UserManagement() {
         <div className={`mx-6 mt-3 shrink-0 rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>
           {message.text}
           <button className="ml-3 opacity-60 hover:opacity-100" onClick={() => setMessage(null)}>✕</button>
+          {message.credentials && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wide text-[#26352f] select-all">
+                {message.credentials}
+              </code>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(message.credentials || "")}
+                className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white"
+              >
+                Copy
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -2627,8 +2627,10 @@ class UserManagementView(generics.ListCreateAPIView):
                 counter += 1
             username = candidate
 
+        password_generated = False
         if not password:
             password = generate_temporary_password()
+            password_generated = True
 
         if User.objects.filter(username=username).exists():
             return Response({'detail': 'A user with this username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -2667,7 +2669,12 @@ class UserManagementView(generics.ListCreateAPIView):
             profile_obj.date_of_birth = date_of_birth
         profile_obj.save()
 
-        return Response(UserDetailSerializer(user).data, status=status.HTTP_201_CREATED)
+        response_data = UserDetailSerializer(user).data
+        if password_generated:
+            # Surface the one-time password: the console has no password field, so
+            # without this the new account would exist but nobody could sign in.
+            response_data['temporary_password'] = password
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class UserDetailUpdateView(APIView):
