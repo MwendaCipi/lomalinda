@@ -298,7 +298,7 @@ function GivePageContent() {
             {signedIn && (
               <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
                 <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col items-start gap-0.5">
                     <div className="min-w-0">
                       <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
                       <p className="mt-0.5 truncate text-xs text-[#617068]">
@@ -325,9 +325,9 @@ function GivePageContent() {
                   </div>
                 </div>
 
-                <div className={signedIn ? "min-h-0 flex-1 overflow-y-auto px-5 py-3 custom-table-scrollbar" : "px-5 py-3"}>
+                <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3" : "px-5 py-3"}>
                   {/* Desktop table */}
-                  <div className="hidden md:block">
+                  <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-[#dfdbd1]">
                         <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
@@ -374,7 +374,7 @@ function GivePageContent() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="grid gap-3 md:hidden">
+                  <div className={signedIn ? "min-h-0 flex-1 overflow-y-auto custom-table-scrollbar grid gap-3 md:hidden" : "grid gap-3 md:hidden"}>
                     {loadingGivings ? (
                       <div className="py-8 text-center text-xs text-[#617068]">Loading your givings...</div>
                     ) : filteredGivings.length === 0 ? (
