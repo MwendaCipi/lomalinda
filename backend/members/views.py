@@ -280,6 +280,47 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
     }
 
 
+def receipt_giver_name(donor_name, *, member=None, email='', phone=''):
+    """The name a receipt greeting uses for the recipient.
+
+    Whatever identifies the giver wins: the name they supplied, the member
+    account the gift belongs to, or a registered account matched by the
+    receipt's email or phone — the same matching ``ensure_giver_profile``
+    uses. ``friend`` is only the last resort when nothing identifies a
+    person, so the greeting stays graceful instead of addressing a known
+    member as a stranger.
+    """
+    name = (donor_name or '').strip()
+    if name:
+        return name
+
+    def account_name(user):
+        if user is None:
+            return ''
+        full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+        return full or (user.username or '').strip()
+
+    name = account_name(member)
+    if name:
+        return name
+
+    email = (email or '').strip()
+    phone = (phone or '').strip()
+    if email or phone:
+        User = get_user_model()
+        user = None
+        if email:
+            user = User.objects.filter(email__iexact=email).first()
+        if not user and phone:
+            user = User.objects.filter(
+                member_profile__phone_number=phone.replace('+', '').replace(' ', '')
+            ).first()
+        name = account_name(user)
+        if name:
+            return name
+    return 'friend'
+
+
 def send_contribution_receipt(contribution):
     if contribution.receipt_sent_at or contribution.status != 'completed':
         return
@@ -287,7 +328,12 @@ def send_contribution_receipt(contribution):
     church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
     local_now = timezone.localtime()
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-    donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
+    donor_name = receipt_giver_name(
+        contribution.donor_name,
+        member=contribution.member,
+        email=contribution.donor_email,
+        phone=contribution.phone_number,
+    )
     amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
     receipt_message = render_receipt_message(
         church_settings.default_receipt_message,
@@ -321,7 +367,9 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     if cash.receipt_sent_at or cash.entry_type != 'individual':
         return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
-    donor_name = cash.donor_name.strip() or 'friend'
+    donor_name = receipt_giver_name(
+        cash.donor_name, email=cash.giver_email, phone=cash.giver_phone,
+    )
     amount_display = f"KES {cash.amount:,.2f}"
     message = render_receipt_message(
         settings_obj.default_receipt_message,

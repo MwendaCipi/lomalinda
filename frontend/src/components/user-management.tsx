@@ -1715,7 +1715,7 @@ export function UserManagement() {
         </div>
 
         {/* Mobile Cards scroll inside the shared scrollable area (no page scroll on phones) */}
-        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3"}>
+        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3 md:hidden"}>
           {loading ? (
             <div className="py-8 text-center text-xs text-[#617068]">Loading members...</div>
           ) : filteredMembers.length === 0 ? (

@@ -1827,3 +1827,94 @@ class AnnouncementManagementPermissionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.draft.refresh_from_db()
         self.assertEqual(self.draft.title, 'Draft notice updated')
+
+
+class ReceiptGreetingNameTests(TestCase):
+    """Receipts greet the recipient's real name; 'friend' only when nobody is identifiable."""
+
+    def _body(self, sender, obj):
+        from django.core import mail
+
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sender(obj)
+        return mail.outbox[-1].body
+
+    def test_member_account_names_a_receipt_without_a_donor_name(self):
+        from .views import send_contribution_receipt
+
+        member = User.objects.create_user(
+            'manason', 'manason@example.com', 'ChurchPass#2026',
+            first_name='Manason', last_name='Amoko',
+        )
+        contribution = Contribution.objects.create(
+            member=member, amount=Decimal('500.00'), purpose='Tithe',
+            status='completed', donor_name='',
+        )
+        body = self._body(send_contribution_receipt, contribution)
+        self.assertTrue(body.startswith('Dear Manason Amoko,'), body)
+
+    def test_email_matched_account_names_an_unlinked_donor(self):
+        from .views import send_contribution_receipt
+
+        registered = User.objects.create_user(
+            'william', 'onjwayo@example.com', 'ChurchPass#2026',
+            first_name='William', last_name='Onjwayo',
+        )
+        contribution = Contribution.objects.create(
+            member=None, amount=Decimal('200.00'), purpose='Tithe',
+            status='completed', donor_name='', donor_email=registered.email,
+        )
+        body = self._body(send_contribution_receipt, contribution)
+        self.assertTrue(body.startswith('Dear William Onjwayo,'), body)
+
+    def test_phone_matched_account_names_the_donor(self):
+        from .views import send_contribution_receipt
+
+        giver = User.objects.create_user(
+            'judith', 'judith@example.com', 'ChurchPass#2026',
+            first_name='Judith', last_name='Ndirangu',
+        )
+        MemberProfile.objects.create(user=giver, phone_number='0710570874')
+        contribution = Contribution.objects.create(
+            member=None, amount=Decimal('150.00'), purpose='Tithe',
+            status='completed', donor_name='', donor_email='gift.sender@example.com',
+            phone_number='0710570874',
+        )
+        body = self._body(send_contribution_receipt, contribution)
+        self.assertTrue(body.startswith('Dear Judith Ndirangu,'), body)
+
+    def test_unknown_donor_keeps_the_friendly_fallback(self):
+        from .views import send_contribution_receipt
+
+        contribution = Contribution.objects.create(
+            member=None, amount=Decimal('100.00'), purpose='Tithe',
+            status='completed', donor_name='', donor_email='stranger@example.com',
+        )
+        body = self._body(send_contribution_receipt, contribution)
+        self.assertTrue(body.startswith('Dear friend,'), body)
+
+    def test_cash_receipt_greets_the_giver_matched_by_email(self):
+        from .views import send_cash_receipt
+
+        treasurer = User.objects.create_user('treasurer', 'treasurer@example.com', 'ChurchPass#2026')
+        registered = User.objects.create_user(
+            'jillian', 'jillian@example.com', 'ChurchPass#2026',
+            first_name='Jillian', last_name='Wanjohi',
+        )
+        cash = CashContribution.objects.create(
+            received_by=treasurer, entry_type='individual',
+            amount=Decimal('50.00'), donor_name='', giver_email=registered.email,
+        )
+        body = self._body(send_cash_receipt, cash)
+        self.assertTrue(body.startswith('Dear Jillian Wanjohi,'), body)
+
+    def test_cash_receipt_falls_back_when_nobody_is_identifiable(self):
+        from .views import send_cash_receipt
+
+        treasurer = User.objects.create_user('treasurer2', 't2@example.com', 'ChurchPass#2026')
+        cash = CashContribution.objects.create(
+            received_by=treasurer, entry_type='individual',
+            amount=Decimal('75.00'), donor_name='', giver_email='nobody@example.com',
+        )
+        body = self._body(send_cash_receipt, cash)
+        self.assertTrue(body.startswith('Dear friend,'), body)
