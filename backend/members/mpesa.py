@@ -40,7 +40,15 @@ def account_reference_for_purpose(purpose):
     return aliases.get(reference, reference[:12]) or 'GIVING'
 
 
-def initiate_stk_push(contribution):
+def initiate_stk_push_for_context(phone_number, amount, purpose, context_token):
+    """Send an STK push for a giving that has no Contribution row yet.
+
+    The contribution is only created once Safaricom's callback confirms the
+    money arrived, so this takes the raw initiation details instead of a
+    model instance. The signed context token is appended to the CallBackURL
+    (Daraja echoes the URL back to us verbatim), which is how the callback
+    later reconstructs what was being paid for.
+    """
     consumer_key = _setting('MPESA_CONSUMER_KEY')
     consumer_secret = _setting('MPESA_CONSUMER_SECRET')
     shortcode = _setting('MPESA_SHORTCODE')
@@ -48,9 +56,8 @@ def initiate_stk_push(contribution):
     callback_url = _setting('MPESA_CALLBACK_URL')
     base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
 
-    phone_number = normalize_mpesa_phone(contribution.phone_number)
-    contribution.phone_number = phone_number
-    contribution.save(update_fields=['phone_number'])
+    separator = '&' if '?' in callback_url else '?'
+    callback_url = f"{callback_url}{separator}ctx={context_token}"
 
     token_response = requests.get(f'{base_url}/oauth/v1/generate?grant_type=client_credentials', auth=(consumer_key, consumer_secret), timeout=15)
     token_response.raise_for_status()
@@ -63,13 +70,13 @@ def initiate_stk_push(contribution):
         'Password': password,
         'Timestamp': timestamp,
         'TransactionType': environ.get('MPESA_TRANSACTION_TYPE', 'CustomerPayBillOnline'),
-        'Amount': int(contribution.amount),
+        'Amount': int(amount),
         'PartyA': phone_number,
         'PartyB': shortcode,
         'PhoneNumber': phone_number,
         'CallBackURL': callback_url,
-        'AccountReference': account_reference_for_purpose(contribution.purpose),
-        'TransactionDesc': contribution.purpose,
+        'AccountReference': account_reference_for_purpose(purpose),
+        'TransactionDesc': purpose,
     }
     response = requests.post(f'{base_url}/mpesa/stkpush/v1/processrequest', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
     response.raise_for_status()

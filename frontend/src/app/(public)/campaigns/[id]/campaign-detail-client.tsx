@@ -57,7 +57,6 @@ export default function CampaignDetailClient() {
   const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "paybill">("mpesa");
   const [stkProvider] = useState<"mpesa">("mpesa");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,10 +91,8 @@ export default function CampaignDetailClient() {
         .then((res) => (res.ok ? res.json() : null))
         .then((userData) => {
           if (userData) {
-            const name = userData.full_name || userData.name || "";
             const phone = userData.phone_number || "";
             const email = userData.email || "";
-            if (name) setDonorName(name);
             if (phone) setPhoneNumber(phone);
             if (email) setDonorEmail(email);
           }
@@ -110,11 +107,6 @@ export default function CampaignDetailClient() {
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       showAlert("Invalid amount", "Please enter a valid amount.", "error");
-      return;
-    }
-
-    if (!donorName.trim()) {
-      showAlert("Name Required", "Please enter your name.", "warning");
       return;
     }
 
@@ -140,7 +132,6 @@ export default function CampaignDetailClient() {
           giving_type: "financial",
           purpose: campaign.name,
           phone_number: phoneNumber,
-          donor_name: donorName,
           donor_email: donorEmail,
           payment_method: "mpesa",
           referral_token: refToken || undefined,
@@ -279,18 +270,6 @@ export default function CampaignDetailClient() {
                 ) : (
                   <form onSubmit={handleDonate} className="mt-6 space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <label className="block text-sm font-medium text-[#26352f]">
-                        Full Name *
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Jane Doe"
-                          value={donorName}
-                          onChange={(e) => setDonorName(e.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
-                        />
-                      </label>
-
                       {paymentMethod === "mpesa" && (
                         <label className="block text-sm font-medium text-[#26352f]">
                           M-Pesa Phone Number *

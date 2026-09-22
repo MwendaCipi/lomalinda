@@ -222,9 +222,13 @@ function GivePageContent() {
         purpose,
         phone_number: phoneNumber,
         item_description: descriptionPayload,
-        donor_name: donorName,
         donor_email: donorEmail,
       };
+      // M-Pesa knows the payer's name from the payment itself (the callback
+      // records it), so only the bank-transfer path sends one.
+      if (methodOfGiving === "bank_transfer") {
+        payload.donor_name = donorName;
+      }
 
       const response = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
         method: "POST",
@@ -601,18 +605,20 @@ function GivePageContent() {
                   </div>
                 </div>
               )}
-
-              {/* 3. Name & Email Row */}
+              {/* 3. Name & Email Row — M-Pesa reads the payer's name from the
+                  payment callback, so only bank transfers ask for it here. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Your name
-                  <input
-                    value={donorName}
-                    onChange={(event) => setDonorName(event.target.value)}
-                    placeholder="Full name"
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                  />
-                </label>
+                {methodOfGiving === "bank_transfer" && (
+                  <label className="block text-sm font-medium text-[#26352f]">
+                    Your name
+                    <input
+                      value={donorName}
+                      onChange={(event) => setDonorName(event.target.value)}
+                      placeholder="Full name"
+                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    />
+                  </label>
+                )}
 
                 <label className="block text-sm font-medium text-[#26352f]">
                   Email

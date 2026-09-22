@@ -50,6 +50,7 @@ from django.utils import timezone
 
 from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, MpesaRefund, Testimony
 from .mpesa import account_reference_for_purpose
+from .mpesa_tokens import pack_callback_context, unpack_callback_context
 
 
 class TestimonyAPITests(APITestCase):
@@ -191,8 +192,31 @@ class MpesaPurposeReferenceTests(TestCase):
 
 
 class MpesaInitiationAPITests(APITestCase):
-    @patch('members.views.initiate_stk_push')
-    def test_stk_initiation_failure_does_not_create_completed_contribution(self, mock_stk):
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_stk_initiation_creates_no_contribution_row(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent'}
+        response = self.client.post('/api/members/contributions/initiate/', {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'amount': '100.00',
+            'purpose': 'Tithe',
+            'phone_number': '0712345678',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.count(), 0)
+        # The push carried the initiation details for the callback.
+        kwargs = mock_stk.call_args.kwargs
+        self.assertEqual(kwargs['phone_number'], '254712345678')
+        self.assertEqual(kwargs['amount'], Decimal('100.00'))
+        self.assertEqual(kwargs['purpose'], 'Tithe')
+        # The context token is signed, not encrypted, but unpacks intact.
+        self.assertEqual(
+            unpack_callback_context(mock_stk.call_args.kwargs['context_token']),
+            {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'},
+        )
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_stk_initiation_failure_creates_no_contribution_row(self, mock_stk):
         mock_stk.side_effect = RuntimeError('Safaricom unavailable')
         response = self.client.post('/api/members/contributions/initiate/', {
             'giving_type': 'financial',
@@ -202,10 +226,93 @@ class MpesaInitiationAPITests(APITestCase):
             'phone_number': '0712345678',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
-        contribution = Contribution.objects.get(pk=response.data['contribution_id'])
-        self.assertEqual(contribution.status, 'failed')
-        self.assertIsNone(contribution.paid_at)
-        self.assertIsNone(contribution.mpesa_receipt_number)
+        self.assertEqual(Contribution.objects.count(), 0)
+
+
+class MpesaCallbackAPITests(APITestCase):
+    def _callback_payload(self, result_code=0, checkout_id='ws_CO_123'):
+        payload = {
+            'Body': {
+                'stkCallback': {
+                    'MerchantRequestID': '29115-34620561-1',
+                    'CheckoutRequestID': checkout_id,
+                    'ResultCode': result_code,
+                }
+            }
+        }
+        if result_code == 0:
+            payload['Body']['stkCallback']['CallbackMetadata'] = {
+                'Item': [
+                    {'Name': 'Amount', 'Value': 100.00},
+                    {'Name': 'MpesaReceiptNumber', 'Value': 'SCL4N0XXXX'},
+                    {'Name': 'PhoneNumber', 'Value': 254712345678},
+                    {'Name': 'FirstName', 'Value': 'Jane'},
+                    {'Name': 'MiddleName', 'Value': 'Wanjiku'},
+                    {'Name': 'LastName', 'Value': 'Doe'},
+                ]
+            }
+        return payload
+
+    def _post_callback(self, payload, context):
+        token = pack_callback_context(context)
+        return self.client.post(f'/api/members/payments/mpesa/callback/?ctx={token}', payload, format='json')
+
+    def test_successful_callback_creates_completed_contribution_named_from_mpesa(self):
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        response = self._post_callback(self._callback_payload(), context)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.count(), 1)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.donor_name, 'Jane Wanjiku Doe')
+        self.assertEqual(contribution.mpesa_receipt_number, 'SCL4N0XXXX')
+        self.assertEqual(contribution.amount, Decimal('100.00'))
+        self.assertEqual(contribution.purpose, 'Tithe')
+        self.assertEqual(contribution.phone_number, '254712345678')
+        self.assertIsNotNone(contribution.paid_at)
+
+    def test_cancelled_callback_creates_no_contribution(self):
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        response = self._post_callback(self._callback_payload(result_code=1032), context)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.count(), 0)
+
+    def test_tampered_or_missing_token_creates_no_contribution(self):
+        response = self.client.post(
+            '/api/members/payments/mpesa/callback/?ctx=tampered-token',
+            self._callback_payload(),
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.count(), 0)
+
+    def test_repeated_callback_creates_only_one_contribution(self):
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        self._post_callback(self._callback_payload(), context)
+        self._post_callback(self._callback_payload(), context)
+        self.assertEqual(Contribution.objects.count(), 1)
+
+    def test_callback_links_campaign_card_and_member(self):
+        from django.contrib.auth.models import User
+
+        from .models import CampaignCardAssignment, FundraisingCampaign
+        giver = User.objects.create_user(username='254712345678', password='secure-password')
+        campaign = FundraisingCampaign.objects.create(name='Camp Goal 2026', target_amount=Decimal('100000.00'))
+        card = CampaignCardAssignment.objects.create(campaign=campaign, member=giver, referral_token='card-token-1')
+        context = {
+            'amount': '500.00',
+            'purpose': 'Camp Goal 2026',
+            'phone_number': '254712345678',
+            'member_id': giver.pk,
+            'donor_email': 'giver@example.com',
+            'referral_token': card.referral_token,
+        }
+        self._post_callback(self._callback_payload(), context)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.member, giver)
+        self.assertEqual(contribution.donor_email, 'giver@example.com')
+        self.assertEqual(contribution.campaign, campaign)
+        self.assertEqual(contribution.card_assignment, card)
 
 
 class MpesaC2BAPITests(APITestCase):
@@ -238,8 +345,10 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.status, 'completed')
         self.assertEqual(contribution.payment_method, 'mpesa')
 
-    def test_c2b_confirmation_updates_existing_pending_contribution(self):
-        pending = Contribution.objects.create(
+    def test_c2b_confirmation_ignores_amounts_matching_no_receipt(self):
+        # The old flow matched pending rows by phone and amount; there are no
+        # pending rows anymore, and unknown confirmations must not adopt one.
+        Contribution.objects.create(
             phone_number='254711223344',
             amount=Decimal('1000.00'),
             purpose='Tithe',
@@ -262,11 +371,9 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, {'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
-        pending.refresh_from_db()
-        self.assertEqual(pending.id, pending.id)
-        self.assertEqual(pending.status, 'completed')
-        self.assertEqual(pending.mpesa_receipt_number, 'XYZ98765')
-        self.assertEqual(pending.donor_name, 'Samuel Oti Otieno')
+        contribution = Contribution.objects.get(mpesa_receipt_number='XYZ98765')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.donor_name, 'Samuel Oti Otieno')
 
 
 class MpesaRefundAPITests(APITestCase):
@@ -808,6 +915,28 @@ class InvitationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         invitation = Invitation.objects.get(email='twodays@example.com')
         self.assertEqual(invitation.expires_at, now + timedelta(days=2))
+
+
+class MyContributionsTests(APITestCase):
+    """A member's giving record lists completed payments only: a pending
+    M-Pesa prompt is not money given and must not inflate their history."""
+
+    def setUp(self):
+        self.member = User.objects.create_user('giver.member', 'giver@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, roles='member')
+
+    def test_only_completed_contributions_are_listed(self):
+        Contribution.objects.create(member=self.member, amount=Decimal('500.00'), purpose='Tithe', status='completed', paid_at=timezone.now())
+        Contribution.objects.create(member=self.member, amount=Decimal('900.00'), purpose='Tithe', status='pending')
+        Contribution.objects.create(member=self.member, amount=Decimal('700.00'), purpose='Tithe', status='failed')
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get('/api/members/contributions/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['status'], 'completed')
+        self.assertEqual(Decimal(response.data[0]['amount']), Decimal('500.00'))
 
 
 class InvitationThrottleTests(APITestCase):

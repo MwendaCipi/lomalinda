@@ -20,7 +20,7 @@ import secrets
 import time
 from decimal import Decimal
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin
 import requests
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -30,7 +30,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push, normalize_mpesa_phone
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
+from .mpesa_tokens import pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .throttling import PublicTokenThrottle
@@ -1131,7 +1132,10 @@ class MyContributionsView(generics.ListAPIView):
     serializer_class = ContributionSerializer
 
     def get_queryset(self):
-        return Contribution.objects.filter(member=self.request.user)
+        # Only completed payments are a member's giving record: a pending
+        # M-Pesa prompt is not money given, so it must not appear in (or
+        # inflate) their history or statement.
+        return Contribution.objects.filter(member=self.request.user, status='completed')
 
 
 def ensure_giver_profile(donor_name, phone_number, donor_email):
@@ -1660,6 +1664,16 @@ class InitiateContributionView(APIView):
     def post(self, request):
         serializer = ContributionInitiateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # M-Pesa STK push never touches the database here. A pending row used
+        # to be created at initiation and completed by the callback, but rows
+        # whose prompt was cancelled, timed out or simply never called back
+        # piled up as pending money the church never received. The callback
+        # now creates the contribution itself, carrying the initiation context
+        # in the signed CallBackURL (see members/mpesa_tokens.py).
+        if serializer.validated_data.get('payment_method', 'mpesa') == 'mpesa':
+            return self._initiate_mpesa_stk_push(request, serializer)
+
         contribution = Contribution.objects.create(
             member=request.user if request.user.is_authenticated else None,
             amount=serializer.validated_data['amount'],
@@ -1671,36 +1685,6 @@ class InitiateContributionView(APIView):
             item_description=serializer.validated_data.get('item_description', ''),
             payment_method=serializer.validated_data.get('payment_method', 'mpesa'),
         )
-        referral_token = request.data.get('referral_token')
-        if referral_token:
-            card_assignment = CampaignCardAssignment.objects.filter(referral_token=referral_token).first()
-            if card_assignment:
-                contribution.card_assignment = card_assignment
-                contribution.campaign = card_assignment.campaign
-                contribution.purpose = card_assignment.campaign.name
-                contribution.save(update_fields=['card_assignment', 'campaign', 'purpose'])
-        elif not contribution.campaign:
-            campaign = FundraisingCampaign.objects.filter(
-                Q(name=contribution.purpose) | Q(account_name=contribution.purpose)
-            ).first()
-            if campaign:
-                contribution.campaign = campaign
-                contribution.save(update_fields=['campaign'])
-        if not contribution.member:
-            giver_user = ensure_giver_profile(contribution.donor_name, contribution.phone_number, contribution.donor_email)
-            if giver_user:
-                contribution.member = giver_user
-                contribution.save(update_fields=['member'])
-
-        donor_email = contribution.donor_email.strip().lower()
-        if donor_email:
-            friend = Friend.objects.filter(email__iexact=donor_email).first()
-            if friend:
-                friend.name = contribution.donor_name or friend.name
-                friend.phone_number = contribution.phone_number or friend.phone_number
-                friend.save(update_fields=['name', 'phone_number', 'updated_at'])
-            else:
-                Friend.objects.create(email=donor_email, name=contribution.donor_name, phone_number=contribution.phone_number)
         if contribution.payment_method in ['cash', 'cheque', 'bank_transfer']:
             import uuid
             prefix_map = {'cash': 'CSH', 'cheque': 'CHQ', 'bank_transfer': 'BNK', 'bank_deposit': 'DEP'}
@@ -1712,46 +1696,127 @@ class InitiateContributionView(APIView):
             method_display = contribution.payment_method.replace('_', ' ').title()
             return Response({'message': f'Thank you! Your {method_display} contribution has been recorded.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
 
-        # Default M-Pesa STK push flow
+    def _initiate_mpesa_stk_push(self, request, serializer):
+        """Start an STK push without writing a pending Contribution row.
+
+        Nothing is recorded until Safaricom's callback confirms the money
+        arrived; a prompt that was cancelled, timed out or never called back
+        used to leave a pending row the church never received money for.
+        The initiation context (amount, purpose, phone, giver email, the
+        campaign card) travels in the signed CallBackURL — see
+        members/mpesa_tokens.py — so the callback can create the contribution
+        on its own, with the payer's name read from M-Pesa itself.
+        """
+        data = serializer.validated_data
+        phone_number = normalize_mpesa_phone(data['phone_number'])
+        context = {
+            'amount': str(data['amount']),
+            'purpose': data['purpose'],
+            'phone_number': phone_number,
+        }
+        donor_email = (data.get('donor_email') or '').strip()
+        if donor_email:
+            context['donor_email'] = donor_email
+        elif request.user and request.user.is_authenticated:
+            context['member_id'] = request.user.pk
+            if request.user.email:
+                context['donor_email'] = request.user.email
+        item_description = (data.get('item_description') or '').strip()
+        if item_description:
+            context['item_description'] = item_description
+        referral_token = request.data.get('referral_token') if isinstance(request.data, dict) else None
+        if referral_token:
+            context['referral_token'] = str(referral_token)
         try:
-            result = initiate_stk_push(contribution)
-            contribution.checkout_request_id = result.get('CheckoutRequestID', '')
-            contribution.merchant_request_id = result.get('MerchantRequestID', '')
-            contribution.save(update_fields=['checkout_request_id', 'merchant_request_id'])
-            return Response({'message': result.get('CustomerMessage', 'Paybill payment prompt sent to your phone. Enter PIN to complete.'), 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
+            result = initiate_stk_push_for_context(
+                phone_number=phone_number,
+                amount=data['amount'],
+                purpose=data['purpose'],
+                context_token=pack_callback_context(context),
+            )
+        except MpesaConfigurationError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as error:
-            contribution.status = 'failed'
-            contribution.save(update_fields=['status'])
             return Response({
                 'detail': f'We could not send the M-Pesa prompt: {error}',
-                'contribution_id': str(contribution.id),
             }, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({
+            'message': result.get('CustomerMessage', 'Paybill payment prompt sent to your phone. Enter PIN to complete.'),
+        }, status=status.HTTP_200_OK)
 
 
 class MpesaCallbackView(APIView):
+    """Receives Daraja's STK result and creates the contribution if money moved.
+
+    The contribution does not exist at push time; the initiation context
+    rides in the signed ctx query parameter we embedded in the CallBackURL
+    and Daraja echoes back verbatim. The payer's name is read from the
+    callback metadata rather than a form, since Safaricom knows it.
+    """
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
         callback = request.data.get('Body', {}).get('stkCallback', {})
-        checkout_request_id = callback.get('CheckoutRequestID')
-        contribution = Contribution.objects.filter(checkout_request_id=checkout_request_id).first()
-        if not contribution:
+        result_code = callback.get('ResultCode')
+        query_string = request.META.get('QUERY_STRING', '')
+        context_token = parse_qs(query_string).get('ctx', [None])[0]
+        context = unpack_callback_context(context_token)
+        if not context:
+            # Unpackable context (tampered, stale or a legacy push): still
+            # acknowledge so Safaricom stops retrying.
             return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
-        result_code = callback.get('ResultCode')
         if result_code == 0:
             metadata = {item.get('Name'): item.get('Value') for item in callback.get('CallbackMetadata', {}).get('Item', [])}
-            from django.utils import timezone
-            contribution.status = 'completed'
-            contribution.mpesa_receipt_number = metadata.get('MpesaReceiptNumber')
-            contribution.phone_number = str(metadata.get('PhoneNumber', contribution.phone_number))
-            contribution.paid_at = timezone.now()
-        else:
-            contribution.status = 'failed'
-        contribution.save()
-        send_contribution_receipt(contribution)
+            checkout_request_id = callback.get('CheckoutRequestID') or None
+            # Safaricom retries unacknowledged callbacks; never record twice.
+            if checkout_request_id and Contribution.objects.filter(checkout_request_id=checkout_request_id).exists():
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+            payer_name = ' '.join(
+                str(metadata.get(part) or '').strip()
+                for part in ('FirstName', 'MiddleName', 'LastName')
+            ).strip()
+            contribution = Contribution.objects.create(
+                amount=Decimal(str(context['amount'])),
+                giving_type='financial',
+                purpose=context['purpose'],
+                phone_number=str(metadata.get('PhoneNumber', context['phone_number'])),
+                donor_name=payer_name,
+                donor_email=context.get('donor_email', ''),
+                item_description=context.get('item_description', ''),
+                payment_method='mpesa',
+                status='completed',
+                mpesa_receipt_number=metadata.get('MpesaReceiptNumber'),
+                checkout_request_id=checkout_request_id,
+                paid_at=timezone.now(),
+            )
+            self._link_giver(contribution, context)
+            send_contribution_receipt(contribution)
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+    def _link_giver(self, contribution, context):
+        """Attribute the completed contribution to a user or campaign card."""
+        msisdn = contribution.phone_number
+        campaign_card = CampaignCardAssignment.objects.filter(referral_token=context.get('referral_token', '')).first() if context.get('referral_token') else None
+        if campaign_card:
+            contribution.campaign = campaign_card.campaign
+            contribution.card_assignment = campaign_card
+
+        matched_user = None
+        member_id = context.get('member_id')
+        if member_id:
+            matched_user = User.objects.filter(pk=member_id).first()
+        if not matched_user and msisdn:
+            normalized_digits = msisdn[-9:] if len(msisdn) >= 9 else msisdn
+            matched_user = User.objects.filter(username__icontains=normalized_digits).first()
+        if matched_user:
+            contribution.member = matched_user
+            if not contribution.donor_email and matched_user.email:
+                contribution.donor_email = matched_user.email
+
+        contribution.save(update_fields=['campaign', 'card_assignment', 'member', 'donor_email'])
 
 
 class MpesaC2BValidationView(APIView):
@@ -1790,15 +1855,6 @@ class MpesaC2BConfirmationView(APIView):
         # Check if already recorded
         contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
         if not contribution:
-            # Try matching a pending contribution by phone number & amount
-            contribution = Contribution.objects.filter(
-                phone_number=msisdn,
-                amount=amount,
-                status='pending',
-                payment_method='mpesa'
-            ).first()
-
-        if not contribution:
             contribution = Contribution(
                 payment_method='mpesa',
                 giving_type='financial',
@@ -1827,7 +1883,6 @@ class MpesaC2BConfirmationView(APIView):
         contribution.save()
         send_contribution_receipt(contribution)
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
-
 
 
 class MpesaB2CResultView(APIView):
@@ -3676,7 +3731,9 @@ class MemberGivingStatementPdfView(APIView):
             if user_found:
                 member = user_found
 
-        digital = Contribution.objects.filter(Q(member=member) | Q(donor_email=member.email), status="COMPLETED", created_at__date__gte=start_date, created_at__date__lte=end_date)
+        # Status values are lowercase in the model; comparing 'COMPLETED'
+        # matched nothing and silently emptied the digital side of statements.
+        digital = Contribution.objects.filter(Q(member=member) | Q(donor_email=member.email), status="completed", created_at__date__gte=start_date, created_at__date__lte=end_date)
         cash = CashContribution.objects.filter(Q(giver_email=member.email) | Q(donor_name__icontains=member.first_name) if member.first_name else Q(giver_email=member.email), received_on__range=(start_date, end_date))
 
         givings = []
