@@ -7,6 +7,7 @@ import {
   Calendar,
   Camera,
   CreditCard,
+  FileText,
   Gift,
   Handshake,
   Heart,
@@ -64,9 +65,16 @@ export const aboutSectionLinks: SectionLink[] = [
   {
     key: "privacy",
     href: "/privacy",
-    label: "Privacy & Terms",
+    label: "Privacy Policy",
     description: "How we handle the information you share with us.",
     icon: ShieldCheck,
+  },
+  {
+    key: "terms",
+    href: "/terms",
+    label: "Terms of Use",
+    description: "The rules for using church accounts and digital services.",
+    icon: FileText,
   },
 ];
 

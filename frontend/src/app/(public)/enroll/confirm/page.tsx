@@ -31,6 +31,7 @@ function EnrollmentConfirmContent() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   /** Fatal: the verification link itself is unusable. */
   const [linkError, setLinkError] = useState("");
   /** Recoverable: shown inline, form stays open. */
@@ -90,6 +91,7 @@ function EnrollmentConfirmContent() {
       nextErrors.confirmPassword = "The two passwords do not match. Please retype the confirmation.";
     }
     if (!privacyAccepted) nextErrors.privacy = "Please accept the privacy policy to continue.";
+    if (!termsAccepted) nextErrors.terms = "Please accept the Terms of Use to continue.";
 
     setGeneralError("");
     if (Object.keys(nextErrors).length > 0) {
@@ -104,7 +106,7 @@ function EnrollmentConfirmContent() {
       const response = await fetch(`${API_URL}/api/members/auth/enrollment/complete/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, username: cleanUsername, password, privacy_accepted: privacyAccepted }),
+        body: JSON.stringify({ token, username: cleanUsername, password, privacy_accepted: privacyAccepted, terms_accepted: termsAccepted }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -112,6 +114,8 @@ function EnrollmentConfirmContent() {
           "username",
           "password",
           "confirmPassword",
+          "privacy",
+          "terms",
         ]);
         const fallback =
           Object.keys(apiFieldErrors).length === 0 && !apiGeneralError
@@ -227,6 +231,24 @@ function EnrollmentConfirmContent() {
               </span>
             </label>
             <FieldError message={fieldErrors.privacy} />
+            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                aria-invalid={Boolean(fieldErrors.terms)}
+                onChange={(event) => {
+                  setTermsAccepted(event.target.checked);
+                  setFieldErrors((current) => ({ ...current, terms: "" }));
+                }}
+                className="mt-1 h-4 w-4 accent-[#5f8067]"
+              />
+              <span>
+                I agree to the{" "}
+                <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>
+                .
+              </span>
+            </label>
+            <FieldError message={fieldErrors.terms} />
             <button
               type="submit"
               disabled={loading}

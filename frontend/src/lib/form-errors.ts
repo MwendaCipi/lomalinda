@@ -11,6 +11,8 @@ const FIELD_ALIASES: Record<string, string> = {
   firstName: "firstName",
   last_name: "lastName",
   lastName: "lastName",
+  privacy_accepted: "privacy",
+  terms_accepted: "terms",
 };
 
 function flatten(value: unknown): string {

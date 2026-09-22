@@ -35,6 +35,8 @@ function AcceptInviteContent() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   /** Fatal: the invitation itself cannot be used, so there is nothing to retry. */
   const [linkError, setLinkError] = useState("");
   /** Recoverable: shown next to the offending input, form stays open. */
@@ -96,6 +98,8 @@ function AcceptInviteContent() {
     if (password && password !== confirmPassword) {
       nextErrors.confirmPassword = "The two passwords do not match. Please retype the confirmation.";
     }
+    if (!privacyAccepted) nextErrors.privacy = "Please accept the Privacy Policy to continue.";
+    if (!termsAccepted) nextErrors.terms = "Please accept the Terms of Use to continue.";
 
     setGeneralError("");
     if (Object.keys(nextErrors).length > 0) {
@@ -115,6 +119,8 @@ function AcceptInviteContent() {
           first_name: cleanFirstName,
           last_name: cleanLastName,
           phone_number: cleanPhoneNumber,
+          privacy_accepted: privacyAccepted,
+          terms_accepted: termsAccepted,
           username: cleanUsername,
           password,
           confirm_password: confirmPassword,
@@ -126,6 +132,8 @@ function AcceptInviteContent() {
           "firstName",
           "lastName",
           "phoneNumber",
+          "privacy",
+          "terms",
           "username",
           "password",
           "confirmPassword",
@@ -276,6 +284,16 @@ function AcceptInviteContent() {
               <FieldError message={fieldErrors.confirmPassword} />
             </label>
             <PasswordRules password={password} />
+            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+              <input type="checkbox" checked={privacyAccepted} aria-invalid={Boolean(fieldErrors.privacy)} onChange={(event) => { setPrivacyAccepted(event.target.checked); setFieldErrors((current) => ({ ...current, privacy: "" })); }} className="mt-1 h-4 w-4 accent-[#5f8067]" />
+              <span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span>
+            </label>
+            <FieldError message={fieldErrors.privacy} />
+            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+              <input type="checkbox" checked={termsAccepted} aria-invalid={Boolean(fieldErrors.terms)} onChange={(event) => { setTermsAccepted(event.target.checked); setFieldErrors((current) => ({ ...current, terms: "" })); }} className="mt-1 h-4 w-4 accent-[#5f8067]" />
+              <span>I agree to the <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>.</span>
+            </label>
+            <FieldError message={fieldErrors.terms} />
             <button
               type="submit"
               disabled={submitting}

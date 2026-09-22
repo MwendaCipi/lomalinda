@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Calendar, Handshake, ShieldCheck, ChevronRight } from "lucide-react";
+import { Building2, Calendar, Handshake, ShieldCheck, FileText, ChevronRight } from "lucide-react";
 
 const aboutLinks = [
   { href: "/about", label: "About Loma Linda", icon: Building2 },
   { href: "/calendar", label: "Church Calendar", icon: Calendar },
   { href: "/partnerships", label: "Partnerships", icon: Handshake },
-  { href: "/privacy", label: "Privacy & Terms", icon: ShieldCheck },
+  { href: "/privacy", label: "Privacy Policy", icon: ShieldCheck },
+  { href: "/terms", label: "Terms of Use", icon: FileText },
 ];
 
 export function AboutSidebar() {

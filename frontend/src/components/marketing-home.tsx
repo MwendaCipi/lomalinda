@@ -70,7 +70,8 @@ const footerColumns = [
     links: [
       { href: "#beliefs", label: "What we believe" },
       { href: "#contact", label: "Contact & directions" },
-      { href: "/privacy", label: "Privacy" },
+      { href: "/privacy", label: "Privacy Policy" },
+      { href: "/terms", label: "Terms of Use" },
     ],
   },
 ];

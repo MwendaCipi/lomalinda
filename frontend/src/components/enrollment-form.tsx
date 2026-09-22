@@ -62,6 +62,7 @@ export function EnrollmentForm({
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const accountType: "member" | "friend" = joiningMode === "friend" ? "friend" : "member";
 
@@ -107,6 +108,8 @@ export function EnrollmentForm({
           first_name,
           last_name,
           joining_mode: joiningMode,
+          privacy_accepted: termsAccepted,
+          terms_accepted: termsAccepted,
           credential: response.credential,
         }),
       });
@@ -124,6 +127,10 @@ export function EnrollmentForm({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!termsAccepted) {
+      showAlert("Terms required", "Please accept the Privacy Policy and Terms of Use before continuing.", "warning");
+      return;
+    }
     if (!form.name.trim() || !form.phone_number.trim() || !form.email.trim()) {
       showAlert("Missing information", "Please fill in your name, phone number, and email address.", "warning");
       return;
@@ -155,6 +162,7 @@ export function EnrollmentForm({
             joining_mode: joiningMode,
             current_church: form.current_church.trim(),
             privacy_accepted: true,
+            terms_accepted: termsAccepted,
           }),
         });
         const data = await response.json().catch(() => ({}));
@@ -220,6 +228,11 @@ export function EnrollmentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
+
+      <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+        <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" />
+        <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
+      </label>
 
       {showAccountTypeChoice && (
         <div>

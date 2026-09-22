@@ -29,7 +29,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -531,8 +531,15 @@ class EnrollmentRequestView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        validated_data = {key: value for key, value in serializer.validated_data.items() if key != 'privacy_accepted'}
-        validated_data['privacy_accepted_at'] = timezone.now()
+        privacy_accepted = serializer.validated_data.pop('privacy_accepted', False)
+        terms_accepted = serializer.validated_data.pop('terms_accepted', False)
+        validated_data = dict(serializer.validated_data)
+        if privacy_accepted:
+            validated_data['privacy_accepted_at'] = timezone.now()
+            validated_data['privacy_policy_version'] = CURRENT_PRIVACY_POLICY_VERSION
+        if terms_accepted:
+            validated_data['terms_accepted_at'] = timezone.now()
+            validated_data['terms_of_use_version'] = CURRENT_TERMS_OF_USE_VERSION
         email = validated_data['email'].lower().strip()
         token = uuid.uuid4()
         enrollment, _ = EnrollmentRequest.objects.update_or_create(
@@ -576,6 +583,8 @@ class EnrollmentOAuthVerifyView(APIView):
         email = str(data.get('email', '')).lower().strip()
         if email != str(request.data.get('email', '')).lower().strip():
             return Response({'detail': 'The verified Google email must match the email entered above.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not request.data.get('privacy_accepted') or not request.data.get('terms_accepted'):
+            return Response({'detail': 'Accept the Privacy Policy and Terms of Use to continue.'}, status=status.HTTP_400_BAD_REQUEST)
         joining_mode = str(request.data.get('joining_mode', 'baptism'))
         if joining_mode not in dict(EnrollmentRequest.JOINING_MODE_CHOICES):
             return Response({'joining_mode': 'Choose a valid joining mode.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -590,7 +599,10 @@ class EnrollmentOAuthVerifyView(APIView):
                 'phone_number': str(request.data.get('phone_number', '')).strip(),
                 'joining_mode': joining_mode,
                 'current_church': current_church,
-                'privacy_accepted_at': None,
+                'privacy_accepted_at': timezone.now(),
+                'privacy_policy_version': CURRENT_PRIVACY_POLICY_VERSION,
+                'terms_accepted_at': timezone.now(),
+                'terms_of_use_version': CURRENT_TERMS_OF_USE_VERSION,
                 'token': uuid.uuid4(),
                 'status': 'verification_pending',
                 'expires_at': timezone.now() + timedelta(hours=1),
@@ -624,11 +636,22 @@ class EnrollmentCompleteView(APIView):
             return Response({'email': 'An account already exists for this email.'}, status=status.HTTP_400_BAD_REQUEST)
         user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'], is_active=enrollment.status == 'approved')
         from .models import MemberProfile
-        MemberProfile.objects.create(user=user, phone_number=enrollment.phone_number, account_type='friend' if enrollment.joining_mode == 'friend' else 'member')
+        MemberProfile.objects.create(
+            user=user,
+            phone_number=enrollment.phone_number,
+            account_type='friend' if enrollment.joining_mode == 'friend' else 'member',
+            privacy_accepted_at=enrollment.privacy_accepted_at or timezone.now(),
+            privacy_policy_version=enrollment.privacy_policy_version or CURRENT_PRIVACY_POLICY_VERSION,
+            terms_accepted_at=enrollment.terms_accepted_at or timezone.now(),
+            terms_of_use_version=enrollment.terms_of_use_version or CURRENT_TERMS_OF_USE_VERSION,
+        )
         enrollment.user = user
         enrollment.status = 'completed' if user.is_active else 'pending'
         enrollment.privacy_accepted_at = timezone.now()
-        enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at'])
+        enrollment.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
+        enrollment.terms_accepted_at = timezone.now()
+        enrollment.terms_of_use_version = CURRENT_TERMS_OF_USE_VERSION
+        enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at', 'privacy_policy_version', 'terms_accepted_at', 'terms_of_use_version'])
         return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
 
 
@@ -867,6 +890,11 @@ class InvitationAcceptView(APIView):
             profile.role = codes[0] if codes else ''
             profile.roles = ', '.join(codes)
             profile.account_type = invitation.account_type
+            consent_time = timezone.now()
+            profile.privacy_accepted_at = consent_time
+            profile.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
+            profile.terms_accepted_at = consent_time
+            profile.terms_of_use_version = CURRENT_TERMS_OF_USE_VERSION
             if phone_number:
                 profile.phone_number = phone_number
             profile.save()

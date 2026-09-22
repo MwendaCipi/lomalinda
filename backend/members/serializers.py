@@ -110,10 +110,11 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class EnrollmentRequestSerializer(serializers.ModelSerializer):
     privacy_accepted = serializers.BooleanField(write_only=True, required=False, default=True)
+    terms_accepted = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = EnrollmentRequest
-        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'current_church', 'privacy_accepted')
+        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'current_church', 'privacy_accepted', 'terms_accepted')
 
     def to_internal_value(self, data):
         data = data.copy() if hasattr(data, 'copy') else dict(data)
@@ -164,6 +165,7 @@ class EnrollmentCompleteSerializer(serializers.Serializer):
         write_only=True, min_length=PASSWORD_MIN_LENGTH, help_text=PASSWORD_REQUIREMENTS
     )
     privacy_accepted = serializers.BooleanField(write_only=True)
+    terms_accepted = serializers.BooleanField(write_only=True)
 
     def validate_password(self, value):
         validate_church_password(value)
@@ -172,6 +174,11 @@ class EnrollmentCompleteSerializer(serializers.Serializer):
     def validate_privacy_accepted(self, value):
         if not value:
             raise serializers.ValidationError('You must agree to the Privacy Policy.')
+        return value
+
+    def validate_terms_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Terms of Use.')
         return value
 
 
@@ -214,6 +221,8 @@ class InvitationAcceptSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    privacy_accepted = serializers.BooleanField(write_only=True)
+    terms_accepted = serializers.BooleanField(write_only=True)
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -223,6 +232,16 @@ class InvitationAcceptSerializer(serializers.Serializer):
         if not re.match(r'^[\w.@+-]+$', username):
             raise serializers.ValidationError('Use letters, numbers and the characters . @ + - _ only.')
         return username
+
+    def validate_privacy_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Privacy Policy.')
+        return value
+
+    def validate_terms_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError('You must agree to the Terms of Use.')
+        return value
 
     def validate(self, attrs):
         confirm = attrs.get('confirm_password')

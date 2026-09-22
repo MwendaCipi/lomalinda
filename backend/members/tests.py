@@ -837,6 +837,7 @@ class InvitationAPITests(APITestCase):
             'username': 'grace.wanjiku',
             'password': 'SabbathRest#2026',
             'confirm_password': 'SabbathRest#2026',
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json')
         self.assertEqual(accepted.status_code, status.HTTP_201_CREATED)
 
@@ -863,6 +864,7 @@ class InvitationAPITests(APITestCase):
             'username': 'someone.else',
             'password': 'AnotherPass#2026',
             'confirm_password': 'AnotherPass#2026',
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json')
         self.assertEqual(reuse.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -873,6 +875,7 @@ class InvitationAPITests(APITestCase):
             'username': 'grace.wanjiku',
             'password': 'SabbathRest#2026',
             'confirm_password': 'Something#Else1',
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json')
         self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -881,6 +884,7 @@ class InvitationAPITests(APITestCase):
             'username': 'plain.member',
             'password': 'SabbathRest#2026',
             'confirm_password': 'SabbathRest#2026',
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json')
         self.assertEqual(taken.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('username', taken.data)
@@ -894,7 +898,7 @@ class InvitationAPITests(APITestCase):
         self.assertEqual(
             self.client.post('/api/members/auth/invitation/accept/', {
                 'token': str(expired.raw_token), 'username': 'late.comer',
-                'password': 'SabbathRest#2026', 'confirm_password': 'SabbathRest#2026',
+                'password': 'SabbathRest#2026', 'confirm_password': 'SabbathRest#2026', 'privacy_accepted': True, 'terms_accepted': True,
             }, format='json').status_code,
             status.HTTP_400_BAD_REQUEST,
         )
@@ -1019,6 +1023,7 @@ class InvitationThrottleTests(APITestCase):
             'username': 'throttled.user',
             'password': 'SabbathRest#2026',
             'confirm_password': 'SabbathRest#2026',
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json', **extra)
 
     def test_verify_and_accept_draw_from_one_budget(self):
@@ -1223,6 +1228,7 @@ class PasswordPolicyTests(APITestCase):
             'username': username,
             'password': password,
             'confirm_password': password,
+            'privacy_accepted': True, 'terms_accepted': True,
         }, format='json')
 
     def test_every_missing_requirement_is_reported(self):

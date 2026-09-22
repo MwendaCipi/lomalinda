@@ -7,6 +7,9 @@ from django.utils import timezone
 
 from .roles import ROLE_CHOICES, normalize_roles
 
+CURRENT_PRIVACY_POLICY_VERSION = '2026-09-22'
+CURRENT_TERMS_OF_USE_VERSION = '2026-09-22'
+
 
 def invitation_token_hash(raw_token):
     """The salted SHA-256 hex digest a raw invitation token is stored as.
@@ -44,6 +47,10 @@ class MemberProfile(models.Model):
     disability = models.TextField(blank=True, default='', help_text="Disability or special needs of the member")
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
     must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
+    privacy_accepted_at = models.DateTimeField(null=True, blank=True)
+    privacy_policy_version = models.CharField(max_length=20, blank=True, default='')
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -89,6 +96,9 @@ class EnrollmentRequest(models.Model):
     current_church = models.CharField(max_length=160, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='enrollment_requests')
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
+    privacy_policy_version = models.CharField(max_length=20, blank=True, default='')
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
