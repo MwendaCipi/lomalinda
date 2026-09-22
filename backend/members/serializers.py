@@ -530,7 +530,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude', 'midweek_vespers_link',
             'live_service_link', 'live_service_active', 'midweek_vespers_time',
             'friday_vespers_time', 'sabbath_time', 'clarion_call_heading',
-            'clarion_call_subtext', 'default_receipt_message',
+            'clarion_call_subtext', 'default_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
             'board_roles',

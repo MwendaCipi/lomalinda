@@ -206,7 +206,14 @@ def send_password_reset_email(user, uid, token):
 
 
 def send_contribution_receipt(contribution):
-    if not contribution.donor_email or contribution.receipt_sent_at or contribution.status != 'completed':
+    if contribution.receipt_sent_at or contribution.status != 'completed':
+        return
+
+    church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
+    delivery_method = church_settings.receipt_delivery_method
+    if delivery_method == 'email' and not contribution.donor_email:
+        return
+    if delivery_method == 'sms' and not contribution.phone_number:
         return
 
     local_now = timezone.localtime()
@@ -222,25 +229,43 @@ def send_contribution_receipt(contribution):
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
     donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
     church_name = current_church_name()
+    receipt_message = church_settings.default_receipt_message
+    receipt_message = receipt_message.replace('{name}', donor_name)
+    receipt_message = receipt_message.replace('{amount}', f"{contribution.currency} {contribution.amount:,.2f}")
+    receipt_message = receipt_message.replace('{purpose}', contribution.purpose)
     body = (
         f"{greeting} {donor_name},\n\n"
-        f"Thank you for giving towards {contribution.purpose}. Here is your receipt for the gift received by {church_name}.\n\n"
-        f"Amount: {contribution.currency} {contribution.amount:,.2f}\n"
-        f"Giving purpose: {contribution.purpose}\n"
-        f"Payment method: {contribution.get_payment_method_display()}\n"
+        f"{receipt_message}\n\n"
         f"Receipt reference: {receipt_reference}\n"
+        f"Payment method: {contribution.get_payment_method_display()}\n"
         f"Date received: {timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')}\n\n"
-        "May God bless you for supporting the work of the church.\n\n"
         f"Warm regards,\n{church_name}"
     )
     try:
-        send_mail(
-            f"Giving receipt — {contribution.purpose}",
-            body,
-            settings.DEFAULT_FROM_EMAIL,
-            [contribution.donor_email],
-            fail_silently=False,
-        )
+        if delivery_method == 'email':
+            send_mail(
+                f"Giving receipt — {contribution.purpose}",
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                [contribution.donor_email],
+                fail_silently=False,
+            )
+        else:
+            sms_api_url = getattr(settings, 'SMS_API_URL', '')
+            sms_api_key = getattr(settings, 'SMS_API_KEY', '')
+            if not sms_api_url or not sms_api_key:
+                return
+            response = requests.post(
+                sms_api_url,
+                json={
+                    'to': contribution.phone_number,
+                    'message': body,
+                    'from': getattr(settings, 'SMS_SENDER_ID', church_name),
+                },
+                headers={'Authorization': f'Bearer {sms_api_key}'},
+                timeout=10,
+            )
+            response.raise_for_status()
     except Exception:
         return
     contribution.receipt_sent_at = timezone.now()
@@ -1760,6 +1785,7 @@ class InitiateContributionView(APIView):
             contribution.mpesa_receipt_number = f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
             contribution.paid_at = timezone.now()
             contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
+            send_contribution_receipt(contribution)
             method_display = contribution.payment_method.replace('_', ' ').title()
             return Response({'message': f'Thank you! Your {method_display} contribution has been recorded.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
 

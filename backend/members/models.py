@@ -601,7 +601,9 @@ class ChurchSettings(models.Model):
     sabbath_time = models.CharField(max_length=120, default='Saturday · 8:00 AM – 4:00 PM')
     clarion_call_heading = models.TextField(default='A place to belong.\nA faith to share.\nA hope that transforms lives.')
     clarion_call_subtext = models.TextField(default="Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
+    RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]
     default_receipt_message = models.TextField(default="Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!", blank=True)
+    receipt_delivery_method = models.CharField(max_length=10, choices=RECEIPT_DELIVERY_CHOICES, default='email')
     default_business_meeting_invitation_message = models.TextField(
         default="Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!",
         blank=True
