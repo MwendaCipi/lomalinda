@@ -378,7 +378,7 @@ function GivePageContent() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className={signedIn ? "min-h-0 flex-1 overflow-y-auto custom-table-scrollbar grid gap-3 md:hidden" : "grid gap-3 md:hidden"}>
+                  <div className={signedIn ? "custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-scroll overscroll-contain pb-20 touch-pan-y md:hidden" : "grid gap-3 md:hidden"}>
                     {loadingGivings ? (
                       <div className="py-8 text-center text-xs text-[#617068]">Loading your givings...</div>
                     ) : filteredGivings.length === 0 ? (
