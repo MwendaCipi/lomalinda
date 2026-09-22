@@ -41,10 +41,15 @@ body:has(.authenticated-giving-page) {
 /* The giving page is a fixed panel at every width. The shell itself needs a
    definite height (flex-1 alone is auto-height — body is not a flex
    container), sized to the space below SiteNav's 4rem header spacer; the
-   shell's pb-24 then keeps the footer clear of the mobile tab bar. */
+   shell's pb-24 then keeps the footer clear of the mobile tab bar. On the
+   giving page the tab bar reserve is trimmed to just clear the bar so the
+   pinned action buttons sit tight above it instead of floating high. */
 html:has(.authenticated-giving-page) .authenticated-public-shell {
   height: calc(100vh - 4rem);
   height: calc(100dvh - 4rem);
+}
+html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24 {
+  padding-bottom: 4.25rem; /* 68px: the 57px tab bar + a whisker of air */
 }
 html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {
   overflow: hidden;

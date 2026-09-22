@@ -300,7 +300,7 @@ function GivePageContent() {
 
   return (
     <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
-      <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
+      <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 pb-2 pt-3 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
             {/* Hidden on phones: vertical space there belongs to the givings list. */}
             <h1 className="mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block">
