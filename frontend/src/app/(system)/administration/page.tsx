@@ -128,7 +128,10 @@ function AdministrationContent() {
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
   const isFinance = hasAnyRole("finance", "treasurer", "admin");
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance", "refunds"];
+  // Every tab renders a full-height panel (table or cards) that scrolls
+  // internally, so the workspace never scrolls the page itself. "overview"
+  // is the mobile card grid and keeps normal scrolling.
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance", "refunds", "announcements", "requests", "transfers", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
@@ -153,7 +156,7 @@ function AdministrationContent() {
   if (status === "denied") return null;
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="administration-workspace min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {/* DESKTOP CONTEXTUAL SIDEBAR (Permanently Sticky on Desktop, Touching Header) */}
         <AdminSidebar
@@ -187,7 +190,7 @@ function AdministrationContent() {
               className={`flex-1 min-h-0 p-4 sm:p-6 ${
                 tableContainedTabs.includes(activeTab)
                   ? "overflow-hidden"
-                  : "overflow-y-auto custom-hover-scrollbar"
+                  : "overflow-y-auto custom-hover-scrollbar md:overflow-y-auto"
               }`}
             >
 

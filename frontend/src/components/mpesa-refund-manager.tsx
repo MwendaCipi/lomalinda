@@ -214,7 +214,7 @@ export function MpesaRefundManager() {
         </div>
 
         {/* Mobile Cards View */}
-        <div className="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto p-3 md:hidden">
+        <div className="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 md:hidden">
           {loading ? (
             <div className="py-12 text-center text-sm text-[#617068]">Loading contributions...</div>
           ) : contributions.length === 0 ? (

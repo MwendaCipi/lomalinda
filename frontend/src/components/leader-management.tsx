@@ -195,8 +195,8 @@ export function LeaderManagement() {
         </div>
       )}
 
-      {/* Mobile Cards View (visible on md:hidden) */}
-      <div className="grid gap-3 md:hidden">
+      {/* Mobile Cards View — scrolls inside the section like the desktop table */}
+      <div className="custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2 md:hidden">
         {loading ? (
           <div className="py-8 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
             Loading member leadership records...

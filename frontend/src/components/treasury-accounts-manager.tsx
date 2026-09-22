@@ -245,7 +245,7 @@ export function TreasuryAccountsManager() {
       {/* Church Accounts — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
         {/* Mobile Cards View */}
-        <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
+        <div className="md:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar">
           {loading ? (
             <div className="py-12 text-center text-sm text-[#617068]">Loading treasury accounts...</div>
           ) : accounts.length === 0 ? (

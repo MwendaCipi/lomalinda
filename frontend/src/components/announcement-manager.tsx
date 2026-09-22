@@ -160,8 +160,8 @@ export function AnnouncementManager() {
 
       {/* Announcements — ledger-style table container */}
       <div className="overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* Mobile Cards View */}
-        <div className="md:hidden divide-y divide-[#eeeae2]">
+        {/* Mobile Cards View scroll within the card on phones */}
+        <div className="custom-table-scrollbar max-h-[60vh] overflow-y-auto overscroll-contain md:hidden divide-y divide-[#eeeae2]">
           {loadingList ? (
             <p className="py-12 text-center text-sm text-[#617068]">Loading announcements...</p>
           ) : announcements.length === 0 ? (

@@ -805,8 +805,8 @@ export function GivingPurposeManager() {
           </table>
         </div>
 
-        {/* Mobile Cards */}
-        <div className="grid gap-3 md:hidden">
+        {/* Mobile Cards scroll within the shared table area on phones */}
+        <div className="grid gap-3">
           {loading ? (
             <div className="py-8 text-center text-xs text-[#617068]">Loading accounts and drives...</div>
           ) : filteredRows.length === 0 ? (

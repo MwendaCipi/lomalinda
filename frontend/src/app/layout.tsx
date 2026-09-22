@@ -24,11 +24,14 @@ export const metadata: Metadata = {
     title: "Loma Linda SDA",
   },
   icons: {
+    // The ?v= query changes whenever the icon art changes: installed PWAs
+    // treat a changed URL as a new icon and refresh the home-screen bitmap
+    // (bumping the file alone is not enough — Android keeps the old render).
     icon: [
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon-192x192.png?v=2-meru", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png?v=2-meru", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
+    apple: "/icons/apple-touch-icon.png?v=2-meru",
   },
 };
 

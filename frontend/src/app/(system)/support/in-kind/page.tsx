@@ -383,7 +383,7 @@ function GiveInKindPageContent() {
                   </div>
                 </div>
 
-                <div className="px-5 py-3">
+                <div className="max-h-[70vh] overflow-y-auto overscroll-contain custom-table-scrollbar px-5 py-3">
                   {/* Desktop table */}
                   <div className="hidden md:block">
                     <table className="w-full text-left text-xs">
@@ -423,8 +423,8 @@ function GiveInKindPageContent() {
                     </table>
                   </div>
 
-                  {/* Mobile cards */}
-                  <div className="grid gap-3 md:hidden">
+                  {/* Mobile cards scroll inside the same container as the desktop table */}
+                  <div className="grid gap-3">
                     {loadingRecords ? (
                       <div className="py-8 text-center text-xs text-[#617068]">Loading records…</div>
                     ) : records.length === 0 ? (

@@ -59,6 +59,29 @@ html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-chil
   height: 100%;
 }
 
+/* The administration workspace (users, leaders, accounts, expenditures,
+   finance, refunds) is a fixed panel at every width too: its inner tables
+   and mobile card lists scroll, so the shell needs the same definite
+   height chain the giving page gets. */
+html:has(.administration-workspace) .app-shell {
+  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
+}
+html:has(.administration-workspace) .app-shell > * {
+  min-height: 0;
+}
+html:has(.administration-workspace) .app-shell > :last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+html:has(.administration-workspace) .app-shell > :last-child > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 @keyframes hero-image-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }

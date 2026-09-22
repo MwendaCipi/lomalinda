@@ -379,7 +379,7 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
 
-        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 md:overflow-y-auto custom-hover-scrollbar">
+        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
           {/* Top Banner / Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#dfdbd1] pb-6">
             <div>

@@ -1714,8 +1714,8 @@ export function UserManagement() {
           </table>
         </div>
 
-        {/* Mobile Cards */}
-        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3 md:hidden"}>
+        {/* Mobile Cards scroll inside the shared scrollable area (no page scroll on phones) */}
+        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3"}>
           {loading ? (
             <div className="py-8 text-center text-xs text-[#617068]">Loading members...</div>
           ) : filteredMembers.length === 0 ? (
@@ -1760,8 +1760,12 @@ export function UserManagement() {
 
       {/* ── Bottom bar: Print + Add ── */}
       <div className="shrink-0 border-t border-[#dfdbd1] bg-white px-6 py-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-[#617068]">
+        {/* The count line is a desktop nicety; on phones the buttons need the width. */}
+        <p className="hidden text-[11px] text-[#617068] sm:block">
           {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
+        </p>
+        <p className="text-[11px] font-semibold text-[#617068] sm:hidden">
+          {invitationFilter === "pending" ? `${pendingInvitations.length} pending` : `${filteredMembers.length} records`}
         </p>
         <div className="flex items-center gap-2">
           <button
