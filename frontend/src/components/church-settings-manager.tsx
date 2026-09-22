@@ -25,7 +25,7 @@ export function ChurchSettingsManager() {
   const [sabbathTime, setSabbathTime] = useState("Saturday · 8:00 AM – 4:00 PM");
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
-  const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Thank you, {name}, for contributing {amount} towards {account}. May God bless you abundantly!");
+  const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("your contribution of {amount} has been received. Thank you, and may God bless you abundantly");
   const [defaultBusinessMeetingInvitationMessage, setDefaultBusinessMeetingInvitationMessage] = useState(
     "Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!"
   );
@@ -224,7 +224,7 @@ export function ChurchSettingsManager() {
               rows={3}
               value={defaultReceiptMessage}
               onChange={(e) => setDefaultReceiptMessage(e.target.value)}
-              placeholder="e.g. Thank you, {name}, for contributing {amount} towards {account}. May God bless you abundantly!"
+              placeholder="your contribution of {amount} has been received. Thank you, and may God bless you abundantly"
               className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
             />
           </div>

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -21,9 +20,9 @@ type Announcement = {
   id: number;
   title: string;
   text: string;
-  href: string;
+  attachment?: string | null;
   visibility: string;
-  action_type?: "acknowledge" | "pledge" | "respond";
+  action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup?: boolean;
   expires_at?: string | null;
   created_at: string;
@@ -36,7 +35,7 @@ export default function AnnouncementsPage() {
   const [endDate, setEndDate] = useState(getTodayDate);
   const [loading, setLoading] = useState(true);
 
-  function loadAnnouncements(filters = { search, startDate, endDate }) {
+  const loadAnnouncements = useCallback((filters = { search, startDate, endDate }) => {
     setLoading(true);
     const params = new URLSearchParams({ include_expired: "true" });
     if (filters.search.trim()) params.set("search", filters.search.trim());
@@ -50,14 +49,14 @@ export default function AnnouncementsPage() {
       .then((data: Announcement[]) => setAnnouncements(Array.isArray(data) ? data : []))
       .catch(() => setAnnouncements([]))
       .finally(() => setLoading(false));
-  }
+  }, [endDate, search, startDate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadAnnouncements({ search, startDate, endDate });
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [search, startDate, endDate]);
+  }, [search, startDate, endDate, loadAnnouncements]);
 
   return (
     <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
@@ -107,9 +106,11 @@ export default function AnnouncementsPage() {
             ) : (
               <div className="grid gap-6 md:grid-cols-2">
                 {announcements.map((announcement) => {
-                  const cardClasses = `flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9 ${
-                    announcement.href ? "group transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md cursor-pointer" : ""
-                  }`;
+                  const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9";
+                  const hasContributionAction = announcement.action_type && announcement.action_type !== "none" && announcement.action_type !== "respond";
+                  const attachmentUrl = announcement.attachment?.startsWith("/")
+                    ? `${API_URL}${announcement.attachment}`
+                    : announcement.attachment;
 
                   const content = (
                     <>
@@ -117,33 +118,23 @@ export default function AnnouncementsPage() {
                         <div className="flex flex-wrap items-center gap-3">
                           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
                           <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(announcement.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
-                          {announcement.visibility === "members" && <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">Members only</span>}
-                          {announcement.action_type === "pledge" && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Pledge Required</span>}
-                          {announcement.action_type === "respond" && <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Response Required</span>}
+                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148] capitalize">{announcement.visibility}</span>
+                          {hasContributionAction && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Contribution Action</span>}
+                          {announcement.action_type === "respond" && <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Response Action</span>}
                           {announcement.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${announcement.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}
                         </div>
-                        <h2 className={`mt-3 text-2xl font-semibold ${announcement.href ? "transition-colors group-hover:text-[#b36b3c]" : ""}`}>{announcement.title}</h2>
+                        <h2 className="mt-3 text-2xl font-semibold">{announcement.title}</h2>
                         <p className="mt-4 text-base leading-7 text-[#26352f]">{announcement.text}</p>
                       </div>
-                      {announcement.href && (
+                      {attachmentUrl && (
                         <div className="mt-6 border-t border-[#dfdbd1] pt-4">
-                          <span className="inline-block text-sm font-semibold text-[#b36b3c] group-hover:underline">
-                            Learn more &rarr;
-                          </span>
+                          <a href={attachmentUrl} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-[#b36b3c] hover:underline">Open attachment</a>
                         </div>
                       )}
                     </>
                   );
 
-                  return announcement.href ? (
-                    <Link key={announcement.id} href={announcement.href} className={cardClasses}>
-                      {content}
-                    </Link>
-                  ) : (
-                    <article key={announcement.id} className={cardClasses}>
-                      {content}
-                    </article>
-                  );
+                  return <article key={announcement.id} className={cardClasses}>{content}</article>;
                 })}
               </div>
             )}

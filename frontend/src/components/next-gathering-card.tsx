@@ -14,7 +14,7 @@ type Announcement = {
   text: string;
   detail?: string;
   href?: string;
-  action_type: "acknowledge" | "pledge" | "respond";
+  action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   action_prompt?: string;
 };
 
@@ -85,7 +85,7 @@ export function NextGatheringCard() {
     ];
     const candidates: Gathering[] = [];
     for (let week = -1; week <= 1; week += 1) definitions.forEach((definition) => {
-      const date = new Date(now); let difference = definition.day - now.getDay() + week * 7; date.setDate(now.getDate() + difference); date.setHours(definition.range[0][0], definition.range[0][1], 0, 0);
+      const date = new Date(now); const difference = definition.day - now.getDay() + week * 7; date.setDate(now.getDate() + difference); date.setHours(definition.range[0][0], definition.range[0][1], 0, 0);
       const end = new Date(date); end.setHours(definition.range[1][0], definition.range[1][1], 0, 0); if (end <= date) end.setDate(end.getDate() + 1);
       candidates.push({ day: definition.day, hour: definition.range[0][0], minute: definition.range[0][1], endHour: definition.range[1][0], endMinute: definition.range[1][1], name: definition.name, time: definition.time, online: definition.online, active: now >= date && now < end, date });
     });
@@ -106,17 +106,21 @@ export function NextGatheringCard() {
     return () => window.clearInterval(timer);
   }, [canRotate, isPaused, isInteracting, slideCount]);
 
-  // Changing slide clears any half-written form state so rotation resumes.
-  useEffect(() => {
-    setIsInteracting(false);
-  }, [index]);
-
   const mapsUrl = settings?.latitude && settings.longitude ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}` : null;
   const liveHref = gathering.active && settings?.live_service_active && settings.live_service_link ? settings.live_service_link : null;
   const actionHref = liveHref || (gathering.online ? settings?.midweek_vespers_link : mapsUrl);
   const gatheringLabel = gathering.active ? (gathering.name === "Sabbath program" ? "Sabbath program is ongoing" : `${gathering.name} is ongoing`) : (gathering.name === "Sabbath program" ? "Sabbath programs begin soon" : `${gathering.name} begins soon`);
   const joinOpen = gathering.online && gathering.active && Boolean(actionHref);
-  const actionType = current?.action_type || "acknowledge";
+  const actionType = current?.action_type || "none";
+  const isContributionAction = actionType !== "none" && actionType !== "respond";
+
+  function dismissCurrentAnnouncement() {
+    if (!current) return;
+    localStorage.setItem(`announcement-handled-${current.id}`, "true");
+    setAnnouncements((prev) => prev.filter((item) => item.id !== current.id));
+    setSlide(0);
+    setIsInteracting(false);
+  }
 
   async function handleActionSubmit(event: FormEvent) {
     event.preventDefault();
@@ -237,13 +241,12 @@ export function NextGatheringCard() {
             <div className="rounded-xl bg-white/70 p-3 text-center text-sm font-semibold text-[#3d5148]">{successMessage}</div>
           ) : (
             <form onSubmit={handleActionSubmit} className="space-y-3">
-              {actionType === "pledge" && (
+              {isContributionAction && (
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Pledge Amount (KES)</label>
+                  <label className="block text-xs font-semibold text-[#26352f]">Contribution Amount (KES)</label>
                   <input
                     type="number"
                     min="1"
-                    required
                     placeholder="e.g. 5000"
                     value={pledgeAmount}
                     onChange={(event) => { setIsInteracting(true); setPledgeAmount(event.target.value); }}
@@ -256,7 +259,6 @@ export function NextGatheringCard() {
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">{current.action_prompt || "Your Response"}</label>
                   <textarea
-                    required
                     rows={2}
                     placeholder="Write your response..."
                     value={responseText}
@@ -266,7 +268,7 @@ export function NextGatheringCard() {
                 </div>
               )}
 
-              {(actionType === "pledge" || actionType === "respond") && (
+              {(isContributionAction || actionType === "respond") && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="text"
@@ -293,13 +295,16 @@ export function NextGatheringCard() {
                   disabled={submitting}
                   className="rounded-full bg-[#b36b3c] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[#96552e] disabled:opacity-60"
                 >
-                  {submitting ? "Submitting..." : actionType === "pledge" ? "Submit Pledge" : actionType === "respond" ? "Send Response" : "Acknowledge"}
+                  {submitting ? "Submitting..." : isContributionAction ? "Submit Contribution Action" : actionType === "respond" ? "Send Response" : "Done"}
                 </button>
-                {current.href && (
-                  <a href={current.href} target="_blank" rel="noopener noreferrer" className="rounded-full border border-[#a9bcae] px-4 py-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]">
-                    Learn More &rarr;
-                  </a>
-                )}
+                <button
+                  type="button"
+                  onClick={dismissCurrentAnnouncement}
+                  disabled={submitting}
+                  className="rounded-full border border-[#a9bcae] px-4 py-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+                >
+                  Dismiss
+                </button>
               </div>
             </form>
           )

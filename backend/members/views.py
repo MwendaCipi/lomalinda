@@ -79,10 +79,31 @@ def render_receipt_message(template, donor_name, amount_display, purpose):
     purpose. Both spellings are filled; anything left brace-wrapped
     (a typo, a future placeholder) is stripped rather than shipped raw.
     """
-    message = (template or '').replace('{name}', donor_name)
-    message = message.replace('{amount}', amount_display)
-    message = message.replace('{account}', purpose).replace('{purpose}', purpose)
-    return re.sub(r'\{[a-z_]+\}', '', message).strip()
+    message = template or ''
+    replacements = {
+        'name': donor_name,
+        'amount': amount_display,
+        'account': purpose,
+        'purpose': purpose,
+    }
+    for key, value in replacements.items():
+        message = message.replace(f'{{{key}}}', value).replace(f'{{{key})', value)
+    return re.sub(r'\{[a-z_]+[})]', '', message).strip()
+
+
+def receipt_email_signature():
+    return "Warm regards,\nTreasury,\nSDA Church Loma Linda, Meru"
+
+
+def receipt_summary(*, account, amount, payment_channel, receipt_ref, date_display):
+    return (
+        "Receipt Summary:\n"
+        f"Account: {account}\n"
+        f"Amount: {amount}\n"
+        f"Payment Channel: {payment_channel}\n"
+        f"Receipt No: {receipt_ref}\n"
+        f"Date: {date_display}"
+    )
 
 
 def send_enrollment_email(enrollment):
@@ -263,31 +284,21 @@ def send_contribution_receipt(contribution):
 
     church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
     local_now = timezone.localtime()
-    if local_now.weekday() == 5:
-        greeting = 'Happy Sabbath'
-    elif local_now.hour < 12:
-        greeting = 'Good morning'
-    elif local_now.hour < 18:
-        greeting = 'Good afternoon'
-    else:
-        greeting = 'Good evening'
-
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
     donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
-    church_name = current_church_name()
+    amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
     receipt_message = render_receipt_message(
         church_settings.default_receipt_message,
         donor_name,
-        f"{contribution.currency} {contribution.amount:,.2f}",
+        amount_display,
         contribution.purpose,
     )
+    date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')
     body = (
-        f"{greeting} {donor_name},\n\n"
+        f"Dear {donor_name},\n\n"
         f"{receipt_message}\n\n"
-        f"Receipt reference: {receipt_reference}\n"
-        f"Payment method: {contribution.get_payment_method_display()}\n"
-        f"Date received: {timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')}\n\n"
-        f"Warm regards,\n{church_name}"
+        f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
+        f"{receipt_email_signature()}"
     )
     email = contribution.donor_email or (contribution.member.email if contribution.member else '')
     delivery = _deliver_receipt_message(
@@ -308,17 +319,17 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
     donor_name = cash.donor_name.strip() or 'friend'
+    amount_display = f"KES {cash.amount:,.2f}"
     message = render_receipt_message(
         settings_obj.default_receipt_message,
         donor_name,
-        f"KES {cash.amount:,.2f}",
+        amount_display,
         cash.purpose,
     )
     body = (
         f"Dear {donor_name},\n\n{message}\n\n"
-        f"Receipt reference: {cash.receipt_number or f'CASH-{cash.id}'}\n"
-        f"Payment method: {cash.get_payment_method_display()}\n"
-        f"Date received: {cash.received_on}\n\nWarm regards,\n{current_church_name()}"
+        f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel=cash.get_payment_method_display(), receipt_ref=cash.receipt_number or f'CASH-{cash.id}', date_display=cash.received_on)}\n\n"
+        f"{receipt_email_signature()}"
     )
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {cash.purpose}",
@@ -1074,7 +1085,7 @@ class AnnouncementView(generics.ListCreateAPIView):
             queryset = queryset.filter(created_at__date__lte=end_date)
         if self.request.user.is_authenticated:
             return queryset
-        return queryset.filter(visibility='public')
+        return queryset.filter(visibility__in=['public', 'all'])
 
     def perform_create(self, serializer):
         if getattr(getattr(self.request.user, 'member_profile', None), 'role', '') not in ('admin', 'leader'):
@@ -1716,8 +1727,6 @@ class ResendContributionReceiptView(APIView):
         # get_or_create guarantees a settings row exists — first() could
         # return None on a fresh tenant and crash the attribute reads below.
         church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
-        church_name = church_settings.church_name or CHURCH_DEFAULT_NAME
-
         now = timezone.now()
         sent_destinations = []
 
@@ -1733,16 +1742,12 @@ class ResendContributionReceiptView(APIView):
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if email:
+                amount_display = f"KES {contribution.amount:,.2f}"
                 body = (
                     f"Dear {donor_name},\n\n"
-                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, f'KES {contribution.amount:,.2f}', contribution.purpose)}\n\n"
-                    f"Receipt Summary:\n"
-                    f"Account: {contribution.purpose}\n"
-                    f"Amount: KES {contribution.amount:,.2f}\n"
-                    f"Payment Channel: {contribution.get_payment_method_display()}\n"
-                    f"Receipt No: {receipt_ref}\n"
-                    f"Date: {timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y')}\n\n"
-                    f"Warm regards,\n{church_name_plain(church_name)} Treasury"
+                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)}\n\n"
+                    f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
+                    f"{receipt_email_signature()}"
                 )
                 try:
                     send_mail(
@@ -1771,16 +1776,12 @@ class ResendContributionReceiptView(APIView):
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if email:
+                amount_display = f"KES {cash.amount:,.2f}"
                 body = (
                     f"Dear {donor_name},\n\n"
-                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, f'KES {cash.amount:,.2f}', cash.purpose)}\n\n"
-                    f"Receipt Summary:\n"
-                    f"Account: {cash.purpose}\n"
-                    f"Amount: KES {cash.amount:,.2f}\n"
-                    f"Payment Channel: Cash\n"
-                    f"Receipt No: {receipt_ref}\n"
-                    f"Date: {cash.received_on}\n\n"
-                    f"Warm regards,\n{church_name_plain(church_name)} Treasury"
+                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, cash.purpose)}\n\n"
+                    f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel='Cash', receipt_ref=receipt_ref, date_display=cash.received_on)}\n\n"
+                    f"{receipt_email_signature()}"
                 )
                 try:
                     send_mail(
@@ -2662,11 +2663,10 @@ def broadcast_campaign_message(campaign, custom_message=None):
         title=f"Campaign: {campaign.title or campaign.name}",
         text=msg_text,
         detail=campaign.description or f"Campaign period: {campaign.start_date} to {campaign.end_date or 'Ongoing'}. Goal: KES {campaign.target_amount:,.2f}",
-        href=f"/campaigns/{campaign.id}",
         visibility='members',
-        action_type='pledge',
+        action_type='camp_goal',
         is_popup=True,
-        action_prompt=f"Pledge or give towards {campaign.account_name or campaign.name}",
+        action_prompt=f"Give towards {campaign.account_name or campaign.name}",
         published=True,
         expires_at=campaign.end_date,
     )

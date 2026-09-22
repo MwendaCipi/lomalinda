@@ -21,7 +21,7 @@ type Announcement = {
   detail?: string;
   href?: string;
   visibility: string;
-  action_type: "acknowledge" | "pledge" | "respond";
+  action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup: boolean;
   action_prompt?: string;
   published: boolean;
@@ -40,11 +40,10 @@ export function PopupAnnouncementModal() {
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(() => typeof window !== "undefined" && Boolean(localStorage.getItem("access_token")));
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    if (token) setIsLoggedIn(true);
 
     fetch(`${API_URL}/api/members/announcements/`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -68,7 +67,17 @@ export function PopupAnnouncementModal() {
 
   if (pathname === "/" || !current) return null;
 
-  const actionType = current.action_type || "acknowledge";
+  const actionType = current.action_type || "none";
+  const isContributionAction = actionType !== "none" && actionType !== "respond";
+  const actionLabel = actionType.replaceAll("_", " ");
+
+  function dismissCurrent() {
+    if (!current) return;
+    localStorage.setItem(`announcement-handled-${current.id}`, "true");
+    const remaining = queue.filter((item) => item.id !== current.id);
+    setQueue(remaining);
+    setCurrent(remaining.length > 0 ? remaining[0] : null);
+  }
 
   async function handleActionSubmit(e: FormEvent) {
     e.preventDefault();
@@ -157,28 +166,27 @@ export function PopupAnnouncementModal() {
         <form onSubmit={handleActionSubmit} className="mt-6 space-y-4">
           <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#fbf6f0] p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">
-              {actionType === "pledge" && "Action Required: Make a Pledge"}
-              {actionType === "respond" && "Action Required: Respond / Provide Feedback"}
-              {actionType === "acknowledge" && "Action Required: Acknowledge Announcement"}
+              {isContributionAction && `User Action: ${actionLabel} Contribution`}
+              {actionType === "respond" && "User Action: Response"}
+              {actionType === "none" && "No Action Required"}
             </p>
             <p className="mt-1 text-xs text-[#617068]">
               {current.action_prompt ||
-                (actionType === "pledge"
-                  ? "Please enter your pledge amount to dismiss this announcement."
+                (isContributionAction
+                  ? "You may enter a contribution amount, or dismiss this announcement."
                   : actionType === "respond"
-                  ? "Please enter your response to dismiss this announcement."
-                  : "Please acknowledge reading this announcement to proceed.")}
+                  ? "You may enter your response, or dismiss this announcement."
+                  : "You can dismiss this announcement when you are done reading.")}
             </p>
 
-            {actionType === "pledge" && (
+            {isContributionAction && (
               <div className="mt-3 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">
-                    Pledge Amount (KES) <span className="text-red-500">*</span>
+                    Contribution Amount (KES)
                   </label>
                   <input
                     type="number"
-                    required
                     min="1"
                     placeholder="e.g. 1000"
                     value={pledgeAmount}
@@ -193,10 +201,9 @@ export function PopupAnnouncementModal() {
               <div className="mt-3 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">
-                    Your Response <span className="text-red-500">*</span>
+                    Your Response
                   </label>
                   <textarea
-                    required
                     rows={3}
                     placeholder="Type your message, response, or commitment..."
                     value={responseText}
@@ -207,7 +214,7 @@ export function PopupAnnouncementModal() {
               </div>
             )}
 
-            {!isLoggedIn && actionType !== "acknowledge" && (
+            {!isLoggedIn && actionType !== "none" && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">
@@ -243,18 +250,26 @@ export function PopupAnnouncementModal() {
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
+              type="button"
+              onClick={dismissCurrent}
+              disabled={submitting}
+              className="rounded-2xl border border-[#c9c5bb] bg-white px-5 py-3.5 text-sm font-semibold text-[#617068] transition hover:border-[#b36b3c]"
+            >
+              Dismiss
+            </button>
+            <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-2xl bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#96552e] disabled:opacity-50"
+              className="flex-1 rounded-2xl bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#96552e] disabled:opacity-50"
             >
               {submitting ? (
                 "Submitting..."
-              ) : actionType === "pledge" ? (
-                "Submit Pledge & Continue"
+              ) : isContributionAction ? (
+                "Submit Contribution Action"
               ) : actionType === "respond" ? (
                 "Submit Response & Continue"
               ) : (
-                "Acknowledge & Continue"
+                "Done"
               )}
             </button>
           </div>

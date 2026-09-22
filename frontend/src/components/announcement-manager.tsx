@@ -10,8 +10,9 @@ type Announcement = {
   title: string;
   text: string;
   href?: string;
+  attachment?: string | null;
   visibility: string;
-  action_type?: "acknowledge" | "pledge" | "respond";
+  action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   sharing_option?: string;
   action_prompt?: string;
   expires_at?: string | null;
@@ -27,13 +28,13 @@ export function AnnouncementManager() {
   const [form, setForm] = useState({
     title: "",
     text: "",
-    href: "",
     visibility: "public",
-    action_type: "acknowledge",
+    action_type: "none",
     sharing_option: "site",
     action_prompt: "",
     expires_at: "",
   });
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSharingDropdown, setShowSharingDropdown] = useState(false);
@@ -62,7 +63,8 @@ export function AnnouncementManager() {
   }
 
   useEffect(() => {
-    fetchAnnouncements();
+    const timer = window.setTimeout(fetchAnnouncements, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function handleDelete(id: number, title: string) {
@@ -90,13 +92,13 @@ export function AnnouncementManager() {
     setForm({
       title: "",
       text: "",
-      href: "",
       visibility: "public",
-      action_type: "acknowledge",
+      action_type: "none",
       sharing_option: "site",
       action_prompt: "",
       expires_at: "",
     });
+    setAttachment(null);
     setMessage("");
     setShowCreateModal(false);
   }
@@ -112,17 +114,19 @@ export function AnnouncementManager() {
     setSubmitting(true);
     setMessage("");
     try {
-      const payload = {
-        ...form,
-        expires_at: form.expires_at ? form.expires_at : null,
-      };
+      const payload = new FormData();
+      Object.entries(form).forEach(([key, value]) => {
+        if (key === "expires_at" && !value) return;
+        payload.append(key, value);
+      });
+      payload.append("href", "");
+      if (attachment) payload.append("attachment", attachment);
       const response = await fetch(`${API_URL}/api/members/announcements/`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
-        body: JSON.stringify(payload),
+        body: payload,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Unable to post announcement.");
@@ -164,7 +168,7 @@ export function AnnouncementManager() {
             <div className="py-12 text-center">
               <span className="text-4xl">📢</span>
               <p className="mt-3 text-sm font-semibold text-[#26352f]">No announcements available.</p>
-              <p className="mt-1 text-xs text-[#617068]">Tap "Add Announcement" below to post your first announcement.</p>
+              <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
             </div>
           ) : (
             announcements.map((item) => (
@@ -199,9 +203,9 @@ export function AnnouncementManager() {
                       }).join(", ")}
                     </span>
                   )}
-                  {item.action_type && item.action_type !== "acknowledge" && (
+                  {item.action_type && item.action_type !== "none" && (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
-                      {item.action_type}
+                      {item.action_type.replaceAll("_", " ")}
                     </span>
                   )}
                 </div>
@@ -240,7 +244,7 @@ export function AnnouncementManager() {
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
                     <p className="text-sm font-semibold text-[#26352f]">No announcements available.</p>
-                    <p className="mt-1 text-xs text-[#617068]">Click "Add Announcement" below to post your first announcement.</p>
+                    <p className="mt-1 text-xs text-[#617068]">Click &quot;Add Announcement&quot; below to post your first announcement.</p>
                   </td>
                 </tr>
               ) : (
@@ -263,12 +267,12 @@ export function AnnouncementManager() {
                         : "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
-                      {item.action_type && item.action_type !== "acknowledge" ? (
+                      {item.action_type && item.action_type !== "none" ? (
                         <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 capitalize">
-                          {item.action_type}
+                          {item.action_type.replaceAll("_", " ")}
                         </span>
                       ) : (
-                        <span className="text-xs text-[#617068]">Acknowledge</span>
+                        <span className="text-xs text-[#617068]">None</span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-xs text-[#617068]">
@@ -378,7 +382,8 @@ export function AnnouncementManager() {
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 >
                   <option value="public">Public</option>
-                  <option value="members">Members only</option>
+                  <option value="members">Members</option>
+                  <option value="all">All</option>
                 </select>
               </label>
 
@@ -431,15 +436,20 @@ export function AnnouncementManager() {
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
-                Required User Action
+                User Action
                 <select
                   value={form.action_type}
                   onChange={(e) => setForm({ ...form, action_type: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 >
-                  <option value="acknowledge">Acknowledge (Read &amp; Confirm)</option>
-                  <option value="pledge">Pledge (Requires amount entry)</option>
-                  <option value="respond">Respond (Requires text message response)</option>
+                  <option value="none">None (dismiss only)</option>
+                  <option value="tithe">Tithe contribution</option>
+                  <option value="combined_offering">Combined Offering contribution</option>
+                  <option value="13th_sabbath">13th Sabbath contribution</option>
+                  <option value="camp_expenses">Camp Expenses contribution</option>
+                  <option value="camp_goal">Camp Goal contribution</option>
+                  <option value="local_church_budget">Local Church Budget contribution</option>
+                  <option value="respond">Response</option>
                 </select>
               </label>
 
@@ -454,12 +464,11 @@ export function AnnouncementManager() {
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
-                Link (optional)
+                Attachment (optional)
                 <input
-                  value={form.href}
-                  onChange={(e) => setForm({ ...form, href: e.target.value })}
-                  placeholder="e.g. /calendar"
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  type="file"
+                  onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 text-xs text-[#26352f] outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f] focus:border-[#b36b3c]"
                 />
               </label>
 
@@ -468,7 +477,7 @@ export function AnnouncementManager() {
                 <input
                   value={form.action_prompt}
                   onChange={(e) => setForm({ ...form, action_prompt: e.target.value })}
-                  placeholder="e.g. 'Enter your building project pledge amount' or 'Share your feedback'"
+                  placeholder="e.g. 'Enter your contribution amount' or 'Share your feedback'"
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
               </label>

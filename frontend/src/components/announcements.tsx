@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-type Announcement = { title: string; text: string; href: string; visibility: string };
+type Announcement = { title: string; text: string; visibility: string };
 
 export function AnnouncementBanner({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
@@ -49,7 +48,6 @@ export function AnnouncementBanner({ compact = false }: { compact?: boolean }) {
           <p className={compact ? "truncate text-sm text-white/90" : "mt-1 text-sm leading-6 text-[#617068]"}><span className="font-semibold text-inherit">{announcement.title}: </span>{announcement.text}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <Link href={announcement.href || "/announcements"} className={compact ? "text-xs font-semibold text-[#f1c89e] hover:underline" : "hidden text-sm font-semibold text-[#b36b3c] hover:underline sm:inline"}>Learn more &rarr;</Link>
           <button type="button" aria-label="Dismiss announcements" onClick={() => { sessionStorage.setItem("announcement-banner-dismissed", "true"); window.dispatchEvent(new Event("announcement-banner-dismissed")); }} className={compact ? "rounded-full p-1 text-white/70 hover:bg-white/10 hover:text-white" : "rounded-full p-1 text-[#617068] hover:bg-black/5 hover:text-[#26352f]"}><span aria-hidden="true" className="text-lg leading-none">×</span></button>
         </div>
       </div>

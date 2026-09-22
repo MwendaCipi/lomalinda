@@ -183,15 +183,25 @@ class Invitation(models.Model):
 
 
 class Announcement(models.Model):
-    VISIBILITY_CHOICES = [('public', 'Public'), ('members', 'Members only')]
-    ACTION_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]
+    VISIBILITY_CHOICES = [('members', 'Members'), ('public', 'Public'), ('all', 'All')]
+    ACTION_CHOICES = [
+        ('none', 'None'),
+        ('tithe', 'Tithe'),
+        ('combined_offering', 'Combined Offering'),
+        ('13th_sabbath', '13th Sabbath'),
+        ('camp_expenses', 'Camp Expenses'),
+        ('camp_goal', 'Camp Goal'),
+        ('local_church_budget', 'Local Church Budget'),
+        ('respond', 'Response'),
+    ]
     SHARING_CHOICES = [('site', 'On the Site'), ('sms', 'Through SMS'), ('email', 'Through Email'), ('all', 'All')]
     title = models.CharField(max_length=160)
     text = models.TextField()
     detail = models.TextField(blank=True)
     href = models.CharField(max_length=255, blank=True)
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
-    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES, default='acknowledge')
+    action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, default='none')
+    attachment = models.FileField(upload_to='announcement-attachments/', blank=True, null=True)
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
     is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")
     action_prompt = models.CharField(max_length=255, blank=True, help_text="Optional prompt for pledge or response")
@@ -207,10 +217,10 @@ class Announcement(models.Model):
 
 
 class AnnouncementResponse(models.Model):
-    ACTION_TYPE_CHOICES = [('acknowledge', 'Acknowledge'), ('pledge', 'Pledge'), ('respond', 'Respond')]
+    ACTION_TYPE_CHOICES = Announcement.ACTION_CHOICES
     announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='responses')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='announcement_responses')
-    action_type = models.CharField(max_length=20, choices=ACTION_TYPE_CHOICES)
+    action_type = models.CharField(max_length=40, choices=ACTION_TYPE_CHOICES)
     pledge_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     response_text = models.TextField(blank=True)
     respondent_name = models.CharField(max_length=120, blank=True)
@@ -602,7 +612,7 @@ class ChurchSettings(models.Model):
     clarion_call_heading = models.TextField(default='A place to belong.\nA faith to share.\nA hope that transforms lives.')
     clarion_call_subtext = models.TextField(default="Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
     RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]
-    default_receipt_message = models.TextField(default="Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!", blank=True)
+    default_receipt_message = models.TextField(default="your contribution of {amount} has been received. Thank you, and may God bless you abundantly", blank=True)
     receipt_delivery_method = models.CharField(max_length=10, choices=RECEIPT_DELIVERY_CHOICES, default='email')
     default_business_meeting_invitation_message = models.TextField(
         default="Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!",
