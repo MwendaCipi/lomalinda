@@ -270,7 +270,7 @@ def send_contribution_receipt(contribution):
         subject=f"Giving receipt — {contribution.purpose}",
         body=body,
         email=contribution.donor_email,
-        phone=contribution.phone_number,
+        phone='',
         mark_sent=lambda: None,
     ):
         contribution.receipt_sent_at = timezone.now()
@@ -295,7 +295,7 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         subject=f"Giving receipt — {cash.purpose}",
         body=body,
         email=cash.giver_email if send_email else '',
-        phone=cash.giver_phone if send_sms else '',
+        phone='',
         mark_sent=lambda: None,
     )
     if sent:
@@ -1361,8 +1361,8 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
                 ensure_giver_profile(cash.donor_name, cash.giver_phone, cash.giver_email)
             send_cash_receipt(
                 cash,
-                send_sms=self.request.data.get('send_sms', True),
-                send_email=self.request.data.get('send_email', True),
+                send_sms=False,
+                send_email=True,
             )
         elif cash.entry_type == 'anonymous':
             if not cash.donor_name.strip():
@@ -1687,7 +1687,8 @@ class ResendContributionReceiptView(APIView):
             receipt_ref = contribution.mpesa_receipt_number or contribution.paystack_reference or f"REC-{contribution.id}"
             donor_name = contribution.donor_name or (contribution.member.get_full_name() if contribution.member else 'Church Member')
             email = contribution.donor_email or (contribution.member.email if contribution.member else '')
-            phone = contribution.phone_number
+            if not email:
+                return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if email:
                 body = (
@@ -1707,14 +1708,11 @@ class ResendContributionReceiptView(APIView):
                         body,
                         settings.DEFAULT_FROM_EMAIL,
                         [email],
-                        fail_silently=True,
+                        fail_silently=False,
                     )
                     sent_destinations.append(f"Email ({email})")
                 except Exception:
-                    pass
-
-            if phone:
-                sent_destinations.append(f"SMS ({phone})")
+                    return Response({'detail': 'The receipt email could not be sent. Check the email configuration and address.'}, status=status.HTTP_502_BAD_GATEWAY)
 
             contribution.receipt_sent_at = now
             contribution.save(update_fields=['receipt_sent_at'])
@@ -1727,7 +1725,8 @@ class ResendContributionReceiptView(APIView):
             receipt_ref = cash.receipt_number or f"CASH-{cash.id}"
             donor_name = cash.donor_name or 'Church Member'
             email = cash.giver_email
-            phone = cash.giver_phone
+            if not email:
+                return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if email:
                 body = (
@@ -1747,14 +1746,11 @@ class ResendContributionReceiptView(APIView):
                         body,
                         settings.DEFAULT_FROM_EMAIL,
                         [email],
-                        fail_silently=True,
+                        fail_silently=False,
                     )
                     sent_destinations.append(f"Email ({email})")
                 except Exception:
-                    pass
-
-            if phone:
-                sent_destinations.append(f"SMS ({phone})")
+                    return Response({'detail': 'The receipt email could not be sent. Check the email configuration and address.'}, status=status.HTTP_502_BAD_GATEWAY)
 
             cash.receipt_sent_at = now
             cash.save(update_fields=['receipt_sent_at'])

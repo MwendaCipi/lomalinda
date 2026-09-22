@@ -102,9 +102,6 @@ export default function ReconciliationPage() {
   const [entryType, setEntryType] = useState<"individual" | "anonymous" | "collection">("individual");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [itemDescription, setItemDescription] = useState("");
-  const [sendAsOpen, setSendAsOpen] = useState(false);
-  const [sendSms, setSendSms] = useState(true);
-  const [sendEmail, setSendEmail] = useState(true);
   const [customPurpose, setCustomPurpose] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
   const [isCustomMessage, setIsCustomMessage] = useState(false);
@@ -349,8 +346,8 @@ export default function ReconciliationPage() {
         amount: cashForm.amount,
         purpose: finalPurpose,
         received_on: receiptDate,
-        send_sms: entryType === "individual" ? sendSms : false,
-        send_email: entryType === "individual" ? sendEmail : false,
+        send_sms: false,
+        send_email: entryType === "individual",
       })
     });
     setSaving(false);
@@ -362,9 +359,6 @@ export default function ReconciliationPage() {
     setCustomPurpose("");
     setReceiptMessage("");
     setIsCustomMessage(false);
-    setSendSms(true);
-    setSendEmail(true);
-    setSendAsOpen(false);
     setIsModalOpen(false);
     setMessage("Receipt saved successfully.");
     await load(nextFrom, nextTo);
@@ -1462,49 +1456,9 @@ export default function ReconciliationPage() {
                     />
                   </label>
 
-                  {/* Send Receipt Through Combobox */}
-                  <div className="relative text-sm font-medium text-[#26352f]">
-                    <span>Send receipt through</span>
-                    <button
-                      type="button"
-                      onClick={() => setSendAsOpen(!sendAsOpen)}
-                      className="mt-1 flex w-full items-center justify-between rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
-                    >
-                      <span>
-                        {sendSms && sendEmail
-                          ? "SMS & Email"
-                          : sendSms
-                          ? "SMS"
-                          : sendEmail
-                          ? "Email"
-                          : "None"}
-                      </span>
-                      <ChevronDown className="h-4 w-4 text-[#617068]" />
-                    </button>
-
-                    {sendAsOpen && (
-                      <div className="absolute left-0 top-full z-20 mt-1.5 w-full rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-lg space-y-2.5 animate-in fade-in duration-150">
-                        <label className="flex items-center gap-3 cursor-pointer text-sm font-medium text-[#26352f]">
-                          <input
-                            type="checkbox"
-                            checked={sendSms}
-                            onChange={(e) => setSendSms(e.target.checked)}
-                            className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
-                          />
-                          <span>SMS</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer text-sm font-medium text-[#26352f]">
-                          <input
-                            type="checkbox"
-                            checked={sendEmail}
-                            onChange={(e) => setSendEmail(e.target.checked)}
-                            className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
-                          />
-                          <span>Email</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
+                  <p className="rounded-xl bg-[#f4f7f4] px-3 py-2 text-xs text-[#617068]">
+                    The receipt will be sent by email.
+                  </p>
                 </>
               )}
 
