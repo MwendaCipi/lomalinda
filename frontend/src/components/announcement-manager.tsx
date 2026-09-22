@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -172,18 +173,46 @@ export function AnnouncementManager() {
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* Mobile Cards View scroll within the card on phones */}
-        <div className="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain md:hidden divide-y divide-[#eeeae2]">
-          {loadingList ? (
-            <p className="py-12 text-center text-sm text-[#617068]">Loading announcements...</p>
-          ) : announcements.length === 0 ? (
-            <div className="py-12 text-center">
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        <RecordList
+          rows={announcements}
+          loading={loadingList}
+          rowKey={(item) => item.id}
+          tableWrapperClassName="min-h-0 flex-1 overflow-auto custom-table-scrollbar"
+          tableClassName="w-full text-left text-sm"
+          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+          headRowClassName=""
+          headCellClassName=""
+          headers={[
+            { label: "#", className: "w-12 px-4 py-3 text-left" },
+            { label: "Title", className: "px-4 py-3" },
+            { label: "Announcement", className: "px-4 py-3" },
+            { label: "Visibility", className: "px-4 py-3" },
+            { label: "Channels", className: "px-4 py-3" },
+            { label: "Action", className: "px-4 py-3" },
+            { label: "Posted", className: "px-4 py-3" },
+            { label: "Display Until", className: "px-4 py-3" },
+            { label: "Actions", className: "px-4 py-3 text-center" },
+          ]}
+          loadingLabel="Loading announcements..."
+          stateClassName="px-4 py-12 text-center text-[#617068]"
+          tableEmptyClassName="px-4 py-12 text-center"
+          tableEmpty={
+            <>
+              <p className="text-sm font-semibold text-[#26352f]">No announcements available.</p>
+              <p className="mt-1 text-xs text-[#617068]">Click &quot;Add Announcement&quot; below to post your first announcement.</p>
+            </>
+          }
+          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsEmpty={
+            <>
               <span className="text-4xl">📢</span>
               <p className="mt-3 text-sm font-semibold text-[#26352f]">No announcements available.</p>
               <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
-            </div>
-          ) : (
-            announcements.map((item) => (
+            </>
+          }
+          cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain divide-y divide-[#eeeae2]"
+          renderCard={(item) => (
               <article key={item.id} className="space-y-2.5 bg-[#faf7f2] p-4 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
@@ -234,40 +263,8 @@ export function AnnouncementManager() {
                   </p>
                 )}
               </article>
-            ))
-          )}
-        </div>
-
-        {/* Desktop Table View */}
-        <div className="hidden min-h-0 flex-1 overflow-auto custom-table-scrollbar md:block">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
-              <tr>
-                <th className="w-12 px-4 py-3 text-left">#</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Announcement</th>
-                <th className="px-4 py-3">Visibility</th>
-                <th className="px-4 py-3">Channels</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Posted</th>
-                <th className="px-4 py-3">Display Until</th>
-                <th className="px-4 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eeeae2]">
-              {loadingList ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-[#617068]">Loading announcements...</td>
-                </tr>
-              ) : announcements.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
-                    <p className="text-sm font-semibold text-[#26352f]">No announcements available.</p>
-                    <p className="mt-1 text-xs text-[#617068]">Click &quot;Add Announcement&quot; below to post your first announcement.</p>
-                  </td>
-                </tr>
-              ) : (
-                announcements.map((item, idx) => (
+            )}
+          renderRow={(item, idx) => (
                   <tr key={item.id} className="align-top hover:bg-[#faf7f2]">
                     <td className="px-4 py-3.5 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
                     <td className="min-w-[160px] px-4 py-3.5 font-bold text-[#26352f]">{item.title}</td>
@@ -325,11 +322,8 @@ export function AnnouncementManager() {
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+          />
 
         {/* Sticky Footer */}
         <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">

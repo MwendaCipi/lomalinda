@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark } from "lucide-react";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -244,18 +245,44 @@ export function TreasuryAccountsManager() {
 
       {/* Church Accounts — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* Mobile Cards View */}
-        <div className="md:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar">
-          {loading ? (
-            <div className="py-12 text-center text-sm text-[#617068]">Loading treasury accounts...</div>
-          ) : accounts.length === 0 ? (
-            <div className="py-12 text-center">
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        <RecordList
+          rows={accounts}
+          loading={loading}
+          rowKey={(acc) => acc.id}
+          tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
+          tableClassName="w-full text-left text-sm"
+          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+          headRowClassName=""
+          headCellClassName=""
+          headers={[
+            { label: "#", className: "w-12 px-4 py-3 text-left" },
+            { label: "Account", className: "px-4 py-3" },
+            { label: "Account No.", className: "px-4 py-3" },
+            { label: "Type", className: "px-4 py-3" },
+            { label: "Description", className: "px-4 py-3" },
+            { label: "Balance (KES)", className: "px-4 py-3 text-right" },
+            { label: "Actions", className: "px-4 py-3 text-center" },
+          ]}
+          loadingLabel="Loading treasury accounts..."
+          stateClassName="px-4 py-12 text-center text-[#617068]"
+          tableEmptyClassName="px-4 py-12 text-center"
+          tableEmpty={
+            <>
+              <p className="text-sm font-semibold text-[#26352f]">No Treasury Accounts configured yet.</p>
+              <p className="mt-1 text-xs text-[#617068]">Click "Add Account" below to set up bank, paybill, or cash accounts.</p>
+            </>
+          }
+          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsEmpty={
+            <>
               <Landmark className="mx-auto h-10 w-10 text-[#617068]" />
               <p className="mt-3 text-sm font-semibold text-[#26352f]">No Treasury Accounts configured yet.</p>
               <p className="mt-1 text-xs text-[#617068]">Tap "Add Account" below to set up bank, paybill, or cash accounts.</p>
-            </div>
-          ) : (
-            accounts.map((acc) => (
+            </>
+          }
+          cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
+          renderCard={(acc) => (
               <div key={acc.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -303,39 +330,8 @@ export function TreasuryAccountsManager() {
                     <span>Transfer</span>
                   </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Desktop Table View */}
-        <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
-              <tr>
-                <th className="w-12 px-4 py-3 text-left">#</th>
-                <th className="px-4 py-3">Account</th>
-                <th className="px-4 py-3">Account No.</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3 text-right">Balance (KES)</th>
-                <th className="px-4 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eeeae2]">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[#617068]">Loading treasury accounts...</td>
-                </tr>
-              ) : accounts.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <p className="text-sm font-semibold text-[#26352f]">No Treasury Accounts configured yet.</p>
-                    <p className="mt-1 text-xs text-[#617068]">Click "Add Account" below to set up bank, paybill, or cash accounts.</p>
-                  </td>
-                </tr>
-              ) : (
-                accounts.map((acc, idx) => (
+              </div>            )}
+          renderRow={(acc, idx) => (
                   <tr key={acc.id} className="hover:bg-[#faf7f2]">
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
                     <td className="px-4 py-3">
@@ -384,11 +380,8 @@ export function TreasuryAccountsManager() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+          />
 
         {/* Sticky Footer */}
         <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">

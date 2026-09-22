@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { AVAILABLE_GROUPS } from "./campaign-management";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -646,33 +647,31 @@ export function GivingPurposeManager() {
 
       {/* ── Scrollable table area ── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-3 custom-table-scrollbar">
-        {/* Desktop Table */}
-        <div className="hidden md:block">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-white border-b border-[#dfdbd1]">
-              <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
-                <th className="pb-3 font-bold w-8">#</th>
-                <th className="pb-3 font-bold">Account</th>
-                <th className="pb-3 font-bold">Account Name</th>
-                <th className="pb-3 font-bold">From</th>
-                <th className="pb-3 font-bold">To</th>
-                <th className="pb-3 text-right font-bold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eeeae2]">
-              {loading ? (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">Loading accounts and drives...</td></tr>
-              ) : filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center">
-                    <p className="text-sm font-semibold text-[#26352f]">No giving accounts or fund drives yet</p>
-                    <p className="mt-1 text-xs text-[#617068]">
-                      Add an account or a drive using the buttons below, or load the standard defaults.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredRows.map((r, idx) =>
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        <RecordList
+          rows={filteredRows}
+          loading={loading}
+          rowKey={(r) => (r.kind === "drive" ? `drive-${r.drive.id}` : `purpose-${r.purpose.id}`)}
+          headers={[
+            { label: "#", className: "w-8" },
+            { label: "Account" },
+            { label: "Account Name" },
+            { label: "From" },
+            { label: "To" },
+            { label: "Actions", className: "text-right" },
+          ]}
+          loadingLabel="Loading accounts and drives..."
+          tableEmptyClassName="py-10 text-center"
+          tableEmpty={
+            <>
+              <p className="text-sm font-semibold text-[#26352f]">No giving accounts or fund drives yet</p>
+              <p className="mt-1 text-xs text-[#617068]">
+                Add an account or a drive using the buttons below, or load the standard defaults.
+              </p>
+            </>
+          }
+          cardsEmpty="No giving accounts or fund drives yet."
+          renderRow={(r, idx) =>
                   r.kind === "drive" ? (
                     <tr key={`drive-${r.drive.id}`} className="hover:bg-[#f7f4ee]">
                       <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
@@ -799,20 +798,8 @@ export function GivingPurposeManager() {
                       </td>
                     </tr>
                   )
-                )
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Cards scroll within the shared table area on phones */}
-        <div className="grid gap-3 md:hidden">
-          {loading ? (
-            <div className="py-8 text-center text-xs text-[#617068]">Loading accounts and drives...</div>
-          ) : filteredRows.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[#617068]">No giving accounts or fund drives yet.</div>
-          ) : (
-            filteredRows.map((r) =>
+          }
+          renderCard={(r) =>
               r.kind === "drive" ? (
                 <div key={`drive-${r.drive.id}`} className="space-y-2 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -882,9 +869,8 @@ export function GivingPurposeManager() {
                   </div>
                 </div>
               )
-            )
-          )}
-        </div>
+            }
+          />
       </div>
 
       {/* ── Bottom bar: Add buttons ── */}

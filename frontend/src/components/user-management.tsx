@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RolesCombobox, formatRoles, heldSystemRoles, SYSTEM_ROLE_HELP } from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -1612,26 +1613,24 @@ export function UserManagement() {
           </div>
         )}
 
-        {/* Desktop Table */}
-        <div className={invitationFilter === "pending" ? "hidden" : "hidden md:block"}>
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-white border-b border-[#dfdbd1]">
-              <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
-                <th className="pb-3 font-bold w-8">#</th>
-                <th className="pb-3 font-bold">Name</th>
-                <th className="pb-3 font-bold">Contact</th>
-                <th className="pb-3 font-bold">Role</th>
-                <th className="pb-3 font-bold">Sex</th>
-                <th className="pb-3 text-right font-bold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eeeae2]">
-              {loading ? (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">Loading members...</td></tr>
-              ) : filteredMembers.length === 0 ? (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">No members found matching your search.</td></tr>
-              ) : (
-                filteredMembers.map((m, idx) => (
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        <RecordList
+          rows={filteredMembers}
+          loading={loading}
+          rowKey={(m) => m.id}
+          hidden={invitationFilter === "pending"}
+          headers={[
+            { label: "#", className: "w-8" },
+            { label: "Name" },
+            { label: "Contact" },
+            { label: "Role" },
+            { label: "Sex" },
+            { label: "Actions", className: "text-right" },
+          ]}
+          loadingLabel="Loading members..."
+          tableEmpty="No members found matching your search."
+          cardsEmpty="No members found."
+          renderRow={(m, idx) => (
                   <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""}`}>
                     <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
                     <td className="py-3 font-semibold text-[#26352f]">
@@ -1708,20 +1707,8 @@ export function UserManagement() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Cards scroll inside the shared scrollable area (no page scroll on phones) */}
-        <div className={invitationFilter === "pending" ? "hidden" : "grid gap-3 md:hidden"}>
-          {loading ? (
-            <div className="py-8 text-center text-xs text-[#617068]">Loading members...</div>
-          ) : filteredMembers.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[#617068]">No members found.</div>
-          ) : (
-            filteredMembers.map((m) => {
+                )}
+          renderCard={(m) => {
               const name = m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
               const contact = m.phone_number || m.email || "—";
               return (
@@ -1753,9 +1740,8 @@ export function UserManagement() {
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            }}
+          />
       </div>
 
       {/* ── Bottom bar: Print + Add ── */}

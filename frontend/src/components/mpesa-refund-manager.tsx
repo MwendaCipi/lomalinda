@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -213,17 +214,37 @@ export function MpesaRefundManager() {
           </span>
         </div>
 
-        {/* Mobile Cards View */}
-        <div className="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 md:hidden">
-          {loading ? (
-            <div className="py-12 text-center text-sm text-[#617068]">Loading contributions...</div>
-          ) : contributions.length === 0 ? (
-            <div className="py-12 text-center">
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        <RecordList
+          rows={contributions}
+          loading={loading}
+          rowKey={(c) => c.id}
+          tableWrapperClassName="custom-table-scrollbar min-h-0 flex-1 overflow-auto"
+          tableClassName="w-full text-left text-sm"
+          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+          headRowClassName=""
+          headCellClassName=""
+          headers={[
+            { label: "#", className: "w-12 px-4 py-3 text-left" },
+            { label: "Donor", className: "px-4 py-3" },
+            { label: "Account", className: "px-4 py-3" },
+            { label: "Phone", className: "px-4 py-3" },
+            { label: "Amount (KES)", className: "px-4 py-3 text-right" },
+            { label: "Paid At", className: "px-4 py-3" },
+            { label: "Action", className: "px-4 py-3 text-center" },
+          ]}
+          loadingLabel="Loading contributions..."
+          stateClassName="px-4 py-12 text-center text-sm text-[#617068]"
+          tableEmpty="No completed M-Pesa contributions yet."
+          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsEmpty={
+            <>
               <Receipt className="mx-auto h-10 w-10 text-[#617068]" />
               <p className="mt-3 text-sm font-semibold text-[#26352f]">No completed M-Pesa contributions yet.</p>
-            </div>
-          ) : (
-            contributions.map((c) => (
+            </>
+          }
+          cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
+          renderCard={(c) => (
               <div key={c.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -262,39 +283,8 @@ export function MpesaRefundManager() {
                   )}
                 </div>
               </div>
-            ))
-          )}
-        </div>
-
-        {/* Desktop Table View */}
-        <div className="custom-table-scrollbar hidden min-h-0 flex-1 overflow-auto md:block">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
-              <tr>
-                <th className="w-12 px-4 py-3 text-left">#</th>
-                <th className="px-4 py-3">Donor</th>
-                <th className="px-4 py-3">Account</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3 text-right">Amount (KES)</th>
-                <th className="px-4 py-3">Paid At</th>
-                <th className="px-4 py-3 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eeeae2]">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#617068]">
-                    Loading contributions...
-                  </td>
-                </tr>
-              ) : contributions.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#617068]">
-                    No completed M-Pesa contributions yet.
-                  </td>
-                </tr>
-              ) : (
-                contributions.map((c, idx) => (
+            )}
+          renderRow={(c, idx) => (
                   <tr key={c.id} className="transition hover:bg-[#faf7f2]">
                     <td className="px-4 py-3 text-xs text-[#617068]">{idx + 1}</td>
                     <td className="px-4 py-3">
@@ -324,11 +314,8 @@ export function MpesaRefundManager() {
                       )}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+          />
       </div>
 
       {/* Refund History */}
