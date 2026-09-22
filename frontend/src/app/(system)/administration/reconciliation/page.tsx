@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const financeRoles = ["finance", "treasurer", "admin", "leader"];
@@ -294,10 +295,10 @@ export default function ReconciliationPage() {
         });
       } else {
         const errData = await res.json().catch(() => ({}));
-        setMessage(errData.detail || "Could not resend receipt.");
+        showAlert("Could not resend receipt", errData.detail || "The receipt could not be resent.", "error");
       }
     } catch {
-      setMessage("Network error. Please try again.");
+      showAlert("Could not resend receipt", "Network error. Please try again.", "error");
     } finally {
       setResendingId(null);
     }
