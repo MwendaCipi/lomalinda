@@ -103,8 +103,9 @@ export default function ReconciliationPage() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [itemDescription, setItemDescription] = useState("");
   const [sendAsOpen, setSendAsOpen] = useState(false);
-  const [sendSms, setSendSms] = useState(true);
-  const [sendEmail, setSendEmail] = useState(false);
+  const [receiptDeliveryMethod, setReceiptDeliveryMethod] = useState<"email" | "sms">("email");
+  const [sendSms, setSendSms] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
   const [customPurpose, setCustomPurpose] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
   const [isCustomMessage, setIsCustomMessage] = useState(false);
@@ -158,6 +159,10 @@ export default function ReconciliationPage() {
         if (data?.default_receipt_message) {
           setSettingsReceiptTemplate(data.default_receipt_message);
         }
+        const deliveryMethod = data?.receipt_delivery_method === "sms" ? "sms" : "email";
+        setReceiptDeliveryMethod(deliveryMethod);
+        setSendSms(deliveryMethod === "sms");
+        setSendEmail(deliveryMethod === "email");
       })
       .catch(() => undefined);
   }, []);
@@ -362,8 +367,8 @@ export default function ReconciliationPage() {
     setCustomPurpose("");
     setReceiptMessage("");
     setIsCustomMessage(false);
-    setSendSms(true);
-    setSendEmail(false);
+    setSendSms(receiptDeliveryMethod === "sms");
+    setSendEmail(receiptDeliveryMethod === "email");
     setSendAsOpen(false);
     setIsModalOpen(false);
     setMessage("Receipt saved successfully.");
