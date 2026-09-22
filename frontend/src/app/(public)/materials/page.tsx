@@ -126,7 +126,7 @@ function MaterialsContent() {
   const { heading, items } = itemsBySection[active];
 
   return (
-    <main className={signedIn ? "min-h-full bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+    <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
       <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">

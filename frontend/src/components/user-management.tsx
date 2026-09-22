@@ -1304,6 +1304,15 @@ export function UserManagement() {
     setOpenActionMenuId(id);
   };
 
+  const isSuperadminAccount = (member: MemberUser) => {
+    const username = (member.username || "").toLowerCase().replace(/[-_\s]/g, "");
+    const roleNames = (member.roles || []).map((role) => role.toLowerCase().replace(/[-_\s]/g, ""));
+    const role = (member.role || "").toLowerCase().replace(/[-_\s]/g, "");
+    return username === "superadmin" || role === "superadmin" || roleNames.includes("superadmin");
+  };
+
+  const visibleMembers = members.filter((member) => !isSuperadminAccount(member));
+
   const matchesMemberFilter = (member: MemberUser) => {
     if (memberFilter === "friends") return member.account_type === "friend" && !member.is_disfellowshipped;
     if (memberFilter === "members") return member.account_type !== "friend" && !member.is_disfellowshipped;
@@ -1313,7 +1322,7 @@ export function UserManagement() {
 
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
 
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = visibleMembers.filter((m) => {
     const query = search.toLowerCase();
     const matchesSearch =
       m.username.toLowerCase().includes(query) ||
@@ -1492,7 +1501,7 @@ export function UserManagement() {
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
           <h2 className="text-xl font-bold text-[#26352f]">Users</h2>
           <p className="text-xs text-[#617068]">
-            {members.length} records registered
+            {visibleMembers.length} records registered
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -1740,7 +1749,7 @@ export function UserManagement() {
       {/* ── Bottom bar: Print + Add ── */}
       <div className="shrink-0 border-t border-[#dfdbd1] bg-white px-6 py-3 flex items-center justify-between gap-3">
         <p className="text-[11px] text-[#617068]">
-          {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${members.length} confirmed records shown`}
+          {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
         </p>
         <div className="flex items-center gap-2">
           <button

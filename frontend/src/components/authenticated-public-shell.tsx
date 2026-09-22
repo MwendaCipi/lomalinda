@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AboutSidebar } from "./sidebars/about-sidebar";
 import { MaterialsSidebar } from "./sidebars/materials-sidebar";
 import { SupportSidebar } from "./sidebars/support-sidebar";
+import { RequestsSidebar } from "./sidebars/requests-sidebar";
 
 export function AuthenticatedPublicShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -17,7 +18,8 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
   const showSidebar = signedIn && (
     pathname.startsWith("/about") ||
     pathname.startsWith("/materials") ||
-    pathname.startsWith("/give")
+    pathname.startsWith("/give") ||
+    pathname.startsWith("/requests")
   );
 
   if (!showSidebar) {
@@ -28,7 +30,9 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
     ? AboutSidebar
     : pathname.startsWith("/materials")
       ? MaterialsSidebar
-      : SupportSidebar;
+      : pathname.startsWith("/requests")
+        ? RequestsSidebar
+        : SupportSidebar;
 
   return (
     <div className="authenticated-public-shell app-shell flex min-h-0 flex-1 overflow-hidden pb-24 md:pb-0">
