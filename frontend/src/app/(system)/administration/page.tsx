@@ -188,11 +188,9 @@ function AdministrationContent() {
 
             <div
               className={`flex-1 min-h-0 ${
-                activeTab === "users" ? "p-0 sm:p-6" : "p-4 sm:p-6"
-              } ${
                 tableContainedTabs.includes(activeTab)
-                  ? "overflow-hidden"
-                  : "overflow-y-auto custom-hover-scrollbar md:overflow-y-auto"
+                  ? "p-0 overflow-hidden"
+                  : "p-4 sm:p-6 overflow-y-auto custom-hover-scrollbar md:overflow-y-auto"
               }`}
             >
 
