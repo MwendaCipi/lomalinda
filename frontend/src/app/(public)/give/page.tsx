@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SlidersHorizontal } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
@@ -91,7 +90,10 @@ function GivePageContent() {
   const [fromDate, setFromDate] = useState(firstSabbathOfCurrentMonth);
   const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [givingSearch, setGivingSearch] = useState("");
-  const [givingPurposeFilter, setGivingPurposeFilter] = useState("all");
+  // Status filter replaces the old purpose dropdown: Successful by default,
+  // with Failed and All for reviewing attempts that never completed. Purpose
+  // filtering is covered by the search box, which matches purpose text.
+  const [givingStatusFilter, setGivingStatusFilter] = useState<"successful" | "failed" | "all">("successful");
 
   const loadMyGivings = () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -114,13 +116,13 @@ function GivePageContent() {
 
   const givingDateOf = (g: MyGiving) => (g.paid_at || g.created_at || "").slice(0, 10);
 
-  const myPurposes = Array.from(new Set(myGivings.map((g) => g.purpose).filter(Boolean))).sort();
-
   const filteredGivings = myGivings.filter((g) => {
     const d = givingDateOf(g);
     if (fromDate && d && d < fromDate) return false;
     if (toDate && d && d > toDate) return false;
-    if (givingPurposeFilter !== "all" && g.purpose !== givingPurposeFilter) return false;
+    const status = (g.status || "").toLowerCase();
+    if (givingStatusFilter === "successful" && status !== "completed") return false;
+    if (givingStatusFilter === "failed" && status !== "failed" && status !== "cancelled") return false;
     const q = givingSearch.toLowerCase();
     if (q && !`${g.purpose} ${g.payment_method} ${g.mpesa_receipt_number || ""}`.toLowerCase().includes(q)) return false;
     return true;
@@ -298,7 +300,8 @@ function GivePageContent() {
     <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
       <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
-            <h1 className="mt-3 shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl">
+            {/* Hidden on phones: vertical space there belongs to the givings list. */}
+            <h1 className="mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block">
               Tithes &amp; Offerings
             </h1>
 
@@ -314,14 +317,23 @@ function GivePageContent() {
                       <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                     </div>
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <label className="relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] hover:border-[#b36b3c]" title="Filter by giving purpose">
-                      <SlidersHorizontal className="h-4 w-4" />
-                      <select value={givingPurposeFilter} onChange={(e) => setGivingPurposeFilter(e.target.value)} aria-label="Filter by giving purpose" className="absolute inset-0 cursor-pointer opacity-0">
-                        <option value="all">All purposes</option>
-                        {myPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </label>
-                    <input type="text" placeholder="Search givings..." value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                      <div className="flex h-9 shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5" role="group" aria-label="Filter by status">
+                        {(["successful", "failed", "all"] as const).map((key) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setGivingStatusFilter(key)}
+                            className={`h-8 rounded-lg px-2.5 text-[11px] font-semibold capitalize transition ${
+                              givingStatusFilter === key
+                                ? "bg-[#26352f] text-white shadow-sm"
+                                : "text-[#617068] hover:text-[#26352f]"
+                            }`}
+                          >
+                            {key}
+                          </button>
+                        ))}
+                      </div>
+                      <input type="text" placeholder="Search purpose, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                     </div>
                   </div>
                 </div>
