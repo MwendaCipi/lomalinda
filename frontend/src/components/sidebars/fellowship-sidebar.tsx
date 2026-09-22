@@ -15,8 +15,8 @@ export function FellowshipSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
-      <div className="sticky top-16 h-[calc(100vh-4rem)] space-y-6 overflow-y-auto p-5 scrollbar-thin">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+      <div className="h-full min-h-0 space-y-6 overflow-y-auto p-5 scrollbar-thin">
         <div className="border-b border-[#dfdbd1] pb-4">
           <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">
             Fellowship &amp; Community

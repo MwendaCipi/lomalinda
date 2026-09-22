@@ -18,8 +18,8 @@ export function MaterialsSidebar() {
   const active = (searchParams.get("section") as MaterialSection) || "bible-egw";
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
-      <div className="sticky top-16 h-[calc(100vh-4rem)] space-y-5 overflow-y-auto p-5 scrollbar-thin">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+      <div className="h-full min-h-0 space-y-5 overflow-y-auto p-5 scrollbar-thin">
         <div className="border-b border-[#dfdbd1] pb-4">
           <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">Study Materials</p>
           <p className="mt-1 text-xs text-[#617068]">Sabbath School lessons, mission readings, scripture &amp; E.G. White writings.</p>
