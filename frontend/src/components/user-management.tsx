@@ -1553,7 +1553,7 @@ export function UserManagement() {
       )}
 
       {/* ── Scrollable table area ── */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 pb-6 custom-table-scrollbar sm:px-6">
+      <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 pb-2 custom-table-scrollbar sm:px-6">
         {invitationFilter === "pending" && (
           <div className="space-y-3">
             {pendingInvitations.length === 0 ? (
