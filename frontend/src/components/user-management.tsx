@@ -769,8 +769,12 @@ const inviteFormInitial = {
   roles: [] as string[],
 };
 
+const DEFAULT_MANUAL_PASSWORD = "Welcome@2026";
+
 const initialForm = {
   name: "",
+  username: "",
+  password: DEFAULT_MANUAL_PASSWORD,
   gender: "",
   email: "",
   phone_number: "",
@@ -1066,6 +1070,8 @@ export function UserManagement() {
           first_name,
           last_name,
           role: formData.role || "member",
+          username: formData.username.trim(),
+          password: formData.password,
           gifts: formData.gifts.join(", "),
           disability: formData.disability.join(", "),
         }),
@@ -1145,6 +1151,8 @@ export function UserManagement() {
           email: friendFormData.email.trim(),
           phone_number: cleanPhone,
           account_type: "friend",
+          username: formData.username.trim(),
+          password: formData.password,
           current_church: friendFormData.current_church.trim(),
           baptismal_status: friendFormData.baptismal_status,
           role: "member",
@@ -1996,6 +2004,21 @@ export function UserManagement() {
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
                 </div>
 
+                {/* Login credentials */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Username *</label>
+                  <input type="text" required autoComplete="off" placeholder="e.g. grace.wanjiku" value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Initial Password *</label>
+                  <input type="text" required autoComplete="off" value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                  <p className="mt-1 text-[10px] text-[#617068]">They must change this password at first login.</p>
+                </div>
+
                 {/* Date of Birth */}
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">Date of Birth</label>
@@ -2090,24 +2113,24 @@ export function UserManagement() {
                   className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
                   Back
                 </button>
-                <button type="submit" disabled={submitting}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
-                  {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
-                </button>
                 <button type="button" onClick={() => setShowAddForm(false)}
                   className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
                   Cancel
+                </button>
+                <button type="submit" disabled={submitting}
+                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
                 </button>
               </div>
                 </>
               )}
               {addStep === 1 && (
                 <div className="flex items-center justify-end gap-3 pt-2">
-                  <button type="submit" className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
-                    Next: Additional Details
-                  </button>
                   <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
                     Cancel
+                  </button>
+                  <button type="submit" className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                    Next: Additional Details
                   </button>
                 </div>
               )}
@@ -2195,13 +2218,13 @@ export function UserManagement() {
               )}
 
               <div className="flex items-center justify-end gap-3 pt-2">
-                <button type="submit" disabled={inviteSubmitting}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60">
-                  {inviteSubmitting ? "Sending…" : "Send Invitation"}
-                </button>
                 <button type="button" onClick={() => setShowInviteForm(false)}
                   className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
                   Cancel
+                </button>
+                <button type="submit" disabled={inviteSubmitting}
+                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60">
+                  {inviteSubmitting ? "Sending…" : "Send Invitation"}
                 </button>
               </div>
             </form>

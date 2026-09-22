@@ -30,6 +30,8 @@ function AcceptInviteContent() {
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -53,6 +55,8 @@ function AcceptInviteContent() {
         if (!response.ok) throw new Error(data.detail || "This invitation link is not valid.");
         setEmail(data.email ?? "");
         setFirstName(data.first_name ?? "");
+        setLastName(data.last_name ?? "");
+        setPhoneNumber(data.phone_number ?? "");
       })
       .catch((error) =>
         setLinkError(error instanceof Error ? error.message : "This invitation link is not valid.")
@@ -74,8 +78,14 @@ function AcceptInviteContent() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanUsername = username.trim();
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+    const cleanPhoneNumber = phoneNumber.replace(/\D/g, "").slice(0, 10);
     const nextErrors: FieldErrors = {};
 
+    if (!cleanFirstName) nextErrors.firstName = "Enter your first name.";
+    if (!cleanLastName) nextErrors.lastName = "Enter your last name.";
+    if (!cleanPhoneNumber || cleanPhoneNumber.length !== 10) nextErrors.phoneNumber = "Enter a valid 10-digit phone number.";
     if (!cleanUsername) nextErrors.username = "Choose a username you will sign in with.";
     else if (/\s/.test(cleanUsername)) nextErrors.username = "Usernames cannot contain spaces.";
     if (!password) nextErrors.password = "Choose a password.";
@@ -102,6 +112,9 @@ function AcceptInviteContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
+          first_name: cleanFirstName,
+          last_name: cleanLastName,
+          phone_number: cleanPhoneNumber,
           username: cleanUsername,
           password,
           confirm_password: confirmPassword,
@@ -110,6 +123,9 @@ function AcceptInviteContent() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const { fieldErrors: apiFieldErrors, generalError: apiGeneralError } = parseApiErrors(data, [
+          "firstName",
+          "lastName",
+          "phoneNumber",
           "username",
           "password",
           "confirmPassword",
@@ -153,6 +169,60 @@ function AcceptInviteContent() {
               </p>
             )}
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                First name
+                <input
+                  name="firstName"
+                  required
+                  autoComplete="given-name"
+                  value={firstName}
+                  aria-invalid={Boolean(fieldErrors.firstName)}
+                  onChange={(event) => {
+                    setFirstName(event.target.value);
+                    setFieldErrors((current) => ({ ...current, firstName: "" }));
+                  }}
+                  className={fieldClass(Boolean(fieldErrors.firstName))}
+                />
+                <FieldError message={fieldErrors.firstName} />
+              </label>
+              <label className="block text-sm font-medium">
+                Last name
+                <input
+                  name="lastName"
+                  required
+                  autoComplete="family-name"
+                  value={lastName}
+                  aria-invalid={Boolean(fieldErrors.lastName)}
+                  onChange={(event) => {
+                    setLastName(event.target.value);
+                    setFieldErrors((current) => ({ ...current, lastName: "" }));
+                  }}
+                  className={fieldClass(Boolean(fieldErrors.lastName))}
+                />
+                <FieldError message={fieldErrors.lastName} />
+              </label>
+            </div>
+            <label className="block text-sm font-medium">
+              Phone number
+              <input
+                name="phoneNumber"
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                required
+                autoComplete="tel"
+                value={phoneNumber}
+                aria-invalid={Boolean(fieldErrors.phoneNumber)}
+                onChange={(event) => {
+                  setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10));
+                  setFieldErrors((current) => ({ ...current, phoneNumber: "" }));
+                }}
+                className={fieldClass(Boolean(fieldErrors.phoneNumber))}
+              />
+              <FieldError message={fieldErrors.phoneNumber} />
+            </label>
             <label className="block text-sm font-medium">
               Username
               <input

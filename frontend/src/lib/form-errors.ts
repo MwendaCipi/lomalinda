@@ -7,6 +7,10 @@ const FIELD_ALIASES: Record<string, string> = {
   password2: "confirmPassword",
   phone_number: "phoneNumber",
   phoneNumber: "phoneNumber",
+  first_name: "firstName",
+  firstName: "firstName",
+  last_name: "lastName",
+  lastName: "lastName",
 };
 
 function flatten(value: unknown): string {

@@ -43,6 +43,7 @@ class MemberProfile(models.Model):
     gifts = models.TextField(blank=True, default='', help_text="Spiritual gifts and talents of the member")
     disability = models.TextField(blank=True, default='', help_text="Disability or special needs of the member")
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
+    must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

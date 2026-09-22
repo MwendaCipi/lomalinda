@@ -211,6 +211,9 @@ class InvitationSerializer(serializers.ModelSerializer):
 
 class InvitationAcceptSerializer(serializers.Serializer):
     token = serializers.UUIDField()
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True, required=False, allow_blank=True)

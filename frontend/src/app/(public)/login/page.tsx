@@ -41,6 +41,14 @@ function LoginContent() {
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       setMessage("You are signed in.");
 
+      // Manually created accounts must replace the shared initial password before
+      // entering the app; preserve the destination they originally requested.
+      if (data.must_change_password) {
+        const destination = nextParam || "/dashboard";
+        router.push(`/change-password?next=${encodeURIComponent(destination)}`);
+        return;
+      }
+
       // Everyone lands on the system dashboard, whose role-aware tiles link
       // leaders on to Administration. The site home stays the marketing page.
       router.push(nextParam || "/dashboard");

@@ -801,6 +801,7 @@ class InvitationVerifyView(APIView):
             'email': invitation.email,
             'first_name': invitation.first_name,
             'last_name': invitation.last_name,
+            'phone_number': invitation.phone_number,
             'account_type': invitation.account_type,
             'account_type_display': invitation.get_account_type_display(),
             'roles': invitation.role_codes(),
@@ -828,6 +829,17 @@ class InvitationAcceptView(APIView):
         if invitation.expires_at <= timezone.now():
             return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        first_name = serializer.validated_data.get('first_name', '').strip() or invitation.first_name.strip()
+        last_name = serializer.validated_data.get('last_name', '').strip() or invitation.last_name.strip()
+        phone_number = serializer.validated_data.get('phone_number', '').strip() or invitation.phone_number.strip()
+        if not first_name:
+            return Response({'first_name': 'Enter your first name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not last_name:
+            return Response({'last_name': 'Enter your last name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if phone_number and not re.fullmatch(r'\d{10}', re.sub(r'\D', '', phone_number)):
+            return Response({'phone_number': 'Enter a valid 10-digit phone number.'}, status=status.HTTP_400_BAD_REQUEST)
+        phone_number = re.sub(r'\D', '', phone_number)
+
         username = serializer.validated_data['username'].strip()
         password = serializer.validated_data['password']
         if User.objects.filter(username__iexact=username).exists():
@@ -835,7 +847,7 @@ class InvitationAcceptView(APIView):
         if User.objects.filter(email__iexact=invitation.email).exists():
             return Response({'detail': 'An account already exists for this email address. Try signing in or resetting your password.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        candidate = User(username=username, email=invitation.email, first_name=invitation.first_name, last_name=invitation.last_name)
+        candidate = User(username=username, email=invitation.email, first_name=first_name, last_name=last_name)
         try:
             validate_password(password, candidate)
         except Exception as error:
@@ -846,8 +858,8 @@ class InvitationAcceptView(APIView):
             user = User.objects.create_user(
                 username=username,
                 email=invitation.email,
-                first_name=invitation.first_name,
-                last_name=invitation.last_name,
+                first_name=first_name,
+                last_name=last_name,
                 password=password,
             )
             profile, _ = MemberProfile.objects.get_or_create(user=user)
@@ -855,8 +867,8 @@ class InvitationAcceptView(APIView):
             profile.role = codes[0] if codes else ''
             profile.roles = ', '.join(codes)
             profile.account_type = invitation.account_type
-            if invitation.phone_number:
-                profile.phone_number = invitation.phone_number
+            if phone_number:
+                profile.phone_number = phone_number
             profile.save()
 
             group_names = sorted({ROLE_GROUP_MAP[code] for code in codes if code in ROLE_GROUP_MAP})
