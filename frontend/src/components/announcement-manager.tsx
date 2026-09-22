@@ -145,9 +145,9 @@ export function AnnouncementManager() {
   }
 
   return (
-    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-6">
+    <section className="flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
       {/* Top Header */}
-      <div className="border-b border-[#dfdbd1] pb-6">
+      <div className="shrink-0 border-b border-[#dfdbd1] pb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
             Announcements Management
@@ -159,9 +159,9 @@ export function AnnouncementManager() {
       </div>
 
       {/* Announcements — ledger-style table container */}
-      <div className="overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
         {/* Mobile Cards View scroll within the card on phones */}
-        <div className="custom-table-scrollbar max-h-[60vh] overflow-y-auto overscroll-contain md:hidden divide-y divide-[#eeeae2]">
+        <div className="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain md:hidden divide-y divide-[#eeeae2]">
           {loadingList ? (
             <p className="py-12 text-center text-sm text-[#617068]">Loading announcements...</p>
           ) : announcements.length === 0 ? (
@@ -220,7 +220,7 @@ export function AnnouncementManager() {
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden max-h-[70vh] overflow-auto custom-table-scrollbar md:block">
+        <div className="hidden min-h-0 flex-1 overflow-auto custom-table-scrollbar md:block">
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
               <tr>
@@ -304,7 +304,7 @@ export function AnnouncementManager() {
         </div>
 
         {/* Sticky Footer */}
-        <div className="border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
+        <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <span className="text-xs text-[#617068] sm:text-sm">
               Showing <strong className="text-[#26352f]">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}

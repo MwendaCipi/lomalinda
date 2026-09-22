@@ -156,7 +156,7 @@ function AdministrationContent() {
   if (status === "denied") return null;
 
   return (
-    <main className="administration-workspace min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="administration-workspace min-h-screen md:h-[calc(100dvh-4rem)] bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {/* DESKTOP CONTEXTUAL SIDEBAR (Permanently Sticky on Desktop, Touching Header) */}
         <AdminSidebar
@@ -189,7 +189,7 @@ function AdministrationContent() {
             <div
               className={`flex-1 min-h-0 ${
                 tableContainedTabs.includes(activeTab)
-                  ? "p-0 overflow-hidden"
+                  ? "flex h-full flex-col p-0 overflow-hidden"
                   : "p-4 sm:p-6 overflow-y-auto custom-hover-scrollbar md:overflow-y-auto"
               }`}
             >
@@ -415,56 +415,56 @@ function AdministrationContent() {
 
             {/* Announcements Manager */}
             {activeTab === "announcements" && (isClerk || isElder || isAdmin) && (
-              <div>
+              <div className="h-full min-h-0">
                 <AnnouncementManager />
               </div>
             )}
 
             {/* Pastoral & Member Requests Manager (including Transfers) */}
             {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin) && (
-              <div>
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <RequestsAdminManager initialTab={activeTab === "transfers" ? "transfers" : "prayer"} />
               </div>
             )}
 
             {/* Treasury Accounts Manager */}
             {activeTab === "accounts" && isFinance && (
-              <div>
+              <div className="h-full min-h-0">
                 <TreasuryAccountsManager />
               </div>
             )}
 
             {/* Expenditure Manager */}
             {activeTab === "expenditures" && isFinance && (
-              <div>
+              <div className="h-full min-h-0">
                 <ExpenditureManager />
               </div>
             )}
 
             {/* M-Pesa Refund Manager */}
             {activeTab === "refunds" && isFinance && (
-              <div>
+              <div className="h-full min-h-0">
                 <MpesaRefundManager />
               </div>
             )}
 
             {/* Giving Accounts & Fund Drives Manager */}
             {activeTab === "finance" && isFinance && (
-              <div>
+              <div className="h-full min-h-0">
                 <GivingPurposeManager />
               </div>
             )}
 
             {/* Church Settings Manager */}
             {activeTab === "settings" && (isAdmin || isClerk || isElder) && (
-              <div>
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <ChurchSettingsManager />
               </div>
             )}
 
             {/* Deaconate Ministry Manager */}
             {["inventory", "deaconate-rota", "deaconate-members", "deaconate-calendar"].includes(activeTab) && (
-              <div>
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <DeaconateManager
                   initialTab={
                     activeTab === "deaconate-rota"
@@ -481,7 +481,7 @@ function AdministrationContent() {
 
             {/* Department Manager (AMM, AWM, AYM, APM, Chaplaincy) */}
             {activeTab.startsWith("dept-") && (
-              <div>
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <DepartmentManager
                   deptKey={activeTab.replace("dept-", "").replace(/-(members|calendar|activities)$/, "") as DepartmentKey}
                   initialSubTab={(activeTab.match(/-(members|calendar|activities)$/)?.[1] as "members" | "calendar" | "activities") || "members"}
