@@ -50,15 +50,23 @@ type StaffRole =
 interface AdminSidebarProps {
   activeTab?: string;
   onSelectTab?: (tab: string) => void;
-  profile?: { username: string; role: string; roles?: string[]; email?: string } | null;
+  profile?: { username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null;
+  permissions?: {
+    isAdmin: boolean;
+    isClerk: boolean;
+    isElder: boolean;
+    isFinance: boolean;
+    isDeaconate: boolean;
+    roles: string[];
+  };
 }
 
-export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: AdminSidebarProps) {
+export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, permissions }: AdminSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = activeTab || searchParams.get("tab") || "overview";
 
-  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[] } | null>(propProfile || null);
+  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; is_staff?: boolean; is_superuser?: boolean } | null>(propProfile || null);
 
   useEffect(() => {
     if (propProfile) {
@@ -76,15 +84,21 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
     }
   }, [propProfile]);
 
-  const userRoles: string[] = Array.isArray(profile?.roles) && profile.roles.length > 0
-    ? profile.roles
-    : [(profile?.role || "").toLowerCase().trim() || "member"];
+  const normalizeRole = (role: string) => role.toLowerCase().trim().replace(/[\s-]+/g, "_");
+  const profileRoles = [
+    ...(Array.isArray(profile?.roles) ? profile.roles : []),
+    profile?.role || "",
+    profile?.is_staff || profile?.is_superuser ? "admin" : "",
+  ]
+    .map(normalizeRole)
+    .filter(Boolean);
+  const userRoles: string[] = permissions?.roles?.length ? permissions.roles : Array.from(new Set(profileRoles.length ? profileRoles : ["member"]));
   const hasAnyRole = (...codes: string[]) => userRoles.some((r) => codes.includes(r));
-  const isAdmin = hasAnyRole("admin");
-  const isClerk = hasAnyRole("clerk", "admin");
-  const isElder = hasAnyRole("elder", "admin");
-  const isFinance = hasAnyRole("finance", "treasurer", "admin");
-  const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
+  const isAdmin = permissions?.isAdmin ?? hasAnyRole("admin");
+  const isClerk = permissions?.isClerk ?? hasAnyRole("clerk", "admin");
+  const isElder = permissions?.isElder ?? hasAnyRole("elder", "admin");
+  const isFinance = permissions?.isFinance ?? hasAnyRole("finance", "treasurer", "admin");
+  const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
 
   const isReconPage = pathname === "/administration/reconciliation";
 

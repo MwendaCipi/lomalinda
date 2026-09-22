@@ -162,6 +162,14 @@ function AdministrationContent() {
         <AdminSidebar
           activeTab={activeTab}
           profile={profile}
+          permissions={{
+            isAdmin,
+            isClerk,
+            isElder,
+            isFinance,
+            isDeaconate: hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk"),
+            roles: userRoles,
+          }}
           onSelectTab={(tab) => {
             setActiveTab(tab);
             router.push(`/administration?tab=${tab}`, { scroll: false });
