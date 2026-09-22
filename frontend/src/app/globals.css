@@ -78,8 +78,6 @@ html:has(.administration-workspace) .app-shell > :last-child {
 html:has(.administration-workspace) .app-shell > :last-child > * {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 @keyframes hero-image-in {

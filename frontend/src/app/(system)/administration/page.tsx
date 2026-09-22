@@ -61,7 +61,7 @@ function AdministrationContent() {
   const searchTab = searchParams.get("tab");
 
   const [status, setStatus] = useState<"loading" | "authorized" | "denied">("loading");
-  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string } | null>(null);
+  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [activeTab, setActiveTab] = useState<string>("overview");
 
@@ -118,9 +118,16 @@ function AdministrationContent() {
     }
   }, [router, status]);
 
-  const userRoles: string[] = Array.isArray(profile?.roles) && profile.roles.length > 0
+  const baseRoles: string[] = Array.isArray(profile?.roles) && profile.roles.length > 0
     ? profile.roles
     : [(profile?.role || "").toLowerCase().trim() || "member"];
+  // Staff and superusers hold admin power even when their profile role is
+  // plain "member" — the same rule `isOfficial` above already uses for
+  // letting them through the door, and the sidebar uses for its sections.
+  const userRoles: string[] =
+    profile && (profile.is_staff || profile.is_superuser) && !baseRoles.includes("admin")
+      ? [...baseRoles, "admin"]
+      : baseRoles;
   const hasAnyRole = (...codes: string[]) => userRoles.some((r) => codes.includes(r));
   const isAdmin = hasAnyRole("admin");
   const isClerk = hasAnyRole("clerk", "admin");
