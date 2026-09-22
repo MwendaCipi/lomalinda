@@ -874,6 +874,28 @@ class InvitationAcceptView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = str(request.data.get('password') or '')
+        confirm_password = str(request.data.get('confirm_password') or '')
+        if password != confirm_password:
+            return Response({'confirm_password': 'The two passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_church_password(password)
+        except Exception as error:
+            return Response({'password': getattr(error, 'messages', None) or [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.set_password(password)
+        request.user.save(update_fields=['password'])
+        profile = getattr(request.user, 'member_profile', None)
+        if profile:
+            profile.must_change_password = False
+            profile.save(update_fields=['must_change_password'])
+        return Response({'message': 'Your password has been changed successfully.'})
+
+
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
@@ -1132,10 +1154,15 @@ class MyContributionsView(generics.ListAPIView):
     serializer_class = ContributionSerializer
 
     def get_queryset(self):
-        # Only completed payments are a member's giving record: a pending
-        # M-Pesa prompt is not money given, so it must not appear in (or
-        # inflate) their history or statement.
-        return Contribution.objects.filter(member=self.request.user, status='completed')
+        # Completed payments are the member's giving record. Cancelled or
+        # failed M-Pesa attempts are terminal records of prompts that never
+        # became money: they never read as pending and default views exclude
+        # them, but the give page opts in with ?include_failed=1 for
+        # transparency.
+        statuses = ['completed']
+        if self.request.query_params.get('include_failed') in ('1', 'true'):
+            statuses = ['completed', 'failed', 'cancelled']
+        return Contribution.objects.filter(member=self.request.user, status__in=statuses)
 
 
 def ensure_giver_profile(donor_name, phone_number, donor_email):
@@ -1760,6 +1787,7 @@ class MpesaCallbackView(APIView):
     def post(self, request):
         callback = request.data.get('Body', {}).get('stkCallback', {})
         result_code = callback.get('ResultCode')
+        result_desc = callback.get('ResultDesc') or 'M-Pesa payment not completed'
         query_string = request.META.get('QUERY_STRING', '')
         context_token = parse_qs(query_string).get('ctx', [None])[0]
         context = unpack_callback_context(context_token)
@@ -1768,12 +1796,14 @@ class MpesaCallbackView(APIView):
             # acknowledge so Safaricom stops retrying.
             return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
+        checkout_request_id = callback.get('CheckoutRequestID') or None
+        # Safaricom retries unacknowledged callbacks; never record twice —
+        # for completions and failed attempts alike.
+        if checkout_request_id and Contribution.objects.filter(checkout_request_id=checkout_request_id).exists():
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
         if result_code == 0:
             metadata = {item.get('Name'): item.get('Value') for item in callback.get('CallbackMetadata', {}).get('Item', [])}
-            checkout_request_id = callback.get('CheckoutRequestID') or None
-            # Safaricom retries unacknowledged callbacks; never record twice.
-            if checkout_request_id and Contribution.objects.filter(checkout_request_id=checkout_request_id).exists():
-                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
             payer_name = ' '.join(
                 str(metadata.get(part) or '').strip()
                 for part in ('FirstName', 'MiddleName', 'LastName')
@@ -1794,6 +1824,22 @@ class MpesaCallbackView(APIView):
             )
             self._link_giver(contribution, context)
             send_contribution_receipt(contribution)
+        else:
+            # The prompt was cancelled, timed out or otherwise failed — no
+            # money moved, but keep a terminal record so the attempt is
+            # visible in the giver's history. It is never 'pending' and it
+            # is excluded from every completed-only total.
+            Contribution.objects.create(
+                amount=Decimal(str(context['amount'])),
+                giving_type='financial',
+                purpose=context['purpose'],
+                phone_number=str(context.get('phone_number', '')),
+                donor_email=context.get('donor_email', ''),
+                item_description=result_desc,
+                payment_method='mpesa',
+                status='failed',
+                checkout_request_id=checkout_request_id,
+            )
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
     def _link_giver(self, contribution, context):
@@ -3230,6 +3276,7 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj.role = roles_param[0]
         profile_obj.roles = ', '.join(roles_param)
         profile_obj.account_type = account_type
+        profile_obj.must_change_password = True
         profile_obj.current_church = current_church
         profile_obj.baptismal_status = baptismal_status
         profile_obj.employment_status = employment_status

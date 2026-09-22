@@ -240,6 +240,12 @@ class MpesaCallbackAPITests(APITestCase):
                 }
             }
         }
+        if result_code != 0:
+            payload['Body']['stkCallback']['ResultDesc'] = {
+                1032: 'Request cancelled by user',
+                1037: 'DS timeout user cannot be reached',
+                1: 'The initiator information is invalid',
+            }.get(result_code, 'Payment not completed')
         if result_code == 0:
             payload['Body']['stkCallback']['CallbackMetadata'] = {
                 'Item': [
@@ -271,11 +277,26 @@ class MpesaCallbackAPITests(APITestCase):
         self.assertEqual(contribution.phone_number, '254712345678')
         self.assertIsNotNone(contribution.paid_at)
 
-    def test_cancelled_callback_creates_no_contribution(self):
+    def test_cancelled_callback_records_terminal_failed_attempt(self):
         context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
         response = self._post_callback(self._callback_payload(result_code=1032), context)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Contribution.objects.count(), 0)
+        self.assertEqual(Contribution.objects.count(), 1)
+        attempt = Contribution.objects.get()
+        self.assertEqual(attempt.status, 'failed')
+        self.assertEqual(attempt.amount, Decimal('100.00'))
+        self.assertEqual(attempt.purpose, 'Tithe')
+        self.assertEqual(attempt.phone_number, '254712345678')
+        self.assertEqual(attempt.item_description, 'Request cancelled by user')
+        # No money moved: no receipt and no payment timestamp.
+        self.assertIsNone(attempt.mpesa_receipt_number)
+        self.assertIsNone(attempt.paid_at)
+
+    def test_repeated_failed_callback_records_only_one_attempt(self):
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        self._post_callback(self._callback_payload(result_code=1037), context)
+        self._post_callback(self._callback_payload(result_code=1037), context)
+        self.assertEqual(Contribution.objects.count(), 1)
 
     def test_tampered_or_missing_token_creates_no_contribution(self):
         response = self.client.post(
@@ -313,6 +334,23 @@ class MpesaCallbackAPITests(APITestCase):
         self.assertEqual(contribution.donor_email, 'giver@example.com')
         self.assertEqual(contribution.campaign, campaign)
         self.assertEqual(contribution.card_assignment, card)
+
+
+class MyContributionsStatusFilterTests(APITestCase):
+    def _make(self, member, **kwargs):
+        return Contribution.objects.create(member=member, amount=Decimal('100.00'), purpose='Tithe', **kwargs)
+
+    def test_failed_attempts_hidden_by_default_and_opt_in(self):
+        from django.contrib.auth.models import User
+
+        member = User.objects.create_user(username='254700000001', password='secure-password')
+        self._make(member, status='completed', payment_method='mpesa', paid_at=timezone.now())
+        self._make(member, status='failed', payment_method='mpesa')
+        self.client.force_authenticate(member)
+        default = self.client.get('/api/members/contributions/')
+        self.assertEqual([c['status'] for c in default.json()], ['completed'])
+        with_failed = self.client.get('/api/members/contributions/?include_failed=1')
+        self.assertEqual(sorted(c['status'] for c in with_failed.json()), ['completed', 'failed'])
 
 
 class MpesaC2BAPITests(APITestCase):

@@ -45,6 +45,22 @@ function firstSabbathOfCurrentMonth(): string {
 const methodLabel = (m: string) =>
   m === "mpesa" ? "M-Pesa" : m === "bank_transfer" ? "Bank-to-Bank" : m;
 
+const statusLabel = (s: string) => {
+  const v = (s || "").toLowerCase();
+  return v === "completed" ? "Completed" : v === "failed" ? "Failed" : v === "cancelled" ? "Cancelled" : "Pending";
+};
+
+const statusBadge = (s: string) => {
+  const v = (s || "").toLowerCase();
+  const styles =
+    v === "completed"
+      ? "bg-[#eef2ed] text-[#3d7146]"
+      : v === "failed" || v === "cancelled"
+        ? "bg-red-50 text-red-700"
+        : "bg-amber-50 text-amber-700";
+  return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${styles}`}>{statusLabel(s)}</span>;
+};
+
 function GivePageContent() {
   const searchParams = useSearchParams();
   const rawPurposeParam = searchParams.get("purpose");
@@ -81,7 +97,7 @@ function GivePageContent() {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
     setLoadingGivings(true);
-    fetch(`${API_URL}/api/members/contributions/`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_URL}/api/members/contributions/?include_failed=1`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setMyGivings(Array.isArray(data) ? data : []))
       .catch(() => setMyGivings([]))
@@ -110,7 +126,8 @@ function GivePageContent() {
     return true;
   });
 
-  const givingTotal = filteredGivings.reduce((sum, g) => sum + Number(g.amount || 0), 0);
+  // Totals count money actually given; failed attempts stay visible but never inflate the sum.
+  const givingTotal = filteredGivings.reduce((sum, g) => ((g.status || "").toLowerCase() === "completed" ? sum + Number(g.amount || 0) : sum), 0);
 
   const fmtGivingDate = (g: MyGiving) => {
     const raw = g.paid_at || g.created_at;
@@ -124,7 +141,7 @@ function GivePageContent() {
     const rows = filteredGivings
       .map(
         (g, i) =>
-          `<tr><td>${i + 1}</td><td>${esc(fmtGivingDate(g))}</td><td>${esc(g.purpose || "—")}</td><td>${esc(methodLabel(g.payment_method))}</td><td>${esc(g.mpesa_receipt_number || "—")}</td><td style="text-align:right">KES ${Number(g.amount || 0).toLocaleString()}</td><td>${(g.status || "").toLowerCase() === "completed" ? "Completed" : "Pending"}</td></tr>`
+          `<tr><td>${i + 1}</td><td>${esc(fmtGivingDate(g))}</td><td>${esc(g.purpose || "—")}</td><td>${esc(methodLabel(g.payment_method))}</td><td>${esc(g.mpesa_receipt_number || "—")}</td><td style="text-align:right">KES ${Number(g.amount || 0).toLocaleString()}</td><td>${statusLabel(g.status)}</td></tr>`
       )
       .join("");
     const win = window.open("", "_blank", "width=900,height=650");
@@ -281,15 +298,10 @@ function GivePageContent() {
     <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
       <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Tithes &amp; Offerings
-                </h1>
-                <p className="mt-2 hidden max-w-2xl text-base leading-8 text-[#617068] sm:block">
-                  Faithfully give tithes, offerings, ministry support, or church building funds.
-                </p>
-              </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Tithes &amp; Offerings
+              </h1>
               <button
                 type="button"
                 onClick={() => setShowGiveModal(true)}
@@ -303,22 +315,14 @@ function GivePageContent() {
             {signedIn && (
               <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
                 <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
-                  <div className="flex flex-col items-start gap-0.5">
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
-                      <p className="mt-0.5 truncate text-xs text-[#617068]">
-                        {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                       <span className="shrink-0 text-xs text-[#617068]">→</span>
                       <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                     <label className="relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] hover:border-[#b36b3c]" title="Filter by giving purpose">
                       <SlidersHorizontal className="h-4 w-4" />
                       <select value={givingPurposeFilter} onChange={(e) => setGivingPurposeFilter(e.target.value)} aria-label="Filter by giving purpose" className="absolute inset-0 cursor-pointer opacity-0">
@@ -327,6 +331,7 @@ function GivePageContent() {
                       </select>
                     </label>
                     <input type="text" placeholder="Search givings..." value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    </div>
                   </div>
                 </div>
 
@@ -364,13 +369,7 @@ function GivePageContent() {
                               <td className="py-3 pr-4 text-[#617068]">{methodLabel(g.payment_method)}</td>
                               <td className="py-3 pr-4 font-mono text-[#617068]">{g.mpesa_receipt_number || "—"}</td>
                               <td className="py-3 pr-4 text-right font-semibold text-[#26352f]">KES {Number(g.amount || 0).toLocaleString()}</td>
-                              <td className="py-3">
-                                {(g.status || "").toLowerCase() === "completed" ? (
-                                  <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold text-[#3d7146]">Completed</span>
-                                ) : (
-                                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">Pending</span>
-                                )}
-                              </td>
+                              <td className="py-3">{statusBadge(g.status)}</td>
                             </tr>
                           ))
                         )}
@@ -389,11 +388,7 @@ function GivePageContent() {
                         <div key={g.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-bold text-sm text-[#26352f]">{g.purpose || "—"}</h3>
-                            {(g.status || "").toLowerCase() === "completed" ? (
-                              <span className="shrink-0 rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d7146]">Completed</span>
-                            ) : (
-                              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">Pending</span>
-                            )}
+                            {statusBadge(g.status)}
                           </div>
                           <p className="text-xs text-[#617068]">{fmtGivingDate(g)} · {methodLabel(g.payment_method)}</p>
                           <p className="text-sm font-bold text-[#b36b3c]">KES {Number(g.amount || 0).toLocaleString()}</p>
@@ -405,7 +400,12 @@ function GivePageContent() {
 
                 {/* Footer actions */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#dfdbd1] px-5 py-3">
-                  <p className="text-[11px] text-[#617068]">{fromDate} → {toDate}</p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <p className="text-[11px] text-[#617068]">{fromDate} → {toDate}</p>
+                    <p className="text-[11px] font-semibold text-[#26352f]">
+                      {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
+                    </p>
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
