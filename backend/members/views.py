@@ -1693,7 +1693,9 @@ class ResendContributionReceiptView(APIView):
         if not source or not raw_id:
             return Response({'detail': 'source and id are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        church_settings = ChurchSettings.load()
+        # get_or_create guarantees a settings row exists — first() could
+        # return None on a fresh tenant and crash the attribute reads below.
+        church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
         church_name = church_settings.church_name or CHURCH_DEFAULT_NAME
         custom_message = church_settings.default_receipt_message or f"Thank you for your faithful contribution to {church_name}."
 
