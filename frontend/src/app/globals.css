@@ -38,11 +38,19 @@ body:has(.authenticated-giving-page) {
   display: none;
 }
 
-/* height:100% is required on mobile too: without it the shell's content
-   wrapper is auto-height, the giving card grows past the viewport, and the
-   footer actions get clipped by the document lock. */
-.authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
+/* The giving page is a fixed panel at every width. The shell itself needs a
+   definite height (flex-1 alone is auto-height — body is not a flex
+   container), sized to the space below SiteNav's 4rem header spacer; the
+   shell's pb-24 then keeps the footer clear of the mobile tab bar. */
+html:has(.authenticated-giving-page) .authenticated-public-shell {
+  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
+}
+html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {
   overflow: hidden;
+  height: 100%;
+}
+html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child > div {
   height: 100%;
 }
 
