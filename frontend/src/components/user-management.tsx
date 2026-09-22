@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RolesCombobox, formatRoles, heldSystemRoles, SYSTEM_ROLE_HELP } from "./roles-combobox";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -970,13 +971,16 @@ export function UserManagement() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Could not send the invitation.");
       setLastInviteLink(data.invite_url || "");
-      setMessage({
-        type: "success",
-        text: data.email_sent
-          ? `Invitation emailed to ${data.email}. They choose their own username and password from the link.`
-          : data.detail || "Invitation created, but the email could not be sent. Share the link below instead.",
-        credentials: data.invite_url,
-      });
+      if (data.email_sent) {
+        // The link itself is only a fallback for a failed email — success gets a clean popup.
+        showAlert("Invitation sent", `Invitation emailed to ${data.email}.`, "success");
+      } else {
+        setMessage({
+          type: "error",
+          text: data.detail || "Invitation created, but the email could not be sent. Share the link below instead.",
+          credentials: data.invite_url,
+        });
+      }
       setInviteFormData(inviteFormInitial);
       setShowInviteForm(false);
       fetchInvitations();
