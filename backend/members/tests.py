@@ -1730,3 +1730,100 @@ class AnnouncementBroadcastTests(APITestCase):
             'sharing_option': 'site',
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+class AnnouncementManagementPermissionTests(APITestCase):
+    """Writes need leadership (staff/superusers count); drafts stay private."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from .models import Announcement
+
+        self.owner = User.objects.create_user(
+            'ann.owner', 'ann.owner@example.com', 'ChurchPass#2026',
+            is_staff=True, is_superuser=True,
+        )
+        MemberProfile.objects.create(user=self.owner, role='member', roles='member')
+        self.stranger = User.objects.create_user('ann.stranger', 'ann.stranger@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.stranger, role='member', roles='member')
+        self.draft = Announcement.objects.create(
+            title='Draft notice', text='Not ready yet.', visibility='members', published=False,
+        )
+
+    def test_superuser_with_member_role_can_post(self):
+        """The site owner's profile says 'member', but staff means admin."""
+        self.client.force_authenticate(self.owner)
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'From the owner',
+            'text': 'Posted as staff.',
+            'visibility': 'public',
+            'sharing_option': 'site',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_plain_member_cannot_post(self):
+        self.client.force_authenticate(self.stranger)
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Sneaky',
+            'text': 'Should not land.',
+            'visibility': 'public',
+            'sharing_option': 'site',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_cannot_edit(self):
+        """Regression: AllowAny + no update guard let strangers rewrite posts."""
+        response = self.client.patch(
+            f'/api/members/announcements/{self.draft.pk}/',
+            {'title': 'Hijacked'}, format='json',
+        )
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.title, 'Draft notice')
+
+    def test_plain_member_cannot_edit_or_delete(self):
+        self.client.force_authenticate(self.stranger)
+        response = self.client.patch(
+            f'/api/members/announcements/{self.draft.pk}/',
+            {'title': 'Hijacked'}, format='json',
+        )
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+        response = self.client.delete(f'/api/members/announcements/{self.draft.pk}/')
+        # Drafts are invisible to outsiders (404 is as good as 403 here).
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.title, 'Draft notice')
+
+    def test_plain_member_cannot_delete_published(self):
+        from .models import Announcement
+
+        post = Announcement.objects.create(
+            title='Live post', text='Still here after the attempt.', visibility='public', published=True,
+        )
+        self.client.force_authenticate(self.stranger)
+        response = self.client.delete(f'/api/members/announcements/{post.pk}/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        post.refresh_from_db()
+        self.assertEqual(post.title, 'Live post')
+
+    def test_superuser_can_delete(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.delete(f'/api/members/announcements/{self.draft.pk}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_unpublished_draft_hidden_from_public_detail(self):
+        response = self.client.get(f'/api/members/announcements/{self.draft.pk}/')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_leader_can_still_edit_draft(self):
+        elder = User.objects.create_user('ann.elder2', 'ann.elder2@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder')
+        self.client.force_authenticate(elder)
+        response = self.client.patch(
+            f'/api/members/announcements/{self.draft.pk}/',
+            {'title': 'Draft notice updated'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.title, 'Draft notice updated')

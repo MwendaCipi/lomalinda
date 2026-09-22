@@ -1123,6 +1123,22 @@ class PasswordResetConfirmView(APIView):
         return Response({'message': 'Your password has been reset. You can now sign in.'})
 
 
+def can_manage_announcements(user):
+    """Leadership test shared by the announcement endpoints.
+
+    Every held role counts (an elder whose primary role is 'member' still
+    passes), and Django staff/superusers count as administrators here just
+    as they do everywhere else in the app — the site owner must be able to
+    post, edit and delete announcements.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('admin', 'clerk', 'elder'))
+
+
 class AnnouncementView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
 
@@ -1134,11 +1150,7 @@ class AnnouncementView(generics.ListCreateAPIView):
         from django.utils import timezone
         today = timezone.now().date()
         
-        is_admin = False
-        if self.request.user.is_authenticated:
-            profile = getattr(self.request.user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'elder'):
-                is_admin = True
+        is_admin = can_manage_announcements(self.request.user)
 
         if is_admin and self.request.query_params.get('include_unpublished') == 'true':
             queryset = Announcement.objects.all()
@@ -1161,10 +1173,7 @@ class AnnouncementView(generics.ListCreateAPIView):
         return queryset.filter(visibility__in=['public', 'all'])
 
     def perform_create(self, serializer):
-        # has_role() checks every held role, so an elder or clerk whose primary
-        # role is 'member' still counts as leadership.
-        profile = getattr(self.request.user, 'member_profile', None)
-        if not (profile and profile.has_role('admin', 'clerk', 'elder')):
+        if not can_manage_announcements(self.request.user):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church administrators, clerks or elders can post announcements.')
         announcement = serializer.save()
@@ -1222,11 +1231,25 @@ class AnnouncementView(generics.ListCreateAPIView):
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [AllowAny]
     serializer_class = AnnouncementSerializer
-    queryset = Announcement.objects.all()
+
+    def get_permissions(self):
+        # Anyone may read a published announcement; only authenticated
+        # leaders may change or remove one.
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def get_queryset(self):
+        # Drafts (unpublished) stay invisible by id too, not just in lists.
+        if can_manage_announcements(self.request.user):
+            return Announcement.objects.all()
+        return Announcement.objects.filter(published=True)
 
     def perform_update(self, serializer):
+        if not can_manage_announcements(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only church administrators, clerks or elders can edit announcements.')
         # Editing the sharing channels re-decides site visibility, so an
         # announcement whose channels gain or lose "site" flips accordingly.
         announcement = serializer.save()
@@ -1238,8 +1261,7 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
             announcement.save(update_fields=['published'])
 
     def perform_destroy(self, instance):
-        profile = getattr(self.request.user, 'member_profile', None)
-        if not (self.request.user.is_authenticated and profile and profile.has_role('admin', 'clerk', 'elder')):
+        if not can_manage_announcements(self.request.user):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church administrators, clerks or elders can delete announcements.')
         instance.delete()
