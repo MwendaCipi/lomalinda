@@ -12,13 +12,15 @@ body {
 }
 
 /* Inside the signed-in system the viewport is fixed on desktop and only the
-   shell's own panels scroll. That lock is scoped to the app shell (the class the
-   system layout puts on its wrapper) so the public website stays an ordinary
-   scrolling document. */
-html:has(.app-shell),
-body:has(.app-shell) {
-  overflow: hidden;
-  height: 100%;
+   shell's own panels scroll. The lock is desktop-only: on phones the document
+   scrolls naturally, because nested internal scrollers collapse on small
+   viewports (the My Givings table could not scroll at all). */
+@media (min-width: 768px) {
+  html:has(.app-shell),
+  body:has(.app-shell) {
+    overflow: hidden;
+    height: 100%;
+  }
 }
 
 /* Landing-page section cards do not belong in the authenticated versions of
@@ -27,8 +29,10 @@ body:has(.app-shell) {
   display: none;
 }
 
-.authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
-  overflow: hidden;
+@media (min-width: 768px) {
+  .authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
+    overflow: hidden;
+  }
 }
 
 @keyframes hero-image-in {

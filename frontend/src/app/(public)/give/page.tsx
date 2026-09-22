@@ -295,9 +295,9 @@ function GivePageContent() {
   else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
-    <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
-      <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
-          <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
+    <main className={signedIn ? "authenticated-giving-page flex min-h-0 flex-col bg-white text-[#26352f] md:h-full md:overflow-hidden" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+      <div className={signedIn ? "flex flex-col px-5 py-5 sm:px-8 lg:px-10 md:min-h-0 md:flex-1" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
+          <div className={signedIn ? "flex flex-col space-y-4 md:min-h-0 md:flex-1" : "space-y-6"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
                 Tithes &amp; Offerings
@@ -313,7 +313,7 @@ function GivePageContent() {
 
             {/* ── My Givings (signed-in members) ── */}
             {signedIn && (
-              <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
+              <section className={signedIn ? "mt-2 flex flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1] md:min-h-0 md:flex-1" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
                 <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
                   <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
                   <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -335,7 +335,7 @@ function GivePageContent() {
                   </div>
                 </div>
 
-                <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3" : "px-5 py-3"}>
+                <div className={signedIn ? "flex flex-col px-5 py-3 md:min-h-0 md:flex-1 md:overflow-hidden" : "px-5 py-3"}>
                   {/* Desktop table */}
                   <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
                     <table className="w-full text-left text-xs">
@@ -378,7 +378,8 @@ function GivePageContent() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className={signedIn ? "custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-scroll overscroll-contain pb-20 touch-pan-y md:hidden" : "grid gap-3 md:hidden"}>
+                  {/* Mobile cards scroll with the document; no internal scroller to collapse. */}
+                  <div className={signedIn ? "grid gap-3 pb-4 md:hidden" : "grid gap-3 md:hidden"}>
                     {loadingGivings ? (
                       <div className="py-8 text-center text-xs text-[#617068]">Loading your givings...</div>
                     ) : filteredGivings.length === 0 ? (

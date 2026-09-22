@@ -35,9 +35,11 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
         : SupportSidebar;
 
   return (
-    <div className="authenticated-public-shell app-shell flex min-h-0 flex-1 overflow-hidden pb-24 md:pb-0">
+    <div className="authenticated-public-shell app-shell flex min-h-0 flex-1 pb-24 md:overflow-hidden md:pb-0">
       <Sidebar />
-      <div className="min-w-0 min-h-0 h-full flex-1 overflow-y-auto custom-hover-scrollbar">{children}</div>
+      {/* Mobile: the document itself scrolls (no internal scroller to collapse).
+          Desktop: the shell is a fixed viewport and this panel scrolls. */}
+      <div className="min-w-0 min-h-0 flex-1 md:h-full md:overflow-y-auto custom-hover-scrollbar">{children}</div>
     </div>
   );
 }
