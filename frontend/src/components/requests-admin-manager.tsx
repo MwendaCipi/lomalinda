@@ -66,7 +66,19 @@ type RemovalItem = {
   reviewed_at?: string | null;
 };
 
-type ActiveTab = "prayer" | "visitation" | "dedication" | "welfare" | "removals" | "transfers";
+type JoinItem = {
+  id: number;
+  full_name: string;
+  email: string;
+  phone_number?: string;
+  joining_mode: "baptism" | "membership_transfer" | "friend";
+  current_church?: string;
+  status: "verification_pending" | "pending" | "approved" | "rejected" | "completed" | "expired";
+  has_account: boolean;
+  created_at: string;
+};
+
+type ActiveTab = "joins" | "prayer" | "visitation" | "dedication" | "welfare" | "removals" | "transfers";
 
 interface RequestsAdminManagerProps {
   initialTab?: ActiveTab;
@@ -79,6 +91,7 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
   const [childDedications, setChildDedications] = useState<ChildDedicationItem[]>([]);
   const [supportSubmissions, setSupportSubmissions] = useState<SupportItem[]>([]);
   const [removalRequests, setRemovalRequests] = useState<RemovalItem[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinItem[]>([]);
   const [isElder, setIsElder] = useState(false);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -101,13 +114,15 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
     setLoading(true);
     const headers = authHeaders();
     try {
-      const [pRes, vRes, dRes, sRes, rRes] = await Promise.all([
+      const [jRes, pRes, vRes, dRes, sRes, rRes] = await Promise.all([
+        fetch(`${API_URL}/api/members/enrollment-requests/`, { headers }),
         fetch(`${API_URL}/api/members/prayer-requests/`, { headers }),
         fetch(`${API_URL}/api/members/visitations/`, { headers }),
         fetch(`${API_URL}/api/members/child-dedications/`, { headers }),
         fetch(`${API_URL}/api/members/support-submissions/`, { headers }),
         fetch(`${API_URL}/api/members/removal-requests/`, { headers }),
       ]);
+      setJoinRequests(jRes.ok ? await jRes.json() : []);
       setPrayerRequests(pRes.ok ? await pRes.json() : []);
       setVisitationRequests(vRes.ok ? await vRes.json() : []);
       setChildDedications(dRes.ok ? await dRes.json() : []);
@@ -128,8 +143,11 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
       fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
         .then((res) => (res.ok ? res.json() : null))
         .then((user) => {
-          const role = (user?.role || "").toLowerCase().trim();
-          setIsElder(["admin", "elder", "clerk"].includes(role) || Boolean(user?.is_staff));
+          const roles = (Array.isArray(user?.roles) && user.roles.length > 0
+            ? user.roles
+            : [user?.role || ""]
+          ).map((r: string) => r.toLowerCase().trim());
+          setIsElder(roles.some((r: string) => ["admin", "elder", "clerk"].includes(r)) || Boolean(user?.is_staff));
         })
         .catch(() => setIsElder(false));
     }
@@ -169,7 +187,41 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
     }
   };
 
+  const handleReviewJoin = async (id: number, decision: "approved" | "rejected") => {
+    const confirmText = decision === "approved"
+      ? "Approve this join request? The account will be activated and they can sign in."
+      : "Reject this join request?";
+    if (!confirm(confirmText)) return;
+
+    setReviewingId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/enrollment-requests/${id}/decision/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      });
+      if (res.ok) {
+        showAlert(
+          decision === "approved" ? "Join Request Approved" : "Join Request Rejected",
+          decision === "approved"
+            ? "The account has been activated \u2014 they can now sign in."
+            : "The join request was rejected.",
+          "success"
+        );
+        fetchAll();
+      } else {
+        const data = await res.json().catch(() => null);
+        showAlert("Review Failed", data?.detail || "Could not update the join request.", "error");
+      }
+    } catch {
+      showAlert("Network Error", "Could not reach the server.", "error");
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   const tabs: { key: ActiveTab; label: string; count?: number }[] = [
+    { key: "joins", label: "Join Requests", count: joinRequests.filter((j) => j.status === "pending" || j.status === "verification_pending").length },
     { key: "prayer", label: "Prayer Requests", count: prayerRequests.length },
     { key: "visitation", label: "Visitation", count: visitationRequests.length },
     { key: "dedication", label: "Child Dedications", count: childDedications.length },
@@ -184,7 +236,7 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
         <div>
           <h2 className="text-2xl font-semibold text-[#26352f]">Pastoral & Member Requests</h2>
           <p className="mt-0.5 text-sm text-[#617068]">
-            Review and manage prayer, visitation, dedications, welfare, and membership transfer requests.
+            Review join requests, prayer, visitation, dedications, welfare, and membership transfers.
           </p>
         </div>
         <button
@@ -224,6 +276,88 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
       {loading && (
         <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
           Loading requests...
+        </div>
+      )}
+
+      {/* Join Requests (friend / baptism enrollments awaiting approval) */}
+      {!loading && activeTab === "joins" && (
+        <div className="space-y-4">
+          {joinRequests.length === 0 ? (
+            <EmptyState icon="\ud83e\udd1d" label="No join requests yet." />
+          ) : (
+            joinRequests.map((item) => {
+              const awaiting = item.status === "pending" || item.status === "verification_pending";
+              return (
+                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-[#26352f]">{item.full_name}</p>
+                      <p className="text-xs text-[#617068]">
+                        {item.email}
+                        {item.phone_number ? ` \u00b7 ${item.phone_number}` : ""}
+                      </p>
+                      <p className="text-xs text-[#617068]">
+                        Submitted {new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
+                        {item.current_church ? ` \u00b7 From ${item.current_church}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+                        {item.joining_mode === "friend" ? "Friend of church" : item.joining_mode === "baptism" ? "Baptism" : "Membership transfer"}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          item.status === "approved" || item.status === "completed"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : item.status === "rejected"
+                              ? "bg-rose-100 text-rose-800"
+                              : item.status === "verification_pending"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {item.status === "verification_pending"
+                          ? "Awaiting their email"
+                          : item.status === "pending"
+                            ? "Awaiting approval"
+                            : item.status}
+                      </span>
+                    </div>
+                  </div>
+                  {!item.has_account && item.status === "verification_pending" && (
+                    <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl">
+                      Still verifying their email. You can approve now \u2014 the account activates when they finish signing up.
+                    </p>
+                  )}
+                  {!item.has_account && item.status === "approved" && (
+                    <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl">
+                      Approved early \u2014 the account activates as soon as they complete their email verification.
+                    </p>
+                  )}
+                  {isElder && awaiting && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={reviewingId === item.id}
+                        onClick={() => handleReviewJoin(item.id, "approved")}
+                        className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === item.id ? "Processing..." : "\u2713 Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === item.id}
+                        onClick={() => handleReviewJoin(item.id, "rejected")}
+                        className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                      >
+                        \u2715 Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

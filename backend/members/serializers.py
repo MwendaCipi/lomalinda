@@ -259,6 +259,22 @@ class AnnouncementResponseSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'user', 'created_at')
 
 
+class EnrollmentAdminSerializer(serializers.ModelSerializer):
+    """Read-only view of a join request for the leadership Requests queue."""
+    full_name = serializers.SerializerMethodField()
+    has_account = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EnrollmentRequest
+        fields = ('id', 'first_name', 'last_name', 'full_name', 'email', 'phone_number', 'joining_mode', 'current_church', 'status', 'has_account', 'created_at', 'expires_at')
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.email
+
+    def get_has_account(self, obj):
+        return obj.user_id is not None
+
+
 class AnnouncementSerializer(serializers.ModelSerializer):
     responses = AnnouncementResponseSerializer(many=True, read_only=True)
     responses_count = serializers.IntegerField(source='responses.count', read_only=True)

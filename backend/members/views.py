@@ -46,7 +46,7 @@ from .roles import (
     sync_role_groups,
     unknown_role_codes,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -753,6 +753,65 @@ class EnrollmentCompleteView(APIView):
         enrollment.terms_of_use_version = CURRENT_TERMS_OF_USE_VERSION
         enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at', 'privacy_policy_version', 'terms_accepted_at', 'terms_of_use_version'])
         return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
+
+
+class EnrollmentAdminListView(generics.ListAPIView):
+    """Join requests (friends, baptism, transfer-ins) for the leadership queue.
+
+    Enrollment completions land as inactive accounts with status ``pending``;
+    without this list they had no place to surface for review.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = EnrollmentAdminSerializer
+
+    def get_queryset(self):
+        profile = getattr(self.request.user, 'member_profile', None)
+        if self.request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder')):
+            return EnrollmentRequest.objects.select_related('user').order_by('-created_at')
+        return EnrollmentRequest.objects.none()
+
+
+class EnrollmentDecisionView(APIView):
+    """Approve or reject a join request.
+
+    Approval activates the account (once it exists) so the person can finally
+    sign in; rejection keeps it disabled. Requests still awaiting email
+    verification can be decided early too: approving lets the link complete
+    straight into an active account, rejecting burns the link.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        profile = getattr(request.user, 'member_profile', None)
+        if not (request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder'))):
+            return Response({'detail': 'Only church officials can review join requests.'}, status=status.HTTP_403_FORBIDDEN)
+        enrollment = EnrollmentRequest.objects.select_related('user').filter(pk=pk).first()
+        if not enrollment:
+            return Response({'detail': 'Join request not found.'}, status=status.HTTP_404_NOT_FOUND)
+        decision = request.data.get('status')
+        if decision not in ('approved', 'rejected'):
+            return Response({'detail': 'Use approved or rejected for join review.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        enrollment.status = decision
+        enrollment.save(update_fields=['status'])
+        if enrollment.user_id:
+            user = enrollment.user
+            user.is_active = decision == 'approved'
+            user.save(update_fields=['is_active'])
+            if decision == 'approved':
+                message = (
+                    'Your request to join as a friend of the church has been approved. You can now sign in.'
+                    if enrollment.joining_mode == 'friend'
+                    else 'Your request to join the church has been approved. You can now sign in.'
+                )
+            else:
+                message = 'Your request to join the church has not been approved. Please contact the church office for more information.'
+            ChurchNotification.objects.create(
+                user=user,
+                title='Join Request Approved' if decision == 'approved' else 'Join Request Not Approved',
+                message=message,
+            )
+        return Response(EnrollmentAdminSerializer(enrollment).data, status=status.HTTP_200_OK)
 
 
 class InvitationListCreateView(generics.ListCreateAPIView):

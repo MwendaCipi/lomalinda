@@ -1603,3 +1603,84 @@ class AnnouncementPublishingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         announcement.refresh_from_db()
         self.assertTrue(announcement.published)
+
+
+class JoinRequestApprovalTests(APITestCase):
+    """Friends (and other joiners) land in the leadership queue until approved."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        self.elder = User.objects.create_user('join.elder', 'join.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.plain = User.objects.create_user('join.plain', 'join.plain@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.applicant = User.objects.create_user('friend.joy', 'friend.joy@example.com', 'ChurchPass#2026')
+        self.applicant.is_active = False
+        self.applicant.save(update_fields=['is_active'])
+        self.enrollment = EnrollmentRequest.objects.create(
+            email='friend.joy@example.com',
+            first_name='Joy',
+            last_name='Kariuki',
+            joining_mode='friend',
+            current_church='SDA Kabarak',
+            user=self.applicant,
+            status='pending',
+            expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+    def test_elder_sees_join_requests_and_plain_member_does_not(self):
+        self.client.force_authenticate(self.elder)
+        response = self.client.get('/api/members/enrollment-requests/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+        self.client.force_authenticate(self.plain)
+        response = self.client.get('/api/members/enrollment-requests/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, [])
+
+    def test_approving_activates_the_account_and_notifies(self):
+        from .models import ChurchNotification
+
+        self.client.force_authenticate(self.elder)
+        response = self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.enrollment.refresh_from_db()
+        self.applicant.refresh_from_db()
+        self.assertEqual(self.enrollment.status, 'approved')
+        self.assertTrue(self.applicant.is_active)
+        self.assertTrue(ChurchNotification.objects.filter(user=self.applicant, title__icontains='approved').exists())
+
+    def test_rejection_keeps_the_account_disabled(self):
+        self.client.force_authenticate(self.elder)
+        response = self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'rejected'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.enrollment.refresh_from_db()
+        self.applicant.refresh_from_db()
+        self.assertEqual(self.enrollment.status, 'rejected')
+        self.assertFalse(self.applicant.is_active)
+
+    def test_plain_member_cannot_decide(self):
+        self.client.force_authenticate(self.plain)
+        response = self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.applicant.refresh_from_db()
+        self.assertFalse(self.applicant.is_active)
+
+    def test_invalid_decision_is_rejected(self):
+        self.client.force_authenticate(self.elder)
+        response = self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'maybe'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
