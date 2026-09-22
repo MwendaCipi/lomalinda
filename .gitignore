@@ -51,3 +51,6 @@ Thumbs.db
 
 # Freebuff local state
 .freebuff/
+
+# Local media uploads (test/dev artifacts); production media lives on the server
+backend/media/

@@ -1185,7 +1185,7 @@ class AnnouncementView(generics.ListCreateAPIView):
             try:
                 from django.contrib.auth.models import User
                 from django.conf import settings
-                from django.core.mail import send_mail
+                from django.core.mail import EmailMessage
                 recipient_emails = list(
                     User.objects.filter(is_active=True)
                     .exclude(email='')
@@ -1196,7 +1196,16 @@ class AnnouncementView(generics.ListCreateAPIView):
                     church_name = current_church_name()
                     subject = f"Church Announcement: {announcement.title}"
                     body = f"Hello Church Member,\n\n{announcement.title}\n\n{announcement.text}\n\n{announcement.detail}\n\n{church_name}"
-                    send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipient_emails, fail_silently=True)
+                    message = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, recipient_emails)
+                    if announcement.attachment:
+                        # The flyer or document rides along with the email;
+                        # the SMS channel stays text-only by design.
+                        try:
+                            with announcement.attachment.open('rb') as fh:
+                                message.attach(announcement.attachment.name.rsplit('/', 1)[-1], fh.read())
+                        except Exception:
+                            pass
+                    message.send(fail_silently=True)
             except Exception:
                 pass
 

@@ -6,6 +6,9 @@ import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** Keep in sync with validate_text in backend/members/serializers.py. */
+const ANNOUNCEMENT_TEXT_LIMIT = 500;
+
 type Announcement = {
   id: number;
   title: string;
@@ -112,6 +115,12 @@ export function AnnouncementManager() {
       const err = "Please select at least one sharing option (On the Site, SMS, Email).";
       setMessage(err);
       showAlert("Missing Sharing Option", err, "error");
+      return;
+    }
+    if (form.text.length > ANNOUNCEMENT_TEXT_LIMIT) {
+      const err = `Announcement text must be ${ANNOUNCEMENT_TEXT_LIMIT} characters or fewer (currently ${form.text.length}).`;
+      setMessage(err);
+      showAlert("Announcement Too Long", err, "error");
       return;
     }
     setSubmitting(true);
@@ -386,6 +395,7 @@ export function AnnouncementManager() {
                 Title *
                 <input
                   required
+                  maxLength={160}
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Announcement title"
@@ -506,11 +516,19 @@ export function AnnouncementManager() {
                 <textarea
                   required
                   rows={4}
+                  maxLength={ANNOUNCEMENT_TEXT_LIMIT}
                   value={form.text}
                   onChange={(e) => setForm({ ...form, text: e.target.value })}
                   placeholder="Write full announcement content..."
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
+                <span
+                  className={`mt-1 block text-right text-[10px] font-semibold ${
+                    form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
+                  }`}
+                >
+                  {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
+                </span>
               </label>
 
               {message && (

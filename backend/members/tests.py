@@ -1684,3 +1684,49 @@ class JoinRequestApprovalTests(APITestCase):
             {'status': 'maybe'}, format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AnnouncementBroadcastTests(APITestCase):
+    """Email carries the attachment; the text length cap holds at the API."""
+
+    def setUp(self):
+        self.elder = User.objects.create_user('ann.mail', 'ann.mail@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.client.force_authenticate(self.elder)
+
+    def test_email_broadcast_carries_the_attachment(self):
+        from django.core import mail
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        flyer = SimpleUploadedFile('sabbath-flyer.png', b'\x89PNG-fake-bytes', content_type='image/png')
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Potluck Sabbath',
+            'text': 'Bring a dish to share after divine service.',
+            'visibility': 'public',
+            'sharing_option': 'email',
+            'attachment': flyer,
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(mail.outbox[0].attachments, 'the attachment must ride along on the email')
+        # Django's storage deduplicates upload names with a unique suffix.
+        attached_name = mail.outbox[0].attachments[0][0]
+        self.assertTrue(attached_name.startswith('sabbath-flyer'), attached_name)
+        self.assertTrue(attached_name.endswith('.png'), attached_name)
+
+    def test_announcement_text_length_is_capped(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Too long',
+            'text': 'x' * 501,
+            'visibility': 'public',
+            'sharing_option': 'site',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Just right',
+            'text': 'x' * 500,
+            'visibility': 'public',
+            'sharing_option': 'site',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

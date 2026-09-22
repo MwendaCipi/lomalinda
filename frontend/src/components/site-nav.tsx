@@ -96,6 +96,9 @@ export function SiteNav() {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("access_token");
       if (token) {
+        // Flip the brand link to the dashboard immediately on mount, so the
+        // first click never races the profile fetch below.
+        setUserState((prev) => ({ ...prev, isLoggedIn: true }));
         fetch(`${API_URL}/api/members/me/`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -283,7 +286,7 @@ export function SiteNav() {
       {/* Top 100% Full-Width Header Bar */}
       <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-[#26352f] border-b border-white/10 shadow-md text-white px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Left: Church Banner / Logo & Church Name */}
-        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
+        <Link href={userState.isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
           <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/10 p-1 border border-white/15">
             <Image
               src="/adventist-symbol.svg"

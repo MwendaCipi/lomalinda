@@ -297,6 +297,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         except (FileNotFoundError, OSError, ValueError):
             return None
 
+    def validate_text(self, value):
+        # Keep in sync with ANNOUNCEMENT_TEXT_LIMIT in announcement-manager.tsx
+        # so long posts are rejected at the API even if a client skips the check.
+        if len(value) > 500:
+            raise serializers.ValidationError('Announcement text must be 500 characters or fewer.')
+        return value
+
     class Meta:
         model = Announcement
         fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'created_at', 'responses', 'responses_count')
