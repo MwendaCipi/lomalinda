@@ -1117,9 +1117,10 @@ class AnnouncementView(generics.ListCreateAPIView):
         send_sms = any(c in ('sms', 'all') for c in channels) or sharing_raw in ('sms', 'all')
         show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
 
-        if not show_site:
-            announcement.published = False
-            announcement.save(update_fields=['published'])
+        # Publish strictly by channel choice: an announcement that goes out on
+        # the site is visible; email/SMS-only ones stay off the site.
+        announcement.published = show_site
+        announcement.save(update_fields=['published'])
 
         if send_email:
             try:
@@ -1156,6 +1157,17 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [AllowAny]
     serializer_class = AnnouncementSerializer
     queryset = Announcement.objects.all()
+
+    def perform_update(self, serializer):
+        # Editing the sharing channels re-decides site visibility, so an
+        # announcement whose channels gain or lose "site" flips accordingly.
+        announcement = serializer.save()
+        sharing_raw = (announcement.sharing_option or '').lower()
+        channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
+        show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
+        if announcement.published != show_site:
+            announcement.published = show_site
+            announcement.save(update_fields=['published'])
 
     def perform_destroy(self, instance):
         profile = getattr(self.request.user, 'member_profile', None)

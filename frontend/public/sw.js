@@ -1,4 +1,4 @@
-const CACHE_NAME = "sda-loma-linda-meru-v5";
+const CACHE_NAME = "sda-loma-linda-meru-v6";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -18,10 +18,10 @@ const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/adventist-logo.svg",
   "/adventist-logo-white.svg",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png",
-  "/icons/icon-512x512-maskable.png",
-  "/icons/apple-touch-icon.png",
+  "/icons/meru/app-icon-192.png",
+  "/icons/meru/app-icon-512.png",
+  "/icons/meru/app-icon-512-maskable.png",
+  "/icons/meru/apple-touch-icon.png",
 ];
 
 async function cacheStaticAssets() {

@@ -1567,3 +1567,39 @@ class ReceiptMessageTemplateTests(TestCase):
         for name in ('send_contribution_receipt', 'send_cash_receipt'):
             source = inspect.getsource(getattr(views, name))
             self.assertNotIn('Dear {donor_name}', source, name)
+
+
+class AnnouncementPublishingTests(APITestCase):
+    """Site visibility follows the sharing channels exactly, on create and edit."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user('pub.admin', 'pub.admin@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.client.force_authenticate(self.admin)
+
+    def test_site_channel_announcement_is_published(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Work day', 'text': 'Sunday after service.', 'visibility': 'members',
+            'sharing_option': 'site,email',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['published'])
+
+    def test_email_only_announcement_stays_off_the_site(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Members only mail', 'text': 'Sent by email.', 'visibility': 'members',
+            'sharing_option': 'email',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['published'])
+
+    def test_editing_channels_updates_publishing(self):
+        from .models import Announcement
+
+        announcement = Announcement.objects.create(title='Old notice', text='Body', visibility='members', published=False)
+        response = self.client.patch(f'/api/members/announcements/{announcement.pk}/', {
+            'sharing_option': 'site',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertTrue(announcement.published)

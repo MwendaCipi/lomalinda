@@ -24,14 +24,15 @@ export const metadata: Metadata = {
     title: "Loma Linda SDA",
   },
   icons: {
-    // The ?v= query changes whenever the icon art changes: installed PWAs
-    // treat a changed URL as a new icon and refresh the home-screen bitmap
-    // (bumping the file alone is not enough — Android keeps the old render).
+    // Brand-new file paths (not query-string versions): every cache layer
+    // between the phone and the server — browser HTTP cache, Cloudflare edge,
+    // Chrome's WebAPK minting server — has never seen these URLs, so a
+    // reinstall is guaranteed to fetch the current Meru artwork.
     icon: [
-      { url: "/icons/icon-192x192.png?v=2-meru", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png?v=2-meru", sizes: "512x512", type: "image/png" },
+      { url: "/icons/meru/app-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/meru/app-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png?v=2-meru",
+    apple: "/icons/meru/apple-touch-icon.png",
   },
 };
 
