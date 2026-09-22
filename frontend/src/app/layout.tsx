@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
   title: "SDA Loma Linda",
   description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
-  manifest: "/manifest.json",
+  manifest: "/manifest.json?v=3-meru",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
