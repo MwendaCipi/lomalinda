@@ -384,10 +384,7 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
           {/* Top Banner / Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#dfdbd1] pb-6">
             <div>
-              <span className="rounded-full bg-[#5f8067]/10 px-3.5 py-1 text-xs font-bold text-[#5f8067]">
-                {isAdminMode ? "Stewardship Administration" : "Church Fundraising"}
-              </span>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Fund Drives {isAdminMode && "& Goal Management"}
               </h1>
               <p className="mt-2 text-sm text-[#617068]">

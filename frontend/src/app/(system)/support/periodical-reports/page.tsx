@@ -40,10 +40,7 @@ export default function PeriodicalReportsPage() {
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">
-                Financial Stewardship
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Periodic Reports
               </h1>
               <p className="mt-3 text-base leading-7 text-[#617068]">

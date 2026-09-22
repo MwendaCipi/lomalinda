@@ -30,11 +30,16 @@ export function SupportSidebar() {
 
         <nav className="space-y-1.5">
           {supportLinks.map((item) => {
+            // next.config sets trailingSlash: true, so live paths carry a
+            // trailing slash ("/support/in-kind/") that would never equal
+            // the bare href — compare without it.
+            const normalized = (pathname ?? "").replace(/\/+$/, "") || "/";
+            const target = item.href.replace(/\/+$/, "");
             const isActive =
-              pathname === item.href ||
-              (item.href === "/give" && pathname === "/support/give") ||
+              normalized === target ||
+              (item.href === "/give" && normalized === "/support/give") ||
               (item.href === "/support/campaigns" &&
-                (pathname?.startsWith("/support/campaigns") || pathname?.startsWith("/campaigns")));
+                (normalized === "/support/campaigns" || normalized.startsWith("/campaigns")));
             const Icon = item.icon;
             return (
               <Link
