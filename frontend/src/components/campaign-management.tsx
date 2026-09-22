@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -821,23 +822,31 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
               </div>
             ) : (
               <>
-                {/* PC Desktop Table View (visible on md and up) */}
-                <div className="hidden md:block overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]">
-                  <div className="overflow-x-auto custom-table-scrollbar">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] font-bold uppercase tracking-wider text-[#617068]">
-                          <th className="px-5 py-3.5">Fund Drive</th>
-                          <th className="px-4 py-3.5">Account Ref</th>
-                          <th className="px-4 py-3.5">Target &amp; Raised</th>
-                          <th className="px-4 py-3.5">Timeline</th>
-                          {isAdminMode && <th className="px-3 py-3.5 text-center">Invites</th>}
-                          <th className="px-3 py-3.5 text-center">Status</th>
-                          <th className="px-5 py-3.5 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#dfdbd1] text-xs">
-                        {campaigns.map((c) => (
+                {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+                <RecordList
+                  rows={campaigns}
+                  loading={false}
+                  rowKey={(c) => c.id}
+                  headers={[
+                    { label: "Fund Drive", className: "px-5 py-3.5" },
+                    { label: "Account Ref", className: "px-4 py-3.5" },
+                    { label: "Target & Raised", className: "px-4 py-3.5" },
+                    { label: "Timeline", className: "px-4 py-3.5" },
+                    ...(isAdminMode
+                      ? [{ label: "Invites", className: "px-3 py-3.5 text-center" }]
+                      : []),
+                    { label: "Status", className: "px-3 py-3.5 text-center" },
+                    { label: "Actions", className: "px-5 py-3.5 text-right" },
+                  ]}
+                  loadingLabel=""
+                  tableWrapperClassName="overflow-hidden overflow-x-auto custom-table-scrollbar rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"
+                  tableClassName="w-full text-left border-collapse"
+                  headClassName=""
+                  headRowClassName="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] font-bold uppercase tracking-wider text-[#617068]"
+                  headCellClassName=""
+                  bodyClassName="divide-y divide-[#dfdbd1] text-xs"
+                  cardsClassName="grid gap-4"
+                  renderRow={(c) => (
                           <tr key={c.id} className="transition hover:bg-[#fcfbf9]">
                             <td className="px-5 py-4 align-middle">
                               <Link
@@ -976,15 +985,8 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
                               </div>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Mobile Card View (visible on mobile only) */}
-                <div className="grid gap-4 md:hidden">
-                  {campaigns.map((c) => (
+                  )}
+                  renderCard={(c) => (
                     <div key={c.id} className="flex flex-col justify-between rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] transition hover:shadow-md space-y-4">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1099,8 +1101,8 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+                />
               </>
             )}
           </div>

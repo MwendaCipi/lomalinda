@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS } from "./roles-combobox";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -195,18 +196,24 @@ export function LeaderManagement() {
         </div>
       )}
 
-      {/* Mobile Cards View — scrolls inside the section like the desktop table */}
-      <div className="custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2 md:hidden">
-        {loading ? (
-          <div className="py-8 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
-            Loading member leadership records...
-          </div>
-        ) : filteredMembers.length === 0 ? (
-          <div className="py-8 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
-            No members found matching your search.
-          </div>
-        ) : (
-          filteredMembers.map((m, idx) => (
+      {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+      <RecordList
+        rows={filteredMembers}
+        loading={loading}
+        rowKey={(m) => m.id}
+        headers={[
+          { label: "#", className: "w-10" },
+          { label: "Member" },
+          { label: "Contact" },
+          { label: "Roles" },
+        ]}
+        loadingLabel="Loading member leadership records..."
+        tableEmpty="No members found matching your search."
+        stateClassName="py-4 text-center text-[#617068]"
+        tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
+        cardsClassName="custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2"
+        cardsStateClassName="py-8 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]"
+        renderCard={(m, idx) => (
             <div key={m.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
                 <div className="flex items-center gap-2">
@@ -235,36 +242,8 @@ export function LeaderManagement() {
                 />
               </div>
             </div>
-          ))
-        )}
-      </div>
-
-      {/* PC Desktop Table View (visible on md and up) */}
-      <div className="hidden flex-1 min-h-0 overflow-auto custom-table-scrollbar md:block">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-white border-b border-[#dfdbd1]">
-            <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
-              <th className="pb-3 font-bold w-10">#</th>
-              <th className="pb-3 font-bold">Member</th>
-              <th className="pb-3 font-bold">Contact</th>
-              <th className="pb-3 font-bold">Roles</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#eeeae2]">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="py-4 text-center text-[#617068]">
-                  Loading member leadership records...
-                </td>
-              </tr>
-            ) : filteredMembers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-4 text-center text-[#617068]">
-                  No members found matching your search.
-                </td>
-              </tr>
-            ) : (
-              filteredMembers.map((m, idx) => (
+          )}
+        renderRow={(m, idx) => (
                 <tr key={m.id} className="hover:bg-[#f7f4ee]">
                   <td className="py-3.5 font-medium text-[#617068] w-10">
                     {idx + 1}
@@ -287,48 +266,8 @@ export function LeaderManagement() {
                     />
                   </td>
                 </tr>
-              ))
             )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile Leader Cards View (visible on mobile only) */}
-      <div className="grid gap-4 md:hidden">
-        {loading ? (
-          <div className="py-6 text-center text-xs text-[#617068]">Loading member leadership records...</div>
-        ) : filteredMembers.length === 0 ? (
-          <div className="py-6 text-center text-xs text-[#617068]">No members found matching your search.</div>
-        ) : (
-          filteredMembers.map((m) => {
-            const name = m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
-            const contact = m.phone_number || "—";
-            return (
-              <div key={m.id} className="rounded-2xl bg-white p-5 border border-[#dfdbd1] shadow-sm space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-sm text-[#26352f]">{name}</h3>
-                    <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
-                  </div>
-                  <span className="rounded-full bg-[#eef2ed] px-2.5 py-1 text-[10px] font-bold shrink-0 text-[#3d5148]">
-                    {formatRoles(m.roles || [m.role || "member"])}
-                  </span>
-                </div>
-
-                <div className="pt-2 border-t border-[#dfdbd1]/60 flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-[#26352f]">Role(s):</span>
-                  <RolesCombobox
-                    selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                    onChange={(newRoles) => handleRolesChange(m.id, newRoles)}
-                    disabled={updatingId === m.id}
-                    align="right"
-                  />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      />
 
       {/* Actions: Print & Add Leader */}
       <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">

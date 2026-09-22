@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { getMinistryGivingPurpose } from "@/config/ministries";
+import { RecordList } from "./record-list";
 
 type DepartmentEvent = { date: string; name: string; department?: string };
 
@@ -61,14 +62,24 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
             />
           </div>
 
-          {/* Mobile Cards View (visible on md:hidden) */}
-          <div className="grid gap-3 md:hidden">
-            {rows.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
-                No events found matching your search.
-              </div>
-            ) : (
-              rows.map((event) => (
+          {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+          <RecordList
+            rows={rows}
+            loading={false}
+            rowKey={(event) => `${event.date}-${event.name}`}
+            headers={[{ label: "Date" }, { label: "Event" }, { label: "Actions" }]}
+            loadingLabel=""
+            tableEmpty=""
+            cardsEmpty="No events found matching your search."
+            stateClassName=""
+            headClassName="border-b border-[#dfdbd1] bg-[#eef2ed] text-xs uppercase tracking-wider text-[#617068]"
+            headRowClassName=""
+            headCellClassName="px-4 py-3"
+            tableClassName="w-full min-w-[500px] text-left text-sm"
+            tableWrapperClassName="overflow-x-auto custom-table-scrollbar rounded-lg border border-[#dfdbd1]"
+            bodyClassName="divide-y divide-[#e9e5dd]"
+            cardsStateClassName="py-6 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]"
+            renderCard={(event) => (
                 <div key={`${event.date}-${event.name}`} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
                   <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
                     <h3 className="font-bold text-sm text-[#26352f]">{event.name}</h3>
@@ -91,22 +102,8 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                     </Link>
                   </div>
                 </div>
-              ))
             )}
-          </div>
-
-          {/* PC Desktop Table View (visible on md and up) */}
-          <div className="hidden md:block overflow-x-auto custom-table-scrollbar rounded-lg border border-[#dfdbd1]">
-            <table className="w-full min-w-[500px] text-left text-sm">
-              <thead className="border-b border-[#dfdbd1] bg-[#eef2ed] text-xs uppercase tracking-wider text-[#617068]">
-                <tr>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Event</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e9e5dd]">
-                {rows.map((event) => (
+            renderRow={(event) => (
                   <tr key={`${event.date}-${event.name}`}>
                     <td className="whitespace-nowrap px-4 py-3 text-[#617068]">
                       {new Date(`${event.date}T12:00:00`).toLocaleDateString(
@@ -139,52 +136,8 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Calendar Cards View (visible on mobile only) */}
-          <div className="grid gap-3 md:hidden">
-            {rows.map((event) => {
-              const dateStr = new Date(`${event.date}T12:00:00`).toLocaleDateString(
-                "en-KE",
-                { month: "short", day: "numeric", year: "numeric" }
-              );
-              return (
-                <div
-                  key={`dept-mob-${event.date}-${event.name}`}
-                  className="rounded-xl bg-white p-4 border border-[#dfdbd1] shadow-sm space-y-2 text-xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[11px] font-semibold text-[#b36b3c]">{dateStr}</span>
-                      <h4 className="font-bold text-sm text-[#26352f] mt-0.5">{event.name}</h4>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#dfdbd1]/60 flex items-center justify-between text-xs">
-                    <Link
-                      href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(
-                        event.name
-                      )}`}
-                      className="font-semibold text-[#b36b3c] hover:underline"
-                    >
-                      View program
-                    </Link>
-                    <Link
-                      href={`/give?purpose=${encodeURIComponent(
-                        getMinistryGivingPurpose(event.department || department)
-                      )}`}
-                      className="font-semibold text-[#5f8067] hover:underline"
-                    >
-                      Give support
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+              )}
+          />
 
           {loaded && rows.length === 0 && (
             <p className="px-4 py-5 text-sm text-[#617068]">
