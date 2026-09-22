@@ -58,8 +58,8 @@ export function MarketingNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#26352f] text-white shadow-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        {/* Brand */}
-        <Link href="/" className="flex items-center gap-2.5 min-w-0 sm:gap-3">
+        {/* Brand — signed-in members land on their dashboard, visitors on the landing page */}
+        <Link href={signedIn ? "/dashboard" : "/"} className="flex items-center gap-2.5 min-w-0 sm:gap-3">
           <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/10 p-1 border border-white/15">
             <Image
               src="/adventist-symbol.svg"

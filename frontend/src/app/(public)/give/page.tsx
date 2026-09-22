@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
+import { Check, SlidersHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -94,6 +95,7 @@ function GivePageContent() {
   // with Failed and All for reviewing attempts that never completed. Purpose
   // filtering is covered by the search box, which matches purpose text.
   const [givingStatusFilter, setGivingStatusFilter] = useState<"successful" | "failed" | "all">("successful");
+  const [showStatusFilterMenu, setShowStatusFilterMenu] = useState(false);
 
   const loadMyGivings = () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -316,8 +318,48 @@ function GivePageContent() {
                       <span className="shrink-0 text-xs text-[#617068]">→</span>
                       <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                     </div>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <div className="flex h-9 shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5" role="group" aria-label="Filter by status">
+                    <div className="relative flex min-w-0 flex-1 items-center gap-2">
+                      {/* Mobile: the three statuses live behind one compact Filters button; the segmented control stays for desktop. */}
+                      <div className="md:hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowStatusFilterMenu((open) => !open)}
+                          aria-expanded={showStatusFilterMenu}
+                          aria-label="Filter by status"
+                          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition ${
+                            givingStatusFilter === "successful"
+                              ? "border-[#dfdbd1] bg-[#f7f4ee] text-[#617068]"
+                              : "border-[#26352f] bg-[#26352f] text-white shadow-sm"
+                          }`}
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                          {givingStatusFilter === "successful" ? "Filter" : givingStatusFilter === "failed" ? "Failed" : "All"}
+                        </button>
+                        {showStatusFilterMenu && (
+                          <div className="absolute z-20 mt-2 w-36 overflow-hidden rounded-xl border border-[#dfdbd1] bg-white shadow-lg">
+                            {(["successful", "failed", "all"] as const).map((key) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                  setGivingStatusFilter(key);
+                                  setShowStatusFilterMenu(false);
+                                }}
+                                className={`flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold transition ${
+                                  givingStatusFilter === key
+                                    ? "bg-[#eef2ed] text-[#26352f]"
+                                    : "text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                                }`}
+                              >
+                                <span className="capitalize">{key}</span>
+                                {givingStatusFilter === key && <Check className="h-3.5 w-3.5 text-[#b36b3c]" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* Desktop: full segmented control. */}
+                      <div className="hidden h-9 shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 md:flex" role="group" aria-label="Filter by status">
                         {(["successful", "failed", "all"] as const).map((key) => (
                           <button
                             key={key}
