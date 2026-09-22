@@ -172,7 +172,7 @@ function AdministrationContent() {
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
           <div className="w-full h-full flex flex-col bg-white border-l border-[#dfdbd1] overflow-hidden">
             {/* Mobile Back Button (Visible only on Mobile when viewing sub-tab) */}
-            {activeTab !== "overview" && (
+            {activeTab !== "overview" && activeTab !== "users" && (
               <div className="flex shrink-0 items-center justify-between border-b border-[#dfdbd1] bg-white p-4 lg:hidden">
                 <button
                   onClick={() => {
@@ -187,7 +187,9 @@ function AdministrationContent() {
             )}
 
             <div
-              className={`flex-1 min-h-0 p-4 sm:p-6 ${
+              className={`flex-1 min-h-0 ${
+                activeTab === "users" ? "p-0 sm:p-6" : "p-4 sm:p-6"
+              } ${
                 tableContainedTabs.includes(activeTab)
                   ? "overflow-hidden"
                   : "overflow-y-auto custom-hover-scrollbar md:overflow-y-auto"

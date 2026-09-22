@@ -1074,7 +1074,18 @@ class AnnouncementView(generics.ListCreateAPIView):
         from django.db.models import Q
         from django.utils import timezone
         today = timezone.now().date()
-        queryset = Announcement.objects.filter(published=True)
+        
+        is_admin = False
+        if self.request.user.is_authenticated:
+            profile = getattr(self.request.user, 'member_profile', None)
+            if profile and profile.has_role('admin', 'clerk', 'elder'):
+                is_admin = True
+
+        if is_admin and self.request.query_params.get('include_unpublished') == 'true':
+            queryset = Announcement.objects.all()
+        else:
+            queryset = Announcement.objects.filter(published=True)
+
         if self.request.query_params.get('include_expired') != 'true':
             queryset = queryset.filter(Q(expires_at__isnull=True) | Q(expires_at__gte=today))
         search = self.request.query_params.get('search', '').strip()

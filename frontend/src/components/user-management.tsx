@@ -1759,32 +1759,29 @@ export function UserManagement() {
       </div>
 
       {/* ── Bottom bar: Print + Add ── */}
-      <div className="shrink-0 border-t border-[#dfdbd1] bg-white px-6 py-3 flex items-center justify-between gap-3">
+      <div className="shrink-0 border-t border-[#dfdbd1] bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* The count line is a desktop nicety; on phones the buttons need the width. */}
         <p className="hidden text-[11px] text-[#617068] sm:block">
           {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
         </p>
-        <p className="text-[11px] font-semibold text-[#617068] sm:hidden">
-          {invitationFilter === "pending" ? `${pendingInvitations.length} pending` : `${filteredMembers.length} records`}
-        </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
-            className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+            className="flex-1 sm:flex-none rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
           >
-            ✉️ Invite by Email
+            ✉️ Invite
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            className="flex-1 sm:flex-none rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
-            + Add Manually
+            + Add
           </button>
           <button
             onClick={handlePrintMemberList}
-            className="rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+            className="flex-1 sm:flex-none rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
           >
-            🖨️ Print User List
+            🖨️ Print
           </button>
         </div>
       </div>

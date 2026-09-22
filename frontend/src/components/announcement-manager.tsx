@@ -53,7 +53,7 @@ export function AnnouncementManager() {
   function fetchAnnouncements() {
     setLoadingList(true);
     const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/?include_expired=true`, {
+    fetch(`${API_URL}/api/members/announcements/?include_expired=true&include_unpublished=true`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((res) => (res.ok ? res.json() : []))
