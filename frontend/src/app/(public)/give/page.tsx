@@ -48,7 +48,8 @@ const methodLabel = (m: string) =>
 function GivePageContent() {
   const searchParams = useSearchParams();
   const rawPurposeParam = searchParams.get("purpose");
-  const normalizedPurpose = rawPurposeParam ? getMinistryGivingPurpose(rawPurposeParam) : "Tithe";
+  // No default: the giver must pick a purpose ("-- select --" placeholder).
+  const normalizedPurpose = rawPurposeParam ? getMinistryGivingPurpose(rawPurposeParam) : "";
 
   const [purpose, setPurpose] = useState(normalizedPurpose);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
@@ -483,6 +484,9 @@ function GivePageContent() {
                     onChange={(event) => setPurpose(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
                   >
+                    <option value="" disabled>
+                      -- select --
+                    </option>
                     {purposes.map((item) => (
                       <option key={item} value={item}>
                         {item}
