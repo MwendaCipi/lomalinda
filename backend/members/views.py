@@ -207,11 +207,13 @@ def send_password_reset_email(user, uid, token):
 
 def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
     """Attempt every available receipt channel and report whether one succeeded."""
-    sent = False
+    email_sent = False
+    sms_sent = False
+    sms_configured = bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))
     if email:
         try:
             send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-            sent = True
+            email_sent = True
         except Exception:
             pass
 
@@ -227,13 +229,18 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
                     timeout=10,
                 )
                 response.raise_for_status()
-                sent = True
+                sms_sent = True
             except Exception:
                 pass
 
+    sent = email_sent or sms_sent
     if sent:
         mark_sent()
-    return sent
+    return {
+        'email_sent': email_sent,
+        'sms_sent': sms_sent,
+        'sms_configured': sms_configured,
+    }
 
 
 def send_contribution_receipt(contribution):
@@ -266,13 +273,15 @@ def send_contribution_receipt(contribution):
         f"Date received: {timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')}\n\n"
         f"Warm regards,\n{church_name}"
     )
-    if _deliver_receipt_message(
+    email = contribution.donor_email or (contribution.member.email if contribution.member else '')
+    delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {contribution.purpose}",
         body=body,
-        email=contribution.donor_email,
-        phone='',
+        email=email,
+        phone=contribution.phone_number,
         mark_sent=lambda: None,
-    ):
+    )
+    if delivery['email_sent'] or delivery['sms_sent']:
         contribution.receipt_sent_at = timezone.now()
         contribution.save(update_fields=['receipt_sent_at'])
 
@@ -280,7 +289,7 @@ def send_contribution_receipt(contribution):
 def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     """Send a manually recorded receipt through both selected channels."""
     if cash.receipt_sent_at or cash.entry_type != 'individual':
-        return
+        return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
     donor_name = cash.donor_name.strip() or 'friend'
     message = settings_obj.default_receipt_message.replace('{name}', donor_name)
@@ -291,16 +300,17 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         f"Payment method: {cash.get_payment_method_display()}\n"
         f"Date received: {cash.received_on}\n\nWarm regards,\n{current_church_name()}"
     )
-    sent = _deliver_receipt_message(
+    delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {cash.purpose}",
         body=body,
         email=cash.giver_email if send_email else '',
-        phone='',
+        phone=cash.giver_phone if send_sms else '',
         mark_sent=lambda: None,
     )
-    if sent:
+    if delivery['email_sent'] or delivery['sms_sent']:
         cash.receipt_sent_at = timezone.now()
         cash.save(update_fields=['receipt_sent_at'])
+    return delivery
 
 
 def is_finance_manager(user):
@@ -1350,6 +1360,12 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
             queryset = queryset.filter(received_on=selected_date)
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        if hasattr(self, 'receipt_delivery_message') and isinstance(response.data, dict):
+            response.data['receipt_delivery_message'] = self.receipt_delivery_message
+        return response
+
     def perform_create(self, serializer):
         self._require_finance_manager()
         cash = serializer.save(received_by=self.request.user)
@@ -1359,10 +1375,15 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         if cash.entry_type == 'individual':
             if cash.donor_name or cash.giver_phone or cash.giver_email:
                 ensure_giver_profile(cash.donor_name, cash.giver_phone, cash.giver_email)
-            send_cash_receipt(
+            delivery = send_cash_receipt(
                 cash,
-                send_sms=False,
-                send_email=True,
+                send_sms=str(self.request.data.get('send_sms', 'true')).lower() in ('true', '1'),
+                send_email=str(self.request.data.get('send_email', 'true')).lower() in ('true', '1'),
+            )
+            self.receipt_delivery_message = (
+                'Email sent; SMS was not sent because SMS is not configured.'
+                if delivery and delivery['email_sent'] and not delivery['sms_sent'] and not delivery['sms_configured']
+                else 'Receipt delivery completed.'
             )
         elif cash.entry_type == 'anonymous':
             if not cash.donor_name.strip():
@@ -1757,9 +1778,9 @@ class ResendContributionReceiptView(APIView):
         else:
             return Response({'detail': 'Invalid source.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        dest_text = ", ".join(sent_destinations) if sent_destinations else "SMS/Email"
+        dest_text = ", ".join(sent_destinations) if sent_destinations else "Email"
         return Response({
-            'detail': f'Receipt resent successfully to {dest_text}.',
+            'detail': f'Email sent; SMS was not sent because SMS is not configured.' if sent_destinations else 'Receipt email could not be sent.',
             'receipt_sent_at': now.isoformat(),
         })
 

@@ -101,6 +101,8 @@ export default function ReconciliationPage() {
   const [cashForm, setCashForm] = useState({ amount: "", purpose: "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [itemDescription, setItemDescription] = useState("");
+  const [sendSms, setSendSms] = useState(true);
+  const [sendEmail, setSendEmail] = useState(true);
   const [customPurpose, setCustomPurpose] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
   const [isCustomMessage, setIsCustomMessage] = useState(false);
@@ -340,8 +342,8 @@ export default function ReconciliationPage() {
         amount: cashForm.amount,
         purpose: finalPurpose,
         received_on: receiptDate,
-        send_sms: false,
-        send_email: true,
+        send_sms: sendSms,
+        send_email: sendEmail,
       })
     });
     setSaving(false);
@@ -352,8 +354,10 @@ export default function ReconciliationPage() {
     setCustomPurpose("");
     setReceiptMessage("");
     setIsCustomMessage(false);
+    setSendSms(true);
+    setSendEmail(true);
     setIsModalOpen(false);
-    setMessage("Receipt saved successfully.");
+    setMessage((await response.clone().json().catch(() => ({}))).receipt_delivery_message || "Receipt saved successfully.");
     await load(nextFrom, nextTo);
     await loadAllGivings(nextFrom, nextTo);
     if (expandedPurpose) {
@@ -1435,9 +1439,14 @@ export default function ReconciliationPage() {
                     />
                   </label>
 
-                  <p className="rounded-xl bg-[#f4f7f4] px-3 py-2 text-xs text-[#617068]">
-                    The receipt will be sent by email.
-                  </p>
+                  <div className="rounded-xl bg-[#f4f7f4] px-3 py-2 text-xs text-[#617068]">
+                    <p className="font-semibold text-[#26352f]">Send receipt through</p>
+                    <div className="mt-2 flex gap-5">
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Email</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} /> SMS</label>
+                    </div>
+                    <p className="mt-1">SMS will report that only email was sent until an SMS gateway is configured.</p>
+                  </div>
                 </>
               )}
 
