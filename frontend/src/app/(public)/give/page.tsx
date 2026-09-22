@@ -116,6 +116,20 @@ function GivePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Signed-in givers get their name filled in for them; typing still wins.
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) return;
+    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => {
+        if (!me) return;
+        const full = `${me.first_name || ""} ${me.last_name || ""}`.trim() || me.username || "";
+        setDonorName((current) => (current ? current : full));
+      })
+      .catch(() => {});
+  }, []);
+
   const givingDateOf = (g: MyGiving) => (g.paid_at || g.created_at || "").slice(0, 10);
 
   const filteredGivings = myGivings.filter((g) => {
@@ -246,11 +260,9 @@ function GivePageContent() {
         item_description: descriptionPayload,
         donor_email: donorEmail,
       };
-      // M-Pesa knows the payer's name from the payment itself (the callback
-      // records it), so only the bank-transfer path sends one.
-      if (methodOfGiving === "bank_transfer") {
-        payload.donor_name = donorName;
-      }
+      // The name rides the initiation context: Safaricom's push callback
+      // does not carry it, so the form is where the giver says who they are.
+      payload.donor_name = donorName;
 
       const response = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
         method: "POST",
@@ -655,20 +667,18 @@ function GivePageContent() {
                   </div>
                 </div>
               )}
-              {/* 3. Name & Email Row — M-Pesa reads the payer's name from the
-                  payment callback, so only bank transfers ask for it here. */}
+              {/* 3. Name & Email Row — the name rides the initiation context so
+                  the callback records who gave; signed-in givers see it prefilled. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {methodOfGiving === "bank_transfer" && (
-                  <label className="block text-sm font-medium text-[#26352f]">
-                    Your name
-                    <input
-                      value={donorName}
-                      onChange={(event) => setDonorName(event.target.value)}
-                      placeholder="Full name"
-                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
-                )}
+                <label className="block text-sm font-medium text-[#26352f]">
+                  Your name
+                  <input
+                    value={donorName}
+                    onChange={(event) => setDonorName(event.target.value)}
+                    placeholder="Full name"
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                  />
+                </label>
 
                 <label className="block text-sm font-medium text-[#26352f]">
                   Email

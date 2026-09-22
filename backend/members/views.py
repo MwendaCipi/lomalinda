@@ -29,7 +29,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, InKindContribution, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -280,47 +280,6 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
     }
 
 
-def receipt_giver_name(donor_name, *, member=None, email='', phone=''):
-    """The name a receipt greeting uses for the recipient.
-
-    Whatever identifies the giver wins: the name they supplied, the member
-    account the gift belongs to, or a registered account matched by the
-    receipt's email or phone — the same matching ``ensure_giver_profile``
-    uses. ``friend`` is only the last resort when nothing identifies a
-    person, so the greeting stays graceful instead of addressing a known
-    member as a stranger.
-    """
-    name = (donor_name or '').strip()
-    if name:
-        return name
-
-    def account_name(user):
-        if user is None:
-            return ''
-        full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
-        return full or (user.username or '').strip()
-
-    name = account_name(member)
-    if name:
-        return name
-
-    email = (email or '').strip()
-    phone = (phone or '').strip()
-    if email or phone:
-        User = get_user_model()
-        user = None
-        if email:
-            user = User.objects.filter(email__iexact=email).first()
-        if not user and phone:
-            user = User.objects.filter(
-                member_profile__phone_number=phone.replace('+', '').replace(' ', '')
-            ).first()
-        name = account_name(user)
-        if name:
-            return name
-    return 'friend'
-
-
 def send_contribution_receipt(contribution):
     if contribution.receipt_sent_at or contribution.status != 'completed':
         return
@@ -328,12 +287,12 @@ def send_contribution_receipt(contribution):
     church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
     local_now = timezone.localtime()
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-    donor_name = receipt_giver_name(
+    donor_name = giver_display_name(
         contribution.donor_name,
         member=contribution.member,
         email=contribution.donor_email,
         phone=contribution.phone_number,
-    )
+    ) or 'friend'
     amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
     receipt_message = render_receipt_message(
         church_settings.default_receipt_message,
@@ -367,9 +326,9 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     if cash.receipt_sent_at or cash.entry_type != 'individual':
         return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
-    donor_name = receipt_giver_name(
+    donor_name = giver_display_name(
         cash.donor_name, email=cash.giver_email, phone=cash.giver_phone,
-    )
+    ) or 'friend'
     amount_display = f"KES {cash.amount:,.2f}"
     message = render_receipt_message(
         settings_obj.default_receipt_message,
@@ -1822,7 +1781,7 @@ class PurposeContributionsView(APIView):
             else:
                 method_display = 'M-Pesa'
 
-            donor_name = c.donor_name.strip() if c.donor_name else (c.member.get_full_name() if c.member and c.member.get_full_name() else (c.member.username if c.member else 'Anonymous Giver'))
+            donor_name = giver_display_name(c.donor_name, member=c.member, email=c.donor_email, phone=c.phone_number) or 'Anonymous Giver'
             results.append({
                 'id': f"digital-{c.id}",
                 'raw_id': c.id,
@@ -1856,7 +1815,7 @@ class PurposeContributionsView(APIView):
             elif c.entry_type == 'anonymous':
                 donor_name = 'Anonymous Giver'
             else:
-                donor_name = c.donor_name.strip() if c.donor_name.strip() else 'Anonymous Giver'
+                donor_name = giver_display_name(c.donor_name, email=c.giver_email, phone=c.giver_phone) or 'Anonymous Giver'
 
             results.append({
                 'id': f"cash-{c.id}",
@@ -2039,7 +1998,7 @@ class InitiateContributionView(APIView):
         The initiation context (amount, purpose, phone, giver email, the
         campaign card) travels in the signed CallBackURL — see
         members/mpesa_tokens.py — so the callback can create the contribution
-        on its own, with the payer's name read from M-Pesa itself.
+        on its own, carrying the name the giver typed on the form.
         """
         data = serializer.validated_data
         phone_number = normalize_mpesa_phone(data['phone_number'])
@@ -2048,6 +2007,9 @@ class InitiateContributionView(APIView):
             'purpose': data['purpose'],
             'phone_number': phone_number,
         }
+        donor_name = (data.get('donor_name') or '').strip()
+        if donor_name:
+            context['donor_name'] = donor_name
         donor_email = (data.get('donor_email') or '').strip()
         if donor_email:
             context['donor_email'] = donor_email
@@ -2084,8 +2046,9 @@ class MpesaCallbackView(APIView):
 
     The contribution does not exist at push time; the initiation context
     rides in the signed ctx query parameter we embedded in the CallBackURL
-    and Daraja echoes back verbatim. The payer's name is read from the
-    callback metadata rather than a form, since Safaricom knows it.
+    and Daraja echoes back verbatim. The giver's name comes from the form
+    (packed into that context); the callback's own metadata and the
+    giver's contact details are only fallbacks.
     """
 
     permission_classes = [AllowAny]
@@ -2115,12 +2078,21 @@ class MpesaCallbackView(APIView):
                 str(metadata.get(part) or '').strip()
                 for part in ('FirstName', 'MiddleName', 'LastName')
             ).strip()
+            if not payer_name:
+                # The push callback carries the payer's MSISDN but not their
+                # name — look the giver up by it (or the emailed account) so
+                # a registered member is never recorded as an anonymous giver.
+                payer_name = giver_display_name(
+                    '',
+                    email=context.get('donor_email', ''),
+                    phone=str(metadata.get('PhoneNumber') or context.get('phone_number') or ''),
+                )
             contribution = Contribution.objects.create(
                 amount=Decimal(str(context['amount'])),
                 giving_type='financial',
                 purpose=context['purpose'],
                 phone_number=str(metadata.get('PhoneNumber', context['phone_number'])),
-                donor_name=payer_name,
+                donor_name=(context.get('donor_name') or '').strip() or payer_name,
                 donor_email=context.get('donor_email', ''),
                 item_description=context.get('item_description', ''),
                 payment_method='mpesa',
@@ -2284,7 +2256,7 @@ class RefundableContributionsView(APIView):
         refunds_by_contribution = {r.contribution_id: r for r in MpesaRefund.objects.all()}
         results = []
         for c in contributions:
-            donor_name = c.donor_name.strip() if c.donor_name else (c.member.get_full_name() if c.member and c.member.get_full_name() else (c.member.username if c.member else 'Anonymous Giver'))
+            donor_name = giver_display_name(c.donor_name, member=c.member, email=c.donor_email, phone=c.phone_number) or 'Anonymous Giver'
             refund = refunds_by_contribution.get(c.id)
             results.append({
                 'id': c.id,
@@ -4007,7 +3979,7 @@ class ReconciliationPdfView(APIView):
         individual_rows = []
         if is_individual:
             for d in digital.order_by("-created_at"):
-                m_name = d.donor_name or (f"{d.member.first_name} {d.member.last_name}".strip() if d.member else None) or "Anonymous"
+                m_name = giver_display_name(d.donor_name, member=d.member, email=d.donor_email, phone=d.phone_number) or "Anonymous"
                 individual_rows.append({
                     "member_name": m_name,
                     "date": d.created_at.strftime("%Y-%m-%d"),
@@ -4019,7 +3991,7 @@ class ReconciliationPdfView(APIView):
                     "item_name": d.item_description,
                 })
             for c in cash.order_by("-received_on"):
-                m_name = c.donor_name or (f"{c.received_by.first_name} {c.received_by.last_name}".strip() if c.received_by else None) or "Anonymous"
+                m_name = giver_display_name(c.donor_name, email=c.giver_email, phone=c.giver_phone) or "Anonymous"
                 individual_rows.append({
                     "member_name": m_name,
                     "date": c.received_on.strftime("%Y-%m-%d"),

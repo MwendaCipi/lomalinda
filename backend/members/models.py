@@ -911,3 +911,48 @@ class Expenditure(models.Model):
 
     def __str__(self):
         return f"Expenditure: {self.title} (KES {self.amount})"
+
+
+def giver_display_name(donor_name, *, member=None, email='', phone=''):
+    """The real name behind a giving record, or '' when nobody is identifiable.
+
+    Whatever identifies the giver wins: the name they supplied, the member
+    account the gift belongs to, or a registered account matched by the
+    record's email or phone — phones compared on their last nine digits so
+    07… and 254… forms meet (the same heuristic ``_link_giver`` uses).
+    Callers apply their own fallback label — a receipt greets 'friend', a
+    ledger shows 'Anonymous Giver' — so each surface looks the giver up
+    first instead of hard-coding a label that fires while people ARE known.
+    """
+    name = (donor_name or '').strip()
+    if name:
+        return name
+
+    def account_name(user):
+        if user is None:
+            return ''
+        full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+        return full or (user.username or '').strip()
+
+    name = account_name(member)
+    if name:
+        return name
+
+    email = (email or '').strip()
+    phone_digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    if email or phone_digits:
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(email__iexact=email).first() if email else None
+        if not user and len(phone_digits) >= 9:
+            profile = (
+                MemberProfile.objects.filter(phone_number__endswith=phone_digits[-9:])
+                .select_related('user')
+                .first()
+            )
+            user = profile.user if profile else None
+        name = account_name(user)
+        if name:
+            return name
+    return ''

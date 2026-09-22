@@ -10,6 +10,7 @@ from .models import (
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
     GivingPurpose, InKindContribution, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
+    giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
@@ -432,10 +433,10 @@ class InKindContributionSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
     def get_donor_display(self, obj):
-        if obj.member:
-            full = f"{obj.member.first_name} {obj.member.last_name}".strip()
-            return full or obj.member.get_username()
-        return obj.donor_name or 'Anonymous'
+        return giver_display_name(
+            obj.donor_name, member=obj.member,
+            email=obj.donor_email, phone=obj.phone_number,
+        ) or 'Anonymous'
 
     def get_items_list(self, obj):
         return [line.strip() for line in (obj.items or '').splitlines() if line.strip()]

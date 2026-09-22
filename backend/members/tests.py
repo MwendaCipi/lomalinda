@@ -228,6 +228,21 @@ class MpesaInitiationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertEqual(Contribution.objects.count(), 0)
 
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_stk_initiation_carries_the_form_name_in_the_context(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        response = self.client.post('/api/members/contributions/initiate/', {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'amount': '100.00',
+            'purpose': 'Tithe',
+            'phone_number': '0712345678',
+            'donor_name': 'Judith Ndirangu',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertEqual(context.get('donor_name'), 'Judith Ndirangu')
+
 
 class MpesaCallbackAPITests(APITestCase):
     def _callback_payload(self, result_code=0, checkout_id='ws_CO_123'):
@@ -273,6 +288,40 @@ class MpesaCallbackAPITests(APITestCase):
         self.assertEqual(contribution.donor_name, 'Jane Wanjiku Doe')
         self.assertEqual(contribution.mpesa_receipt_number, 'SCL4N0XXXX')
         self.assertEqual(contribution.amount, Decimal('100.00'))
+
+    def test_callback_records_name_from_contact_when_safaricom_omits_it(self):
+        """Without the name items, the giver is resolved from email/phone instead."""
+        User.objects.create_user(
+            'zipp.m', 'zipporah.moturi@example.com', 'ChurchPass#2026',
+            first_name='Zipporah', last_name='Moturi',
+        )
+        payload = self._callback_payload()
+        items = payload['Body']['stkCallback']['CallbackMetadata']['Item']
+        payload['Body']['stkCallback']['CallbackMetadata']['Item'] = [
+            item for item in items
+            if item['Name'] not in ('FirstName', 'MiddleName', 'LastName')
+        ]
+        context = {
+            'amount': '100.00', 'purpose': 'Tithe',
+            'phone_number': '254712345678',
+            'donor_email': 'zipporah.moturi@example.com',
+        }
+        response = self._post_callback(payload, context)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(checkout_request_id='ws_CO_123')
+        self.assertEqual(contribution.donor_name, 'Zipporah Moturi')
+
+    def test_callback_prefers_the_form_name_over_metadata(self):
+        context = {
+            'amount': '100.00', 'purpose': 'Tithe',
+            'phone_number': '254712345678',
+            'donor_name': 'Judith Ndirangu',
+        }
+        # The payload still carries Safaricom's FirstName — the form wins.
+        response = self._post_callback(self._callback_payload(), context)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(checkout_request_id='ws_CO_123')
+        self.assertEqual(contribution.donor_name, 'Judith Ndirangu')
         self.assertEqual(contribution.purpose, 'Tithe')
         self.assertEqual(contribution.phone_number, '254712345678')
         self.assertIsNotNone(contribution.paid_at)
@@ -1918,3 +1967,72 @@ class ReceiptGreetingNameTests(TestCase):
         )
         body = self._body(send_cash_receipt, cash)
         self.assertTrue(body.startswith('Dear friend,'), body)
+
+
+class GiverIdentityOnTheLedgerTests(APITestCase):
+    """Ledgers name givers from real identity (email/phone), not 'Anonymous Giver'."""
+
+    def setUp(self):
+        self.finance = User.objects.create_user('fin.treasurer', 'fin@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.finance, role='treasurer', roles='treasurer')
+        self.donor = User.objects.create_user(
+            'zipporah', 'zipporah.moturi@example.com', 'ChurchPass#2026',
+            first_name='Zipporah', last_name='Moturi',
+        )
+        MemberProfile.objects.create(user=self.donor, phone_number='0703720759')
+
+    def _mpesa_give(self, **kwargs):
+        base = dict(
+            member=None, amount=Decimal('50.00'), purpose='Tithe',
+            status='completed', payment_method='mpesa', donor_name='',
+        )
+        base.update(kwargs)
+        return Contribution.objects.create(**base)
+
+    def _ledger_names(self):
+        self.client.force_authenticate(self.finance)
+        response = self.client.get('/api/members/treasury/refundable-contributions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [row['donor_name'] for row in response.data]
+
+    def test_ledger_names_giver_by_phone_in_254_form(self):
+        self._mpesa_give(phone_number='254703720759', donor_email='')
+        self.assertEqual(self._ledger_names(), ['Zipporah Moturi'])
+
+    def test_ledger_names_giver_by_email_alone(self):
+        self._mpesa_give(phone_number='', donor_email='zipporah.moturi@example.com')
+        self.assertEqual(self._ledger_names(), ['Zipporah Moturi'])
+
+    def test_unidentifiable_giver_stays_anonymous(self):
+        self._mpesa_give(phone_number='254700000000', donor_email='stranger@example.com')
+        self.assertEqual(self._ledger_names(), ['Anonymous Giver'])
+
+
+class InKindDonorDisplayTests(TestCase):
+    """In-kind donor display resolves identity before falling back to Anonymous."""
+
+    def _row(self, **kwargs):
+        from .models import InKindContribution
+
+        base = dict(donor_name='', items='Bags of maize')
+        base.update(kwargs)
+        return InKindContribution.objects.create(**base)
+
+    def test_display_resolves_phone_match_before_anonymous(self):
+        from .serializers import InKindContributionSerializer
+
+        donor = User.objects.create_user(
+            'zipp.i', 'zipporah.inkind@example.com', 'ChurchPass#2026',
+            first_name='Zipporah', last_name='Moturi',
+        )
+        MemberProfile.objects.create(user=donor, phone_number='0703720759')
+        row = self._row(phone_number='254703720759')
+        data = InKindContributionSerializer(row).data
+        self.assertEqual(data['donor_display'], 'Zipporah Moturi')
+
+    def test_display_falls_back_to_anonymous(self):
+        from .serializers import InKindContributionSerializer
+
+        row = self._row(items='Chairs')
+        data = InKindContributionSerializer(row).data
+        self.assertEqual(data['donor_display'], 'Anonymous')
