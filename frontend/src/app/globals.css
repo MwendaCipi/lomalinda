@@ -23,16 +23,23 @@ body {
   }
 }
 
+/* The giving page is app-like at every width: heading and the footer actions
+   stay pinned while the givings list scrolls inside the card, so the document
+   itself never scrolls here. */
+html:has(.authenticated-giving-page),
+body:has(.authenticated-giving-page) {
+  overflow: hidden;
+  height: 100%;
+}
+
 /* Landing-page section cards do not belong in the authenticated versions of
    About, Materials, and Giving; those pages use the original sidebars instead. */
 .authenticated-public-shell .public-section-nav {
   display: none;
 }
 
-@media (min-width: 768px) {
-  .authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
-    overflow: hidden;
-  }
+.authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
+  overflow: hidden;
 }
 
 @keyframes hero-image-in {
