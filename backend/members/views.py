@@ -71,6 +71,20 @@ def generate_temporary_password(length=12):
     return ''.join(characters)
 
 
+def render_receipt_message(template, donor_name, amount_display, purpose):
+    """Fill the configurable receipt message's placeholders.
+
+    The template lives in Church Settings and may use {name}, {amount} and
+    {purpose} — or {account}, the app's user-facing word for a giving
+    purpose. Both spellings are filled; anything left brace-wrapped
+    (a typo, a future placeholder) is stripped rather than shipped raw.
+    """
+    message = (template or '').replace('{name}', donor_name)
+    message = message.replace('{amount}', amount_display)
+    message = message.replace('{account}', purpose).replace('{purpose}', purpose)
+    return re.sub(r'\{[a-z_]+\}', '', message).strip()
+
+
 def send_enrollment_email(enrollment):
     church_name = current_church_name()
     link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
@@ -261,10 +275,12 @@ def send_contribution_receipt(contribution):
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
     donor_name = contribution.donor_name.strip() if contribution.donor_name else 'friend'
     church_name = current_church_name()
-    receipt_message = church_settings.default_receipt_message
-    receipt_message = receipt_message.replace('{name}', donor_name)
-    receipt_message = receipt_message.replace('{amount}', f"{contribution.currency} {contribution.amount:,.2f}")
-    receipt_message = receipt_message.replace('{purpose}', contribution.purpose)
+    receipt_message = render_receipt_message(
+        church_settings.default_receipt_message,
+        donor_name,
+        f"{contribution.currency} {contribution.amount:,.2f}",
+        contribution.purpose,
+    )
     body = (
         f"{greeting} {donor_name},\n\n"
         f"{receipt_message}\n\n"
@@ -292,8 +308,12 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
     donor_name = cash.donor_name.strip() or 'friend'
-    message = settings_obj.default_receipt_message.replace('{name}', donor_name)
-    message = message.replace('{amount}', f"KES {cash.amount:,.2f}").replace('{purpose}', cash.purpose)
+    message = render_receipt_message(
+        settings_obj.default_receipt_message,
+        donor_name,
+        f"KES {cash.amount:,.2f}",
+        cash.purpose,
+    )
     body = (
         f"Dear {donor_name},\n\n{message}\n\n"
         f"Receipt reference: {cash.receipt_number or f'CASH-{cash.id}'}\n"
@@ -1697,7 +1717,6 @@ class ResendContributionReceiptView(APIView):
         # return None on a fresh tenant and crash the attribute reads below.
         church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
         church_name = church_settings.church_name or CHURCH_DEFAULT_NAME
-        custom_message = church_settings.default_receipt_message or f"Thank you for your faithful contribution to {church_name}."
 
         now = timezone.now()
         sent_destinations = []
@@ -1716,9 +1735,9 @@ class ResendContributionReceiptView(APIView):
             if email:
                 body = (
                     f"Dear {donor_name},\n\n"
-                    f"{custom_message}\n\n"
+                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, f'KES {contribution.amount:,.2f}', contribution.purpose)}\n\n"
                     f"Receipt Summary:\n"
-                    f"Purpose: {contribution.purpose}\n"
+                    f"Account: {contribution.purpose}\n"
                     f"Amount: KES {contribution.amount:,.2f}\n"
                     f"Payment Channel: {contribution.get_payment_method_display()}\n"
                     f"Receipt No: {receipt_ref}\n"
@@ -1754,9 +1773,9 @@ class ResendContributionReceiptView(APIView):
             if email:
                 body = (
                     f"Dear {donor_name},\n\n"
-                    f"{custom_message}\n\n"
+                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, f'KES {cash.amount:,.2f}', cash.purpose)}\n\n"
                     f"Receipt Summary:\n"
-                    f"Purpose: {cash.purpose}\n"
+                    f"Account: {cash.purpose}\n"
                     f"Amount: KES {cash.amount:,.2f}\n"
                     f"Payment Channel: Cash\n"
                     f"Receipt No: {receipt_ref}\n"

@@ -335,12 +335,12 @@ function AdministrationContent() {
                         className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
                       >
                         <span className="text-3xl">🏷️</span>
-                        <h2 className="mt-3 text-lg font-bold">Giving Purposes &amp; Drives</h2>
+                        <h2 className="mt-3 text-lg font-bold">Giving Accounts &amp; Drives</h2>
                         <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Manage giving purposes and fund drives shown on the giving forms.
+                          Manage giving accounts and fund drives shown on the giving forms.
                         </p>
                         <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Manage Purposes &rarr;
+                          Manage Accounts &rarr;
                         </span>
                       </div>
 
@@ -448,7 +448,7 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Giving Purposes & Fund Drives Manager */}
+            {/* Giving Accounts & Fund Drives Manager */}
             {activeTab === "finance" && isFinance && (
               <div>
                 <GivingPurposeManager />

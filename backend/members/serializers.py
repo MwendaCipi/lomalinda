@@ -414,12 +414,12 @@ class GivingPurposeSerializer(serializers.ModelSerializer):
         read_only_fields = ('id',)
 
     def validate_name(self, value):
-        name = validate_text_min_length(value, 2, 'Giving purpose name').strip()
+        name = validate_text_min_length(value, 2, 'Giving account name').strip()
         words = name.split()
         if len(words) > 2:
-            raise serializers.ValidationError('Giving purpose name must be at most 2 words.')
+            raise serializers.ValidationError('Giving account name must be at most 2 words.')
         if len(name) > 20:
-            raise serializers.ValidationError('Giving purpose name must be at most 20 characters.')
+            raise serializers.ValidationError('Giving account name must be at most 20 characters.')
         return name
 
 

@@ -273,7 +273,7 @@ export function MpesaRefundManager() {
               <tr>
                 <th className="w-12 px-4 py-3 text-left">#</th>
                 <th className="px-4 py-3">Donor</th>
-                <th className="px-4 py-3">Purpose</th>
+                <th className="px-4 py-3">Account</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3 text-right">Amount (KES)</th>
                 <th className="px-4 py-3">Paid At</th>
@@ -349,7 +349,7 @@ export function MpesaRefundManager() {
               <thead className="bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068]">
                 <tr>
                   <th className="px-4 py-3">Donor</th>
-                  <th className="px-4 py-3">Purpose</th>
+                  <th className="px-4 py-3">Account</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3 text-right">Amount (KES)</th>
                   <th className="px-4 py-3">Status</th>
@@ -404,7 +404,7 @@ export function MpesaRefundManager() {
                 <span className="font-bold text-[#26352f]">{refundTarget.donor_name}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#617068]">Purpose</span>
+                <span className="text-[#617068]">Account</span>
                 <span className="font-semibold text-[#26352f]">{refundTarget.purpose}</span>
               </div>
               <div className="flex items-center justify-between">

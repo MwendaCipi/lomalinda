@@ -369,7 +369,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
                 >
                   <div className="flex items-center gap-2.5">
                     <Tag className="h-4 w-4 shrink-0" />
-                    <span>Giving Purposes</span>
+                    <span>Giving Accounts</span>
                   </div>
                   {currentTab === "finance" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </button>
@@ -384,7 +384,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
                 >
                   <div className="flex items-center gap-2.5">
                     <Tag className="h-4 w-4 shrink-0" />
-                    <span>Giving Purposes</span>
+                    <span>Giving Accounts</span>
                   </div>
                   {currentTab === "finance" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </Link>

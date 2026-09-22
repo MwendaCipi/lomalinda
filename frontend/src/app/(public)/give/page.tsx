@@ -158,7 +158,7 @@ function GivePageContent() {
     </style></head><body>
       <h1>My Giving Report</h1>
       <p>${fromDate} to ${toDate}</p>
-      <table><thead><tr><th>#</th><th>Date</th><th>Purpose</th><th>Method</th><th>Receipt</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>#</th><th>Date</th><th>Account</th><th>Method</th><th>Receipt</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="total">Total: KES ${givingTotal.toLocaleString()}</p>
     </body></html>`);
     win.document.close();
@@ -333,7 +333,7 @@ function GivePageContent() {
                           </button>
                         ))}
                       </div>
-                      <input type="text" placeholder="Search purpose, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                     </div>
                   </div>
                 </div>
@@ -346,7 +346,7 @@ function GivePageContent() {
                         <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
                           <th className="pb-3 pr-4 font-bold w-8">#</th>
                           <th className="pb-3 pr-4 font-bold">Date</th>
-                          <th className="pb-3 pr-4 font-bold">Purpose</th>
+                          <th className="pb-3 pr-4 font-bold">Account</th>
                           <th className="pb-3 pr-4 font-bold">Method</th>
                           <th className="pb-3 pr-4 font-bold">Receipt</th>
                           <th className="pb-3 pr-4 text-right font-bold">Amount</th>
@@ -478,10 +478,10 @@ function GivePageContent() {
                 </div>
               )}
 
-              {/* 1. Giving Purpose & Method of Giving */}
+              {/* 1. Giving Account & Method of Giving */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block text-sm font-medium text-[#26352f]">
-                  Giving purpose
+                  Giving account
                   <select
                     required
                     value={purpose}

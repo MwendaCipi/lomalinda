@@ -220,7 +220,7 @@ function GiveInKindPageContent() {
     </style></head><body>
       <h1>In-Kind Giving Report</h1>
       <p>${fromDate} to ${toDate} · ${all.length} gift${all.length === 1 ? "" : "s"} · ${allItems} item${allItems === 1 ? "" : "s"}</p>
-      <table><thead><tr><th>#</th><th>Date</th><th>Donor</th><th>Purpose</th><th>Items</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>#</th><th>Date</th><th>Donor</th><th>Account</th><th>Items</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="total">Total: ${all.length} gift${all.length === 1 ? "" : "s"} · ${allItems} item${allItems === 1 ? "" : "s"}</p>
     </body></html>`);
     win.document.close();
@@ -236,7 +236,7 @@ function GiveInKindPageContent() {
     }
     const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
     const lines = [
-      ["#", "Date", "Donor", "Purpose", "Items", "Notes"].join(","),
+      ["#", "Date", "Donor", "Account", "Items", "Notes"].join(","),
       ...all.map((r, i) =>
         [String(i + 1), fmtReportDate(r), r.donor_display || "Anonymous", r.purpose || "", (r.items_list || []).join("; "), r.notes || ""].map(esc).join(",")
       ),
@@ -284,7 +284,7 @@ function GiveInKindPageContent() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Purpose</label>
+                  <label className="block text-xs font-semibold text-[#26352f]">Account</label>
                   <select
                     value={purpose}
                     onChange={(e) => setPurpose(e.target.value)}
@@ -392,7 +392,7 @@ function GiveInKindPageContent() {
                           <th className="pb-3 font-bold w-8">#</th>
                           <th className="pb-3 font-bold">Date</th>
                           <th className="pb-3 font-bold">Donor</th>
-                          <th className="pb-3 font-bold">Purpose</th>
+                          <th className="pb-3 font-bold">Account</th>
                           <th className="pb-3 font-bold">Items</th>
                           <th className="pb-3 font-bold">Notes</th>
                         </tr>

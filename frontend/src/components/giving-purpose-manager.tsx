@@ -153,7 +153,7 @@ export function GivingPurposeManager() {
 
   useEffect(() => {
     loadAll().catch(() =>
-      setMessage({ type: "error", text: "Unable to load giving purposes and drives." })
+      setMessage({ type: "error", text: "Unable to load giving accounts and drives." })
     );
   }, []);
 
@@ -359,17 +359,17 @@ export function GivingPurposeManager() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setMessage({ type: "success", text: `Added giving purpose "${purposeName.trim()}".` });
-        showAlert("Purpose Added", `Added giving purpose "${purposeName.trim()}".`, "success");
+        setMessage({ type: "success", text: `Added giving account "${purposeName.trim()}".` });
+        showAlert("Account Added", `Added giving account "${purposeName.trim()}".`, "success");
         setPurposeName("");
         setPurposeAccount("");
         setShowPurposeForm(false);
         await loadAll();
       } else {
-        setMessage({ type: "error", text: data.detail || "Unable to add giving purpose." });
+        setMessage({ type: "error", text: data.detail || "Unable to add giving account." });
       }
     } catch {
-      setMessage({ type: "error", text: "Network error adding giving purpose." });
+      setMessage({ type: "error", text: "Network error adding giving account." });
     } finally {
       setSavingPurpose(false);
     }
@@ -489,13 +489,13 @@ export function GivingPurposeManager() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setMessage({ type: "success", text: `Removed giving purpose "${purpose.name}".` });
+        setMessage({ type: "success", text: `Removed giving account "${purpose.name}".` });
         await loadAll();
       } else {
-        setMessage({ type: "error", text: "Unable to remove giving purpose." });
+        setMessage({ type: "error", text: "Unable to remove giving account." });
       }
     } catch {
-      setMessage({ type: "error", text: "Network error removing purpose." });
+      setMessage({ type: "error", text: "Network error removing account." });
     } finally {
       setRemovingPurposeId(null);
     }
@@ -564,14 +564,14 @@ export function GivingPurposeManager() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ type: "error", text: data.detail || "Unable to update purpose." });
+        setMessage({ type: "error", text: data.detail || "Unable to update account." });
         return;
       }
-      setMessage({ type: "success", text: `Updated giving purpose "${editPurposeName.trim()}".` });
+      setMessage({ type: "success", text: `Updated giving account "${editPurposeName.trim()}".` });
       setEditPurpose(null);
       await loadAll();
     } catch {
-      setMessage({ type: "error", text: "Network error updating purpose." });
+      setMessage({ type: "error", text: "Network error updating account." });
     } finally {
       setSavingEditPurpose(false);
     }
@@ -608,7 +608,7 @@ export function GivingPurposeManager() {
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dfdbd1] px-6 py-4 shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-[#26352f]">Giving Purposes</h2>
+          <h2 className="text-xl font-bold text-[#26352f]">Giving Accounts</h2>
           <p className="mt-0.5 text-xs text-[#617068]">
             {purposes.length} purposes · {drives.length} fund drives
           </p>
@@ -616,7 +616,7 @@ export function GivingPurposeManager() {
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
           <input
             type="text"
-            placeholder="Search purposes..."
+            placeholder="Search accounts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="min-w-[180px] max-w-sm flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
@@ -652,7 +652,7 @@ export function GivingPurposeManager() {
             <thead className="sticky top-0 z-10 bg-white border-b border-[#dfdbd1]">
               <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
                 <th className="pb-3 font-bold w-8">#</th>
-                <th className="pb-3 font-bold">Purpose</th>
+                <th className="pb-3 font-bold">Account</th>
                 <th className="pb-3 font-bold">Account Name</th>
                 <th className="pb-3 font-bold">From</th>
                 <th className="pb-3 font-bold">To</th>
@@ -661,13 +661,13 @@ export function GivingPurposeManager() {
             </thead>
             <tbody className="divide-y divide-[#eeeae2]">
               {loading ? (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">Loading purposes and drives...</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">Loading accounts and drives...</td></tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-10 text-center">
-                    <p className="text-sm font-semibold text-[#26352f]">No giving purposes or fund drives yet</p>
+                    <p className="text-sm font-semibold text-[#26352f]">No giving accounts or fund drives yet</p>
                     <p className="mt-1 text-xs text-[#617068]">
-                      Add a purpose or a drive using the buttons below, or load the standard defaults.
+                      Add an account or a drive using the buttons below, or load the standard defaults.
                     </p>
                   </td>
                 </tr>
@@ -779,7 +779,7 @@ export function GivingPurposeManager() {
                                 }}
                                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                               >
-                                ✏️ Edit Purpose
+                                ✏️ Edit Account
                               </button>
                               <div className="my-1 border-t border-[#dfdbd1]" />
                               <button
@@ -808,9 +808,9 @@ export function GivingPurposeManager() {
         {/* Mobile Cards */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
-            <div className="py-8 text-center text-xs text-[#617068]">Loading purposes and drives...</div>
+            <div className="py-8 text-center text-xs text-[#617068]">Loading accounts and drives...</div>
           ) : filteredRows.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[#617068]">No giving purposes or fund drives yet.</div>
+            <div className="py-8 text-center text-xs text-[#617068]">No giving accounts or fund drives yet.</div>
           ) : (
             filteredRows.map((r) =>
               r.kind === "drive" ? (
@@ -862,7 +862,7 @@ export function GivingPurposeManager() {
                       <code className="shrink-0 rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-[#617068]">{r.account}</code>
                     )}
                   </div>
-                  <p className="text-xs text-[#617068]">Ongoing purpose</p>
+                  <p className="text-xs text-[#617068]">Ongoing account</p>
                   <div className="flex flex-wrap gap-2 border-t border-[#dfdbd1]/60 pt-2">
                     <button
                       type="button"
@@ -917,12 +917,12 @@ export function GivingPurposeManager() {
           <div role="dialog" aria-modal="true" aria-labelledby="add-purpose-title"
             className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 id="add-purpose-title" className="text-xl font-bold text-[#26352f]">Add Purpose</h3>
+              <h3 id="add-purpose-title" className="text-xl font-bold text-[#26352f]">Add Account</h3>
               <button type="button" onClick={() => setShowPurposeForm(false)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
             </div>
             <form onSubmit={handleAddPurpose} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Purpose Name *</label>
+                <label className="block text-xs font-semibold text-[#26352f]">Account Name *</label>
                 <input
                   type="text"
                   required
@@ -962,7 +962,7 @@ export function GivingPurposeManager() {
                   disabled={savingPurpose}
                   className="rounded-xl bg-[#26352f] px-5 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60"
                 >
-                  {savingPurpose ? "Adding..." : "Add Purpose"}
+                  {savingPurpose ? "Adding..." : "Add Account"}
                 </button>
               </div>
             </form>
@@ -1173,12 +1173,12 @@ export function GivingPurposeManager() {
           <div role="dialog" aria-modal="true" aria-labelledby="edit-purpose-title"
             className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 id="edit-purpose-title" className="text-lg font-bold text-[#26352f]">Edit Purpose</h3>
+              <h3 id="edit-purpose-title" className="text-lg font-bold text-[#26352f]">Edit Account</h3>
               <button type="button" onClick={() => setEditPurpose(null)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
             </div>
             <form onSubmit={handleSaveEditPurpose} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Purpose Name *</label>
+                <label className="block text-xs font-semibold text-[#26352f]">Account Name *</label>
                 <input
                   type="text"
                   required

@@ -232,7 +232,7 @@ def generate_reconciliation_pdf(
         story.append(Paragraph(summary_text, st["h2"]))
         story.append(Spacer(1, 8))
 
-        ind_headers = ["Contributor Name", "Date", "Purpose", "Type & Mode", "Receipt / Ref", "Amount (KES)"]
+        ind_headers = ["Contributor Name", "Date", "Account", "Type & Mode", "Receipt / Ref", "Amount (KES)"]
         ind_data = [[
             Paragraph(ind_headers[0], st["header"]),
             Paragraph(ind_headers[1], st["header"]),
@@ -286,7 +286,7 @@ def generate_reconciliation_pdf(
         story.append(Spacer(1, 16))
 
         if purpose_rows:
-            story.append(Paragraph("<b>Giving Purpose Breakdown</b>", st["h2"]))
+            story.append(Paragraph("<b>Giving Account Breakdown</b>", st["h2"]))
             story.append(Spacer(1, 6))
 
             p_headers = ["Giving Purpose", "M-Pesa", "Bank-to-Bank", "Cheque", "Cash", "Total (KES)"]

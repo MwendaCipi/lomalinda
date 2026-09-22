@@ -446,7 +446,7 @@ export default function ReconciliationPage() {
         // Fallback to CSV
         const headers = ["#", "Giving Purpose", "M-Pesa (KES)", "Bank-to-Bank (KES)", "Cheque (KES)", "Cash (KES)", "Total (KES)"];
         const rows = displayedRows.map((row, idx) => [idx + 1, `"${row.purpose.replace(/"/g, '""')}"`, row.mpesa, row.bank_transfer, row.cheque, row.cash, row.total]);
-        const totalRow = ["TOTAL", "All Purposes", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
+        const totalRow = ["TOTAL", "All Accounts", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
         const csvContent = [headers.join(","), ...rows.map((r) => r.join(",")), totalRow.join(",")].join("\n");
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -461,7 +461,7 @@ export default function ReconciliationPage() {
     } catch {
       const headers = ["#", "Giving Purpose", "M-Pesa (KES)", "Bank-to-Bank (KES)", "Cheque (KES)", "Cash (KES)", "Total (KES)"];
       const rows = displayedRows.map((row, idx) => [idx + 1, `"${row.purpose.replace(/"/g, '""')}"`, row.mpesa, row.bank_transfer, row.cheque, row.cash, row.total]);
-      const totalRow = ["TOTAL", "All Purposes", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
+      const totalRow = ["TOTAL", "All Accounts", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
       const csvContent = [headers.join(","), ...rows.map((r) => r.join(",")), totalRow.join(",")].join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
@@ -871,7 +871,7 @@ export default function ReconciliationPage() {
                         <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
                           <tr>
                             <th className="px-4 py-3 text-left w-12">#</th>
-                            <th className="px-4 py-3 w-56 shrink-0">Purpose</th>
+                            <th className="px-4 py-3 w-56 shrink-0">Account</th>
                             <th className="px-4 py-3 text-right">M-Pesa</th>
                             <th className="px-4 py-3 text-right">Bank-to-Bank</th>
                             <th className="px-4 py-3 text-right">Cheque</th>
@@ -1063,7 +1063,7 @@ export default function ReconciliationPage() {
                                   <th className="px-3 py-2.5 w-10">#</th>
                                   <th className="px-3 py-2.5 w-28 whitespace-nowrap">Date</th>
                                   <th className="px-3 py-2.5 w-44 shrink-0">Giver</th>
-                                  <th className="px-3 py-2.5 w-44 shrink-0">Purpose</th>
+                                  <th className="px-3 py-2.5 w-44 shrink-0">Account</th>
                                   <th className="px-3 py-2.5 w-24">Mode</th>
                                   <th className="px-3 py-2.5 w-32">Receipt</th>
                                   <th className="px-3 py-2.5 text-right w-28">Amount</th>
