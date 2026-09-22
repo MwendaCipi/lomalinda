@@ -286,7 +286,8 @@ export default function ReconciliationPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage(data.detail || "Receipt resent successfully.");
+        showAlert("Receipt sent", data.detail || "Receipt resent successfully.", "success");
+        setMessage("");
         const nowStr = new Date().toISOString();
         setPurposeGivings((prev) => {
           const currentList = prev[giving.purpose] || [];

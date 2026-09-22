@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -22,7 +23,11 @@ export function triggerPwaInstall() {
       });
     });
   } else if (typeof window !== "undefined") {
-    alert("To install this app on your PC or Mobile device:\n\nChrome / Edge on Desktop: Click the Install icon (💻) in your browser address bar.\n\nSafari on iPhone / Mac: Tap Share -> Add to Home Screen.");
+    showAlert(
+      "Install the app",
+      "Chrome / Edge on Desktop: click the Install icon (💻) in the address bar.\n\nSafari on iPhone / Mac: tap Share → Add to Home Screen.",
+      "info"
+    );
   }
 }
 

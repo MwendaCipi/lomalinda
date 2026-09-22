@@ -38,8 +38,12 @@ body:has(.authenticated-giving-page) {
   display: none;
 }
 
+/* height:100% is required on mobile too: without it the shell's content
+   wrapper is auto-height, the giving card grows past the viewport, and the
+   footer actions get clipped by the document lock. */
 .authenticated-public-shell:has(.authenticated-giving-page) > div:last-child {
   overflow: hidden;
+  height: 100%;
 }
 
 @keyframes hero-image-in {

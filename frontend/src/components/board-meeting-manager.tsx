@@ -258,10 +258,10 @@ export function BoardMeetingManager() {
       if (res.ok) {
         fetchMeetings();
       } else {
-        alert("Failed to delete agenda item.");
+        showAlert("Could not delete", "Failed to delete the agenda item.", "error");
       }
     } catch {
-      alert("Error deleting agenda item.");
+      showAlert("Network error", "Could not delete the agenda item. Please try again.", "error");
     }
   };
 
