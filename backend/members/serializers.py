@@ -263,10 +263,27 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     responses = AnnouncementResponseSerializer(many=True, read_only=True)
     responses_count = serializers.IntegerField(source='responses.count', read_only=True)
     sharing_option = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    attachment_name = serializers.SerializerMethodField()
+    attachment_size = serializers.SerializerMethodField()
+
+    def get_attachment_name(self, obj):
+        """Original file name, so the UI can label an attachment without guessing from the URL."""
+        if not obj.attachment:
+            return None
+        return obj.attachment.name.rsplit('/', 1)[-1]
+
+    def get_attachment_size(self, obj):
+        """File size in bytes for display (e.g. 'PDF \u00b7 1.4 MB'); None when the file is missing on disk."""
+        if not obj.attachment:
+            return None
+        try:
+            return obj.attachment.size
+        except (FileNotFoundError, OSError, ValueError):
+            return None
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at')
 
 

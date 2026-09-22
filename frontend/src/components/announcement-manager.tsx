@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -11,6 +12,8 @@ type Announcement = {
   text: string;
   href?: string;
   attachment?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
   visibility: string;
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   sharing_option?: string;
@@ -188,6 +191,13 @@ export function AnnouncementManager() {
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
+                <AnnouncementAttachment
+                  attachment={item.attachment}
+                  name={item.attachment_name}
+                  size={item.attachment_size}
+                  compact
+                  className="mt-1"
+                />
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[#617068]">
                     {new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
@@ -252,7 +262,16 @@ export function AnnouncementManager() {
                   <tr key={item.id} className="align-top hover:bg-[#faf7f2]">
                     <td className="px-4 py-3.5 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
                     <td className="min-w-[160px] px-4 py-3.5 font-bold text-[#26352f]">{item.title}</td>
-                    <td className="max-w-[360px] px-4 py-3.5 text-xs leading-relaxed text-[#415047]">{item.text}</td>
+                    <td className="max-w-[360px] px-4 py-3.5 text-xs leading-relaxed text-[#415047]">
+                      {item.text}
+                      <AnnouncementAttachment
+                        attachment={item.attachment}
+                        name={item.attachment_name}
+                        size={item.attachment_size}
+                        compact
+                        className="mt-2"
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
                       <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#3d5148] capitalize">
                         {item.visibility}

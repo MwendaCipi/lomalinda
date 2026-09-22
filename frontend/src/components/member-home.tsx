@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { roleLabel } from "@/components/roles-combobox";
+import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -35,6 +36,9 @@ type Announcement = {
   text: string;
   detail?: string;
   href?: string;
+  attachment?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
   created_at: string;
 };
 
@@ -278,6 +282,14 @@ export function MemberHome() {
                         <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(a.created_at)}</span>
                       </div>
                       {a.text && <p className="mt-1 line-clamp-2 text-xs text-[#617068]">{a.text}</p>}
+                      <AnnouncementAttachment
+                        attachment={a.attachment}
+                        name={a.attachment_name}
+                        size={a.attachment_size}
+                        linked={false}
+                        compact
+                        className="mt-2"
+                      />
                     </Link>
                   ))
                 )}

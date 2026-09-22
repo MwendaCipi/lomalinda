@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -24,6 +25,9 @@ type Announcement = {
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup: boolean;
   action_prompt?: string;
+  attachment?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
   published: boolean;
   expires_at?: string;
   created_at: string;
@@ -161,6 +165,15 @@ export function PopupAnnouncementModal() {
           <p className="mt-3 text-sm leading-relaxed text-[#415047]">
             {current.text}
           </p>
+          {current.attachment && (
+            <div className="mt-4">
+              <AnnouncementAttachment
+                attachment={current.attachment}
+                name={current.attachment_name}
+                size={current.attachment_size}
+              />
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleActionSubmit} className="mt-6 space-y-4">

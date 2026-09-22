@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
+import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 function getQuarterStartDate() {
@@ -21,6 +22,8 @@ type Announcement = {
   title: string;
   text: string;
   attachment?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
   visibility: string;
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup?: boolean;
@@ -108,10 +111,6 @@ export default function AnnouncementsPage() {
                 {announcements.map((announcement) => {
                   const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9";
                   const hasContributionAction = announcement.action_type && announcement.action_type !== "none" && announcement.action_type !== "respond";
-                  const attachmentUrl = announcement.attachment?.startsWith("/")
-                    ? `${API_URL}${announcement.attachment}`
-                    : announcement.attachment;
-
                   const content = (
                     <>
                       <div>
@@ -126,9 +125,13 @@ export default function AnnouncementsPage() {
                         <h2 className="mt-3 text-2xl font-semibold">{announcement.title}</h2>
                         <p className="mt-4 text-base leading-7 text-[#26352f]">{announcement.text}</p>
                       </div>
-                      {attachmentUrl && (
+                      {announcement.attachment && (
                         <div className="mt-6 border-t border-[#dfdbd1] pt-4">
-                          <a href={attachmentUrl} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-[#b36b3c] hover:underline">Open attachment</a>
+                          <AnnouncementAttachment
+                            attachment={announcement.attachment}
+                            name={announcement.attachment_name}
+                            size={announcement.attachment_size}
+                          />
                         </div>
                       )}
                     </>
