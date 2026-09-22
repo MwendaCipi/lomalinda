@@ -1762,13 +1762,13 @@ export function UserManagement() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
-            className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
           >
             ✉️ Invite by Email
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+            className="rounded-xl border border-[#26352f] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
             + Add Manually
           </button>
