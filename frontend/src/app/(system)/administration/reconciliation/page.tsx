@@ -99,7 +99,6 @@ export default function ReconciliationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [purposes, setPurposes] = useState<string[]>([]);
   const [cashForm, setCashForm] = useState({ amount: "", purpose: "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
-  const [entryType, setEntryType] = useState<"individual" | "anonymous" | "collection">("individual");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [itemDescription, setItemDescription] = useState("");
   const [customPurpose, setCustomPurpose] = useState("");
@@ -160,7 +159,7 @@ export default function ReconciliationPage() {
   }, []);
 
   const formatReceiptDefaultMsg = (name: string, amt: string, purp: string, custPurp: string, itemDesc: string, type: string, pm: string) => {
-    const nameVal = type === "anonymous" ? "Anonymous Giver" : type === "collection" ? (name.trim() || "General Collection") : (name.trim() || "{name}");
+    const nameVal = name.trim() || "{name}";
     const amountVal = amt.trim() ? `kes ${amt.trim()}` : "kes {amount}";
     const purposeVal = purp === "Other" ? (custPurp.trim() || "{purpose}") : (purp || "{purpose}");
     return settingsReceiptTemplate
@@ -171,9 +170,9 @@ export default function ReconciliationPage() {
 
   useEffect(() => {
     if (isModalOpen && !isCustomMessage) {
-      setReceiptMessage(formatReceiptDefaultMsg(cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, entryType, paymentMethod));
+      setReceiptMessage(formatReceiptDefaultMsg(cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, "individual", paymentMethod));
     }
-  }, [isModalOpen, isCustomMessage, cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, entryType, paymentMethod]);
+  }, [isModalOpen, isCustomMessage, cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, paymentMethod]);
 
   const loadAllGivings = async (fDate = fromDate, tDate = toDate) => {
     setLoadingAllGivings(true);
@@ -318,12 +317,7 @@ export default function ReconciliationPage() {
         return;
       }
     }
-    const finalDonorName =
-      entryType === "anonymous"
-        ? "Anonymous Giver"
-        : entryType === "collection"
-        ? cashForm.donor_name.trim() || "General Collection"
-        : cashForm.donor_name;
+    const finalDonorName = cashForm.donor_name;
 
     const receiptDate = cashForm.received_on || toDate || localDate();
     let nextFrom = fromDate;
@@ -340,20 +334,19 @@ export default function ReconciliationPage() {
         ...cashForm,
         notes: receiptMessage,
         donor_name: finalDonorName,
-        entry_type: entryType,
+        entry_type: "individual",
         payment_method: paymentMethod,
         item_description: "",
         amount: cashForm.amount,
         purpose: finalPurpose,
         received_on: receiptDate,
         send_sms: false,
-        send_email: entryType === "individual",
+        send_email: true,
       })
     });
     setSaving(false);
     if (!response.ok) { const body = await response.json().catch(() => ({})); setMessage(body.amount?.[0] || body.detail || "Could not save the receipt."); return; }
     setCashForm({ amount: "", purpose: "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
-    setEntryType("individual");
     setPaymentMethod("cash");
     setItemDescription("");
     setCustomPurpose("");
@@ -1330,20 +1323,6 @@ export default function ReconciliationPage() {
             </div>
 
             <form onSubmit={addCash} className="mt-4 grid gap-4 sm:grid-cols-2">
-              {/* Receipt Type */}
-              <label className="text-sm font-medium text-[#26352f]">
-                Receipt Type
-                <select
-                  value={entryType}
-                  onChange={(e) => setEntryType(e.target.value as "individual" | "anonymous" | "collection")}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                >
-                  <option value="individual">Individual Member</option>
-                  <option value="anonymous">Anonymous Giver</option>
-                  <option value="collection">General Collection</option>
-                </select>
-              </label>
-
               {/* Method of Giving */}
               <label className="text-sm font-medium text-[#26352f]">
                 Method of Giving
@@ -1417,7 +1396,7 @@ export default function ReconciliationPage() {
               </label>
 
               {/* Conditional Giver details based on Receipt Type */}
-              {entryType === "individual" && (
+              {(
                 <>
                   <label className="text-sm font-medium text-[#26352f]">
                     Giver Full Name
@@ -1462,7 +1441,7 @@ export default function ReconciliationPage() {
                 </>
               )}
 
-              {entryType === "collection" && (
+              {false && (
                 <label className="text-sm font-medium text-[#26352f] sm:col-span-2">
                   Collection Name / Title
                   <input
@@ -1513,11 +1492,7 @@ export default function ReconciliationPage() {
                   disabled={saving}
                   className="rounded-full bg-[#b36b3c] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
                 >
-                  {saving
-                    ? "Saving..."
-                    : entryType === "individual"
-                    ? "Send Receipt"
-                    : "Add Receipt"}
+                  {saving ? "Saving..." : "Send Receipt"}
                 </button>
               </div>
             </form>
