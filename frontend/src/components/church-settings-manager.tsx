@@ -26,7 +26,6 @@ export function ChurchSettingsManager() {
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!");
-  const [receiptDeliveryMethod, setReceiptDeliveryMethod] = useState<"email" | "sms">("email");
   const [defaultBusinessMeetingInvitationMessage, setDefaultBusinessMeetingInvitationMessage] = useState(
     "Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!"
   );
@@ -64,7 +63,6 @@ export function ChurchSettingsManager() {
           if (data.clarion_call_heading) setClarionCallHeading(data.clarion_call_heading);
           if (data.clarion_call_subtext) setClarionCallSubtext(data.clarion_call_subtext);
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
-          if (data.receipt_delivery_method === "sms") setReceiptDeliveryMethod("sms");
           if (data.default_business_meeting_invitation_message) {
             setDefaultBusinessMeetingInvitationMessage(data.default_business_meeting_invitation_message);
           }
@@ -113,7 +111,6 @@ export function ChurchSettingsManager() {
         clarion_call_heading: clarionCallHeading,
         clarion_call_subtext: clarionCallSubtext,
         default_receipt_message: defaultReceiptMessage,
-        receipt_delivery_method: receiptDeliveryMethod,
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
         // System roles always stay on the board, whatever the tick boxes say.
@@ -217,21 +214,6 @@ export function ChurchSettingsManager() {
           </p>
 
           <div className="mt-3">
-            <label className="block text-xs font-semibold text-[#26352f]">
-              Default delivery method
-            </label>
-            <select
-              value={receiptDeliveryMethod}
-              onChange={(e) => setReceiptDeliveryMethod(e.target.value as "email" | "sms")}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
-            >
-              <option value="email">Email (recommended)</option>
-              <option value="sms">SMS</option>
-            </select>
-            <p className="mt-1 text-xs text-[#617068]">
-              Email receipts use the giver&apos;s email. SMS requires the configured SMS gateway and the giver&apos;s phone number.
-            </p>
-
             <label className="mt-4 block text-xs font-semibold text-[#26352f]">
               Receipt Thank-You Message
             </label>

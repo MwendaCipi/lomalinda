@@ -103,8 +103,7 @@ export default function ReconciliationPage() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [itemDescription, setItemDescription] = useState("");
   const [sendAsOpen, setSendAsOpen] = useState(false);
-  const [receiptDeliveryMethod, setReceiptDeliveryMethod] = useState<"email" | "sms">("email");
-  const [sendSms, setSendSms] = useState(false);
+  const [sendSms, setSendSms] = useState(true);
   const [sendEmail, setSendEmail] = useState(true);
   const [customPurpose, setCustomPurpose] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
@@ -159,10 +158,6 @@ export default function ReconciliationPage() {
         if (data?.default_receipt_message) {
           setSettingsReceiptTemplate(data.default_receipt_message);
         }
-        const deliveryMethod = data?.receipt_delivery_method === "sms" ? "sms" : "email";
-        setReceiptDeliveryMethod(deliveryMethod);
-        setSendSms(deliveryMethod === "sms");
-        setSendEmail(deliveryMethod === "email");
       })
       .catch(() => undefined);
   }, []);
@@ -367,8 +362,8 @@ export default function ReconciliationPage() {
     setCustomPurpose("");
     setReceiptMessage("");
     setIsCustomMessage(false);
-    setSendSms(receiptDeliveryMethod === "sms");
-    setSendEmail(receiptDeliveryMethod === "email");
+    setSendSms(true);
+    setSendEmail(true);
     setSendAsOpen(false);
     setIsModalOpen(false);
     setMessage("Receipt saved successfully.");
@@ -675,11 +670,11 @@ export default function ReconciliationPage() {
                                       {g.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3d7146]">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
-                                          Sent
+                                          Receipt sent
                                         </span>
                                       ) : (
                                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                          Pending
+                                          Receipt pending
                                         </span>
                                       )}
                                     </div>
@@ -1031,7 +1026,7 @@ export default function ReconciliationPage() {
 
                                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#eeeae2]">
                                   <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-[#5f8067]" : "text-[#b36b3c]"}`}>
-                                    {giving.receipt_sent_at ? "Receipt Sent" : "Receipt Pending"}
+                                    {giving.receipt_sent_at ? "Receipt sent" : "Receipt pending"}
                                   </span>
                                   <div className="flex items-center gap-2">
                                     {(giving.giver_phone || giving.giver_email) && (
@@ -1119,7 +1114,7 @@ export default function ReconciliationPage() {
                                       {giving.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3d7146]">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
-                                          Sent
+                                          Receipt sent
                                         </span>
                                       ) : (
                                         <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
