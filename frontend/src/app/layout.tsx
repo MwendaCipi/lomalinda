@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "SDA Loma Linda",
+    title: "Loma Linda SDA",
   },
   icons: {
     icon: [
