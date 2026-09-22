@@ -25,7 +25,7 @@ function createIconSvg(width, height, safePadding = 0) {
         <!-- Church identity text on 3 distinct rows below the SDA symbol -->
         <text x="${innerW / 2}" y="${innerH * 0.49}" font-family="sans-serif" font-weight="800" font-size="${innerW * 0.075}" fill="#f1c89e" text-anchor="middle" letter-spacing="1.5">SDA</text>
         <text x="${innerW / 2}" y="${innerH * 0.61}" font-family="sans-serif" font-weight="800" font-size="${innerW * 0.072}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.8">LOMA LINDA</text>
-        <text x="${innerW / 2}" y="${innerH * 0.72}" font-family="sans-serif" font-weight="700" font-size="${innerW * 0.065}" fill="#b36b3c" text-anchor="middle" letter-spacing="1.2">NAIROBI</text>
+        <text x="${innerW / 2}" y="${innerH * 0.72}" font-family="sans-serif" font-weight="700" font-size="${innerW * 0.065}" fill="#b36b3c" text-anchor="middle" letter-spacing="1.2">MERU</text>
       </g>
     </svg>
   `;
