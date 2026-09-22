@@ -31,7 +31,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type StaffRole =
   | "admin"
-  | "leader"
   | "clerk"
   | "elder"
   | "deacon"
@@ -82,10 +81,10 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile }: A
     : [(profile?.role || "").toLowerCase().trim() || "member"];
   const hasAnyRole = (...codes: string[]) => userRoles.some((r) => codes.includes(r));
   const isAdmin = hasAnyRole("admin");
-  const isClerk = hasAnyRole("clerk", "admin", "leader");
-  const isElder = hasAnyRole("elder", "admin", "leader");
-  const isFinance = hasAnyRole("finance", "treasurer", "admin", "leader");
-  const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "leader", "elder", "clerk");
+  const isClerk = hasAnyRole("clerk", "admin");
+  const isElder = hasAnyRole("elder", "admin");
+  const isFinance = hasAnyRole("finance", "treasurer", "admin");
+  const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
 
   const isReconPage = pathname === "/administration/reconciliation";
 

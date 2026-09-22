@@ -112,7 +112,6 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
         const userRoles: string[] = Array.isArray(user?.roles) && user.roles.length > 0 ? user.roles : [(user?.role || "").toLowerCase().trim()];
         const officialRoles = [
           "admin",
-          "leader",
           "clerk",
           "elder",
           "youth_leader",

@@ -27,7 +27,6 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "chaplaincy", label: "Chaplain", group: "Chaplaincy" },
   { value: "finance", label: "Finance Team", group: "Finance Team" },
   { value: "treasurer", label: "Treasurer", group: "Finance Team" },
-  { value: "leader", label: "Church Leader", group: "Church Leaders" },
   { value: "admin", label: "Administrator", group: "Administrators", system: true },
 ];
 

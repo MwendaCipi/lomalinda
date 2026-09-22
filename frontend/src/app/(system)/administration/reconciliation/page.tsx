@@ -7,7 +7,7 @@ import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-const financeRoles = ["finance", "treasurer", "admin", "leader"];
+const financeRoles = ["finance", "treasurer", "admin"];
 const localDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
 const money = (amount: string | number) => Number(amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

@@ -29,7 +29,7 @@ export function LeaderManagement() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberUser | null>(null);
-  const [modalSelectedRoles, setModalSelectedRoles] = useState<string[]>(["leader"]);
+  const [modalSelectedRoles, setModalSelectedRoles] = useState<string[]>(["elder"]);
   const [modalSearch, setModalSearch] = useState("");
   const [submittingModal, setSubmittingModal] = useState(false);
 
@@ -345,7 +345,7 @@ export function LeaderManagement() {
           onClick={() => {
             setSelectedMember(null);
             setModalSearch("");
-            setModalSelectedRoles(["leader"]);
+            setModalSelectedRoles(["elder"]);
             setIsModalOpen(true);
           }}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#96552c] transition-colors"

@@ -25,7 +25,6 @@ ROLE_DEFINITIONS = (
     ('chaplaincy', 'Chaplain', 'Chaplaincy', False),
     ('finance', 'Finance Team', 'Finance Team', False),
     ('treasurer', 'Treasurer', 'Finance Team', False),
-    ('leader', 'Church Leader', 'Church Leaders', False),
     (ADMIN_ROLE, 'Administrator', 'Administrators', True),
 )
 
@@ -109,7 +108,7 @@ def can_manage_system_roles(actor):
     """Whether ``actor`` may hand out or take away a system role (Administrator).
 
     Only superusers and administrators may touch the Administrator role, so a
-    clerk or leader can never promote themselves or demote an administrator.
+    clerk or elder can never promote themselves or demote an administrator.
     """
     if not actor or not getattr(actor, 'is_authenticated', False):
         return False

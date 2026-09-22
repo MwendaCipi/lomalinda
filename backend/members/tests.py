@@ -1458,3 +1458,112 @@ class BrandNamingTests(TestCase):
         self.assertEqual(dict(MemberProfile.ACCOUNT_TYPE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
         self.assertEqual(dict(EnrollmentRequest.JOINING_MODE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
         self.assertEqual(dict(Invitation._meta.get_field('account_type').choices)['friend'], 'Friend of SDA Loma Linda')
+
+
+class AnnouncementPermissionTests(APITestCase):
+    """Announcement posting is decided by the full role set, not just the primary role."""
+
+    def _profile(self, username, roles):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role=roles.split(", ")[0], roles=roles)
+        return user
+
+    def test_an_elder_with_member_primary_role_can_post(self):
+        """The reported bug: elders whose primary role is member were refused."""
+        elder = self._profile('elder.member', 'member, elder')
+        self.client.force_authenticate(elder)
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Board meeting', 'text': 'Sunday at 10am.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_a_clerk_can_post_and_a_plain_member_cannot(self):
+        clerk = self._profile('clerk.poster', 'clerk')
+        self.client.force_authenticate(clerk)
+        ok = self.client.post('/api/members/announcements/', {
+            'title': 'Choir practice', 'text': 'Friday 4pm.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
+
+        member = self._profile('plain.member', 'member')
+        self.client.force_authenticate(member)
+        denied = self.client.post('/api/members/announcements/', {
+            'title': 'Not mine', 'text': 'Should be refused.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_elder_can_delete_their_own_announcement(self):
+        from .models import Announcement
+
+        elder = self._profile('elder.deleter', 'member, elder')
+        announcement = Announcement.objects.create(title='Temp', text='To be deleted', visibility='members')
+        self.client.force_authenticate(elder)
+        response = self.client.delete(f'/api/members/announcements/{announcement.pk}/')
+        self.assertIn(response.status_code, (status.HTTP_204_NO_CONTENT, status.HTTP_200_OK))
+        self.assertFalse(Announcement.objects.filter(pk=announcement.pk).exists())
+
+
+class GenericLeaderRoleTests(TestCase):
+    """The catch-all 'Church Leader' role no longer exists; holders became elders."""
+
+    def test_the_role_registry_has_no_generic_leader(self):
+        from .roles import ROLE_CODES
+
+        self.assertNotIn('leader', ROLE_CODES)
+
+    def test_migration_maps_leader_holders_to_elder(self):
+        from importlib import import_module
+
+        from django.apps import apps as django_apps
+
+        migration = import_module('members.migrations.0090_retire_generic_leader_role')
+
+        primary = MemberProfile.objects.create(user=User.objects.create_user('lead.primary', 'lp@example.com', 'ChurchPass#2026'), role='leader', roles='leader')
+        mixed = MemberProfile.objects.create(user=User.objects.create_user('lead.mixed', 'lm@example.com', 'ChurchPass#2026'), role='treasurer', roles='treasurer, leader')
+        migration.retire_leader_role(django_apps, None)
+
+        primary.refresh_from_db()
+        mixed.refresh_from_db()
+        # Primary-only holders become elders; mixed holders keep their real
+        # roles and simply drop the retired code.
+        self.assertEqual(primary.role, 'elder')
+        self.assertEqual(primary.roles, 'elder')
+        self.assertEqual(mixed.role, 'treasurer')
+        self.assertEqual(mixed.roles, 'treasurer')
+
+    def test_the_board_roles_default_has_no_leader(self):
+        from .views import is_finance_manager  # noqa: F401  (import guards against stale module state)
+
+        settings_row = MemberProfile._meta.get_field('role')
+        self.assertNotIn('leader', [code for code, _ in settings_row.choices])
+
+
+class ReceiptMessageTemplateTests(TestCase):
+    """The settings template is the whole receipt message, greeting included."""
+
+    def test_the_default_message_starts_with_the_greeting(self):
+        from .models import ChurchSettings
+
+        default = ChurchSettings._meta.get_field('default_receipt_message').get_default()
+        self.assertTrue(default.startswith('Dear {name}'), default)
+
+    def test_rendered_receipt_starts_with_the_greeting_line(self):
+        from .views import render_receipt_message
+
+        rendered = render_receipt_message(
+            'Dear {name},\n\nYour contribution of {amount} towards {account} has been received.',
+            'Jane Doe', 'KES 1,000.00', 'Tithe',
+        )
+        self.assertTrue(rendered.startswith('Dear Jane Doe,'), rendered)
+        self.assertIn('KES 1,000.00', rendered)
+        self.assertIn('Tithe', rendered)
+
+    def test_receipt_body_is_exactly_the_template_plus_summary_and_signature(self):
+        """No hard-coded 'Dear …' prelude may be prepended by the senders."""
+        import inspect
+
+        from . import views
+
+        for name in ('send_contribution_receipt', 'send_cash_receipt'):
+            source = inspect.getsource(getattr(views, name))
+            self.assertNotIn('Dear {donor_name}', source, name)

@@ -23,7 +23,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type StaffRole =
   | "admin"
-  | "leader"
   | "clerk"
   | "elder"
   | "youth_leader"
@@ -38,7 +37,6 @@ type StaffRole =
 
 const officialRoles: StaffRole[] = [
   "admin",
-  "leader",
   "clerk",
   "elder",
   "youth_leader",
@@ -94,15 +92,14 @@ function AdministrationContent() {
           (userRoles.some((r) => officialRoles.includes(r as StaffRole)) ||
             data.is_staff ||
             data.is_superuser ||
-            rawRole === "admin" ||
-            rawRole === "leader");
+            rawRole === "admin");
 
         if (isOfficial) {
           setProfile(data);
           setStatus("authorized");
 
           const effectiveRole = userRoles.find((r) => r !== "member") || (rawRole === "member" && (data.is_staff || data.is_superuser) ? "admin" : rawRole);
-          if (["clerk", "elder", "admin", "leader"].includes(effectiveRole)) {
+          if (["clerk", "elder", "admin"].includes(effectiveRole)) {
             fetch(`${API_URL}/api/members/transfers/`, { headers: { Authorization: `Bearer ${token}` } })
               .then((res) => (res.ok ? res.json() : []))
               .then((t) => setTransfers(t))
@@ -126,11 +123,11 @@ function AdministrationContent() {
     : [(profile?.role || "").toLowerCase().trim() || "member"];
   const hasAnyRole = (...codes: string[]) => userRoles.some((r) => codes.includes(r));
   const isAdmin = hasAnyRole("admin");
-  const isClerk = hasAnyRole("clerk", "admin", "leader");
-  const isElder = hasAnyRole("elder", "admin", "leader");
+  const isClerk = hasAnyRole("clerk", "admin");
+  const isElder = hasAnyRole("elder", "admin");
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
-  const isFinance = hasAnyRole("finance", "treasurer", "admin", "leader");
+  const isFinance = hasAnyRole("finance", "treasurer", "admin");
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance", "refunds"];
 
   // Synchronize active tab safely without infinite loop

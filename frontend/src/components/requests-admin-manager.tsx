@@ -129,7 +129,7 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
         .then((res) => (res.ok ? res.json() : null))
         .then((user) => {
           const role = (user?.role || "").toLowerCase().trim();
-          setIsElder(["admin", "elder", "leader"].includes(role) || Boolean(user?.is_staff));
+          setIsElder(["admin", "elder", "clerk"].includes(role) || Boolean(user?.is_staff));
         })
         .catch(() => setIsElder(false));
     }

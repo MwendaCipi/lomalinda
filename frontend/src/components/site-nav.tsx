@@ -30,7 +30,6 @@ import { triggerPwaInstall } from "./pwa-register";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const staffRoles = [
   "admin",
-  "leader",
   "clerk",
   "elder",
   "youth_leader",

@@ -130,10 +130,10 @@ export function MemberHome() {
     ...(hasAny(["treasurer", "finance"])
       ? [{ href: "/administration?tab=finance", label: "Treasury", desc: "Accounts, receipts, refunds", icon: Wallet }]
       : []),
-    ...(hasAny(["elder", "admin", "leader", "clerk"])
+    ...(hasAny(["elder", "admin", "clerk"])
       ? [{ href: "/administration?tab=users", label: "Members", desc: "Directory, roles, invites", icon: Users }]
       : []),
-    ...(hasAny(["elder", "admin", "leader"])
+    ...(hasAny(["elder", "admin"])
       ? [{ href: "/administration?tab=board", label: "Board & Meetings", desc: "Agendas and minutes", icon: CalendarClock }]
       : []),
     ...(hasAny(["elder", "admin"])
@@ -236,7 +236,7 @@ export function MemberHome() {
                       Reconciliation
                     </Link>
                   )}
-                  {hasAny(["elder", "admin", "leader", "clerk"]) && (
+                  {hasAny(["elder", "admin", "clerk"]) && (
                     <Link href="/administration?tab=announcements" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                       Post announcement
                     </Link>
@@ -246,7 +246,7 @@ export function MemberHome() {
                       Church budget
                     </Link>
                   )}
-                  {hasAny(["elder", "admin", "leader"]) && (
+                  {hasAny(["elder", "admin"]) && (
                     <Link href="/requests" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                       Review requests
                     </Link>

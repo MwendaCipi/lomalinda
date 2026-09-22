@@ -74,10 +74,12 @@ def generate_temporary_password(length=12):
 def render_receipt_message(template, donor_name, amount_display, purpose):
     """Fill the configurable receipt message's placeholders.
 
-    The template lives in Church Settings and may use {name}, {amount} and
-    {purpose} — or {account}, the app's user-facing word for a giving
-    purpose. Both spellings are filled; anything left brace-wrapped
-    (a typo, a future placeholder) is stripped rather than shipped raw.
+    The template lives in Church Settings and is the message itself: it should
+    carry its own greeting (the shipped default starts "Dear {name}"). It may
+    use {name}, {amount} and {purpose} — or {account}, the app's user-facing
+    word for a giving purpose. Both spellings are filled; anything left
+    brace-wrapped (a typo, a future placeholder) is stripped rather than
+    shipped raw.
     """
     message = template or ''
     replacements = {
@@ -215,13 +217,13 @@ def send_invitation_email(invitation):
 
 
 def can_manage_invitations(user):
-    """Church administrators, clerks and leaders may invite accounts."""
+    """Church administrators and clerks may invite accounts."""
     if not user or not user.is_authenticated:
         return False
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('admin', 'clerk', 'leader'))
+    return bool(profile and profile.has_role('admin', 'clerk'))
 
 
 def send_password_reset_email(user, uid, token):
@@ -294,8 +296,9 @@ def send_contribution_receipt(contribution):
         contribution.purpose,
     )
     date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')
+    # The settings template is the whole message (greeting included); only the
+    # structured summary and signature are appended around it.
     body = (
-        f"Dear {donor_name},\n\n"
         f"{receipt_message}\n\n"
         f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
         f"{receipt_email_signature()}"
@@ -327,7 +330,7 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         cash.purpose,
     )
     body = (
-        f"Dear {donor_name},\n\n{message}\n\n"
+        f"{message}\n\n"
         f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel=cash.get_payment_method_display(), receipt_ref=cash.receipt_number or f'CASH-{cash.id}', date_display=cash.received_on)}\n\n"
         f"{receipt_email_signature()}"
     )
@@ -351,7 +354,7 @@ def is_finance_manager(user):
         return True
     profile = getattr(user, 'member_profile', None)
     official_roles = (
-        'admin', 'leader', 'clerk', 'elder', 'youth_leader', 'choir_director',
+        'admin', 'clerk', 'elder', 'youth_leader', 'choir_director',
         'children_ministry', 'men_ministry', 'women_ministry', 'chaplaincy',
         'finance', 'treasurer'
     )
@@ -769,7 +772,7 @@ class InvitationListCreateView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         if not can_manage_invitations(request.user):
-            return Response({'detail': 'Only church administrators, clerks or leaders can invite accounts.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'Only church administrators or clerks can invite accounts.'}, status=status.HTTP_403_FORBIDDEN)
 
         email = str(request.data.get('email') or '').strip().lower()
         if not email:
@@ -854,7 +857,7 @@ class InvitationDetailView(APIView):
 
     def _get(self, request, pk):
         if not can_manage_invitations(request.user):
-            return None, Response({'detail': 'Only church administrators, clerks or leaders can manage invitations.'}, status=status.HTTP_403_FORBIDDEN)
+            return None, Response({'detail': 'Only church administrators or clerks can manage invitations.'}, status=status.HTTP_403_FORBIDDEN)
         invitation = Invitation.objects.filter(pk=pk).first()
         if invitation is None:
             return None, Response({'detail': 'Invitation not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1088,9 +1091,12 @@ class AnnouncementView(generics.ListCreateAPIView):
         return queryset.filter(visibility__in=['public', 'all'])
 
     def perform_create(self, serializer):
-        if getattr(getattr(self.request.user, 'member_profile', None), 'role', '') not in ('admin', 'leader'):
+        # has_role() checks every held role, so an elder or clerk whose primary
+        # role is 'member' still counts as leadership.
+        profile = getattr(self.request.user, 'member_profile', None)
+        if not (profile and profile.has_role('admin', 'clerk', 'elder')):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church leaders can post announcements.')
+            raise PermissionDenied('Only church administrators, clerks or elders can post announcements.')
         announcement = serializer.save()
 
         # Handle Site / SMS / Email broadcast
@@ -1141,9 +1147,10 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Announcement.objects.all()
 
     def perform_destroy(self, instance):
-        if not self.request.user.is_authenticated or getattr(getattr(self.request.user, 'member_profile', None), 'role', '') not in ('admin', 'leader'):
+        profile = getattr(self.request.user, 'member_profile', None)
+        if not (self.request.user.is_authenticated and profile and profile.has_role('admin', 'clerk', 'elder')):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church leaders or admins can delete announcements.')
+            raise PermissionDenied('Only church administrators, clerks or elders can delete announcements.')
         instance.delete()
 
 
@@ -1744,7 +1751,6 @@ class ResendContributionReceiptView(APIView):
             if email:
                 amount_display = f"KES {contribution.amount:,.2f}"
                 body = (
-                    f"Dear {donor_name},\n\n"
                     f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)}\n\n"
                     f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
                     f"{receipt_email_signature()}"
@@ -1778,7 +1784,6 @@ class ResendContributionReceiptView(APIView):
             if email:
                 amount_display = f"KES {cash.amount:,.2f}"
                 body = (
-                    f"Dear {donor_name},\n\n"
                     f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, cash.purpose)}\n\n"
                     f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel='Cash', receipt_ref=receipt_ref, date_display=cash.received_on)}\n\n"
                     f"{receipt_email_signature()}"
@@ -1815,7 +1820,7 @@ class SupportSubmissionView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'leader', 'elder'):
+            if profile and profile.has_role('admin', 'clerk', 'elder'):
                 return SupportSubmission.objects.all().order_by('-id')
         return SupportSubmission.objects.none()
 
@@ -2225,7 +2230,7 @@ class PrayerRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'leader', 'elder', 'chaplaincy'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'chaplaincy'):
                 return PrayerRequest.objects.all().order_by('-created_at')
         return PrayerRequest.objects.none()
 
@@ -2238,7 +2243,7 @@ class ChildDedicationRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'leader', 'elder', 'children_ministry'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'children_ministry'):
                 return ChildDedicationRequest.objects.all().order_by('-id')
         return ChildDedicationRequest.objects.none()
 
@@ -2357,7 +2362,7 @@ class ChurchFinancialReportsView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user if self.request.user.is_authenticated else None
         profile = getattr(user, 'member_profile', None) if user else None
-        if profile and profile.has_role('leader', 'admin', 'finance'):
+        if profile and profile.has_role('admin', 'finance'):
             return ChurchFinancialReport.objects.all()
         return ChurchFinancialReport.objects.filter(published_to_members=True)
 
@@ -2406,7 +2411,7 @@ class InKindContributionView(APIView):
         is_leader = bool(
             request.user.is_authenticated and (
                 request.user.is_staff
-                or (profile and profile.has_role('admin', 'clerk', 'leader', 'elder', 'finance', 'treasurer'))
+                or (profile and profile.has_role('admin', 'clerk', 'elder', 'finance', 'treasurer'))
             )
         )
         if is_leader:
@@ -2629,7 +2634,7 @@ def broadcast_campaign_message(campaign, custom_message=None):
         'men': 'men_ministry',
         'women': 'women_ministry',
         'chaplaincy': 'chaplaincy',
-        'leaders': 'leader',
+        'leaders': 'elder',
     }
 
     target_groups = campaign.target_groups or []
@@ -2710,7 +2715,7 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
             'men': ('men_ministry', 'Adventist Men Ministries'),
             'women': ('women_ministry', 'Adventist Women Ministries'),
             'chaplaincy': ('chaplaincy', 'Chaplaincy'),
-            'leaders': ('leader', 'Church Leaders'),
+            'leaders': ('elder', 'Church Leaders'),
         }
 
         from django.contrib.auth.models import User
@@ -2787,7 +2792,7 @@ class CampaignIssueCardsView(APIView):
             'men': ('men_ministry', 'Adventist Men Ministries'),
             'women': ('women_ministry', 'Adventist Women Ministries'),
             'chaplaincy': ('chaplaincy', 'Chaplaincy'),
-            'leaders': ('leader', 'Church Leaders'),
+            'leaders': ('elder', 'Church Leaders'),
         }
 
         from django.contrib.auth.models import User
@@ -2893,7 +2898,7 @@ class MembershipTransferRequestDetailView(generics.RetrieveUpdateDestroyAPIView)
         instance = self.get_object()
         next_status = request.data.get('status')
         current_profile = getattr(request.user, 'member_profile', None) if request.user.is_authenticated else None
-        if next_status == 'approved' and (not current_profile or not current_profile.has_role('admin', 'leader', 'elder')):
+        if next_status == 'approved' and (not current_profile or not current_profile.has_role('admin', 'elder')):
             return Response({'detail': 'Only elders or administrators can approve transfer requests.'}, status=status.HTTP_403_FORBIDDEN)
 
         response = super().partial_update(request, *args, **kwargs)
@@ -2925,13 +2930,13 @@ class MembershipRemovalRequestView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         profile = getattr(self.request.user, 'member_profile', None)
-        if profile and profile.has_role('admin', 'clerk', 'leader', 'elder'):
+        if profile and profile.has_role('admin', 'clerk', 'elder'):
             return MembershipRemovalRequest.objects.select_related('member', 'requested_by', 'reviewed_by').all()
         return MembershipRemovalRequest.objects.none()
 
     def perform_create(self, serializer):
         profile = getattr(self.request.user, 'member_profile', None)
-        if not profile or not profile.has_role('admin', 'clerk', 'leader', 'elder'):
+        if not profile or not profile.has_role('admin', 'clerk', 'elder'):
             raise PermissionDenied('Only church officials can request member removal.')
         serializer.save(requested_by=self.request.user)
 
@@ -2945,7 +2950,7 @@ class MembershipRemovalRequestDetailView(generics.RetrieveUpdateAPIView):
         instance = self.get_object()
         next_status = request.data.get('status')
         profile = getattr(request.user, 'member_profile', None)
-        if next_status in ('approved', 'rejected') and (not profile or not profile.has_role('admin', 'leader', 'elder')):
+        if next_status in ('approved', 'rejected') and (not profile or not profile.has_role('admin', 'elder')):
             return Response({'detail': 'Only elders or administrators can review removal requests.'}, status=status.HTTP_403_FORBIDDEN)
         if next_status not in ('approved', 'rejected'):
             return Response({'detail': 'Use approved or rejected for removal review.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -3054,7 +3059,7 @@ class BoardMeetingView(generics.ListCreateAPIView):
             try:
                 settings_obj = ChurchSettings.objects.first()
                 template = settings_obj.default_board_meeting_invitation_message if settings_obj and settings_obj.default_board_meeting_invitation_message else "Dear Church Board Member, you are hereby invited to attend the Church Board Meeting: '{title}' scheduled for {meeting_date} at {location}. Please review the agendas and attached documents."
-                configured_roles = settings_obj.board_roles if settings_obj and settings_obj.board_roles else ['elder', 'clerk', 'treasurer', 'leader', 'finance', 'admin']
+                configured_roles = settings_obj.board_roles if settings_obj and settings_obj.board_roles else ['elder', 'clerk', 'treasurer', 'finance', 'admin']
 
                 board_users = User.objects.filter(is_active=True).filter(
                     Q(member_profile__role__in=configured_roles) | Q(is_superuser=True) | Q(is_staff=True)
@@ -3294,7 +3299,7 @@ class VisitationRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'leader', 'elder', 'chaplaincy'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'chaplaincy'):
                 return VisitationRequest.objects.all().order_by('-id')
         return VisitationRequest.objects.none()
 
@@ -3308,7 +3313,7 @@ class UserManagementView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         profile = getattr(request.user, 'member_profile', None)
-        if not profile or not profile.has_role('admin', 'clerk', 'leader'):
+        if not profile or not profile.has_role('admin', 'clerk'):
             return Response({'detail': 'Only admins or clerks can add new members.'}, status=status.HTTP_403_FORBIDDEN)
 
         username = (request.data.get('username') or '').strip()
@@ -3452,7 +3457,7 @@ class UserDetailUpdateView(APIView):
 
     def patch(self, request, pk):
         current_profile = getattr(request.user, 'member_profile', None)
-        if not current_profile or not current_profile.has_role('admin', 'clerk', 'leader'):
+        if not current_profile or not current_profile.has_role('admin', 'clerk'):
             return Response({'detail': 'Only church administrators or clerks can edit member profiles.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -3518,7 +3523,7 @@ class DisfellowshipView(APIView):
 
     def post(self, request, pk):
         current_profile = getattr(request.user, 'member_profile', None)
-        if not current_profile or not current_profile.has_role('admin', 'clerk', 'leader', 'elder'):
+        if not current_profile or not current_profile.has_role('admin', 'clerk', 'elder'):
             return Response({'detail': 'Only church administrators or clerks can perform this action.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -3560,7 +3565,7 @@ class MemberListPDFView(APIView):
 
     def get(self, request):
         current_profile = getattr(request.user, 'member_profile', None)
-        if not current_profile or not current_profile.has_role('admin', 'clerk', 'leader', 'elder'):
+        if not current_profile or not current_profile.has_role('admin', 'clerk', 'elder'):
             return Response({'detail': 'Only church administrators or clerks can export the member list.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -3600,7 +3605,7 @@ class UserRoleUpdateView(APIView):
 
     def patch(self, request, pk):
         current_profile = getattr(request.user, 'member_profile', None)
-        if not current_profile or not current_profile.has_role('admin', 'leader', 'clerk'):
+        if not current_profile or not current_profile.has_role('admin', 'elder', 'clerk'):
             return Response({'detail': 'Only church administrators or clerks can update member roles.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -4306,7 +4311,7 @@ class TreasuryAccountListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can create treasury accounts."}, status=status.HTTP_403_FORBIDDEN)
         serializer = TreasuryAccountSerializer(data=request.data)
         if serializer.is_valid():
@@ -4336,7 +4341,7 @@ class TreasuryAccountDetailView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can update treasury accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -4363,7 +4368,7 @@ class TreasuryAccountCreditView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can credit accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -4404,7 +4409,7 @@ class TreasuryAccountDebitView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can debit accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -4445,7 +4450,7 @@ class TreasuryAccountTransferView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can transfer funds between accounts."}, status=status.HTTP_403_FORBIDDEN)
 
         source_id = request.data.get("source_account_id")
@@ -4530,7 +4535,7 @@ class ExpenditureListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can record expenditures."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ExpenditureSerializer(data=request.data)
@@ -4564,7 +4569,7 @@ class ExpenditureDetailView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance", "leader")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
             return Response({"detail": "Only finance team can update expenditure records."}, status=status.HTTP_403_FORBIDDEN)
         try:
             exp = Expenditure.objects.get(pk=pk)
