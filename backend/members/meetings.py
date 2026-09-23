@@ -166,6 +166,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
     subject_kind = 'Church Board Meeting' if kind == BOARD_KIND else 'Church Business Meeting'
     audience = list(meeting_audience(kind))
     invited = emailed = 0
+    already_emailed = set()
 
     for user in audience:
         message = render_message(template, invitation_context(meeting, user, church_name))
@@ -175,7 +176,11 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
             message=message,
         )
         invited += 1
-        if notify_email and user.email:
+        address = (user.email or '').strip().lower()
+        # Two accounts can share one mailbox; that inbox should not get the same
+        # invitation twice.
+        if notify_email and address and address not in already_emailed:
+            already_emailed.add(address)
             try:
                 send_mail(
                     f'{subject_kind} Invitation: {meeting.title}',

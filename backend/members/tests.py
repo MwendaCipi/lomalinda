@@ -2781,6 +2781,22 @@ class MeetingInvitationTests(APITestCase):
         self.assertIn('{agenda}', mail.outbox[0].body)
         self.assertIn('Dear Esther', mail.outbox[0].body)
 
+    def test_two_accounts_sharing_one_mailbox_get_one_invitation_between_them(self):
+        from django.core import mail
+
+        # The live church board has exactly this shape: the same address on two
+        # accounts, which used to mean the same invitation twice in one inbox.
+        self.board_b.email = self.board_a.email
+        self.board_b.save(update_fields=['email'])
+
+        response = self._schedule()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['invitations'], {'invited': 2, 'emailed': 1})
+        self.assertEqual([message.to for message in mail.outbox], [['board.a@example.com']])
+        # Both people still get their own in-app notice.
+        self.assertEqual(ChurchNotification.objects.count(), 2)
+
     def test_scheduling_without_notifying_anyone_says_so_and_sends_nothing(self):
         from django.core import mail
 
