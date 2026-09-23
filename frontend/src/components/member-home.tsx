@@ -94,6 +94,7 @@ export function MemberHome() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [encouragement, setEncouragement] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -130,6 +131,13 @@ export function MemberHome() {
       .then((data: unknown) => setNotifications(Array.isArray(data) ? data.slice(0, 5) : []))
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false));
+
+    // The church's own line of encouragement, editable in church settings.
+    // Public read: it is greeting copy, not private data.
+    fetch(`${API_URL}/api/members/church-settings/`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setEncouragement(data?.dashboard_encouragement_line || ""))
+      .catch(() => {});
   }, [router]);
 
   const roles = me?.roles && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -178,59 +186,36 @@ export function MemberHome() {
       : []),
   ];
 
-  // ── My giving stats ──────────────────────────────────────────────────────
+  // ── My giving ────────────────────────────────────────────────────────────
   const completed = contributions.filter((c) => (c.status || "completed") === "completed");
-  const thisYear = new Date().getFullYear().toString();
-  const yearTotal = completed
-    .filter((c) => (c.paid_at || c.created_at || "").startsWith(thisYear))
-    .reduce((s, c) => s + Number(c.amount || 0), 0);
-  const latest = completed[0];
+  const encouragementLine = encouragement.trim();
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      {/* Hero */}
+      {/* Hero — a greeting, who you are, and the church's line of encouragement.
+          Money lives in the panels below: this card is where a member is greeted,
+          not where their giving is totalled. */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">{greeting}</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{firstName}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {roles.map((r) => (
-                <span
-                  key={r}
-                  className={`rounded-full px-3 py-1 text-[10px] font-bold capitalize ${
-                    r === "member" ? "bg-white/10 text-white/80" : "bg-[#f1c89e] text-[#26352f]"
-                  }`}
-                >
-                  {roleLabel(r)}
-                </span>
-              ))}
-            </div>
-          </div>
-          <Link
-            href="/give"
-            className="inline-flex items-center gap-2 rounded-full bg-[#f1c89e] px-4 py-2.5 text-xs font-bold text-[#26352f] transition hover:bg-white"
-          >
-            <HandHeart className="h-4 w-4" />
-            Give Now
-          </Link>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          {greeting}, {firstName}.
+        </h1>
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {roles.map((r) => (
+            <span
+              key={r}
+              className={`rounded-full px-3 py-1 text-[11px] font-bold capitalize ${
+                r === "member" ? "bg-white/10 text-white/80" : "bg-[#f1c89e] text-[#26352f]"
+              }`}
+            >
+              {roleLabel(r)}
+            </span>
+          ))}
         </div>
-
-        {/* Stats strip */}
-        <div className="mt-6 grid grid-cols-3 gap-3 border-t border-white/10 pt-5">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Given this year</p>
-            <p className="mt-1 text-lg font-bold text-white sm:text-xl">{fmtAmount(yearTotal)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Gifts recorded</p>
-            <p className="mt-1 text-lg font-bold text-white sm:text-xl">{completed.length}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Notices</p>
-            <p className="mt-1 text-lg font-bold text-white sm:text-xl">{notifications.length}</p>
-          </div>
-        </div>
+        {encouragementLine && (
+          <p className="mt-3 max-w-md text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
+            {encouragementLine}
+          </p>
+        )}
       </section>
 
       {loading ? (

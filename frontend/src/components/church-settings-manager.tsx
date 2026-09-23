@@ -35,6 +35,10 @@ export function ChurchSettingsManager() {
   // Filled by the API so the tokens listed here are exactly the ones the
   // backend substitutes — help text cannot drift from behaviour.
   const [invitationPlaceholders, setInvitationPlaceholders] = useState<{ token: string; description: string }[]>([]);
+  // The line the dashboard greeting ends with. Short by design; the API caps it
+  // at the same length this input does.
+  const [encouragementLine, setEncouragementLine] = useState("Jesus is coming again.");
+  const ENCOURAGEMENT_MAX = 140;
   const [boardRoles, setBoardRoles] = useState<string[]>([
     "elder", "clerk", "treasurer", "finance", "admin"
   ]);
@@ -68,6 +72,9 @@ export function ChurchSettingsManager() {
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
           if (Array.isArray(data.invitation_placeholders)) {
             setInvitationPlaceholders(data.invitation_placeholders);
+          }
+          if (typeof data.dashboard_encouragement_line === "string") {
+            setEncouragementLine(data.dashboard_encouragement_line);
           }
           if (data.default_business_meeting_invitation_message) {
             setDefaultBusinessMeetingInvitationMessage(data.default_business_meeting_invitation_message);
@@ -119,6 +126,7 @@ export function ChurchSettingsManager() {
         default_receipt_message: defaultReceiptMessage,
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
+        dashboard_encouragement_line: encouragementLine.trim(),
         // System roles always stay on the board, whatever the tick boxes say.
         board_roles: Array.from(new Set([...boardRoles, ...SYSTEM_ROLE_CODES])),
         bank_name: bankName,
@@ -400,6 +408,28 @@ export function ChurchSettingsManager() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Dashboard encouragement */}
+        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
+          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
+            <span>💬</span> Dashboard Greeting Line
+          </h3>
+          <p className="mt-1 text-xs text-[#617068]">
+            Shown under &quot;Good morning, [name].&quot; on every member&apos;s dashboard. Keep it to one short line — two
+            lines at most on a phone.
+          </p>
+          <input
+            type="text"
+            maxLength={ENCOURAGEMENT_MAX}
+            value={encouragementLine}
+            onChange={(e) => setEncouragementLine(e.target.value.slice(0, ENCOURAGEMENT_MAX))}
+            placeholder="e.g. Jesus is coming again."
+            className="mt-3 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+          />
+          <p className="mt-1 text-right text-[11px] text-[#617068]">
+            {encouragementLine.length}/{ENCOURAGEMENT_MAX}
+          </p>
         </div>
 
         {/* General Church Details */}

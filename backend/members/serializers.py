@@ -628,6 +628,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'clarion_call_subtext', 'default_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
+            'dashboard_encouragement_line',
             'invitation_placeholders',
             'board_roles',
             'invitation_link_lifetime_days',

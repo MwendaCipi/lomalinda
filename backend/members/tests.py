@@ -3033,3 +3033,43 @@ class SplitGivingTests(APITestCase):
         self.assertEqual(contribution.purpose, 'Tithe')
         self.assertEqual(contribution.amount, Decimal('250.00'))
         self.assertIsNone(contribution.payment_group)
+
+
+class DashboardGreetingLineTests(APITestCase):
+    """The dashboard's line of encouragement is the church's own, and short."""
+
+    URL = '/api/members/church-settings/'
+
+    def setUp(self):
+        self.admin = User.objects.create_user('greet.admin', 'greet.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        ChurchSettings.objects.create(church_name='SDA Loma Linda, Meru')
+
+    def test_the_shipped_default_is_a_line_a_church_would_actually_say(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['dashboard_encouragement_line'], 'Jesus is coming again.')
+
+    def test_the_church_can_rewrite_it_and_members_read_the_new_wording(self):
+        self.client.force_authenticate(self.admin)
+
+        saved = self.client.patch(self.URL, {'dashboard_encouragement_line': 'God is faithful.'}, format='json')
+
+        self.assertEqual(saved.status_code, status.HTTP_200_OK)
+        self.assertEqual(saved.data['dashboard_encouragement_line'], 'God is faithful.')
+        # The dashboard reads it anonymously, like the rest of the greeting copy.
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.URL).data['dashboard_encouragement_line'], 'God is faithful.')
+
+    def test_a_paragraph_is_refused_because_it_would_not_fit(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.patch(
+            self.URL,
+            {'dashboard_encouragement_line': 'Blessed Sabbath to every member of the household of faith ' * 4},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ChurchSettings.objects.get().dashboard_encouragement_line, 'Jesus is coming again.')

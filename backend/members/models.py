@@ -680,6 +680,15 @@ class ChurchSettings(models.Model):
     bank_branch = models.CharField(max_length=120, default='Meru', blank=True)
     bank_swift_code = models.CharField(max_length=50, default='KCBKNEN', blank=True)
     bank_paybill_number = models.CharField(max_length=50, default='522522', blank=True)
+    # One short line of encouragement on the dashboard greeting. Kept short on
+    # purpose: it sits under the greeting on every member's phone, so a paragraph
+    # would push their actual work off the screen.
+    dashboard_encouragement_line = models.CharField(
+        max_length=140,
+        default='Jesus is coming again.',
+        blank=True,
+        help_text='Short encouragement shown under the dashboard greeting (140 characters).',
+    )
     invitation_link_lifetime_days = models.PositiveIntegerField(default=7, help_text="How many days an emailed invitation link stays usable before it expires")
     updated_at = models.DateTimeField(auto_now=True)
 
