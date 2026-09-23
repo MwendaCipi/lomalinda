@@ -58,6 +58,9 @@ export default function CampaignDetailClient() {
   const [stkProvider] = useState<"mpesa">("mpesa");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
+  // A receipt can only be emailed to the verified address on a member's
+  // account, so a signed-out visitor is not asked for one (see the Give form).
+  const [signedIn, setSignedIn] = useState(false);
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -91,6 +94,7 @@ export default function CampaignDetailClient() {
         .then((res) => (res.ok ? res.json() : null))
         .then((userData) => {
           if (userData) {
+            setSignedIn(true);
             const phone = userData.phone_number || "";
             const email = userData.email || "";
             if (phone) setPhoneNumber(phone);
@@ -301,16 +305,32 @@ export default function CampaignDetailClient() {
                         />
                       </label>
 
-                      <label className="block text-sm font-medium text-[#26352f]">
-                        Your Email (Optional)
-                        <input
-                          type="email"
-                          placeholder="e.g. jane@example.com"
-                          value={donorEmail}
-                          onChange={(e) => setDonorEmail(e.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
-                        />
-                      </label>
+                      {signedIn ? (
+                        <label className="block text-sm font-medium text-[#26352f]">
+                          Email
+                          <input
+                            type="email"
+                            value={donorEmail}
+                            readOnly
+                            aria-readonly="true"
+                            title="Receipts go to the email on your church account."
+                            className="mt-1.5 w-full cursor-not-allowed rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-sm text-[#617068] outline-none"
+                          />
+                          <span className="mt-1 block text-[11px] font-normal text-[#617068]">
+                            {donorEmail
+                              ? "Your receipt goes to your account email."
+                              : "Your account has no email address, so no receipt can be sent."}
+                          </span>
+                        </label>
+                      ) : (
+                        <div className="pb-1 text-[11px] font-normal leading-relaxed text-[#617068]">
+                          Receipts are only emailed to the verified address on a member&apos;s account.{" "}
+                          <Link href={`/login?next=/campaigns/${campaignId}`} className="font-semibold text-[#b36b3c] hover:underline">
+                            Sign in
+                          </Link>{" "}
+                          and this field fills itself in.
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-2">

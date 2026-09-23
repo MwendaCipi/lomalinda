@@ -3073,3 +3073,96 @@ class DashboardGreetingLineTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(ChurchSettings.objects.get().dashboard_encouragement_line, 'Jesus is coming again.')
+
+
+class ReceiptAddressEnforcementTests(APITestCase):
+    """A gift receipt may only go to the signed-in giver's own account email.
+
+    The Give form hides the email field from signed-out givers and locks it for
+    members, but that was a form rule: the endpoint believed whatever address a
+    request named, so a crafted call could ask the church to email a receipt
+    into someone else's inbox. The address is now read from the account, which
+    is the only place it can be verified.
+    """
+
+    URL = '/api/members/contributions/initiate/'
+
+    def _gift(self, **overrides):
+        payload = {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'amount': '500.00',
+            'purpose': 'Tithe',
+            'phone_number': '',
+        }
+        payload.update(overrides)
+        return self.client.post(self.URL, payload, format='json')
+
+    def test_a_member_receipt_ignores_an_address_named_in_the_request(self):
+        member = User.objects.create_user('receipt.owner', 'owner@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self._gift(donor_email='someone.else@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.member, member)
+        self.assertEqual(contribution.donor_email, 'owner@example.com')
+
+    def test_the_receipt_lands_in_the_members_own_inbox(self):
+        from django.core import mail
+
+        member = User.objects.create_user('receipt.inbox', 'inbox@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            self._gift(donor_email='someone.else@example.com')
+
+        self.assertEqual(mail.outbox[-1].to, ['inbox@example.com'])
+
+    def test_a_member_without_an_account_email_gets_no_receipt_address(self):
+        member = User.objects.create_user('receipt.nomail', '', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self._gift(donor_email='typed.in@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Contribution.objects.get().donor_email, '')
+
+    def test_a_signed_out_giver_cannot_route_a_receipt(self):
+        response = self._gift(donor_email='stranger@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        contribution = Contribution.objects.get()
+        self.assertIsNone(contribution.member)
+        self.assertEqual(contribution.donor_email, '')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_the_prompt_carries_the_account_address_and_the_member(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        member = User.objects.create_user('receipt.prompt', 'prompt@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self._gift(
+            payment_method='mpesa', phone_number='0712345678',
+            donor_email='someone.else@example.com',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertEqual(context['donor_email'], 'prompt@example.com')
+        self.assertEqual(context['member_id'], member.pk)
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_a_signed_out_prompt_carries_no_address_at_all(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+
+        response = self._gift(
+            payment_method='mpesa', phone_number='0712345678',
+            donor_email='stranger@example.com',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertNotIn('donor_email', context)
+        self.assertNotIn('member_id', context)

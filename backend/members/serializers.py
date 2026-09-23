@@ -415,6 +415,22 @@ class ContributionAllocationSerializer(serializers.Serializer):
                                       error_messages={'min_value': 'Each account needs at least KES 1.'})
 
 
+def receipt_email_for(user):
+    """The only address a gift receipt may be sent to: the giver's own account email.
+
+    The Give form hides the email field from signed-out givers and locks it for
+    members, but that was a form rule — the endpoint accepted whatever address a
+    request named, so a crafted call could ask the church to email a receipt into
+    anyone's inbox. Receipts are now addressed from the account instead of the
+    payload: a member is emailed at the verified address on their account, and a
+    signed-out giver has no verifiable address, so nothing is emailed to them.
+    (An SMS receipt, which goes to the phone they gave, is unaffected.)
+    """
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return ''
+    return (getattr(user, 'email', '') or '').strip()
+
+
 class ContributionInitiateSerializer(serializers.Serializer):
     giving_type = serializers.ChoiceField(choices=['financial'], default='financial')
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, default=0)
@@ -438,6 +454,11 @@ class ContributionInitiateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
+        # The receipt address comes from the account, never from the request
+        # body — see receipt_email_for(). Applied before anything is written or
+        # packed into an M-Pesa push, so the callback and the ledger agree.
+        attrs['donor_email'] = receipt_email_for(getattr(self.context.get('request'), 'user', None))
+
         submitted = attrs.get('allocations') or []
         cleaned = []
         seen = set()

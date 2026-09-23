@@ -2489,7 +2489,7 @@ class InitiateContributionView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        serializer = ContributionInitiateSerializer(data=request.data)
+        serializer = ContributionInitiateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
         # M-Pesa STK push never touches the database here. A pending row used
@@ -2563,13 +2563,14 @@ class InitiateContributionView(APIView):
         donor_name = (data.get('donor_name') or '').strip()
         if donor_name:
             context['donor_name'] = donor_name
+        # The receipt address is the account's own, set by the serializer; the
+        # member id rides along so the callback can attribute the gift even if
+        # the phone it was paid from is not the one on the member's profile.
+        if request.user and request.user.is_authenticated:
+            context['member_id'] = request.user.pk
         donor_email = (data.get('donor_email') or '').strip()
         if donor_email:
             context['donor_email'] = donor_email
-        elif request.user and request.user.is_authenticated:
-            context['member_id'] = request.user.pk
-            if request.user.email:
-                context['donor_email'] = request.user.email
         item_description = (data.get('item_description') or '').strip()
         if item_description:
             context['item_description'] = item_description
