@@ -11,6 +11,7 @@ from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.dateparse import parse_date
 from datetime import date, datetime, timedelta
 import uuid
 import re
@@ -46,6 +47,14 @@ from .roles import (
     role_labels,
     sync_role_groups,
     unknown_role_codes,
+)
+from .meetings import (
+    BOARD_KIND,
+    BUSINESS_KIND,
+    as_bool,
+    broadcast_invitation,
+    create_agendas,
+    parse_clock,
 )
 from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
@@ -3650,104 +3659,52 @@ class BoardMeetingView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         title = request.data.get('title')
-        meeting_date = request.data.get('meeting_date')
-        meeting_time = request.data.get('meeting_time', '5:00 PM')
+        meeting_date = parse_date(str(request.data.get('meeting_date') or ''))
+        start_time = parse_clock(request.data.get('start_time'))
+        end_time = parse_clock(request.data.get('end_time'))
         location = request.data.get('location', 'Board Room / Main Sanctuary')
         agenda_summary = request.data.get('agenda', '')
         minutes = request.data.get('minutes', '')
         status_val = request.data.get('status', 'upcoming')
-        notify_sms = request.data.get('notify_sms', True)
-        if isinstance(notify_sms, str):
-            notify_sms = notify_sms.lower() in ('true', '1')
-        notify_email = request.data.get('notify_email', True)
-        if isinstance(notify_email, str):
-            notify_email = notify_email.lower() in ('true', '1')
-
-        reference_file = request.FILES.get('reference_file') or request.FILES.get('file')
+        notify_sms = as_bool(request.data.get('notify_sms', True))
+        notify_email = as_bool(request.data.get('notify_email', True))
+        custom_message = (request.data.get('notification_message') or '').strip()
 
         if not title or not meeting_date:
             return Response({'error': 'Title and meeting_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if start_time and end_time and end_time <= start_time:
+            return Response({'end_time': 'A meeting has to finish after it starts.'}, status=status.HTTP_400_BAD_REQUEST)
 
         meeting = BoardMeeting.objects.create(
             title=title,
             meeting_date=meeting_date,
-            meeting_time=meeting_time,
+            start_time=start_time,
+            end_time=end_time,
             location=location,
             agenda=agenda_summary,
             minutes=minutes,
             status=status_val,
-            reference_file=reference_file,
             notify_sms=notify_sms,
             notify_email=notify_email
         )
 
-        agendas_raw = request.data.get('agendas')
-        if isinstance(agendas_raw, str):
-            try:
-                agendas_data = json.loads(agendas_raw)
-            except Exception:
-                agendas_data = []
-        elif isinstance(agendas_raw, list):
-            agendas_data = agendas_raw
-        else:
-            agendas_data = []
+        create_agendas(request, meeting, BoardMeetingAgenda)
 
-        for idx, item in enumerate(agendas_data):
-            if not isinstance(item, dict):
-                continue
-            ag_title = item.get('title')
-            if not ag_title:
-                continue
-            ag_desc = item.get('description', '')
-            ag_order = item.get('order', idx + 1)
-
-            doc_file = request.FILES.get(f'agenda_file_{idx}') or request.FILES.get(f'doc_{idx}')
-            doc_name = doc_file.name if doc_file else item.get('document_name', '')
-
-            BoardMeetingAgenda.objects.create(
-                meeting=meeting,
-                title=ag_title,
-                description=ag_desc,
-                order=ag_order,
-                document=doc_file if doc_file else None,
-                document_name=doc_name
-            )
-
-        # Broadcast invitation notification to Board Members
-        if notify_sms or notify_email:
-            try:
-                settings_obj = ChurchSettings.objects.first()
-                template = settings_obj.default_board_meeting_invitation_message if settings_obj and settings_obj.default_board_meeting_invitation_message else "Dear Church Board Member, you are hereby invited to attend the Church Board Meeting: '{title}' scheduled for {meeting_date} at {location}. Please review the agendas and attached documents."
-                configured_roles = settings_obj.board_roles if settings_obj and settings_obj.board_roles else ['elder', 'clerk', 'treasurer', 'finance', 'admin']
-
-                board_users = User.objects.filter(is_active=True).filter(
-                    Q(member_profile__role__in=configured_roles) | Q(is_superuser=True) | Q(is_staff=True)
-                ).distinct()
-
-                message = template.format(
-                    title=meeting.title,
-                    meeting_date=meeting.meeting_date,
-                    meeting_time=meeting.meeting_time,
-                    location=meeting.location
-                )
-
-                for u in board_users:
-                    ChurchNotification.objects.create(
-                        user=u,
-                        title=f"Board Meeting Invitation: {meeting.title}",
-                        message=message
-                    )
-
-                if notify_email:
-                    recipient_emails = list(board_users.exclude(email='').values_list('email', flat=True).distinct())
-                    if recipient_emails:
-                        subject = f"Church Board Meeting Invitation: {meeting.title}"
-                        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_emails, fail_silently=True)
-            except Exception:
-                pass
+        # Invite the church board, using the message the secretary edited on the
+        # form when there is one, and the church's configured template otherwise.
+        invited, emailed = broadcast_invitation(
+            meeting,
+            BOARD_KIND,
+            current_church_name(),
+            template=custom_message or None,
+            notify_sms=notify_sms,
+            notify_email=notify_email,
+        )
 
         serializer = self.get_serializer(meeting)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        data = dict(serializer.data)
+        data['invitations'] = {'invited': invited, 'emailed': emailed}
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class BoardMeetingDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -3803,17 +3760,14 @@ class BusinessMeetingView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         title = request.data.get('title')
-        meeting_date = request.data.get('meeting_date')
+        meeting_date = parse_date(str(request.data.get('meeting_date') or ''))
         meeting_time = request.data.get('meeting_time', '2:00 PM')
         location = request.data.get('location', 'Main Sanctuary')
         status_val = request.data.get('status', 'upcoming')
         minutes = request.data.get('minutes', '')
-        notify_sms = request.data.get('notify_sms', True)
-        if isinstance(notify_sms, str):
-            notify_sms = notify_sms.lower() in ('true', '1')
-        notify_email = request.data.get('notify_email', True)
-        if isinstance(notify_email, str):
-            notify_email = notify_email.lower() in ('true', '1')
+        notify_sms = as_bool(request.data.get('notify_sms', True))
+        notify_email = as_bool(request.data.get('notify_email', True))
+        custom_message = (request.data.get('notification_message') or '').strip()
 
         if not title or not meeting_date:
             return Response({'error': 'Title and meeting_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -3829,70 +3783,21 @@ class BusinessMeetingView(generics.ListCreateAPIView):
             notify_email=notify_email
         )
 
-        agendas_raw = request.data.get('agendas')
-        if isinstance(agendas_raw, str):
-            try:
-                agendas_data = json.loads(agendas_raw)
-            except Exception:
-                agendas_data = []
-        elif isinstance(agendas_raw, list):
-            agendas_data = agendas_raw
-        else:
-            agendas_data = []
+        create_agendas(request, meeting, BusinessMeetingAgenda)
 
-        for idx, item in enumerate(agendas_data):
-            if not isinstance(item, dict):
-                continue
-            ag_title = item.get('title')
-            if not ag_title:
-                continue
-            ag_desc = item.get('description', '')
-            ag_order = item.get('order', idx + 1)
-
-            doc_file = request.FILES.get(f'agenda_file_{idx}') or request.FILES.get(f'doc_{idx}')
-            doc_name = doc_file.name if doc_file else item.get('document_name', '')
-
-            BusinessMeetingAgenda.objects.create(
-                meeting=meeting,
-                title=ag_title,
-                description=ag_desc,
-                order=ag_order,
-                document=doc_file if doc_file else None,
-                document_name=doc_name
-            )
-
-        # Broadcast invitation notification to all active church members
-        if notify_sms or notify_email:
-            try:
-                settings_obj = ChurchSettings.objects.first()
-                template = settings_obj.default_business_meeting_invitation_message if settings_obj and settings_obj.default_business_meeting_invitation_message else "Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!"
-
-                active_users = User.objects.filter(is_active=True)
-
-                message = template.format(
-                    title=meeting.title,
-                    meeting_date=meeting.meeting_date,
-                    meeting_time=meeting.meeting_time,
-                    location=meeting.location
-                )
-
-                for u in active_users:
-                    ChurchNotification.objects.create(
-                        user=u,
-                        title=f"Business Meeting Invitation: {meeting.title}",
-                        message=message
-                    )
-
-                if notify_email:
-                    recipient_emails = list(active_users.exclude(email='').values_list('email', flat=True).distinct())
-                    if recipient_emails:
-                        subject = f"Church Business Meeting Invitation: {meeting.title}"
-                        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_emails, fail_silently=True)
-            except Exception:
-                pass
+        invited, emailed = broadcast_invitation(
+            meeting,
+            BUSINESS_KIND,
+            current_church_name(),
+            template=custom_message or None,
+            notify_sms=notify_sms,
+            notify_email=notify_email,
+        )
 
         serializer = self.get_serializer(meeting)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        data = dict(serializer.data)
+        data['invitations'] = {'invited': invited, 'emailed': emailed}
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class BusinessMeetingDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -4385,6 +4290,80 @@ class UserRoleUpdateView(APIView):
             'role_display': role_display,
             'detail': f"Role for {target_user.username} updated to '{role_display}'."
         })
+
+
+class UserAccountTypeUpdateView(APIView):
+    """Shift a person between member, friend and ex-member.
+
+    Which of the three someone is was already stored as two fields —
+    ``account_type`` for member/friend and ``is_disfellowshipped`` for the
+    ex-member state — and the Users table read them but could not set them. The
+    three-way choice is owned here so every surface (list, filter, card) agrees.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    VALID_TYPES = ('member', 'friend', 'ex_member')
+
+    def patch(self, request, pk):
+        current_profile = getattr(request.user, 'member_profile', None)
+        if not current_profile or not current_profile.has_role('admin', 'elder', 'clerk'):
+            return Response(
+                {'detail': 'Only church administrators or clerks can change a person\'s type.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        requested = (request.data.get('account_type') or '').strip()
+        if requested not in self.VALID_TYPES:
+            return Response(
+                {'account_type': "Choose one of: member, friend, ex_member."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            target_user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if target_user.is_superuser:
+            return Response(
+                {'detail': 'This is a system account, not a church member.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile, _ = MemberProfile.objects.get_or_create(user=target_user)
+        previous = 'ex_member' if profile.is_disfellowshipped else ('friend' if profile.account_type == 'friend' else 'member')
+
+        if requested == 'ex_member':
+            # Someone who left keeps whatever they were before, so restoring them
+            # later is not a guess.
+            profile.is_disfellowshipped = True
+        else:
+            profile.account_type = requested
+            profile.is_disfellowshipped = False
+        profile.save(update_fields=['account_type', 'is_disfellowshipped'])
+
+        if previous != requested:
+            ChurchNotification.objects.create(
+                user=target_user,
+                title="Your church record was updated",
+                message=(
+                    f"Your record at {current_church_name()} is now recorded as "
+                    f"{ACCOUNT_TYPE_LABELS[requested]}. Speak to a church clerk if this is not right."
+                ),
+            )
+
+        serializer = UserDetailSerializer(target_user)
+        data = dict(serializer.data)
+        data['detail'] = f"{target_user.username} is now {ACCOUNT_TYPE_LABELS[requested]}."
+        return Response(data)
+
+
+ACCOUNT_TYPE_LABELS = {
+    'member': 'a member',
+    'friend': 'a friend',
+    'ex_member': 'an ex-member',
+}
 
 
 class MemberLookupView(APIView):

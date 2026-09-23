@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RolesCombobox, formatRoles, heldSystemRoles, SYSTEM_ROLE_HELP } from "./roles-combobox";
+import {
+  AccountTypeCombobox,
+  accountTypeOf,
+  accountTypeLabel,
+  type AccountTypeOption,
+  RolesCombobox,
+  formatRoles,
+  heldSystemRoles,
+  SYSTEM_ROLE_HELP,
+} from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 
@@ -900,6 +909,7 @@ export function UserManagement() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
+  const [updatingTypeId, setUpdatingTypeId] = useState<number | null>(null);
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -1505,6 +1515,58 @@ export function UserManagement() {
     }
   };
 
+  // ── Quick type change from the table combo (member / friend / ex-member) ──
+  const handleQuickTypeChange = async (member: MemberUser, nextType: AccountTypeOption["value"]) => {
+    const previous = accountTypeOf(member.account_type, member.is_disfellowshipped);
+    if (nextType === "ex_member" && previous !== "ex_member") {
+      const proceed = confirm(
+        `Record ${member.first_name || member.username} as an ex-member? They stay on the church record but are no longer counted as a member or a friend, and can be restored later.`
+      );
+      if (!proceed) return;
+    }
+
+    setUpdatingTypeId(member.id);
+    const optimistic = {
+      account_type: nextType === "friend" ? "friend" : "member",
+      is_disfellowshipped: nextType === "ex_member",
+    };
+    setMembers((prev) => prev.map((m) => (m.id === member.id ? { ...m, ...optimistic } : m)));
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/users/${member.id}/account-type/`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ account_type: nextType }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // The API answers with the saved record, so the row cannot drift from it.
+        setMembers((prev) => prev.map((m) => (m.id === member.id ? { ...m, ...optimistic } : m)));
+        setMessage({ type: "success", text: d.detail || `Recorded as ${accountTypeLabel(nextType)}.` });
+      } else {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === member.id
+              ? { ...m, account_type: member.account_type, is_disfellowshipped: member.is_disfellowshipped }
+              : m
+          )
+        );
+        setMessage({ type: "error", text: d.detail || d.account_type || "Failed to update the record type." });
+      }
+    } catch {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === member.id
+            ? { ...m, account_type: member.account_type, is_disfellowshipped: member.is_disfellowshipped }
+            : m
+        )
+      );
+      setMessage({ type: "error", text: "Network error updating the record type." });
+    } finally {
+      setUpdatingTypeId(null);
+    }
+  };
+
   const handleContactMember = (member: MemberUser) => {
     if (member.phone_number) {
       window.location.href = `tel:${member.phone_number}`;
@@ -1725,6 +1787,7 @@ export function UserManagement() {
             { label: "Name" },
             { label: "Contact" },
             { label: "Role" },
+            { label: "Type" },
             { label: "Sex" },
             { label: "Actions", className: "text-right" },
           ]}
@@ -1741,25 +1804,19 @@ export function UserManagement() {
                       {m.phone_number || m.email || "—"}
                     </td>
                     <td className="py-3">
-                      {m.is_disfellowshipped ? (
-                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-bold text-red-700">
-                          Ex-member
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <RolesCombobox
-                            selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                            onChange={(newRoles) => handleQuickRolesChange(m.id, newRoles)}
-                            disabled={updatingRoleId === m.id || m.account_type === "friend"}
-                            lockedRoles={heldSystemRoles(m.roles, m.role)}
-                          />
-                          {m.account_type === "friend" && (
-                            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-700">
-                              Friend
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <RolesCombobox
+                        selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
+                        onChange={(newRoles) => handleQuickRolesChange(m.id, newRoles)}
+                        disabled={updatingRoleId === m.id || m.account_type === "friend"}
+                        lockedRoles={heldSystemRoles(m.roles, m.role)}
+                      />
+                    </td>
+                    <td className="py-3">
+                      <AccountTypeCombobox
+                        value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
+                        onChange={(nextType) => handleQuickTypeChange(m, nextType)}
+                        disabled={updatingTypeId === m.id}
+                      />
                     </td>
                     <td className="py-3 text-[#617068]">{m.gender || "—"}</td>
                     <td className="py-3 text-right">
@@ -1819,15 +1876,29 @@ export function UserManagement() {
                       <h3 className="font-bold text-sm text-[#26352f]">{name}</h3>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
                     </div>
-                    {m.is_disfellowshipped ? (
-                      <span className="rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-bold text-red-700 shrink-0">Ex-member</span>
-                    ) : m.account_type === "friend" ? (
-                      <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-700 shrink-0">Friend</span>
-                    ) : (
-                      <span className="rounded-full bg-[#eef2ed] px-2.5 py-1 text-[10px] font-bold capitalize text-[#3d5148] shrink-0">
-                        {(m.role || "member").replaceAll("_", " ")}
-                      </span>
-                    )}
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold capitalize shrink-0 ${
+                        m.is_disfellowshipped
+                          ? "bg-red-100 text-red-700"
+                          : m.account_type === "friend"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-[#eef2ed] text-[#3d5148]"
+                      }`}
+                    >
+                      {m.is_disfellowshipped
+                        ? "Ex-member"
+                        : m.account_type === "friend"
+                        ? "Friend"
+                        : (m.role || "member").replaceAll("_", " ")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-[#617068]">Type</p>
+                    <AccountTypeCombobox
+                      value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
+                      onChange={(nextType) => handleQuickTypeChange(m, nextType)}
+                      disabled={updatingTypeId === m.id}
+                    />
                   </div>
                   {m.gender && <p className="text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>}
                   <div className="pt-2 border-t border-[#dfdbd1]/60 flex flex-wrap gap-2">

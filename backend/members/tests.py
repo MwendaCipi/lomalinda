@@ -48,7 +48,8 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import CashContribution, ChurchBudget, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
+from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 
@@ -2579,3 +2580,222 @@ class DashboardAnalyticsTests(APITestCase):
         self.assertEqual(response.data['budget']['has_budget'], False)
         self.assertEqual(response.data['budget']['income_target'], 0.0)
         self.assertEqual(response.data['budget']['income_actual'], 0.0)
+
+
+class AccountTypeChangeTests(APITestCase):
+    """Member, friend, ex-member: one three-way choice, owned in one place.
+
+    The Users table reads two stored fields (account_type and
+    is_disfellowshipped) but the switch that changes them had no endpoint at all,
+    so a person could only be recorded as a friend by creating them that way.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('type.admin', 'type.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.person = User.objects.create_user('type.person', 'type.person@example.com', 'PersonPass#2026')
+        self.person.first_name = 'Mercy'
+        self.person.save()
+        MemberProfile.objects.create(user=self.person, role='member', roles='member')
+        self.plain = User.objects.create_user('type.plain', 'type.plain@example.com', 'PlainPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.owner = User.objects.create_superuser('type.owner', 'type.owner@example.com', 'OwnerPass#2026')
+        self.client.force_authenticate(self.admin)
+
+    def _set_type(self, value, user=None):
+        return self.client.patch(
+            f'/api/members/users/{(user or self.person).id}/account-type/',
+            {'account_type': value},
+            format='json',
+        )
+
+    def test_a_person_can_be_moved_through_all_three_states(self):
+        friend = self._set_type('friend')
+        self.assertEqual(friend.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=self.person)
+        self.assertEqual(profile.account_type, 'friend')
+        self.assertFalse(profile.is_disfellowshipped)
+
+        ex_member = self._set_type('ex_member')
+        self.assertEqual(ex_member.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertTrue(profile.is_disfellowshipped)
+
+        back_to_member = self._set_type('member')
+        self.assertEqual(back_to_member.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertEqual(profile.account_type, 'member')
+        self.assertFalse(profile.is_disfellowshipped)
+        self.assertIn('is now a member', back_to_member.data['detail'])
+
+    def test_the_three_filters_the_users_screen_offers_agree_with_the_stored_state(self):
+        # The screen filters on exactly these two fields, so the endpoint has to
+        # leave them in a state each filter can recognise.
+        self._set_type('friend')
+        listed = {row['username']: row for row in self.client.get('/api/members/users/').data}
+        self.assertEqual(listed['type.person']['account_type'], 'friend')
+        self.assertFalse(listed['type.person']['is_disfellowshipped'])
+
+        self._set_type('ex_member')
+        listed = {row['username']: row for row in self.client.get('/api/members/users/').data}
+        self.assertTrue(listed['type.person']['is_disfellowshipped'])
+
+    def test_shifting_to_ex_member_tells_the_person(self):
+        self._set_type('ex_member')
+
+        notice = ChurchNotification.objects.filter(user=self.person).order_by('-created_at').first()
+        self.assertIsNotNone(notice)
+        self.assertIn('ex-member', notice.message)
+
+    def test_only_officers_may_change_a_type(self):
+        self.client.force_authenticate(self.plain)
+
+        response = self._set_type('friend')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(MemberProfile.objects.get(user=self.person).account_type, 'member')
+
+    def test_an_unknown_type_is_rejected_and_nothing_changes(self):
+        response = self.client.patch(
+            f'/api/members/users/{self.person.id}/account-type/',
+            {'account_type': 'vip'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        profile = MemberProfile.objects.get(user=self.person)
+        self.assertEqual(profile.account_type, 'member')
+        self.assertFalse(profile.is_disfellowshipped)
+
+    def test_a_system_account_is_not_a_church_member(self):
+        response = self._set_type('friend', user=self.owner)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class MeetingInvitationTests(APITestCase):
+    """Meeting invitations: the times on the form, and the words members read."""
+
+    URL = '/api/members/board-meetings/'
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('meet.clerk', 'meet.clerk@example.com', 'ClerkPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+
+        self.board_a = User.objects.create_user('board.a', 'board.a@example.com', 'BoardPass#2026')
+        self.board_a.first_name = 'Esther'
+        self.board_a.save()
+        MemberProfile.objects.create(user=self.board_a, role='elder', roles='elder')
+
+        self.board_b = User.objects.create_user('board.b', 'board.b@example.com', 'BoardPass#2026')
+        self.board_b.first_name = 'Samuel'
+        self.board_b.save()
+        MemberProfile.objects.create(user=self.board_b, role='elder', roles='elder')
+
+        self.settings_row = ChurchSettings.objects.create(
+            church_name='SDA Loma Linda, Meru',
+            board_roles=['elder'],
+        )
+        self.client.force_authenticate(self.clerk)
+
+    def _schedule(self, **overrides):
+        payload = {
+            'title': 'Q3 Executive Board Meeting',
+            'meeting_date': '2026-09-19',
+            'start_time': '09:00',
+            'end_time': '11:30',
+            'location': 'Board Room',
+            'notify_sms': 'true',
+            'notify_email': 'true',
+        }
+        payload.update(overrides)
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            return self.client.post(self.URL, payload, format='multipart')
+
+    def test_a_meeting_is_saved_with_the_start_and_finish_times_the_form_collected(self):
+        created = self._schedule()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['start_time'], '09:00:00')
+        self.assertEqual(created.data['end_time'], '11:30:00')
+        # Readable the way members say it, not 09:00:00.
+        self.assertEqual(created.data['time_range'], '9:00 AM \u2013 11:30 AM')
+        self.assertEqual(BoardMeeting.objects.get().time_range_display(), '9:00 AM \u2013 11:30 AM')
+
+    def test_a_meeting_cannot_finish_before_it_starts(self):
+        response = self._schedule(start_time='15:00', end_time='14:00')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(BoardMeeting.objects.count(), 0)
+
+    def test_each_board_member_is_greeted_by_their_own_name(self):
+        from django.core import mail
+
+        response = self._schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # One message per member, each addressed on its own: the board's
+        # addresses are not put on each other's To: line.
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(sorted(len(message.to) for message in mail.outbox), [1, 1])
+        bodies = {message.to[0]: message.body for message in mail.outbox}
+        esther = bodies['board.a@example.com']
+        samuel = bodies['board.b@example.com']
+
+        self.assertTrue(esther.startswith(eat_greeting()))
+        self.assertIn('Esther', esther)
+        self.assertIn('Samuel', samuel)
+        self.assertNotIn('Samuel', esther)
+        self.assertNotIn('{name}', esther)
+        # The day, the date and both times are filled in, not left as tokens.
+        self.assertIn('Saturday', esther)
+        self.assertIn('19 September 2026', esther)
+        self.assertIn('9:00 AM', esther)
+        self.assertIn('11:30 AM', esther)
+        self.assertIn('SDA Loma Linda, Meru', esther)
+        self.assertNotIn('{', esther)
+        self.assertEqual(response.data['invitations'], {'invited': 2, 'emailed': 2})
+
+    def test_the_message_edited_on_the_form_is_the_one_members_receive(self):
+        from django.core import mail
+
+        self._schedule(notification_message='{greeting}, {name}. Board meets {day} at {start_time} in {location}.')
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(mail.outbox[0].body.startswith(eat_greeting()))
+        self.assertIn('Board meets Saturday at 9:00 AM in Board Room.', mail.outbox[0].body)
+
+    def test_a_stray_brace_in_the_template_no_longer_cancels_the_invitation(self):
+        from django.core import mail
+
+        # str.format() raised on this, and the broadcaster swallowed the error —
+        # so one typo silently cancelled every invitation it was meant to carry.
+        self.settings_row.default_board_meeting_invitation_message = 'Dear {name}, see the {agenda} { attached.'
+        self.settings_row.save(update_fields=['default_board_meeting_invitation_message'])
+
+        response = self._schedule()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 2)
+        # Unknown tokens stay as written instead of taking the message down.
+        self.assertIn('{agenda}', mail.outbox[0].body)
+        self.assertIn('Dear Esther', mail.outbox[0].body)
+
+    def test_scheduling_without_notifying_anyone_says_so_and_sends_nothing(self):
+        from django.core import mail
+
+        response = self._schedule(notify_sms='false', notify_email='false')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['invitations'], {'invited': 0, 'emailed': 0})
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+
+    def test_the_settings_screen_is_told_the_placeholders_rendering_supports(self):
+        response = self.client.get('/api/members/church-settings/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tokens = [row['token'] for row in response.data['invitation_placeholders']]
+        self.assertEqual(tokens, [f'{{{name}}}' for name, _help in PLACEHOLDERS])
+        self.assertIn('{greeting}', tokens)
+        self.assertTrue(all(row['description'] for row in response.data['invitation_placeholders']))

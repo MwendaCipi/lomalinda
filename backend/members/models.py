@@ -1,5 +1,6 @@
 import hashlib
 import uuid
+from datetime import datetime
 
 from django.conf import settings
 from django.db import models
@@ -597,6 +598,27 @@ class SabbathEvent(models.Model):
         ordering = ['date']
 
 
+def format_clock(value):
+    """A ``time`` as members say it — 5:00 PM, never 05:00 PM.
+
+    Accepts the string a browser posts as well as a stored ``time``, so a meeting
+    built straight from a request still prints its own times.
+    """
+    if not value:
+        return ''
+    if not hasattr(value, 'strftime'):
+        text = str(value).strip()
+        for pattern in ('%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M%p'):
+            try:
+                value = datetime.strptime(text, pattern)
+                break
+            except ValueError:
+                continue
+        else:
+            return text
+    return value.strftime('%I:%M %p').lstrip('0')
+
+
 class ChurchSettings(models.Model):
     church_name = models.CharField(max_length=160, default='SDA Loma Linda, Meru')
     district = models.CharField(max_length=160, blank=True, help_text='NEKF district name, e.g. "Meru Central"')
@@ -616,12 +638,22 @@ class ChurchSettings(models.Model):
     RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]
     default_receipt_message = models.TextField(default="Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly", blank=True)
     receipt_delivery_method = models.CharField(max_length=10, choices=RECEIPT_DELIVERY_CHOICES, default='email')
+    # The wording members actually receive. Placeholders are filled per recipient;
+    # see members/meetings.py for the full list and the EAT-aware greeting.
     default_business_meeting_invitation_message = models.TextField(
-        default="Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!",
+        default=(
+            "{greeting}, {name}. {church} is inviting you to a church business meeting "
+            "scheduled for {day}, {date} at {meeting_time}, {location}. "
+            "God bless you as you purpose to attend."
+        ),
         blank=True
     )
     default_board_meeting_invitation_message = models.TextField(
-        default="Dear Church Board Member, you are hereby invited to attend the Church Board Meeting: '{title}' scheduled for {meeting_date} at {location}. Please review the agendas and attached documents.",
+        default=(
+            "{greeting}, {name}. {church} is inviting you to a board meeting "
+            "scheduled for {day}, {date} from {start_time} to {end_time}. "
+            "God bless you as you purpose to attend."
+        ),
         blank=True
     )
     board_roles = models.JSONField(
@@ -710,12 +742,12 @@ class BoardMeeting(models.Model):
     STATUS_CHOICES = [('upcoming', 'Upcoming'), ('completed', 'Completed'), ('archived', 'Archived')]
     title = models.CharField(max_length=160)
     meeting_date = models.DateField()
-    meeting_time = models.CharField(max_length=80, blank=True, default='5:00 PM')
+    start_time = models.TimeField(null=True, blank=True, help_text="When the meeting starts")
+    end_time = models.TimeField(null=True, blank=True, help_text="When the meeting is expected to end")
     location = models.CharField(max_length=160, blank=True, default='Board Room / Main Sanctuary')
     agenda = models.TextField(blank=True, help_text="Meeting agenda summary")
     minutes = models.TextField(blank=True, help_text="Recorded board meeting minutes")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
-    reference_file = models.FileField(upload_to='board-materials/', blank=True, null=True)
     notify_sms = models.BooleanField(default=True)
     notify_email = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -725,6 +757,13 @@ class BoardMeeting(models.Model):
 
     def __str__(self):
         return f"Board Meeting: {self.title} ({self.meeting_date})"
+
+    def time_range_display(self):
+        """"5:00 PM – 6:30 PM", or whichever half the secretary filled in."""
+        start, end = format_clock(self.start_time), format_clock(self.end_time)
+        if start and end:
+            return f"{start} \u2013 {end}"
+        return start or end
 
 
 class BoardMeetingAgenda(models.Model):

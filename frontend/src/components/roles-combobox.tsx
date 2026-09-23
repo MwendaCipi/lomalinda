@@ -51,6 +51,36 @@ export const SYSTEM_ROLE_HELP =
 export const SYSTEM_ROLE_LOCKED_HELP =
   "Administrator is a system role: it cannot be removed from this account.";
 
+export type AccountTypeOption = {
+  value: "member" | "friend" | "ex_member";
+  label: string;
+  help: string;
+};
+
+/**
+ * How the church records a person: a member, a friend of the church, or an
+ * ex-member. Two stored fields (account_type and is_disfellowshipped) express
+ * the three states; this is the one place that reads them back as one answer.
+ */
+export const ACCOUNT_TYPE_OPTIONS: AccountTypeOption[] = [
+  { value: "member", label: "Member", help: "A member of this church, on the church roll." },
+  { value: "friend", label: "Friend", help: "A friend of the church who is not a member." },
+  { value: "ex_member", label: "Ex-member", help: "Has left or been removed; kept on record." },
+];
+
+export function accountTypeOf(
+  accountType?: string | null,
+  isDisfellowshipped?: boolean | null
+): AccountTypeOption["value"] {
+  if (isDisfellowshipped) return "ex_member";
+  return accountType === "friend" ? "friend" : "member";
+}
+
+/** "Ex-member" — the stored state said out loud. */
+export function accountTypeLabel(value: string): string {
+  return ACCOUNT_TYPE_OPTIONS.find((option) => option.value === value)?.label || "Member";
+}
+
 export function roleLabel(code: string): string {
   return ROLE_LABELS[code] || code.replaceAll("_", " ");
 }
@@ -61,6 +91,92 @@ export function formatRoles(roles: string[]): string {
   const labels = roles.map(roleLabel);
   if (labels.length <= 2) return labels.join(", ");
   return `${labels[0]} +${labels.length - 1}`;
+}
+
+interface AccountTypeComboboxProps {
+  value: AccountTypeOption["value"];
+  onChange: (value: AccountTypeOption["value"]) => void;
+  disabled?: boolean;
+}
+
+/** Single-choice twin of RolesCombobox, for the Type column. */
+export function AccountTypeCombobox({ value, onChange, disabled = false }: AccountTypeComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
+
+  const current = ACCOUNT_TYPE_OPTIONS.find((option) => option.value === value) || ACCOUNT_TYPE_OPTIONS[0];
+
+  return (
+    <div className="relative inline-block" ref={containerRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() =>
+          setIsOpen((open) => {
+            // Open upward near the bottom of the viewport, like the role picker.
+            if (!open && containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              setDropUp(window.innerHeight - rect.bottom < 220);
+            }
+            return !open;
+          })
+        }
+        title={current.help}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <span>{current.label}</span>
+        <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          role="listbox"
+          className={`absolute z-50 w-52 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${dropUp ? "bottom-full mb-1" : "mt-1"} left-0`}
+        >
+          {ACCOUNT_TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              title={option.help}
+              onClick={() => {
+                setIsOpen(false);
+                if (option.value !== value) onChange(option.value);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
+                option.value === value ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148] hover:bg-[#f7f4ee]"
+              }`}
+            >
+              <span className="flex-1">{option.label}</span>
+              {option.value === value && <span className="text-[#b36b3c]">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface RolesComboboxProps {

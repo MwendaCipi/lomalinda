@@ -27,11 +27,14 @@ export function ChurchSettingsManager() {
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly");
   const [defaultBusinessMeetingInvitationMessage, setDefaultBusinessMeetingInvitationMessage] = useState(
-    "Dear member, you are warmly invited to our upcoming Church Business Meeting: '{title}' on {meeting_date} at {location}. Your presence and active participation are highly valued!"
+    "{greeting}, {name}. {church} is inviting you to a church business meeting scheduled for {day}, {date} at {meeting_time}, {location}. God bless you as you purpose to attend."
   );
   const [defaultBoardMeetingInvitationMessage, setDefaultBoardMeetingInvitationMessage] = useState(
-    "Dear Church Board Member, you are hereby invited to attend the Church Board Meeting: '{title}' scheduled for {meeting_date} at {location}. Please review the agendas and attached documents."
+    "{greeting}, {name}. {church} is inviting you to a board meeting scheduled for {day}, {date} from {start_time} to {end_time}. God bless you as you purpose to attend."
   );
+  // Filled by the API so the tokens listed here are exactly the ones the
+  // backend substitutes — help text cannot drift from behaviour.
+  const [invitationPlaceholders, setInvitationPlaceholders] = useState<{ token: string; description: string }[]>([]);
   const [boardRoles, setBoardRoles] = useState<string[]>([
     "elder", "clerk", "treasurer", "finance", "admin"
   ]);
@@ -63,6 +66,9 @@ export function ChurchSettingsManager() {
           if (data.clarion_call_heading) setClarionCallHeading(data.clarion_call_heading);
           if (data.clarion_call_subtext) setClarionCallSubtext(data.clarion_call_subtext);
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
+          if (Array.isArray(data.invitation_placeholders)) {
+            setInvitationPlaceholders(data.invitation_placeholders);
+          }
           if (data.default_business_meeting_invitation_message) {
             setDefaultBusinessMeetingInvitationMessage(data.default_business_meeting_invitation_message);
           }
@@ -353,8 +359,19 @@ export function ChurchSettingsManager() {
             <span>✉️</span> Default Meeting Invitation Message Templates
           </h3>
           <p className="mt-1 text-xs text-[#617068]">
-            Configure default invitation message text for Business and Board Meetings. Supports placeholders: <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{title}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{meeting_date}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{meeting_time}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{location}"}</code>.
+            The message members receive when you schedule a Business or Board meeting. Each placeholder is
+            filled in per member as the message is sent.
           </p>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+            {invitationPlaceholders.map((placeholder) => (
+              <li key={placeholder.token}>
+                <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                  {placeholder.token}
+                </code>{" "}
+                {placeholder.description}
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-4 space-y-4">
             <div>

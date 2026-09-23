@@ -13,6 +13,7 @@ from .models import (
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
+from .meetings import PLACEHOLDERS as MEETING_PLACEHOLDERS
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
 from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_role_codes
 from .validators import (
@@ -565,6 +566,13 @@ class SabbathEventSerializer(serializers.ModelSerializer):
 
 
 class ChurchSettingsSerializer(serializers.ModelSerializer):
+    # Read-only: the settings screen prints this list beside the templates so the
+    # wording offered to the church can never drift from what rendering supports.
+    invitation_placeholders = serializers.SerializerMethodField()
+
+    def get_invitation_placeholders(self, obj):
+        return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in MEETING_PLACEHOLDERS]
+
     def validate_board_roles(self, value):
         """Board roles are chosen from the hard-coded role codes.
 
@@ -585,6 +593,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'clarion_call_subtext', 'default_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
+            'invitation_placeholders',
             'board_roles',
             'invitation_link_lifetime_days',
             'bank_name', 'bank_account_name', 'bank_account_number',
@@ -679,21 +688,19 @@ class BoardMeetingAgendaSerializer(serializers.ModelSerializer):
 
 class BoardMeetingSerializer(serializers.ModelSerializer):
     agendas = BoardMeetingAgendaSerializer(many=True, read_only=True)
-    reference_file_url = serializers.SerializerMethodField()
+    time_range = serializers.SerializerMethodField()
 
     class Meta:
         model = BoardMeeting
         fields = (
-            'id', 'title', 'meeting_date', 'meeting_time', 'location', 'agenda',
-            'minutes', 'status', 'reference_file', 'reference_file_url',
+            'id', 'title', 'meeting_date', 'start_time', 'end_time', 'time_range',
+            'location', 'agenda', 'minutes', 'status',
             'notify_sms', 'notify_email', 'agendas', 'created_at'
         )
         read_only_fields = ('id', 'created_at')
 
-    def get_reference_file_url(self, obj):
-        if obj.reference_file:
-            return obj.reference_file.url
-        return None
+    def get_time_range(self, obj):
+        return obj.time_range_display()
 
 
 class ChurchNotificationSerializer(serializers.ModelSerializer):
