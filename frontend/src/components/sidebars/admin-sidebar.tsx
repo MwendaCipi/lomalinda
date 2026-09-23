@@ -101,6 +101,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
 
   const isReconPage = pathname === "/administration/reconciliation";
+  // Fund drives are their own page, so their item is highlighted by the URL
+  // rather than by the tab the main workspace is showing.
+  const isFundDrivesPage = pathname === "/administration/fund-drives";
 
   const handleTabClick = (tab: string) => {
     if (onSelectTab) {
@@ -435,6 +438,19 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   {currentTab === "accounts" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </Link>
               )}
+
+              <Link
+                href="/administration/fund-drives"
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  isFundDrivesPage ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#dfd9cb]"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <HeartHandshake className="h-4 w-4 shrink-0 text-[#5f8067]" />
+                  <span>Fund Drives</span>
+                </div>
+                {isFundDrivesPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+              </Link>
 
               {onSelectTab && !isReconPage ? (
                 <button

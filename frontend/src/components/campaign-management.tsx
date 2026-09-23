@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
@@ -58,7 +58,14 @@ export const AVAILABLE_GROUPS = [
 
 type CampaignMode = "admin" | "member";
 
-export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode }) {
+export function CampaignManagement({
+  mode = "member",
+  openCreate = false,
+}: {
+  mode?: CampaignMode;
+  /** Open the creation form as soon as the officer is allowed to see it. */
+  openCreate?: boolean;
+}) {
   const isAdminMode = mode === "admin";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +102,8 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
 
   // Actions menu dropdown state
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  // Only once, so closing the form after arriving from "Add Fund Drive" keeps it closed.
+  const openedCreateForm = useRef(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -145,6 +154,13 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
         setLoading(false);
       });
   }, [isAdminMode]);
+
+  useEffect(() => {
+    if (openCreate && canEdit && !openedCreateForm.current) {
+      openedCreateForm.current = true;
+      setShowCreateModal(true);
+    }
+  }, [openCreate, canEdit]);
 
   function fetchCampaigns(token: string) {
     fetch(`${API_URL}/api/members/campaigns/`, {
@@ -381,6 +397,16 @@ export function CampaignManagement({ mode = "member" }: { mode?: CampaignMode })
         {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
 
         <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
+          {/* Phones carry no admin sidebar, so this page gives its own way back. */}
+          {isAdminMode && (
+            <Link
+              href="/administration"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] transition hover:text-[#26352f] lg:hidden"
+            >
+              &larr; Back to administration
+            </Link>
+          )}
+
           {/* Top Banner / Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#dfdbd1] pb-6">
             <div>

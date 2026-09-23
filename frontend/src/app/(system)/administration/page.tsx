@@ -56,6 +56,35 @@ type Transfer = {
   other_church: string;
 };
 
+/** Session cache of the gate result — the API still enforces every request. */
+const ADMIN_GATE_KEY = "admin_gate_profile";
+
+/**
+ * What the workspace is about to show, named per section.
+ *
+ * The wait before a tab renders is time spent fetching that section, so the
+ * screen says which one is loading rather than narrating a permissions check.
+ */
+const ADMIN_LOADING_LABELS: Record<string, string> = {
+  users: "the member roster",
+  leaders: "church leaders",
+  board: "board meetings",
+  business: "business meetings",
+  announcements: "announcements",
+  requests: "requests",
+  transfers: "membership transfers",
+  accounts: "treasury accounts",
+  expenditures: "expenditure records",
+  refunds: "M-Pesa refunds",
+  finance: "the contributions ledger",
+  inventory: "the inventory register",
+  "deaconate-rota": "the duty rota",
+  "deaconate-members": "the deaconate team",
+  "deaconate-calendar": "the deaconate calendar",
+  settings: "church settings",
+  overview: "the overview",
+};
+
 function AdministrationContent() {
   const searchParams = useSearchParams();
   const searchTab = searchParams.get("tab");
@@ -72,6 +101,23 @@ function AdministrationContent() {
     if (!token) {
       setStatus("denied");
       return;
+    }
+
+    // This browser already passed the gate earlier in the session, so the
+    // workspace paints at once instead of re-showing a wait screen on every
+    // visit. The check below still runs and still decides: access is enforced
+    // by the API, this only avoids asking the same question twice in a row.
+    const cached = sessionStorage.getItem(ADMIN_GATE_KEY);
+    if (cached) {
+      try {
+        const remembered = JSON.parse(cached);
+        if (remembered && (remembered.role || remembered.roles?.length)) {
+          setProfile(remembered);
+          setStatus("authorized");
+        }
+      } catch {
+        sessionStorage.removeItem(ADMIN_GATE_KEY);
+      }
     }
 
     fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
@@ -97,6 +143,7 @@ function AdministrationContent() {
         if (isOfficial) {
           setProfile(data);
           setStatus("authorized");
+          sessionStorage.setItem(ADMIN_GATE_KEY, JSON.stringify(data));
 
           const effectiveRole = userRoles.find((r) => r !== "member") || (rawRole === "member" && (data.is_staff || data.is_superuser) ? "admin" : rawRole);
           if (["clerk", "elder", "admin"].includes(effectiveRole)) {
@@ -106,6 +153,7 @@ function AdministrationContent() {
               .catch(() => {});
           }
         } else {
+          sessionStorage.removeItem(ADMIN_GATE_KEY);
           setStatus("denied");
         }
       })
@@ -155,7 +203,7 @@ function AdministrationContent() {
   if (status === "loading") {
     return (
       <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
-        Checking your administration access...
+        Loading {ADMIN_LOADING_LABELS[searchTab ?? ""] ?? "the administration workspace"}...
       </main>
     );
   }

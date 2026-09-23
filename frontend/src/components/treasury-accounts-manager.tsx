@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark } from "lucide-react";
+import Link from "next/link";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Copy, MessageCircle } from "lucide-react";
+import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -46,6 +48,8 @@ export function TreasuryAccountsManager() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [showCreditDebitModal, setShowCreditDebitModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  // The account whose support link is being shared with the congregation.
+  const [supportAccount, setSupportAccount] = useState<TreasuryAccount | null>(null);
 
   // Forms
   const [addForm, setAddForm] = useState({
@@ -217,6 +221,28 @@ export function TreasuryAccountsManager() {
     setShowCreditDebitModal(true);
   };
 
+  /**
+   * The link a member follows to give straight to one account.
+   *
+   * It is the public giving form's deep link (?purpose=), which opens the form
+   * with that account already chosen — so an officer can paste it into a
+   * WhatsApp group and the member only has to enter an amount.
+   */
+  const supportLinkFor = (account: TreasuryAccount) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sdalomalinda.or.ke";
+    return `${origin}/give?purpose=${encodeURIComponent(account.name)}`;
+  };
+
+  const copySupportLink = async (account: TreasuryAccount) => {
+    const link = supportLinkFor(account);
+    try {
+      await navigator.clipboard.writeText(link);
+      showAlert("Link copied", `Paste it wherever members can act on it — it opens the giving form with ${account.name} already selected.`, "success");
+    } catch {
+      showAlert("Copy this link", link, "info");
+    }
+  };
+
   const openTransferFromAccount = (sourceAccId: number) => {
     const target = accounts.find(a => a.id !== sourceAccId);
     setTransferForm({
@@ -367,10 +393,18 @@ export function TreasuryAccountsManager() {
                     onClick={() => openTransferFromAccount(acc.id)}
                     disabled={accounts.length < 2}
                     title="Transfer from this account"
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:opacity-40"
                   >
                     <ArrowRightLeft className="h-3 w-3 text-[#b36b3c]" />
                     <span>Transfer</span>
+                  </button>
+                  <button
+                    onClick={() => setSupportAccount(acc)}
+                    title="Share a giving link for this account"
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                  >
+                    <HandHeart className="h-3 w-3 text-[#b36b3c]" />
+                    <span>Support</span>
                   </button>
                 </div>
               </div>            )}
@@ -419,6 +453,14 @@ export function TreasuryAccountsManager() {
                         >
                           <ArrowRightLeft className="h-3.5 w-3.5 text-[#b36b3c]" />
                           <span>Transfer</span>
+                        </button>
+                        <button
+                          onClick={() => setSupportAccount(acc)}
+                          title="Share a giving link for this account"
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                        >
+                          <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
+                          <span>Support</span>
                         </button>
                       </div>
                     </td>
@@ -574,15 +616,15 @@ export function TreasuryAccountsManager() {
         </div>
         {view === "accounts" && (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowTransferModal(true)}
-              disabled={accounts.length < 2}
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#c9c5bb] bg-white px-3 text-xs font-semibold text-[#26352f] shadow-sm transition hover:bg-[#f7f4ee] disabled:opacity-50 sm:px-3.5"
+            {/* Transferring is a per-account action (each row has Transfer), so the
+                footer offers the other thing a treasurer needs here: a new drive. */}
+            <Link
+              href="/administration/fund-drives?new=1"
+              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#c9c5bb] bg-white px-3 text-xs font-semibold text-[#26352f] shadow-sm transition hover:bg-[#f7f4ee] sm:px-3.5"
             >
-              <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />
-              <span>Transfer Funds</span>
-            </button>
+              <HandHeart className="h-4 w-4 text-[#b36b3c]" />
+              <span>Add Fund Drive</span>
+            </Link>
             <button
               type="button"
               onClick={() => setShowAddAccountModal(true)}
@@ -594,6 +636,60 @@ export function TreasuryAccountsManager() {
           </div>
         )}
       </div>
+
+      {/* Modal: the support link for one account, ready to send on */}
+      {supportAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-xl">
+            <div>
+              <h3 className="text-lg font-bold text-[#26352f]">Support {supportAccount.name}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-[#617068]">
+                Send this link to members, or paste it into a group. It opens the giving form with this account
+                already chosen, so a member only has to enter an amount.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#dfdbd1] bg-[#faf7f2] p-3">
+              <p className="break-all font-mono text-[11px] text-[#26352f]">{supportLinkFor(supportAccount)}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => copySupportLink(supportAccount)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#3a4a43]"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy link
+              </button>
+              <Link
+                href={`/give?purpose=${encodeURIComponent(supportAccount.name)}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c]"
+              >
+                <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
+                Open giving form
+              </Link>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Support ${supportAccount.name}: ${supportLinkFor(supportAccount)}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c]"
+              >
+                <MessageCircle className="h-3.5 w-3.5 text-[#3d7146]" />
+                Share on WhatsApp
+              </a>
+            </div>
+            <div className="flex justify-end border-t border-[#dfdbd1] pt-3">
+              <button
+                type="button"
+                onClick={() => setSupportAccount(null)}
+                className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] transition hover:bg-[#f7f4ee]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal 1: Add Account */}
       {showAddAccountModal && (
