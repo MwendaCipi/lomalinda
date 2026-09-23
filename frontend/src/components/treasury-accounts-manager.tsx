@@ -6,6 +6,9 @@ import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** The movement endpoint returns its newest rows up to this many; the log says so. */
+const TRANSACTION_LOG_LIMIT = 150;
+
 type TreasuryAccount = {
   id: number;
   name: string;
@@ -33,6 +36,9 @@ type AccountTransaction = {
 export function TreasuryAccountsManager() {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
+  // Two views over one set of data: the accounts themselves, and the movement
+  // log behind them. Accounts opens first — it is what the desk visits for.
+  const [view, setView] = useState<"accounts" | "transactions">("accounts");
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -100,6 +106,17 @@ export function TreasuryAccountsManager() {
   }, []);
 
   const totalLiquidity = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+
+  /** Money arriving in an account (a credit, or the receiving half of a transfer). */
+  const isCreditMovement = (tx: AccountTransaction) =>
+    tx.transaction_type === "credit" || tx.transaction_type === "transfer_in";
+
+  const moneyIn = transactions
+    .filter(isCreditMovement)
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const moneyOut = transactions
+    .filter((tx) => !isCreditMovement(tx))
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
   const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,26 +243,52 @@ export function TreasuryAccountsManager() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">Treasury Accounts</h2>
-          <p className="mt-1 text-sm text-[#617068]">
-            Manage church bank, paybill, and cash accounts, perform debit/credit operations, and transfer funds.
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+      {/* ── Header: which of the two tables is showing, and the way between them ── */}
+      <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
+          <h2 className="text-xl font-bold text-[#26352f]">Treasury Accounts</h2>
+          <p className="text-xs text-[#617068]">
+            {view === "accounts"
+              ? `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
+              : `${transactions.length} ${transactions.length === 1 ? "movement" : "movements"}`}
           </p>
+        </div>
+        <div
+          className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:self-auto"
+          role="group"
+          aria-label="Treasury view"
+        >
+          {([
+            { key: "accounts" as const, label: `Accounts (${accounts.length})` },
+            { key: "transactions" as const, label: `Transaction log (${transactions.length})` },
+          ]).map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setView(option.key)}
+              aria-pressed={view === option.key}
+              className={`h-8 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${
+                view === option.key ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {actionMessage && (
-        <div className="rounded-2xl border border-[#c9c5bb] bg-white p-4 text-xs font-semibold text-[#26352f] shadow-xs">
+        <div className="mx-5 mt-3 shrink-0 rounded-xl border border-[#c9c5bb] bg-white p-3 text-xs font-semibold text-[#26352f] shadow-xs sm:mx-6">
           {actionMessage}
         </div>
       )}
 
-      {/* Church Accounts — ledger-style table container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+      {/* ── Both tables live here; the chosen one is shown, and only its rows scroll ── */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair.
+            Both stay mounted with the chosen one shown, so whichever is on screen
+            keeps the full height of the workspace instead of sharing it. */}
         <RecordList
           rows={accounts}
           loading={loading}
@@ -381,107 +424,175 @@ export function TreasuryAccountsManager() {
                     </td>
                   </tr>
                 )}
-          />
+          hidden={view !== "accounts"}
+        />
 
-        {/* Sticky Footer */}
-        <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <div className="flex items-center gap-4 text-xs sm:text-sm">
-              <span className="text-xs text-[#617068]">
-                Showing <strong className="text-[#26352f]">{accounts.length}</strong> account{accounts.length === 1 ? "" : "s"}
-              </span>
-              <span className="font-bold text-[#26352f]">
-                Total Liquidity: <span className="text-[#b36b3c]">KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowTransferModal(true)}
-                disabled={accounts.length < 2}
-                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#c9c5bb] bg-white px-3 text-xs font-semibold text-[#26352f] shadow-sm transition hover:bg-[#f7f4ee] disabled:opacity-50 sm:px-3.5"
-              >
-                <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />
-                <span>Transfer Funds</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddAccountModal(true)}
-                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Add Account</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <RecordList
+            rows={transactions}
+            loading={loading}
+            rowKey={(tx) => tx.id}
+            tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
+            tableClassName="w-full text-left text-sm"
+            headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+            headRowClassName=""
+            headCellClassName=""
+            headers={[
+              { label: "Date", className: "px-4 py-3 text-left" },
+              { label: "Account", className: "px-4 py-3" },
+              { label: "Type", className: "px-4 py-3" },
+              { label: "Amount (KES)", className: "px-4 py-3 text-right" },
+              { label: "Description", className: "px-4 py-3" },
+              { label: "Ref", className: "px-4 py-3" },
+            ]}
+            loadingLabel="Loading account transactions..."
+            stateClassName="px-4 py-12 text-center text-[#617068]"
+            tableEmptyClassName="px-4 py-12 text-center"
+            tableEmpty={
+              <>
+                <p className="text-sm font-semibold text-[#26352f]">No account transactions recorded yet.</p>
+                <p className="mt-1 text-xs text-[#617068]">
+                  Credits, debits and transfers appear here the moment they are recorded.
+                </p>
+              </>
+            }
+            cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+            cardsEmpty={
+              <>
+                <ArrowRightLeft className="mx-auto h-10 w-10 text-[#617068]" />
+                <p className="mt-3 text-sm font-semibold text-[#26352f]">No account transactions recorded yet.</p>
+                <p className="mt-1 text-xs text-[#617068]">
+                  Credits, debits and transfers appear here the moment they are recorded.
+                </p>
+              </>
+            }
+            cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
+            renderCard={(tx) => {
+              const isCredit = isCreditMovement(tx);
+              return (
+                <div key={tx.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-bold text-[#26352f]">{tx.account_name}</h4>
+                      <p className="text-[11px] text-[#617068]">
+                        {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
+                        isCredit ? "bg-[#eef2ed] text-[#3d7146]" : "bg-[#fdf2f2] text-[#b91c1c]"
+                      }`}
+                    >
+                      {tx.transaction_type_display}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#617068]">Amount</span>
+                    <span className={`text-sm font-bold ${isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"}`}>
+                      {isCredit ? "+" : "−"}KES {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[#617068]">
+                    {tx.description}
+                    {tx.related_account_name && <span className="ml-1">({tx.related_account_name})</span>}
+                  </p>
+                  {tx.reference && <p className="font-mono text-[11px] text-[#617068]">Ref {tx.reference}</p>}
+                </div>
+              );
+            }}
+            renderRow={(tx) => {
+              const isCredit = isCreditMovement(tx);
+              return (
+                <tr key={tx.id} className="hover:bg-[#faf7f2]">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">
+                    {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-[#26352f]">{tx.account_name}</td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
+                        isCredit ? "bg-[#eef2ed] text-[#3d7146]" : "bg-[#fdf2f2] text-[#b91c1c]"
+                      }`}
+                    >
+                      {tx.transaction_type_display}
+                    </span>
+                  </td>
+                  <td
+                    className={`whitespace-nowrap px-4 py-3 text-right font-semibold ${
+                      isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"
+                    }`}
+                  >
+                    {isCredit ? "+" : "−"}
+                    {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="max-w-[280px] truncate px-4 py-3 text-xs text-[#26352f]" title={tx.description || undefined}>
+                    {tx.description}
+                    {tx.related_account_name && <span className="ml-1 text-[#617068]">({tx.related_account_name})</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-[#617068]">
+                    {tx.reference || "—"}
+                  </td>
+                </tr>
+              );
+            }}
+            hidden={view !== "transactions"}
+        />
       </div>
 
-      {/* Transaction History Log Table */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 pt-4">
-        <h3 className="text-lg font-bold text-[#26352f]">Account Transactions Log</h3>
-        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-xs">
-          <div className="h-full overflow-auto custom-table-scrollbar">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068]">
-                <tr>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Account</th>
-                  <th className="px-5 py-3">Type</th>
-                  <th className="px-5 py-3 text-right">Amount (KES)</th>
-                  <th className="px-5 py-3">Description</th>
-                  <th className="px-5 py-3">Ref</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#dfdbd1]">
-                {transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-xs text-[#617068]">
-                      No account transactions recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  transactions.map((tx) => {
-                    const isCredit = tx.transaction_type === "credit" || tx.transaction_type === "transfer_in";
-                    return (
-                      <tr key={tx.id} className="hover:bg-[#faf9f6]">
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#617068]">
-                          {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 font-bold text-[#26352f]">
-                          {tx.account_name}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3.5">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                              isCredit
-                                ? "bg-[#eef2ed] text-[#3d7146]"
-                                : "bg-[#fdf2f2] text-[#b91c1c]"
-                            }`}
-                          >
-                            {tx.transaction_type_display}
-                          </span>
-                        </td>
-                        <td className={`whitespace-nowrap px-5 py-3.5 text-right font-bold ${isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"}`}>
-                          {isCredit ? "+" : "-"}{Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-[#26352f]">
-                          {tx.description}
-                          {tx.related_account_name && (
-                            <span className="ml-1 text-[#617068]">({tx.related_account_name})</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-xs font-mono text-[#617068]">
-                          {tx.reference || "—"}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* ── Footer: one bar for both views, in the shape the other tables use ── */}
+      <div className="flex shrink-0 flex-col gap-3 border-t border-[#dfdbd1] bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#617068]">
+          {view === "accounts" ? (
+            <>
+              <span>
+                Showing <strong className="text-[#26352f]">{accounts.length}</strong> account
+                {accounts.length === 1 ? "" : "s"}
+              </span>
+              <span>
+                Total liquidity:{" "}
+                <strong className="text-[#b36b3c]">
+                  KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </strong>
+              </span>
+            </>
+          ) : (
+            <>
+              <span>
+                Showing <strong className="text-[#26352f]">{transactions.length}</strong> movement
+                {transactions.length === 1 ? "" : "s"}
+              </span>
+              <span>
+                In: <strong className="text-[#3d7146]">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+              </span>
+              <span>
+                Out: <strong className="text-[#b91c1c]">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+              </span>
+              {transactions.length >= TRANSACTION_LOG_LIMIT && (
+                <span>Only the most recent {TRANSACTION_LOG_LIMIT} movements are listed.</span>
+              )}
+            </>
+          )}
         </div>
+        {view === "accounts" && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowTransferModal(true)}
+              disabled={accounts.length < 2}
+              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#c9c5bb] bg-white px-3 text-xs font-semibold text-[#26352f] shadow-sm transition hover:bg-[#f7f4ee] disabled:opacity-50 sm:px-3.5"
+            >
+              <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />
+              <span>Transfer Funds</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddAccountModal(true)}
+              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Account</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal 1: Add Account */}
@@ -765,6 +876,6 @@ export function TreasuryAccountsManager() {
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
