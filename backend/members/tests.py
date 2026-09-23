@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import Contribution, EnrollmentRequest, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony
+from .models import CashContribution, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 
@@ -2365,3 +2365,93 @@ class MemberRosterSystemAccountTests(APITestCase):
         names = [row['name'] for row in rows]
         self.assertEqual(sorted(names), ['roster.admin', 'roster.member'])
         self.assertNotIn('Owner Account', names)
+
+
+class DashboardAnalyticsTests(APITestCase):
+    """The dashboard's church-fund analytics: officers only, and real money only."""
+
+    URL = '/api/members/dashboard/analytics/'
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('dash.treasurer', 'dash.treasurer@example.com', 'TreasurerPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer')
+        self.member = User.objects.create_user('dash.member', 'dash.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.treasury = TreasuryAccount.objects.create(name='Main Bank', account_type='bank', balance=Decimal('1234.00'))
+        self.today = timezone.localdate()
+        self.client.force_authenticate(self.treasurer)
+
+    def test_plain_members_cannot_see_the_church_financial_dashboard(self):
+        self.client.force_authenticate(self.member)
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_series_counts_completed_gifts_and_recorded_cash_only(self):
+        Contribution.objects.create(amount='1000.00', purpose='Tithe', status='completed', paid_at=timezone.now(), payment_method='mpesa')
+        # Money that never arrived is not income.
+        Contribution.objects.create(amount='500.00', purpose='Tithe', status='pending', paid_at=timezone.now(), payment_method='mpesa')
+        CashContribution.objects.create(
+            received_by=self.treasurer, amount=Decimal('200.00'), purpose='Combined Offering',
+            received_on=self.today, payment_method='cash',
+        )
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['giving']['window_total'], 1200.0)
+        self.assertEqual(response.data['giving']['this_month'], 1200.0)
+        this_week = response.data['series'][-1]
+        self.assertEqual(this_week['income'], 1200.0)
+        self.assertEqual(this_week['gifts'], 2)
+        self.assertEqual(
+            {row['label'] for row in response.data['giving']['by_account']},
+            {'Tithe', 'Combined Offering'},
+        )
+        methods = {row['label']: row['total'] for row in response.data['giving']['by_method']}
+        self.assertEqual(methods['M-Pesa'], 1000.0)
+        self.assertEqual(methods['Cash'], 200.0)
+
+    def test_expenses_and_liquidity_share_the_same_weeks(self):
+        Expenditure.objects.create(
+            title='Power bill', amount=Decimal('300.00'), category='utilities',
+            expenditure_date=self.today, recorded_by=self.treasurer,
+        )
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.data['expenditure']['this_month'], 300.0)
+        self.assertEqual(response.data['series'][-1]['expense'], 300.0)
+        self.assertEqual(response.data['funds']['total_liquidity'], 1234.0)
+        self.assertEqual(response.data['funds']['accounts'][0]['name'], 'Main Bank')
+        self.assertEqual(response.data['expenditure']['by_category'][0]['label'], 'Utilities (Water, Power, Net)')
+
+    def test_the_window_is_twelve_weeks_and_older_money_stays_out_of_it(self):
+        Contribution.objects.create(
+            amount='9999.00', purpose='Tithe', status='completed',
+            paid_at=timezone.now() - timedelta(weeks=20), payment_method='mpesa',
+        )
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(len(response.data['series']), 12)
+        self.assertEqual(response.data['giving']['window_total'], 0.0)
+        # The year-to-date figure still counts it.
+        self.assertEqual(response.data['giving']['this_year'], 9999.0)
+
+    def test_member_counts_leave_out_system_accounts(self):
+        User.objects.create_superuser('dash.owner', 'dash.owner@example.com', 'OwnerPass#2026')
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.data['members']['total'], 2)
+
+    def test_pending_refunds_are_reported_for_the_treasurer(self):
+        gift = Contribution.objects.create(amount='400.00', purpose='Tithe', status='completed', paid_at=timezone.now(), payment_method='mpesa')
+        MpesaRefund.objects.create(
+            contribution=gift, amount=Decimal('150.00'), phone_number='254700000000',
+            status='pending', originator_conversation_id='conv-dash-1', initiated_by=self.treasurer,
+        )
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.data['pending_refunds']['count'], 1)
+        self.assertEqual(response.data['pending_refunds']['amount'], 150.0)

@@ -7,7 +7,7 @@ from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from datetime import date, datetime, timedelta
@@ -1961,6 +1961,206 @@ class ContributionRecentView(APIView):
         for item in items:
             item.pop('sort_at')
         return Response(items[:8])
+
+
+def can_view_church_finances(user):
+    """Who may see the church-wide money picture on the dashboard.
+
+    The officers who keep the books: the treasurer and finance team, plus the
+    clerk, elders and administrators who answer for them. Members still see
+    their own giving — this gates the *whole church's* figures.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('admin', 'clerk', 'elder', 'treasurer', 'finance'))
+
+
+def _week_start(day):
+    """The Sunday that begins ``day``'s week — the church's week runs Sabbath to Friday."""
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
+def _month_start(day):
+    return day.replace(day=1)
+
+
+class DashboardAnalyticsView(APIView):
+    """Church funds and giving analytics for the dashboard's charts.
+
+    Only real money is counted: a digital gift counts once its status is
+    ``completed`` (when the money actually arrived), an expense on the date it
+    was recorded, and both are bucketed into the same weeks so a bar of income
+    and a bar of spending always describe the same seven days. Gifts the finance
+    team keyed in by hand (CashContribution) are included alongside M-Pesa and
+    bank gifts, so the series agrees with the ledger instead of only half of it.
+    """
+
+    permission_classes = [IsAuthenticated]
+    WINDOW_WEEKS = 12
+    TOP_ACCOUNTS = 8
+
+    def get(self, request):
+        if not can_view_church_finances(request.user):
+            return Response(
+                {'detail': 'Only church officers can view the financial dashboard.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        today = timezone.localdate()
+        this_week = _week_start(today)
+        window_start = this_week - timedelta(weeks=self.WINDOW_WEEKS - 1)
+
+        weeks = [window_start + timedelta(weeks=index) for index in range(self.WINDOW_WEEKS)]
+        buckets = [
+            {
+                'week_start': week.isoformat(),
+                'label': week.strftime('%-d %b'),
+                'income': 0.0,
+                'expense': 0.0,
+                'gifts': 0,
+            }
+            for week in weeks
+        ]
+
+        def bucket_for(day):
+            """The window bucket ``day`` belongs to, or None when it is outside it."""
+            if day is None or day < window_start:
+                return None
+            index = (day - window_start).days // 7
+            return buckets[index] if 0 <= index < len(buckets) else None
+
+        # ── Window: the 12-week series, and the giving behind it ──────────────
+        purpose_totals = {}
+        method_totals = {}
+        window_income = 0.0
+
+        payment_labels = dict(Contribution.PAYMENT_METHOD_CHOICES)
+
+        def add_income(day, amount, purpose, method, count=1):
+            nonlocal window_income
+            bucket = bucket_for(day)
+            if bucket is None:
+                return
+            bucket['income'] += amount
+            bucket['gifts'] += count
+            window_income += amount
+            if purpose:
+                purpose_totals[purpose] = purpose_totals.get(purpose, 0.0) + amount
+            label = payment_labels.get(method, (method or 'Other').replace('_', ' ').title())
+            method_totals[label] = method_totals.get(label, 0.0) + amount
+
+        # Only the window is read: a dashboard must not walk the whole ledger.
+        # A completed gift dated by its payment, falling back to when the row was
+        # written for the few older rows that arrived without a paid_at.
+        digital = Contribution.objects.filter(status='completed').filter(
+            Q(paid_at__date__gte=window_start) | Q(paid_at__isnull=True, created_at__date__gte=window_start)
+        )
+        for row in digital:
+            moment = row.paid_at or row.created_at
+            add_income(timezone.localtime(moment).date(), float(row.amount), row.purpose, row.payment_method)
+
+        for row in CashContribution.objects.filter(received_on__gte=window_start):
+            # Recorded cash lands in the ledger on the day it was received.
+            add_income(row.received_on, float(row.amount), row.purpose, row.payment_method)
+
+        expense_totals = {}
+        window_expense = 0.0
+        expense_labels = dict(Expenditure.CATEGORY_CHOICES)
+        for row in Expenditure.objects.filter(expenditure_date__gte=window_start):
+            bucket = bucket_for(row.expenditure_date)
+            if bucket is None:
+                continue
+            amount = float(row.amount)
+            bucket['expense'] += amount
+            window_expense += amount
+            label = expense_labels.get(row.category, (row.category or 'Other').replace('_', ' ').title())
+            expense_totals[label] = expense_totals.get(label, 0.0) + amount
+
+        # ── The headline figures, over the periods people ask about ───────────
+        month_start = _month_start(today)
+        last_month_end = month_start - timedelta(days=1)
+        last_month_start = _month_start(last_month_end)
+        year_start = today.replace(month=1, day=1)
+
+        def income_between(start, end):
+            digital_total = Contribution.objects.filter(
+                status='completed', paid_at__date__gte=start, paid_at__date__lte=end,
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            cash_total = CashContribution.objects.filter(
+                received_on__gte=start, received_on__lte=end,
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            return float(digital_total) + float(cash_total)
+
+        def expense_between(start, end):
+            total = Expenditure.objects.filter(
+                expenditure_date__gte=start, expenditure_date__lte=end,
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            return float(total)
+
+        accounts = TreasuryAccount.objects.all().order_by('-balance')
+        pending_refunds = MpesaRefund.objects.filter(status='pending')
+
+        # The roster counts exclude system accounts, exactly as the member list does.
+        roster = User.objects.filter(is_superuser=False)
+
+        return Response({
+            'window_weeks': self.WINDOW_WEEKS,
+            'as_of': today.isoformat(),
+            'series': buckets,
+            'funds': {
+                'total_liquidity': float(
+                    accounts.aggregate(total=Sum('balance'))['total'] or 0
+                ),
+                'accounts': [
+                    {
+                        'id': account.id,
+                        'name': account.name,
+                        'account_type': account.account_type,
+                        'type_label': account.get_account_type_display(),
+                        'balance': float(account.balance),
+                    }
+                    for account in accounts
+                ],
+                'account_count': accounts.count(),
+            },
+            'giving': {
+                'this_month': income_between(month_start, today),
+                'last_month': income_between(last_month_start, last_month_end),
+                'this_year': income_between(year_start, today),
+                'window_total': window_income,
+                'by_account': [
+                    {'label': label, 'total': total}
+                    for label, total in sorted(purpose_totals.items(), key=lambda item: -item[1])[:self.TOP_ACCOUNTS]
+                ],
+                'by_method': [
+                    {'label': label, 'total': total}
+                    for label, total in sorted(method_totals.items(), key=lambda item: -item[1])
+                ],
+            },
+            'expenditure': {
+                'this_month': expense_between(month_start, today),
+                'this_year': expense_between(year_start, today),
+                'window_total': window_expense,
+                'by_category': [
+                    {'label': label, 'total': total}
+                    for label, total in sorted(expense_totals.items(), key=lambda item: -item[1])[:self.TOP_ACCOUNTS]
+                ],
+            },
+            'members': {
+                'total': roster.count(),
+                'friends': MemberProfile.objects.filter(account_type='friend').count(),
+                'new_this_month': roster.filter(date_joined__date__gte=month_start).count(),
+                'ex_members': MemberProfile.objects.filter(is_disfellowshipped=True).count(),
+                'pending_invitations': Invitation.objects.filter(status='pending').count(),
+            },
+            'pending_refunds': {
+                'count': pending_refunds.count(),
+                'amount': float(pending_refunds.aggregate(total=Sum('amount'))['total'] or 0),
+            },
+        })
 
 
 class ResendContributionReceiptView(APIView):
