@@ -529,7 +529,8 @@ function GivePageContent() {
           >
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c]">Money Giving</p>
+                {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">Money Giving</p>
                 <h3 id="give-modal-title" className="text-lg font-bold text-[#26352f]">Give Now</h3>
               </div>
               <button
