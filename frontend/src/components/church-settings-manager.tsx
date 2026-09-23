@@ -49,6 +49,10 @@ export function ChurchSettingsManager() {
   const [bankSwiftCode, setBankSwiftCode] = useState("KCBKNEN");
   const [bankPaybillNumber, setBankPaybillNumber] = useState("522522");
   const [invitationLinkLifetimeDays, setInvitationLinkLifetimeDays] = useState(7);
+  // The church's own legal documents; empty means the built-in wording on the
+  // public pages, so a church that never touches these loses nothing.
+  const [privacyPolicy, setPrivacyPolicy] = useState("");
+  const [termsOfUse, setTermsOfUse] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -92,6 +96,8 @@ export function ChurchSettingsManager() {
           if (data.bank_swift_code) setBankSwiftCode(data.bank_swift_code);
           if (data.bank_paybill_number) setBankPaybillNumber(data.bank_paybill_number);
           if (data.invitation_link_lifetime_days) setInvitationLinkLifetimeDays(data.invitation_link_lifetime_days);
+          if (typeof data.privacy_policy === "string") setPrivacyPolicy(data.privacy_policy);
+          if (typeof data.terms_of_use === "string") setTermsOfUse(data.terms_of_use);
         }
       })
       .catch(() => {})
@@ -136,6 +142,8 @@ export function ChurchSettingsManager() {
         bank_swift_code: bankSwiftCode,
         bank_paybill_number: bankPaybillNumber,
         invitation_link_lifetime_days: invitationLinkLifetimeDays,
+        privacy_policy: privacyPolicy,
+        terms_of_use: termsOfUse,
       };
 
       const res = await fetch(`${API_URL}/api/members/church-settings/`, {
@@ -430,6 +438,40 @@ export function ChurchSettingsManager() {
           <p className="mt-1 text-right text-[11px] text-[#617068]">
             {encouragementLine.length}/{ENCOURAGEMENT_MAX}
           </p>
+        </div>
+
+        {/* Legal documents */}
+        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
+          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
+            <span>⚖️</span> Privacy Policy &amp; Terms of Use
+          </h3>
+          <p className="mt-1 text-xs text-[#617068]">
+            Your own wording for the two legal pages. Separate paragraphs with a blank line. Leave a box empty and the
+            public page keeps the built-in document.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#26352f]">Privacy Policy</label>
+              <textarea
+                rows={8}
+                value={privacyPolicy}
+                onChange={(e) => setPrivacyPolicy(e.target.value)}
+                placeholder="Shown at /privacy. Start with who the church is, then what you collect and how you use it..."
+                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-[#26352f]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#26352f]">Terms of Use</label>
+              <textarea
+                rows={8}
+                value={termsOfUse}
+                onChange={(e) => setTermsOfUse(e.target.value)}
+                placeholder="Shown at /terms. Cover accounts, acceptable use, giving and changes to the terms..."
+                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-[#26352f]"
+              />
+            </div>
+          </div>
         </div>
 
         {/* General Church Details */}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicSectionNav } from "@/components/public-section-nav";
+import { LegalDocument } from "@/components/legal-document";
 import { aboutSectionLinks } from "@/config/site-sections";
 
 const POLICY_VERSION = "22 September 2026";
@@ -20,6 +21,9 @@ export default function PrivacyPage() {
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
         <article className="mx-auto max-w-4xl rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
+          {/* The church's own policy once it has written one; the built-in
+              wording below is the fallback and the pre-hydration content. */}
+          <LegalDocument field="privacy_policy">
           <div className="space-y-7 text-sm leading-7 text-[#617068]">
             <section>
               <h2 className="text-xl font-semibold text-[#26352f]">Who we are</h2>
@@ -58,6 +62,7 @@ export default function PrivacyPage() {
               <p className="mt-1">Please also read our <Link href="/terms" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>, which govern accounts, submissions, giving and use of the service.</p>
             </section>
           </div>
+          </LegalDocument>
         </article>
       </section>
 

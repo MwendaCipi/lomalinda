@@ -3253,3 +3253,49 @@ class MemberEmailFromTheGivingFormTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         member.refresh_from_db()
         self.assertEqual(member.email, '')
+
+
+class ChurchLegalDocumentsTests(APITestCase):
+    """The church writes its own privacy policy and terms of use.
+
+    The two public pages carry built-in wording; these fields are where the
+    church replaces it with its own, edited in church settings like every other
+    piece of church copy.
+    """
+
+    URL = '/api/members/church-settings/'
+
+    def setUp(self):
+        self.admin = User.objects.create_user('legal.admin', 'legal.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        ChurchSettings.objects.create(church_name='SDA Loma Linda, Meru')
+
+    def test_the_documents_start_empty_and_are_readable_anonymously(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['privacy_policy'], '')
+        self.assertEqual(response.data['terms_of_use'], '')
+
+    def test_the_church_writes_both_documents_and_the_public_api_serves_them(self):
+        self.client.force_authenticate(self.admin)
+        saved = self.client.patch(self.URL, {
+            'privacy_policy': 'We keep what you give us, and nothing more.',
+            'terms_of_use': 'Give cheerfully, and treat each other kindly.',
+        }, format='json')
+
+        self.assertEqual(saved.status_code, status.HTTP_200_OK)
+        # The pages read the settings anonymously, like the rest of the copy.
+        self.client.force_authenticate(None)
+        public = self.client.get(self.URL)
+        self.assertEqual(public.data['privacy_policy'], 'We keep what you give us, and nothing more.')
+        self.assertEqual(public.data['terms_of_use'], 'Give cheerfully, and treat each other kindly.')
+
+    def test_an_empty_box_clears_a_document_back_to_the_builtin_wording(self):
+        self.client.force_authenticate(self.admin)
+        self.client.patch(self.URL, {'privacy_policy': 'A first attempt.'}, format='json')
+
+        cleared = self.client.patch(self.URL, {'privacy_policy': ''}, format='json')
+
+        self.assertEqual(cleared.status_code, status.HTTP_200_OK)
+        self.assertEqual(ChurchSettings.objects.get().privacy_policy, '')

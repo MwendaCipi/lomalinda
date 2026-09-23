@@ -689,6 +689,17 @@ class ChurchSettings(models.Model):
         blank=True,
         help_text='Short encouragement shown under the dashboard greeting (140 characters).',
     )
+    # The legal pages (/privacy, /terms) render these when the church has
+    # written them; the built-in wording ships with the app and is the fallback
+    # while the boxes are empty, so the pages are never blank.
+    privacy_policy = models.TextField(
+        blank=True,
+        help_text='The church\'s own privacy policy. Shown on /privacy when set.',
+    )
+    terms_of_use = models.TextField(
+        blank=True,
+        help_text="The church's own terms of use. Shown on /terms when set.",
+    )
     invitation_link_lifetime_days = models.PositiveIntegerField(default=7, help_text="How many days an emailed invitation link stays usable before it expires")
     updated_at = models.DateTimeField(auto_now=True)
 

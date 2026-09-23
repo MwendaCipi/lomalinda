@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicSectionNav } from "@/components/public-section-nav";
+import { LegalDocument } from "@/components/legal-document";
 import { aboutSectionLinks } from "@/config/site-sections";
 
 const TERMS_VERSION = "22 September 2026";
@@ -18,6 +19,9 @@ export default function TermsPage() {
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
         <article className="mx-auto max-w-4xl rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
+          {/* The church's own terms once it has written them; the built-in
+              wording below is the fallback and the pre-hydration content. */}
+          <LegalDocument field="terms_of_use">
           <div className="space-y-7 text-sm leading-7 text-[#617068]">
             <section><h2 className="text-xl font-semibold text-[#26352f]">Acceptance</h2><p className="mt-2">By using this website or creating an account, you agree to these Terms of Use and our <Link href="/privacy" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>. If you do not agree, please do not create an account or submit information.</p></section>
             <section><h2 className="text-xl font-semibold text-[#26352f]">Accounts and passwords</h2><p className="mt-2">Provide accurate information, keep your username and password private, and notify the church if you suspect unauthorized access. You are responsible for activity performed through your account. Administrators may suspend or close accounts that violate these terms, create a security risk or contain materially false information.</p></section>
@@ -29,6 +33,7 @@ export default function TermsPage() {
             <section><h2 className="text-xl font-semibold text-[#26352f]">Changes and contact</h2><p className="mt-2">We may update these terms as the service changes. The current version and effective date will remain on this page. Questions or concerns can be sent to <a className="font-semibold text-[#b36b3c] hover:underline" href="mailto:hello@sdalomalinda.or.ke">hello@sdalomalinda.or.ke</a>.</p></section>
             <section className="rounded-2xl bg-[#f7f4ee] p-4"><p>These terms are a practical starting point for the church’s digital service and should be reviewed by a qualified Kenyan legal or privacy professional before being relied on as final legal advice.</p></section>
           </div>
+          </LegalDocument>
         </article>
       </section>
 

@@ -666,6 +666,8 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
             'dashboard_encouragement_line',
+            'privacy_policy',
+            'terms_of_use',
             'invitation_placeholders',
             'board_roles',
             'invitation_link_lifetime_days',
