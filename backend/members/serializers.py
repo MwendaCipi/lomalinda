@@ -415,16 +415,32 @@ class ContributionAllocationSerializer(serializers.Serializer):
                                       error_messages={'min_value': 'Each account needs at least KES 1.'})
 
 
+class MemberEmailSerializer(serializers.Serializer):
+    """The one profile field a member may set for themselves.
+
+    Receipts are addressed from the account (see receipt_email_for), so a
+    member with no address on file had no way to ever receive one. This is the
+    narrow door that lets them fix it — nothing else about the account is
+    writable from here.
+    """
+
+    email = serializers.EmailField(allow_blank=True)
+
+    def validate_email(self, value):
+        return value.strip()
+
+
 def receipt_email_for(user):
     """The only address a gift receipt may be sent to: the giver's own account email.
 
-    The Give form hides the email field from signed-out givers and locks it for
-    members, but that was a form rule — the endpoint accepted whatever address a
+    The Give form hides the email field from signed-out givers, but relying on
+    the form alone was not enough — the endpoint accepted whatever address a
     request named, so a crafted call could ask the church to email a receipt into
-    anyone's inbox. Receipts are now addressed from the account instead of the
-    payload: a member is emailed at the verified address on their account, and a
-    signed-out giver has no verifiable address, so nothing is emailed to them.
-    (An SMS receipt, which goes to the phone they gave, is unaffected.)
+    anyone's inbox. Receipts are addressed from the account instead of the
+    payload: a member is emailed at the address on their account (which they can
+    set from the same form, via MemberEmailSerializer), and a signed-out giver
+    has no verifiable address, so nothing is emailed to them. An SMS receipt,
+    which goes to the phone they gave, is unaffected.
     """
     if user is None or not getattr(user, 'is_authenticated', False):
         return ''

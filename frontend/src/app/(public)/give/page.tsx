@@ -85,6 +85,9 @@ function GivePageContent() {
   const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
+  // The address currently on the member's account, kept apart from what they
+  // have typed so the form can tell "the same" from "changed, and not saved yet".
+  const [accountEmail, setAccountEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -124,8 +127,10 @@ function GivePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Signed-in givers get their name and account email filled in for them; the
-  // name stays editable, the email is the account's own and is locked in the form.
+  // Signed-in givers get their name and account email filled in for them. The
+  // email is editable because it is the address on their account: receipts are
+  // sent there, so a member whose account has none can add one and a member
+  // whose address is stale can correct it (saved on submit, before the gift).
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
@@ -135,6 +140,7 @@ function GivePageContent() {
         if (!me) return;
         const full = `${me.first_name || ""} ${me.last_name || ""}`.trim() || me.username || "";
         setDonorName((current) => (current ? current : full));
+        setAccountEmail(me.email || "");
         setDonorEmail((current) => (current ? current : me.email || ""));
       })
       .catch(() => {});
@@ -298,6 +304,27 @@ function GivePageContent() {
           setLoading(false);
           return;
         }
+      }
+
+      // The receipt is addressed from the account, so an address typed here IS
+      // a change to the account — saved before the gift is initiated, while the
+      // ledger row and the M-Pesa callback would still read the old one. A
+      // blank field deliberately clears it, leaving the phone as the receipt.
+      const typedEmail = donorEmail.trim();
+      if (signedIn && token && typedEmail.toLowerCase() !== accountEmail.trim().toLowerCase()) {
+        const saveResponse = await fetch(`${API_URL}/api/members/me/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: typedEmail }),
+        });
+        if (!saveResponse.ok) {
+          const problem = await saveResponse.json().catch(() => ({}));
+          throw new Error(
+            problem.email?.[0] || problem.detail || "That email address could not be saved to your account."
+          );
+        }
+        const saved = await saveResponse.json().catch(() => null);
+        setAccountEmail(saved?.email ?? typedEmail);
       }
 
       let descriptionPayload = "";
@@ -598,8 +625,9 @@ function GivePageContent() {
               )}
 
               {/* 1. Who is giving — asked first, and prefilled for a signed-in
-                  member. The email is the account's own and is not retyped here:
-                  receipts only go to a verified address. */}
+                  member. The email is the one on their account, because that is
+                  where a receipt is addressed from; it stays editable so a
+                  member without one can add it and still be receipted. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block text-sm font-medium text-[#26352f]">
                   Your name
@@ -617,15 +645,16 @@ function GivePageContent() {
                     <input
                       type="email"
                       value={donorEmail}
-                      readOnly
-                      aria-readonly="true"
-                      title="Receipts go to the email on your church account."
-                      className="mt-2 w-full cursor-not-allowed rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#617068] outline-none"
+                      onChange={(event) => setDonorEmail(event.target.value)}
+                      placeholder="you@example.com"
+                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
                     />
                     <span className="mt-1 block text-[11px] font-normal text-[#617068]">
-                      {donorEmail
-                        ? "Your receipt goes to your account email."
-                        : "Your account has no email address, so no receipt can be sent."}
+                      {!donorEmail.trim()
+                        ? "No email — receipts only go by SMS to the phone you give with. Type one here and we'll save it to your account."
+                        : donorEmail.trim().toLowerCase() === accountEmail.trim().toLowerCase()
+                          ? "This is the address on your account; your receipt goes here."
+                          : "We'll save this to your account so your receipt can reach you."}
                     </span>
                   </label>
                 ) : (

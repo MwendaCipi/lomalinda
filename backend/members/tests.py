@@ -3166,3 +3166,90 @@ class ReceiptAddressEnforcementTests(APITestCase):
         context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
         self.assertNotIn('donor_email', context)
         self.assertNotIn('member_id', context)
+
+
+class MemberEmailFromTheGivingFormTests(APITestCase):
+    """A member can set or correct the email on their own account.
+
+    Receipts are addressed from the account (see the receipt-address tests), so
+    a member whose account had no address could never receive one. The giving
+    form now offers that single field, and it writes to the account — which is
+    why the gift that follows is receipted at the new address.
+    """
+
+    ME_URL = '/api/members/me/'
+    GIVE_URL = '/api/members/contributions/initiate/'
+
+    def test_a_member_adds_the_email_their_account_was_missing(self):
+        member = User.objects.create_user('adding.member', '', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self.client.patch(self.ME_URL, {'email': 'added@example.com'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'added@example.com')
+        member.refresh_from_db()
+        self.assertEqual(member.email, 'added@example.com')
+
+    def test_a_malformed_address_is_refused_and_nothing_changes(self):
+        member = User.objects.create_user('careful.member', 'kept@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self.client.patch(self.ME_URL, {'email': 'not-an-address'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        member.refresh_from_db()
+        self.assertEqual(member.email, 'kept@example.com')
+
+    def test_only_the_email_changes_and_only_on_the_members_own_account(self):
+        member = User.objects.create_user('narrow.member', 'old@example.com', 'ChurchPass#2026')
+        other = User.objects.create_user('untouched.member', 'other@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self.client.patch(
+            self.ME_URL,
+            {'email': 'new@example.com', 'username': 'hijacked', 'first_name': 'Not', 'is_staff': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        member.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(member.email, 'new@example.com')
+        self.assertEqual(member.username, 'narrow.member')
+        self.assertEqual(member.first_name, '')
+        self.assertFalse(member.is_staff)
+        self.assertEqual(other.email, 'other@example.com')
+
+    def test_signed_out_givers_cannot_write_to_an_account(self):
+        response = self.client.patch(self.ME_URL, {'email': 'someone@example.com'}, format='json')
+
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+    def test_the_next_gift_is_receipted_at_the_address_just_saved(self):
+        member = User.objects.create_user('newly.receipted', '', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        self.client.patch(self.ME_URL, {'email': 'fresh@example.com'}, format='json')
+        gift = self.client.post(self.GIVE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'amount': '300.00',
+            'purpose': 'Tithe',
+            'phone_number': '',
+            'donor_email': 'somewhere.else@example.com',
+        }, format='json')
+
+        self.assertEqual(gift.status_code, status.HTTP_201_CREATED)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.donor_email, 'fresh@example.com')
+
+    def test_clearing_the_address_means_sms_only_and_the_account_keeps_nothing(self):
+        member = User.objects.create_user('sms.only', 'unwanted@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self.client.patch(self.ME_URL, {'email': ''}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        member.refresh_from_db()
+        self.assertEqual(member.email, '')

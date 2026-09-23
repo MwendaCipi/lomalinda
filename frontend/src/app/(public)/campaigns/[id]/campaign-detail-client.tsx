@@ -58,9 +58,11 @@ export default function CampaignDetailClient() {
   const [stkProvider] = useState<"mpesa">("mpesa");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
-  // A receipt can only be emailed to the verified address on a member's
-  // account, so a signed-out visitor is not asked for one (see the Give form).
+  // A receipt can only be emailed to the address on a member's account, so a
+  // signed-out visitor is not asked for one and a member edits the account's
+  // own (see the Give form).
   const [signedIn, setSignedIn] = useState(false);
+  const [accountEmail, setAccountEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -97,6 +99,7 @@ export default function CampaignDetailClient() {
             setSignedIn(true);
             const phone = userData.phone_number || "";
             const email = userData.email || "";
+            setAccountEmail(email);
             if (phone) setPhoneNumber(phone);
             if (email) setDonorEmail(email);
           }
@@ -128,6 +131,26 @@ export default function CampaignDetailClient() {
 
     setIsSubmitting(true);
     try {
+      // The receipt is addressed from the account, so an address typed here is
+      // a change to the account — saved first, so the receipt that follows
+      // reads it. A blank field leaves the account without one (SMS only).
+      const typedEmail = donorEmail.trim();
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      if (signedIn && token && typedEmail.toLowerCase() !== accountEmail.trim().toLowerCase()) {
+        const saved = await fetch(`${API_URL}/api/members/me/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: typedEmail }),
+        });
+        if (!saved.ok) {
+          const problem = await saved.json().catch(() => ({}));
+          throw new Error(
+            problem.email?.[0] || problem.detail || "That email address could not be saved to your account."
+          );
+        }
+        setAccountEmail(typedEmail);
+      }
+
       const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -311,15 +334,16 @@ export default function CampaignDetailClient() {
                           <input
                             type="email"
                             value={donorEmail}
-                            readOnly
-                            aria-readonly="true"
-                            title="Receipts go to the email on your church account."
-                            className="mt-1.5 w-full cursor-not-allowed rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-sm text-[#617068] outline-none"
+                            onChange={(e) => setDonorEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
                           />
                           <span className="mt-1 block text-[11px] font-normal text-[#617068]">
-                            {donorEmail
-                              ? "Your receipt goes to your account email."
-                              : "Your account has no email address, so no receipt can be sent."}
+                            {!donorEmail.trim()
+                              ? "No email — receipts only go by SMS. Type one here and we'll save it to your account."
+                              : donorEmail.trim().toLowerCase() === accountEmail.trim().toLowerCase()
+                                ? "This is the address on your account; your receipt goes here."
+                                : "We'll save this to your account so your receipt can reach you."}
                           </span>
                         </label>
                       ) : (
