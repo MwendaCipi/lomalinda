@@ -2336,6 +2336,8 @@ class MemberRosterSystemAccountTests(APITestCase):
         # The owner account: a superuser, and (like the live one) it even has a
         # member profile, which is why it used to show up as an ordinary member.
         self.owner = User.objects.create_superuser('owner.account', 'owner@example.com', 'OwnerPass#2026')
+        self.owner.first_name, self.owner.last_name = 'Owner', 'Account'
+        self.owner.save()
         MemberProfile.objects.create(user=self.owner, role='member', roles='member')
         self.client.force_authenticate(self.admin)
 
@@ -2349,11 +2351,17 @@ class MemberRosterSystemAccountTests(APITestCase):
         self.assertNotIn('owner.account', usernames)
 
     def test_printed_member_roster_leaves_out_the_superuser_account(self):
-        response = self.client.get('/api/members/users/list-pdf/')
+        # Inspect the rows the view hands to the printer rather than the PDF
+        # bytes: reportlab may compress its text, which would make a search of
+        # the output pass no matter who was listed.
+        with patch('members.pdf_generator.generate_member_list_pdf') as generate:
+            generate.return_value = b'%PDF-1.4 roster'
+            response = self.client.get('/api/members/users/list-pdf/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response['Content-Type'], 'application/pdf')
-        # Generated names are embedded uncompressed, so the PDF text is searchable.
-        pdf_text = response.content.decode('latin-1')
-        self.assertNotIn('owner.account', pdf_text)
-        self.assertNotIn('owner@example.com', pdf_text)
+        self.assertEqual(response.content, b'%PDF-1.4 roster')
+        rows = generate.call_args[0][1]
+        names = [row['name'] for row in rows]
+        self.assertEqual(sorted(names), ['roster.admin', 'roster.member'])
+        self.assertNotIn('Owner Account', names)
