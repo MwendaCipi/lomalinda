@@ -196,7 +196,10 @@ export function MemberHome() {
           Money lives in the panels below: this card is where a member is greeted,
           not where their giving is totalled. */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+        {/* The greeting is meant to read as one line on a phone as well as on a
+            wide screen, so the size follows the viewport between the two ends
+            instead of switching at a breakpoint and wrapping in between. */}
+        <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
           {greeting}, {firstName}.
         </h1>
         <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
