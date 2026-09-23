@@ -103,7 +103,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   const isReconPage = pathname === "/administration/reconciliation";
   // Fund drives are their own page, so their item is highlighted by the URL
   // rather than by the tab the main workspace is showing.
-  const isFundDrivesPage = pathname === "/administration/fund-drives";
+  const isFundDrivesPage = pathname.replace(/\/$/, "") === "/administration/fund-drives";
 
   const handleTabClick = (tab: string) => {
     if (onSelectTab) {
