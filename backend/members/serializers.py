@@ -408,10 +408,21 @@ class SupportSubmissionSerializer(serializers.ModelSerializer):
         return validate_text_min_length(value, 5, 'Content')
 
 
+class ContributionAllocationSerializer(serializers.Serializer):
+    """One account and how much of the gift goes to it."""
+    purpose = serializers.CharField(max_length=120)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1,
+                                      error_messages={'min_value': 'Each account needs at least KES 1.'})
+
+
 class ContributionInitiateSerializer(serializers.Serializer):
     giving_type = serializers.ChoiceField(choices=['financial'], default='financial')
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, default=0)
     purpose = serializers.CharField(max_length=120, default='Tithe')
+    # A giver may support several accounts in one payment. Older clients still
+    # send a single amount+purpose, so an absent allocations list is read as one
+    # allocation — the two shapes end up identical further down.
+    allocations = ContributionAllocationSerializer(many=True, required=False)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     donor_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
     donor_email = serializers.EmailField(required=False, allow_blank=True)
@@ -427,6 +438,30 @@ class ContributionInitiateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
+        submitted = attrs.get('allocations') or []
+        cleaned = []
+        seen = set()
+        for row in submitted:
+            purpose = (row.get('purpose') or '').strip()
+            if not purpose:
+                raise serializers.ValidationError({'allocations': 'Each amount needs an account.'})
+            key = purpose.lower()
+            if key in seen:
+                raise serializers.ValidationError(
+                    {'allocations': f'"{purpose}" was chosen twice — each account appears once.'}
+                )
+            seen.add(key)
+            cleaned.append({'purpose': purpose, 'amount': row['amount']})
+
+        if cleaned:
+            attrs['allocations'] = cleaned
+            # amount/purpose stay filled in as the payment's total and its label:
+            # the M-Pesa push is sent once, for the whole gift.
+            attrs['amount'] = sum(row['amount'] for row in cleaned)
+            attrs['purpose'] = cleaned[0]['purpose'] if len(cleaned) == 1 else f"{len(cleaned)} accounts"
+        else:
+            attrs['allocations'] = [{'purpose': attrs['purpose'], 'amount': attrs['amount']}]
+
         if attrs['giving_type'] == 'financial':
             if attrs['amount'] < 1:
                 raise serializers.ValidationError({'amount': 'Financial giving must be at least KES 1.'})

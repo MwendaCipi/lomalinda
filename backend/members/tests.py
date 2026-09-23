@@ -210,10 +210,17 @@ class MpesaInitiationAPITests(APITestCase):
         self.assertEqual(kwargs['phone_number'], '254712345678')
         self.assertEqual(kwargs['amount'], Decimal('100.00'))
         self.assertEqual(kwargs['purpose'], 'Tithe')
-        # The context token is signed, not encrypted, but unpacks intact.
+        # The context token is signed, not encrypted, but unpacks intact. A
+        # single-account gift travels as one allocation line, so the callback
+        # has only one shape of context to understand.
         self.assertEqual(
             unpack_callback_context(mock_stk.call_args.kwargs['context_token']),
-            {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'},
+            {
+                'amount': '100.00',
+                'purpose': 'Tithe',
+                'allocations': [{'purpose': 'Tithe', 'amount': '100.00'}],
+                'phone_number': '254712345678',
+            },
         )
 
     @patch('members.views.initiate_stk_push_for_context')
@@ -2815,3 +2822,214 @@ class MeetingInvitationTests(APITestCase):
         self.assertEqual(tokens, [f'{{{name}}}' for name, _help in PLACEHOLDERS])
         self.assertIn('{greeting}', tokens)
         self.assertTrue(all(row['description'] for row in response.data['invitation_placeholders']))
+
+
+class SplitGivingTests(APITestCase):
+    """One payment, several accounts.
+
+    A giver can tick Tithe and Building Fund on the same form and enter an amount
+    against each. Safaricom is asked once, for the total, and the church records
+    the money as one line per account so every fund total stays right.
+    """
+
+    INITIATE_URL = '/api/members/contributions/initiate/'
+    CALLBACK_URL = '/api/members/payments/mpesa/callback/'
+
+    def _callback_payload(self, result_code=0, checkout_id='ws_CO_SPLIT'):
+        payload = {
+            'Body': {
+                'stkCallback': {
+                    'MerchantRequestID': '29115-34620561-9',
+                    'CheckoutRequestID': checkout_id,
+                    'ResultCode': result_code,
+                }
+            }
+        }
+        if result_code == 0:
+            payload['Body']['stkCallback']['CallbackMetadata'] = {
+                'Item': [
+                    {'Name': 'Amount', 'Value': 1500.00},
+                    {'Name': 'MpesaReceiptNumber', 'Value': 'SPL1T0001'},
+                    {'Name': 'PhoneNumber', 'Value': 254712345678},
+                    {'Name': 'FirstName', 'Value': 'Esther'},
+                ]
+            }
+        return payload
+
+    def _post_callback(self, context, result_code=0):
+        token = pack_callback_context(context)
+        return self.client.post(f'{self.CALLBACK_URL}?ctx={token}', self._callback_payload(result_code), format='json')
+
+    def test_bank_giving_to_two_accounts_is_recorded_as_two_lines(self):
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '',
+            'donor_name': 'Kennedy Owuor',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data['contribution_ids']), 2)
+        lines = {row.purpose: row for row in Contribution.objects.all()}
+        self.assertEqual(lines['Tithe'].amount, Decimal('500.00'))
+        self.assertEqual(lines['Building Fund'].amount, Decimal('1000.00'))
+        self.assertEqual(lines['Tithe'].status, 'completed')
+        # Both lines belong to the same payment, so the split can be seen as one.
+        self.assertIsNotNone(lines['Tithe'].payment_group)
+        self.assertEqual(lines['Tithe'].payment_group, lines['Building Fund'].payment_group)
+        # Each account line can be receipted against its own amount.
+        self.assertNotEqual(lines['Tithe'].mpesa_receipt_number, lines['Building Fund'].mpesa_receipt_number)
+
+    def test_a_one_account_body_still_records_one_line_without_a_group(self):
+        # Older clients (and installed PWAs mid-update) post amount + purpose.
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'amount': '700.00',
+            'purpose': 'Tithe',
+            'phone_number': '',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Contribution.objects.count(), 1)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.purpose, 'Tithe')
+        self.assertEqual(contribution.amount, Decimal('700.00'))
+        self.assertIsNone(contribution.payment_group)
+
+    def test_the_same_account_cannot_be_chosen_twice(self):
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'tithe', 'amount': '300.00'},
+            ],
+            'phone_number': '',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('chosen twice', str(response.data))
+        self.assertEqual(Contribution.objects.count(), 0)
+
+    def test_an_account_line_without_money_is_rejected(self):
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '0'},
+            ],
+            'phone_number': '',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Contribution.objects.count(), 0)
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_mpesa_asks_for_the_total_once_and_carries_the_split(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '0712345678',
+            'donor_name': 'Esther Wanjiru',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # One prompt, for the whole gift — not one per account.
+        mock_stk.assert_called_once()
+        self.assertEqual(Decimal(str(mock_stk.call_args.kwargs['amount'])), Decimal('1500.00'))
+        # Nothing is written before the money arrives.
+        self.assertEqual(Contribution.objects.count(), 0)
+
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertEqual(
+            context['allocations'],
+            [{'purpose': 'Tithe', 'amount': '500.00'}, {'purpose': 'Building Fund', 'amount': '1000.00'}],
+        )
+        self.assertEqual(context['amount'], '1500.00')
+
+    def test_the_callback_credits_each_account_from_one_receipt(self):
+        context = {
+            'amount': '1500.00',
+            'purpose': '2 accounts',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '254712345678',
+        }
+        response = self._post_callback(context)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lines = {row.purpose: row for row in Contribution.objects.all()}
+        self.assertEqual(sorted(lines), ['Building Fund', 'Tithe'])
+        self.assertEqual(lines['Tithe'].amount, Decimal('500.00'))
+        self.assertEqual(lines['Building Fund'].amount, Decimal('1000.00'))
+        # One Safaricom receipt, two ledger lines, and the lines add up to what
+        # the M-Pesa statement shows for that code.
+        self.assertEqual(lines['Tithe'].mpesa_receipt_number, 'SPL1T0001')
+        self.assertEqual(lines['Building Fund'].mpesa_receipt_number, 'SPL1T0001')
+        self.assertEqual(lines['Tithe'].payment_group, lines['Building Fund'].payment_group)
+        self.assertEqual(
+            sum(row.amount for row in lines.values()) + Decimal('0'),
+            Decimal('1500.00'),
+        )
+        self.assertTrue(all(row.status == 'completed' for row in lines.values()))
+        self.assertTrue(all(row.paid_at for row in lines.values()))
+
+    def test_a_split_prompt_that_fails_leaves_one_line_per_account(self):
+        context = {
+            'amount': '1500.00',
+            'purpose': '2 accounts',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '254712345678',
+        }
+        response = self._post_callback(context, result_code=1032)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        attempts = list(Contribution.objects.all())
+        self.assertEqual(len(attempts), 2)
+        self.assertTrue(all(row.status == 'failed' for row in attempts))
+        self.assertEqual(sum(row.amount for row in attempts), Decimal('1500.00'))
+        self.assertTrue(all(row.mpesa_receipt_number is None for row in attempts))
+
+    def test_a_retried_split_callback_is_not_recorded_twice(self):
+        context = {
+            'amount': '1500.00',
+            'purpose': '2 accounts',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '254712345678',
+        }
+        self._post_callback(context)
+        self._post_callback(context)
+
+        self.assertEqual(Contribution.objects.count(), 2)
+
+    def test_a_context_signed_before_splits_is_still_recorded(self):
+        # A push sent moments before a deploy carries no allocations list.
+        response = self._post_callback({
+            'amount': '250.00', 'purpose': 'Tithe', 'phone_number': '254712345678',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.purpose, 'Tithe')
+        self.assertEqual(contribution.amount, Decimal('250.00'))
+        self.assertIsNone(contribution.payment_group)

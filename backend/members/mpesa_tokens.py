@@ -4,9 +4,8 @@ The giving flow used to create a `pending` Contribution row at initiation and
 let Safaricom's callback find and complete it. Pending rows that never became
 real money — the payer cancelling, a timed-out prompt, a callback that never
 arrived — piled up in the database, so the row is now created only when the
-callback confirms the money arrived. The initiation details (amount, purpose,
-phone, the giver's email or member id, the campaign card) ride along in a
-signed token instead: Daraja echoes the CallBackURL we send at push time back
+callback confirms the money arrived. The initiation details(the amount, the split across accounts, purpose, phone, the giver's email or member id, the
+campaign card) ride along in a signed token instead: Daraja echoes the CallBackURL we send at push time back
 to us, and the token is embedded in that URL's query string.
 
 The token is Django's signed timestamped value (HMAC with SECRET_KEY), capped
@@ -28,6 +27,25 @@ TOKEN_SALT = 'members.mpesa_callback_context'
 # itself expires after about a minute and a half; payers can linger on the
 # PIN screen a while longer, so give the callback a generous window.
 TOKEN_TTL_SECONDS = int(getattr(settings, 'MPESA_CALLBACK_TOKEN_TTL_SECONDS', 600))
+
+
+def allocation_lines(context):
+    """The account lines a payment should be recorded as.
+
+    A giver can support several accounts in one payment; Safaricom's prompt asks
+    for the total and the split travels in the token as ``allocations``. Contexts
+    signed before splits existed carry only a single amount and purpose, and are
+    still honoured, so a push sent just before a deploy is not lost.
+    """
+    allocations = context.get('allocations')
+    if allocations:
+        return [
+            {'purpose': str(row.get('purpose') or context.get('purpose') or 'Combined Offering'),
+             'amount': row.get('amount')}
+            for row in allocations
+            if row.get('amount')
+        ]
+    return [{'purpose': context.get('purpose') or 'Combined Offering', 'amount': context.get('amount')}]
 
 
 def pack_callback_context(payload):

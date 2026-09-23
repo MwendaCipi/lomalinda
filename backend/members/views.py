@@ -33,7 +33,7 @@ from rest_framework.views import APIView
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
-from .mpesa_tokens import pack_callback_context, unpack_callback_context
+from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .throttling import PublicTokenThrottle
@@ -2501,28 +2501,42 @@ class InitiateContributionView(APIView):
         if serializer.validated_data.get('payment_method', 'mpesa') == 'mpesa':
             return self._initiate_mpesa_stk_push(request, serializer)
 
-        contribution = Contribution.objects.create(
-            member=request.user if request.user.is_authenticated else None,
-            amount=serializer.validated_data['amount'],
-            giving_type=serializer.validated_data['giving_type'],
-            purpose=serializer.validated_data['purpose'],
-            phone_number=serializer.validated_data['phone_number'],
-            donor_name=serializer.validated_data.get('donor_name', ''),
-            donor_email=serializer.validated_data.get('donor_email', ''),
-            item_description=serializer.validated_data.get('item_description', ''),
-            payment_method=serializer.validated_data.get('payment_method', 'mpesa'),
-        )
-        if contribution.payment_method in ['cash', 'cheque', 'bank_transfer']:
-            import uuid
-            prefix_map = {'cash': 'CSH', 'cheque': 'CHQ', 'bank_transfer': 'BNK', 'bank_deposit': 'DEP'}
-            prefix = prefix_map.get(contribution.payment_method, 'REC')
-            contribution.status = 'completed'
-            contribution.mpesa_receipt_number = f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
-            contribution.paid_at = timezone.now()
-            contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
-            send_contribution_receipt(contribution)
-            method_display = contribution.payment_method.replace('_', ' ').title()
-            return Response({'message': f'Thank you! Your {method_display} contribution has been recorded.', 'contribution_id': str(contribution.id)}, status=status.HTTP_201_CREATED)
+        method = serializer.validated_data.get('payment_method', 'mpesa')
+        allocations = serializer.validated_data['allocations']
+        # One payment per account line, so the books show which account each part
+        # of the gift went to. A single-account gift is simply one line.
+        import uuid
+        group = uuid.uuid4() if len(allocations) > 1 else None
+        prefix_map = {'cash': 'CSH', 'cheque': 'CHQ', 'bank_transfer': 'BNK', 'bank_deposit': 'DEP'}
+        prefix = prefix_map.get(method, 'REC')
+        created = []
+        for row in allocations:
+            contribution = Contribution.objects.create(
+                member=request.user if request.user.is_authenticated else None,
+                amount=row['amount'],
+                giving_type=serializer.validated_data['giving_type'],
+                purpose=row['purpose'],
+                phone_number=serializer.validated_data['phone_number'],
+                donor_name=serializer.validated_data.get('donor_name', ''),
+                donor_email=serializer.validated_data.get('donor_email', ''),
+                item_description=serializer.validated_data.get('item_description', ''),
+                payment_method=method,
+                payment_group=group,
+            )
+            if contribution.payment_method in ['cash', 'cheque', 'bank_transfer']:
+                contribution.status = 'completed'
+                contribution.mpesa_receipt_number = f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
+                contribution.paid_at = timezone.now()
+                contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
+                send_contribution_receipt(contribution)
+            created.append(contribution)
+
+        method_display = method.replace('_', ' ').title()
+        return Response({
+            'message': f'Thank you! Your {method_display} contribution has been recorded.',
+            'contribution_id': str(created[0].id),
+            'contribution_ids': [str(row.id) for row in created],
+        }, status=status.HTTP_201_CREATED)
 
     def _initiate_mpesa_stk_push(self, request, serializer):
         """Start an STK push without writing a pending Contribution row.
@@ -2537,9 +2551,13 @@ class InitiateContributionView(APIView):
         """
         data = serializer.validated_data
         phone_number = normalize_mpesa_phone(data['phone_number'])
+        allocations = data['allocations']
         context = {
+            # The total is what Safaricom's prompt asks for; the split rides along
+            # so the callback can credit each account when the money arrives.
             'amount': str(data['amount']),
             'purpose': data['purpose'],
+            'allocations': [{'purpose': row['purpose'], 'amount': str(row['amount'])} for row in allocations],
             'phone_number': phone_number,
         }
         donor_name = (data.get('donor_name') or '').strip()
@@ -2622,38 +2640,50 @@ class MpesaCallbackView(APIView):
                     email=context.get('donor_email', ''),
                     phone=str(metadata.get('PhoneNumber') or context.get('phone_number') or ''),
                 )
-            contribution = Contribution.objects.create(
-                amount=Decimal(str(context['amount'])),
-                giving_type='financial',
-                purpose=context['purpose'],
-                phone_number=str(metadata.get('PhoneNumber', context['phone_number'])),
-                donor_name=(context.get('donor_name') or '').strip() or payer_name,
-                donor_email=context.get('donor_email', ''),
-                item_description=context.get('item_description', ''),
-                payment_method='mpesa',
-                status='completed',
-                mpesa_receipt_number=metadata.get('MpesaReceiptNumber'),
-                checkout_request_id=checkout_request_id,
-                paid_at=timezone.now(),
-            )
-            self._link_giver(contribution, context)
-            send_contribution_receipt(contribution)
+            receipt_number = metadata.get('MpesaReceiptNumber')
+            phone = str(metadata.get('PhoneNumber', context['phone_number']))
+            lines = allocation_lines(context)
+            group = uuid.uuid4() if len(lines) > 1 else None
+            for row in lines:
+                contribution = Contribution.objects.create(
+                    amount=Decimal(str(row['amount'])),
+                    giving_type='financial',
+                    purpose=row['purpose'],
+                    phone_number=phone,
+                    donor_name=(context.get('donor_name') or '').strip() or payer_name,
+                    donor_email=context.get('donor_email', ''),
+                    item_description=context.get('item_description', ''),
+                    payment_method='mpesa',
+                    status='completed',
+                    mpesa_receipt_number=receipt_number,
+                    checkout_request_id=checkout_request_id,
+                    payment_group=group,
+                    paid_at=timezone.now(),
+                )
+                self._link_giver(contribution, context)
+                send_contribution_receipt(contribution)
         else:
             # The prompt was cancelled, timed out or otherwise failed — no
             # money moved, but keep a terminal record so the attempt is
             # visible in the giver's history. It is never 'pending' and it
-            # is excluded from every completed-only total.
-            Contribution.objects.create(
-                amount=Decimal(str(context['amount'])),
-                giving_type='financial',
-                purpose=context['purpose'],
-                phone_number=str(context.get('phone_number', '')),
-                donor_email=context.get('donor_email', ''),
-                item_description=result_desc,
-                payment_method='mpesa',
-                status='failed',
-                checkout_request_id=checkout_request_id,
-            )
+            # is excluded from every completed-only total. A split gift leaves
+            # one line per account here too, so the history reads the same
+            # whether the prompt succeeded or not.
+            lines = allocation_lines(context)
+            group = uuid.uuid4() if len(lines) > 1 else None
+            for row in lines:
+                Contribution.objects.create(
+                    amount=Decimal(str(row['amount'])),
+                    giving_type='financial',
+                    purpose=row['purpose'],
+                    phone_number=str(context.get('phone_number', '')),
+                    donor_email=context.get('donor_email', ''),
+                    item_description=result_desc,
+                    payment_method='mpesa',
+                    status='failed',
+                    checkout_request_id=checkout_request_id,
+                    payment_group=group,
+                )
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
     def _link_giver(self, contribution, context):
@@ -2713,7 +2743,10 @@ class MpesaC2BConfirmationView(APIView):
         purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
 
         # Check if already recorded
-        contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
+        # A split STK gift shares one receipt number across its account lines;
+        # a C2B paybill payment is always a single line, so only unsplit rows can
+        # be the payment this confirmation is about.
+        contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id, payment_group__isnull=True).first()
         if not contribution:
             contribution = Contribution(
                 payment_method='mpesa',

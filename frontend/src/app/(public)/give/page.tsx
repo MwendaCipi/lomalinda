@@ -71,9 +71,13 @@ function GivePageContent() {
   // be turned into the differently-named "Budget".
   const normalizedPurpose = linkedPurpose ? getMinistryGivingPurpose(linkedPurpose) : "";
 
-  const [purpose, setPurpose] = useState(normalizedPurpose);
+  // A giver may support several accounts in one payment, so the choice is a list
+  // and each chosen account carries its own amount. One M-Pesa prompt is sent,
+  // for the total; the church records the split per account.
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>(normalizedPurpose ? [normalizedPurpose] : []);
+  const [accountAmounts, setAccountAmounts] = useState<Record<string, string>>({});
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
-  const [amount, setAmount] = useState("");
   const [purposes, setPurposes] = useState<string[]>([]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bankRefNumber, setBankRefNumber] = useState("");
@@ -191,10 +195,28 @@ function GivePageContent() {
   useEffect(() => {
     if (rawPurposeParam) {
       const mapped = getMinistryGivingPurpose(rawPurposeParam);
-      setPurpose(mapped);
+      setSelectedAccounts([mapped]);
       setShowGiveModal(true);
     }
   }, [rawPurposeParam]);
+
+  const toggleAccount = (account: string) => {
+    setSelectedAccounts((current) =>
+      current.includes(account) ? current.filter((item) => item !== account) : [...current, account]
+    );
+  };
+
+  const allocationTotal = selectedAccounts.reduce(
+    (sum, account) => sum + (Number(accountAmounts[account]) || 0),
+    0
+  );
+
+  const accountPickerLabel =
+    selectedAccounts.length === 0
+      ? "-- select --"
+      : selectedAccounts.length === 1
+        ? selectedAccounts[0]
+        : `${selectedAccounts[0]} +${selectedAccounts.length - 1} more`;
 
   const [churchBankDetails, setChurchBankDetails] = useState({
     bank_name: "KCB Bank Kenya",
@@ -240,7 +262,7 @@ function GivePageContent() {
         const exact = linkedPurpose
           ? published.find((name) => name.toLowerCase() === linkedPurpose.toLowerCase())
           : undefined;
-        if (exact) setPurpose(exact);
+        if (exact) setSelectedAccounts([exact]);
         setPurposes(ensureLinkedPurpose(published, exact ?? normalizedPurpose));
       })
       .catch(() => setPurposes(ensureLinkedPurpose(defaultPurposes, normalizedPurpose)));
@@ -253,6 +275,22 @@ function GivePageContent() {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
     try {
+      if (selectedAccounts.length === 0) {
+        showAlert("Choose an account", "Select at least one account to give to.", "warning");
+        setLoading(false);
+        return;
+      }
+      const withoutAmount = selectedAccounts.find((account) => (Number(accountAmounts[account]) || 0) < 1);
+      if (withoutAmount) {
+        showAlert("Amount needed", `Enter an amount of at least KES 1 for ${withoutAmount}.`, "warning");
+        setLoading(false);
+        return;
+      }
+      const allocations = selectedAccounts.map((account) => ({
+        purpose: account,
+        amount: Number(accountAmounts[account]) || 0,
+      }));
+
       if (methodOfGiving === "mpesa") {
         const cleanPhone = phoneNumber.replace(/\D/g, "");
         if (cleanPhone.length !== 10) {
@@ -275,8 +313,10 @@ function GivePageContent() {
       const payload: Record<string, unknown> = {
         giving_type: "financial",
         payment_method: methodOfGiving,
-        amount: amount,
-        purpose,
+        // The whole gift, split per account. The API totals it for the prompt.
+        allocations,
+        amount: allocationTotal,
+        purpose: allocations[0].purpose,
         phone_number: phoneNumber,
         item_description: descriptionPayload,
         donor_email: donorEmail,
@@ -599,28 +639,61 @@ function GivePageContent() {
                 )}
               </div>
 
-              {/* 2. Giving Account & Method of Giving */}
+              {/* 2. Giving Accounts & Method of Giving */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Giving account
-                  <select
-                    required
-                    value={purpose}
-                    onChange={(event) => setPurpose(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                  >
-                    <option value="" disabled>
-                      -- select --
-                    </option>
-                    {purposes.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="block self-start text-sm font-medium text-[#26352f]">
+                  <span>Giving accounts</span>
+                  <div className="relative mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountPicker((open) => !open)}
+                      aria-expanded={showAccountPicker}
+                      aria-label="Choose giving accounts"
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                    >
+                      <span className={`min-w-0 truncate ${selectedAccounts.length ? "text-[#26352f]" : "text-[#8a948d]"}`}>
+                        {accountPickerLabel}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-[#617068]">▼</span>
+                    </button>
 
-                <label className="block text-sm font-medium text-[#26352f]">
+                    {showAccountPicker && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-[#dfdbd1] bg-white p-2 shadow-xl">
+                        <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                          Tick every account you are giving to
+                        </p>
+                        {purposes.map((item) => {
+                          const checked = selectedAccounts.includes(item);
+                          return (
+                            <label
+                              key={item}
+                              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleAccount(item)}
+                                className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
+                              />
+                              <span className="min-w-0 flex-1 truncate">{item}</span>
+                            </label>
+                          );
+                        })}
+                        <div className="mt-1 flex justify-end border-t border-[#dfdbd1] px-1 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowAccountPicker(false)}
+                            className="rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <label className="block self-start text-sm font-medium text-[#26352f]">
                   Method of Giving
                   <select
                     value={methodOfGiving}
@@ -633,22 +706,45 @@ function GivePageContent() {
                 </label>
               </div>
 
-              {/* 3. Method-Specific Fields & Details */}
-              {methodOfGiving === "mpesa" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="block text-sm font-medium text-[#26352f]">
-                    Amount (KES)
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
+              {/* 3. One amount per chosen account — the account and its amount
+                  share the row, on phones as well as wide screens. */}
+              {selectedAccounts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[#26352f]">Amount per account (KES)</p>
+                  {selectedAccounts.map((account) => (
+                    <div
+                      key={account}
+                      className="flex items-center gap-2 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/60 px-3 py-2"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#26352f] sm:text-sm">
+                        {account}
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        required
+                        placeholder="Amount"
+                        aria-label={`Amount for ${account}`}
+                        value={accountAmounts[account] ?? ""}
+                        onChange={(event) =>
+                          setAccountAmounts((current) => ({ ...current, [account]: event.target.value }))
+                        }
+                        className="w-24 shrink-0 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-[#b36b3c] sm:w-32"
+                      />
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-1 pt-1 text-sm">
+                    <span className="font-medium text-[#617068]">Total</span>
+                    <span className="font-bold text-[#26352f]">KES {allocationTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
 
+              {/* 4. Method-Specific Fields & Details */}
+              {methodOfGiving === "mpesa" && (
+                <div className="grid grid-cols-1 gap-4">
                   <label className="block text-sm font-medium text-[#26352f]">
                     Phone number
                     <input
@@ -682,20 +778,7 @@ function GivePageContent() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-[#26352f]">
-                      Amount (KES)
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        required
-                        value={amount}
-                        onChange={(event) => setAmount(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                      />
-                    </label>
-
+                  <div className="grid grid-cols-1 gap-4">
                     <label className="block text-sm font-medium text-[#26352f]">
                       Bank Deposit / Ref Number
                       <input
@@ -734,12 +817,17 @@ function GivePageContent() {
                   </div>
                 </div>
               )}
-              <button
-                disabled={loading}
-                className="mt-6 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm sm:text-base font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
-              >
-                {submitButtonText}
-              </button>
+              {/* Sticky on phones: with several accounts the rows push the button
+                  down, so it stays reachable at the foot of the modal instead of
+                  scrolling out of sight. */}
+              <div className="sticky bottom-0 -mx-6 mt-6 border-t border-[#dfdbd1] bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+                <button
+                  disabled={loading}
+                  className="w-full rounded-full bg-[#3d7146] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#305a38] disabled:opacity-60 sm:text-base"
+                >
+                  {submitButtonText}
+                </button>
+              </div>
             </form>
           </div>
         </div>

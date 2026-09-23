@@ -254,8 +254,21 @@ class Contribution(models.Model):
     phone_number = models.CharField(max_length=20, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    mpesa_receipt_number = models.CharField(max_length=64, unique=True, null=True, blank=True)
-    checkout_request_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    # A giver may send one payment for several accounts at once, and the church
+    # keeps one ledger line per account: Tithe KES 500 and Building Fund KES
+    # 1,000 out of a single M-Pesa receipt. Safaricom's code therefore belongs to
+    # the payment, not to a line, so it is not unique on its own — what is unique
+    # is the payment, which payment_group identifies. Lines sharing a code sum to
+    # the amount on the M-Pesa statement, which is how the treasury reconciles it.
+    mpesa_receipt_number = models.CharField(
+        max_length=64, null=True, blank=True,
+        help_text="Safaricom's code; shared by the account lines of one split payment.",
+    )
+    checkout_request_id = models.CharField(max_length=128, null=True, blank=True)
+    payment_group = models.UUIDField(
+        null=True, blank=True, db_index=True,
+        help_text="Groups the account lines of a single payment when a giver split one gift.",
+    )
     merchant_request_id = models.CharField(max_length=128, blank=True)
     paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
