@@ -359,7 +359,7 @@ export default function ReconciliationPage() {
     setSendSms(true);
     setSendEmail(true);
     setIsModalOpen(false);
-    setMessage((await response.clone().json().catch(() => ({}))).receipt_delivery_message || "Receipt saved successfully.");
+    const deliveryMessage = (await response.clone().json().catch(() => ({}))).receipt_delivery_message || "Receipt saved successfully.";
     await load(nextFrom, nextTo);
     await loadAllGivings(nextFrom, nextTo);
     if (expandedPurpose) {
@@ -374,6 +374,9 @@ export default function ReconciliationPage() {
         }
       } catch {}
     }
+    // Set after load(): load() clears the banner first, so setting before the
+    // reloads batched both updates and the delivery feedback never rendered.
+    setMessage(deliveryMessage);
   }
 
   if (status === "loading") return <main className="min-h-screen bg-[#f7f4ee] p-10 text-center text-[#617068]">Loading reconciliation workspace…</main>;
