@@ -354,6 +354,38 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     return delivery
 
 
+def cash_receipt_delivery_message(delivery, *, email_requested, sms_requested, has_email, has_phone):
+    """One honest line about where a cash receipt actually went.
+
+    Success is only claimed when a channel really delivered; when nothing
+    was sent, the reasons say why (no address, SMS not configured, a
+    channel switched off) instead of reporting a generic completion.
+    """
+    email_sent = bool(delivery.get('email_sent'))
+    sms_sent = bool(delivery.get('sms_sent'))
+    if email_sent and sms_sent:
+        return 'Receipt sent by email and SMS.'
+    if email_sent:
+        if sms_requested and not delivery.get('sms_configured'):
+            return 'Email sent; SMS was not sent because SMS is not configured.'
+        return 'Receipt sent by email.'
+    if sms_sent:
+        return 'Receipt sent by SMS.'
+    if not email_requested and not sms_requested:
+        return 'The receipt was not sent because no delivery channel was selected.'
+    reasons = []
+    if email_requested:
+        reasons.append('this giver has no email address' if not has_email else 'the email could not be sent')
+    if sms_requested:
+        if not delivery.get('sms_configured'):
+            reasons.append('SMS is not configured')
+        elif not has_phone:
+            reasons.append('this giver has no phone number')
+        else:
+            reasons.append('the SMS could not be sent')
+    return 'The receipt was not sent: ' + ' and '.join(reasons) + '.'
+
+
 def is_finance_manager(user):
     if not user or not user.is_authenticated:
         return False
@@ -834,6 +866,9 @@ class InvitationListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if not can_manage_invitations(self.request.user):
             return Invitation.objects.none()
+        # Past its expiry an invitation is no longer pending: flip stale rows
+        # on read so the console's Pending list holds only live invitations.
+        Invitation.objects.filter(status='pending', expires_at__lte=timezone.now()).update(status='expired')
         return Invitation.objects.all()
 
     def create(self, request, *args, **kwargs):
@@ -1533,15 +1568,15 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         if cash.entry_type == 'individual':
             if cash.donor_name or cash.giver_phone or cash.giver_email:
                 ensure_giver_profile(cash.donor_name, cash.giver_phone, cash.giver_email)
-            delivery = send_cash_receipt(
-                cash,
-                send_sms=str(self.request.data.get('send_sms', 'true')).lower() in ('true', '1'),
-                send_email=str(self.request.data.get('send_email', 'true')).lower() in ('true', '1'),
-            )
-            self.receipt_delivery_message = (
-                'Email sent; SMS was not sent because SMS is not configured.'
-                if delivery and delivery['email_sent'] and not delivery['sms_sent'] and not delivery['sms_configured']
-                else 'Receipt delivery completed.'
+            send_sms = str(self.request.data.get('send_sms', 'true')).lower() in ('true', '1')
+            send_email = str(self.request.data.get('send_email', 'true')).lower() in ('true', '1')
+            delivery = send_cash_receipt(cash, send_sms=send_sms, send_email=send_email)
+            self.receipt_delivery_message = cash_receipt_delivery_message(
+                delivery,
+                email_requested=send_email,
+                sms_requested=send_sms,
+                has_email=bool(cash.giver_email),
+                has_phone=bool(cash.giver_phone),
             )
         elif cash.entry_type == 'anonymous':
             if not cash.donor_name.strip():

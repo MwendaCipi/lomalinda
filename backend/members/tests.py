@@ -2036,3 +2036,87 @@ class InKindDonorDisplayTests(TestCase):
         row = self._row(items='Chairs')
         data = InKindContributionSerializer(row).data
         self.assertEqual(data['donor_display'], 'Anonymous')
+
+
+class ReceiptDeliveryFeedbackTests(APITestCase):
+    """A recorded receipt's feedback must say what each channel actually did."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='treasury.feedback', password='secure-password')
+        MemberProfile.objects.create(user=self.user, role='treasurer')
+        self.client.force_authenticate(self.user)
+        self.today = timezone.localdate()
+
+    def _record(self, **overrides):
+        payload = {
+            'received_on': self.today.isoformat(),
+            'amount': '250.00',
+            'purpose': 'Tithe',
+            'donor_name': 'Phone Giver',
+            'giver_phone': '0712345678',
+        }
+        payload.update(overrides)
+        response = self.client.post('/api/members/treasury/cash-contributions/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return response.data['receipt_delivery_message']
+
+    def test_phone_only_giver_is_told_the_receipt_was_not_sent(self):
+        message = self._record()
+        self.assertNotEqual(message, 'Receipt delivery completed.')
+        self.assertTrue(message.startswith('The receipt was not sent:'))
+        self.assertIn('this giver has no email address', message)
+        self.assertIn('SMS is not configured', message)
+
+    def test_email_delivery_reports_success_with_the_real_channels(self):
+        message = self._record(giver_email='grace@example.com')
+        self.assertEqual(message, 'Email sent; SMS was not sent because SMS is not configured.')
+
+    def test_switched_off_channels_never_claim_success(self):
+        message = self._record(send_sms='false', send_email='false')
+        self.assertEqual(message, 'The receipt was not sent because no delivery channel was selected.')
+
+
+class InvitationExpiryTests(APITestCase):
+    """A pending invitation past its expiry reads as expired, not pending."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user('expiry.admin', 'expiry.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin_user, role='admin', roles='admin')
+        self.client.force_authenticate(user=self.admin_user)
+
+    def _invitation(self, email, **overrides):
+        values = {
+            'email': email,
+            'first_name': 'Grace',
+            'last_name': 'Wanjiku',
+            'expires_at': timezone.now() + timedelta(days=7),
+        }
+        values.update(overrides)
+        return Invitation.objects.create(**values)
+
+    def test_listing_flips_stale_pending_rows_to_expired(self):
+        stale = self._invitation('stale@example.com', expires_at=timezone.now() - timedelta(days=3))
+        fresh = self._invitation('fresh@example.com')
+
+        response = self.client.get('/api/members/invitations/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        statuses = {row['id']: row['status'] for row in response.data}
+        self.assertEqual(statuses[stale.id], 'expired')
+        self.assertEqual(statuses[fresh.id], 'pending')
+        stale.refresh_from_db()
+        self.assertEqual(stale.status, 'expired')
+
+    def test_an_expired_invitation_can_be_resent_into_pending(self):
+        stale = self._invitation('stale@example.com', expires_at=timezone.now() - timedelta(days=3))
+        self.client.get('/api/members/invitations/')
+
+        with patch('members.views.send_mail') as mock_send:
+            response = self.client.post(f'/api/members/invitations/{stale.id}/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['email_sent'])
+        mock_send.assert_called_once()
+        stale.refresh_from_db()
+        self.assertEqual(stale.status, 'pending')
+        self.assertGreater(stale.expires_at, timezone.now())

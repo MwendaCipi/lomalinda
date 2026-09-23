@@ -751,7 +751,7 @@ interface InvitationRow {
   account_type_display: string;
   roles: string;
   role_codes: string[];
-  status: "pending" | "accepted" | "revoked";
+  status: "pending" | "accepted" | "revoked" | "expired";
   invited_by_name: string;
   sent_at: string | null;
   expires_at: string;
@@ -1595,7 +1595,7 @@ export function UserManagement() {
                       </p>
                     </div>
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
-                      {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Confirmed" : "Withdrawn"}
+                      {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Confirmed" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
                     </span>
                   </div>
                   {invitation.status !== "accepted" && (
@@ -2237,7 +2237,7 @@ export function UserManagement() {
                           </p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
-                          {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Accepted" : "Withdrawn"}
+                          {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Accepted" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
                         </span>
                       </div>
                       {invitation.status !== "accepted" && (

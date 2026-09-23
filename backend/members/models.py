@@ -122,7 +122,7 @@ class Invitation(models.Model):
     token is never persisted anywhere.
     """
 
-    STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('revoked', 'Revoked')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('revoked', 'Revoked'), ('expired', 'Expired')]
     email = models.EmailField()
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
