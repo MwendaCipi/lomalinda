@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import CashContribution, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
+from .models import CashContribution, ChurchBudget, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 
@@ -2455,3 +2455,127 @@ class DashboardAnalyticsTests(APITestCase):
 
         self.assertEqual(response.data['pending_refunds']['count'], 1)
         self.assertEqual(response.data['pending_refunds']['amount'], 150.0)
+
+    def test_the_window_follows_the_officers_choice_and_is_clamped(self):
+        Contribution.objects.create(
+            amount='700.00', purpose='Tithe', status='completed',
+            paid_at=timezone.now() - timedelta(weeks=20), payment_method='mpesa',
+        )
+
+        monthly = self.client.get(self.URL, {'weeks': 26})
+        self.assertEqual(len(monthly.data['series']), 26)
+        self.assertEqual(monthly.data['giving']['window_total'], 700.0)
+        self.assertEqual(monthly.data['window_weeks'], 26)
+
+        # A gift three weeks back sits outside the default twelve weeks.
+        Contribution.objects.create(
+            amount='50.00', purpose='Tithe', status='completed',
+            paid_at=timezone.now() - timedelta(weeks=3), payment_method='mpesa',
+        )
+        self.assertEqual(self.client.get(self.URL, {'weeks': 4}).data['giving']['window_total'], 50.0)
+
+        # A crafted or silly window is clamped, never handed to the database raw.
+        self.assertEqual(self.client.get(self.URL, {'weeks': 9999}).data['window_weeks'], 26)
+        self.assertEqual(self.client.get(self.URL, {'weeks': 0}).data['window_weeks'], 4)
+        self.assertEqual(self.client.get(self.URL, {'weeks': 'last-year'}).data['window_weeks'], 12)
+
+    def test_the_window_is_compared_with_the_window_before_it(self):
+        Contribution.objects.create(
+            amount='300.00', purpose='Tithe', status='completed',
+            paid_at=timezone.now() - timedelta(weeks=14), payment_method='mpesa',
+        )
+        Contribution.objects.create(amount='80.00', purpose='Tithe', status='completed', paid_at=timezone.now(), payment_method='mpesa')
+        Expenditure.objects.create(
+            title='Older fuel', amount=Decimal('90.00'), category='operations',
+            expenditure_date=self.today - timedelta(weeks=14), recorded_by=self.treasurer,
+        )
+
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.data['giving']['window_total'], 80.0)
+        self.assertEqual(response.data['previous']['income'], 300.0)
+        self.assertEqual(response.data['previous']['expense'], 90.0)
+        self.assertLess(response.data['previous']['end'], response.data['window_start'])
+
+    def test_givers_are_counted_once_each_and_anonymous_giving_is_not_a_person(self):
+        for amount in ('100.00', '60.00'):
+            Contribution.objects.create(
+                amount=amount, purpose='Tithe', status='completed', paid_at=timezone.now(),
+                payment_method='mpesa', phone_number='+254 700 111 222',
+            )
+        Contribution.objects.create(
+            amount='40.00', purpose='Tithe', status='completed', paid_at=timezone.now(),
+            payment_method='bank_transfer', donor_email='Faithful@Example.com',
+        )
+        # The same giver twice by email is still one giver.
+        Contribution.objects.create(
+            amount='10.00', purpose='Tithe', status='completed', paid_at=timezone.now(),
+            payment_method='bank_transfer', donor_email='faithful@example.com',
+        )
+        CashContribution.objects.create(
+            received_by=self.treasurer, amount=Decimal('500.00'), purpose='Combined Offering',
+            received_on=self.today, payment_method='cash', entry_type='anonymous',
+        )
+
+        givers = self.client.get(self.URL).data['giving']['givers']
+
+        self.assertEqual(givers['gifts'], 5)
+        self.assertEqual(givers['givers'], 2)
+        self.assertEqual(givers['average'], 142.0)
+        self.assertEqual(givers['largest'], 500.0)
+        self.assertEqual(givers['grouped_total'], 500.0)
+        self.assertEqual(givers['last_gift_on'], self.today.isoformat())
+
+    def test_the_month_trend_covers_a_year_and_lands_gifts_in_their_month(self):
+        older = timezone.now() - timedelta(days=150)
+        Contribution.objects.create(
+            amount='250.00', purpose='Tithe', status='completed', paid_at=older, payment_method='mpesa',
+        )
+        Contribution.objects.create(amount='75.00', purpose='Tithe', status='completed', paid_at=timezone.now(), payment_method='mpesa')
+
+        months = self.client.get(self.URL).data['monthly']
+
+        self.assertEqual(len(months), 12)
+        # The first bucket and every January carry their year, so a trend that
+        # crosses into a new year is readable.
+        self.assertTrue(months[0]['label'].endswith(str(self.today.year - 1)[-2:]))
+        self.assertTrue(all(month['label'].endswith('26') for month in months if month['month_start'].endswith('-01-01')))
+        self.assertEqual(months[-1]['month_start'], self.today.replace(day=1).isoformat())
+        self.assertEqual(months[-1]['income'], 75.0)
+        self.assertEqual(months[-1]['gifts'], 1)
+        older_month = timezone.localtime(older).date().replace(day=1).isoformat()
+        self.assertEqual(
+            [month for month in months if month['month_start'] == older_month][0]['income'],
+            250.0,
+        )
+        self.assertEqual(sum(month['income'] for month in months), 325.0)
+
+    def test_fund_composition_and_budget_track_the_real_books(self):
+        TreasuryAccount.objects.create(name='Paybill', account_type='mobile_money', balance=Decimal('500.00'))
+        TreasuryAccount.objects.create(name='Petty cash', account_type='cash', balance=Decimal('100.00'))
+        ChurchBudget.objects.create(year=self.today.year, total_income=Decimal('9000.00'), total_expenses=Decimal('5000.00'))
+        Contribution.objects.create(amount='120.00', purpose='Tithe', status='completed', paid_at=timezone.now(), payment_method='mpesa')
+        Expenditure.objects.create(
+            title='Water', amount=Decimal('70.00'), category='utilities', account=self.treasury,
+            expenditure_date=self.today, recorded_by=self.treasurer,
+        )
+
+        response = self.client.get(self.URL)
+
+        composition = {row['label']: row['total'] for row in response.data['funds']['by_type']}
+        self.assertEqual(composition['Bank Account'], 1234.0)
+        self.assertEqual(composition['Mobile Money / Paybill'], 500.0)
+        self.assertEqual(composition['Cash / Petty Cash'], 100.0)
+
+        self.assertEqual(response.data['budget']['has_budget'], True)
+        self.assertEqual(response.data['budget']['income_target'], 9000.0)
+        self.assertEqual(response.data['budget']['income_actual'], 120.0)
+        self.assertEqual(response.data['budget']['expense_actual'], 70.0)
+        self.assertEqual(response.data['expenditure']['by_account'], [{'label': 'Main Bank', 'total': 70.0}])
+
+    def test_a_year_without_a_budget_says_so_instead_of_inventing_one(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.data['budget']['has_budget'], False)
+        self.assertEqual(response.data['budget']['income_target'], 0.0)
+        self.assertEqual(response.data['budget']['income_actual'], 0.0)

@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Landmark, PiggyBank, TrendingUp, Wallet } from "lucide-react";
-import { GroupedBarChart, HorizontalBars } from "./mini-charts";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  HandCoins,
+  Landmark,
+  PiggyBank,
+  Target,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { CompositionBar, GroupedBarChart, HorizontalBars, TrendLineChart } from "./mini-charts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -15,13 +26,33 @@ type SeriesPoint = {
   gifts: number;
 };
 
+type MonthPoint = {
+  month_start: string;
+  label: string;
+  income: number;
+  expense: number;
+  gifts: number;
+};
+
 type Analytics = {
   window_weeks: number;
+  window_start: string;
   as_of: string;
   series: SeriesPoint[];
+  previous: { income: number; expense: number; start: string; end: string };
+  monthly: MonthPoint[];
+  budget: {
+    year: number;
+    has_budget: boolean;
+    income_target: number;
+    expense_target: number;
+    income_actual: number;
+    expense_actual: number;
+  };
   funds: {
     total_liquidity: number;
     account_count: number;
+    by_type: { label: string; total: number; count: number }[];
     accounts: { id: number; name: string; type_label: string; balance: number }[];
   };
   giving: {
@@ -31,12 +62,21 @@ type Analytics = {
     window_total: number;
     by_account: { label: string; total: number }[];
     by_method: { label: string; total: number }[];
+    givers: {
+      gifts: number;
+      givers: number;
+      average: number;
+      largest: number;
+      grouped_total: number;
+      last_gift_on: string | null;
+    };
   };
   expenditure: {
     this_month: number;
     this_year: number;
     window_total: number;
     by_category: { label: string; total: number }[];
+    by_account: { label: string; total: number }[];
   };
   members: {
     total: number;
@@ -51,6 +91,15 @@ type Analytics = {
 const INCOME_COLOR = "#5f8067";
 const EXPENSE_COLOR = "#b36b3c";
 
+/** The windows an officer actually asks about: this month, the quarter, half a year. */
+const RANGES = [
+  { weeks: 4, label: "4 weeks" },
+  { weeks: 12, label: "12 weeks" },
+  { weeks: 26, label: "26 weeks" },
+];
+
+const DEFAULT_WEEKS = 12;
+
 const fmtAmount = (value: number) =>
   `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
@@ -61,45 +110,179 @@ const fmtCompact = (value: number) => {
   return String(Math.round(value));
 };
 
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** How the window compares with the one before it; null when there is nothing to compare. */
+const changePercent = (current: number, previous: number) =>
+  previous > 0 ? ((current - previous) / previous) * 100 : null;
+
+const deltaHint = (current: number, previous: number) => {
+  const percent = changePercent(current, previous);
+  if (percent === null) return previous === 0 && current > 0 ? "none in the period before" : null;
+  return `${percent >= 0 ? "+" : ""}${percent.toFixed(0)}% on the period before`;
+};
+
+/**
+ * What a treasurer would mark with a pencil, said in plain words.
+ *
+ * Every line is a restatement of a figure already on the page — nothing here is
+ * modelled, estimated or forecast — so the panel and the notes can never
+ * contradict each other.
+ */
+function buildInsights(data: Analytics): string[] {
+  const notes: string[] = [];
+  const weeks = data.window_weeks;
+  const income = data.giving.window_total;
+  const expense = data.expenditure.window_total;
+
+  const percent = changePercent(income, data.previous.income);
+  if (percent !== null) {
+    notes.push(`Giving is ${percent >= 0 ? "up" : "down"} ${Math.abs(percent).toFixed(0)}% on the ${weeks} weeks before this one.`);
+  } else if (income > 0 && data.previous.income === 0) {
+    notes.push(`Nothing was recorded in the ${weeks} weeks before this one.`);
+  }
+
+  const quiet = data.series.filter((week) => week.income === 0 && week.expense === 0).length;
+  if (quiet > 0 && data.series.length > 1) {
+    notes.push(`${quiet} of the last ${data.series.length} weeks had no money recorded in or out.`);
+  }
+
+  if (expense > income) {
+    notes.push(`Spending ran ${fmtAmount(expense - income)} ahead of giving in this window.`);
+  }
+
+  if (data.giving.givers.grouped_total > 0 && income > 0) {
+    const share = (data.giving.givers.grouped_total / income) * 100;
+    notes.push(
+      `${fmtAmount(data.giving.givers.grouped_total)} (${share.toFixed(0)}% of giving) came in as collections or anonymous gifts.`,
+    );
+  }
+
+  const largest = data.funds.accounts[0];
+  if (largest && data.funds.total_liquidity > 0) {
+    const share = (largest.balance / data.funds.total_liquidity) * 100;
+    if (share >= 35) {
+      notes.push(`${largest.name} holds ${share.toFixed(0)}% of the church's ${fmtAmount(data.funds.total_liquidity)}.`);
+    }
+  }
+
+  if (data.pending_refunds.count > 0) {
+    notes.push(
+      `${data.pending_refunds.count} M-Pesa refund${data.pending_refunds.count === 1 ? "" : "s"} still awaiting settlement.`,
+    );
+  }
+
+  return notes.slice(0, 4);
+}
+
+function StatTile({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+  tone?: "good" | "warn";
+}) {
+  return (
+    <div className="rounded-2xl border border-[#e5dfd2] bg-[#faf9f5] p-3.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{label}</p>
+      <p className="mt-1.5 text-sm font-bold text-[#26352f] sm:text-base">{value}</p>
+      {hint && (
+        <p
+          className={`mt-1 flex items-center gap-1 text-[10px] ${
+            tone === "good" ? "text-[#4d6d55]" : tone === "warn" ? "text-[#96552c]" : "text-[#617068]"
+          }`}
+        >
+          {tone === "good" && <ArrowUpRight className="h-3 w-3" />}
+          {tone === "warn" && <ArrowDownRight className="h-3 w-3" />}
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ProgressRow({
+  label,
+  actual,
+  target,
+  formatValue,
+}: {
+  label: string;
+  actual: number;
+  target: number;
+  formatValue: (value: number) => string;
+}) {
+  const share = target > 0 ? (actual / target) * 100 : 0;
+  const over = share > 100;
+  return (
+    <li>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs font-semibold text-[#26352f]">{label}</span>
+        <span className="text-xs font-bold text-[#26352f]">
+          {formatValue(actual)}
+          <span className="font-semibold text-[#617068]"> of {formatValue(target)}</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-[#f2efe8]">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${Math.min(100, Math.max(2, share))}%`, backgroundColor: over ? "#96552c" : "#5f8067" }}
+        />
+      </div>
+      <p className="mt-1 text-[10px] text-[#617068]">
+        {share.toFixed(0)}% of the year's plan
+        {target > 0 && !over && actual < target && ` · ${formatValue(target - actual)} to go`}
+        {over && ` · ${formatValue(actual - target)} beyond the plan`}
+      </p>
+    </li>
+  );
+}
+
 /**
  * Church funds at a glance, for the officers who keep the books.
  *
  * Tailored for the treasurer and the leadership team: what came in, what went
- * out, where the money sits, and the handful of numbers that raise a question
- * (pending refunds, invitations nobody has accepted). Members never reach this
- * panel — the caller renders it for finance roles only, and the endpoint
- * refuses anyone else — because these are the whole church's figures.
+ * out, who gave it, where the money sits and whether the year is running to
+ * plan. Members never reach this panel — the caller renders it for finance
+ * roles only, and the endpoint refuses anyone else — because these are the
+ * whole church's figures.
  */
 export function DashboardAnalytics() {
   const [data, setData] = useState<Analytics | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "denied" | "error">("loading");
+  const [weeks, setWeeks] = useState(DEFAULT_WEEKS);
+  const [trend, setTrend] = useState<"weeks" | "months">("weeks");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (window: number) => {
+    const token = localStorage.getItem("access_token");
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/dashboard/analytics/?weeks=${window}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 403) {
+        setState("denied");
+        return;
+      }
+      if (!res.ok) throw new Error("analytics failed");
+      setData(await res.json());
+      setState("ready");
+    } catch {
+      setState((current) => (current === "ready" ? "ready" : "error"));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    let cancelled = false;
-
-    fetch(`${API_URL}/api/members/dashboard/analytics/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(async (res) => {
-        if (cancelled) return;
-        if (res.status === 403) {
-          setState("denied");
-          return;
-        }
-        if (!res.ok) throw new Error("analytics failed");
-        const payload: Analytics = await res.json();
-        setData(payload);
-        setState("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setState("error");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    load(weeks);
+  }, [load, weeks]);
 
   if (state === "denied") return null;
 
@@ -123,63 +306,46 @@ export function DashboardAnalytics() {
     );
   }
 
-  const monthDelta = data.giving.this_month - data.giving.last_month;
-  const monthDeltaPct = data.giving.last_month > 0 ? (monthDelta / data.giving.last_month) * 100 : null;
-  const netThisMonth = data.giving.this_month - data.expenditure.this_month;
-  const windowNet = data.giving.window_total - data.expenditure.window_total;
-  const hasSeries = data.series.some((point) => point.income > 0 || point.expense > 0);
-
-  const kpis: { label: string; value: string; hint?: string; tone?: "good" | "warn" }[] = [
-    {
-      label: "Total liquidity",
-      value: fmtAmount(data.funds.total_liquidity),
-      hint: `${data.funds.account_count} ${data.funds.account_count === 1 ? "account" : "accounts"}`,
-    },
-    {
-      label: "Giving this month",
-      value: fmtAmount(data.giving.this_month),
-      hint:
-        monthDeltaPct === null
-          ? "no figure for last month"
-          : `${monthDelta >= 0 ? "+" : ""}${monthDeltaPct.toFixed(0)}% vs last month`,
-      tone: monthDeltaPct === null ? undefined : monthDelta > 0 ? "good" : monthDelta < 0 ? "warn" : undefined,
-    },
-    {
-      label: "Spending this month",
-      value: fmtAmount(data.expenditure.this_month),
-      hint: `KES ${data.expenditure.this_year.toLocaleString("en-KE", { maximumFractionDigits: 0 })} this year`,
-    },
-    {
-      label: "Net this month",
-      value: fmtAmount(netThisMonth),
-      hint: netThisMonth >= 0 ? "surplus" : "deficit",
-      tone: netThisMonth >= 0 ? "good" : "warn",
-    },
-    {
-      label: "Pending refunds",
-      value: String(data.pending_refunds.count),
-      hint: data.pending_refunds.count > 0 ? fmtAmount(data.pending_refunds.amount) : "nothing outstanding",
-    },
-    {
-      label: "Members",
-      value: String(data.members.total),
-      hint: `${data.members.friends} friends · ${data.members.new_this_month} new this month`,
-    },
-  ];
+  const rangeLabel = `last ${data.window_weeks} weeks`;
+  const net = data.giving.window_total - data.expenditure.window_total;
+  const insights = buildInsights(data);
+  const monthIncome = data.monthly.reduce((sum, month) => sum + month.income, 0);
+  const monthExpense = data.monthly.reduce((sum, month) => sum + month.expense, 0);
+  const hasMonthly = data.monthly.some((month) => month.income > 0 || month.expense > 0);
 
   return (
-    <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
+    <section
+      aria-busy={busy}
+      className={`mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm transition-opacity sm:p-6 ${
+        busy ? "opacity-60" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
             <Landmark className="h-4 w-4 text-[#b36b3c]" /> Church finances at a glance
           </h2>
           <p className="mt-1 text-[11px] text-[#617068]">
-            Real receipts only — completed gifts and recorded cash — for the last {data.window_weeks} weeks to{" "}
-            {new Date(data.as_of).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
+            Real receipts only — completed gifts and recorded cash — for the {rangeLabel} to{" "}
+            {fmtDay(data.as_of)}.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-full border border-[#c9c5bb] bg-white p-0.5" role="group" aria-label="Window">
+            {RANGES.map((option) => (
+              <button
+                key={option.weeks}
+                type="button"
+                onClick={() => setWeeks(option.weeks)}
+                aria-pressed={weeks === option.weeks}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                  weeks === option.weeks ? "bg-[#26352f] text-white" : "text-[#26352f] hover:bg-[#f2efe8]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <Link
             href="/administration/reconciliation"
             className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
@@ -195,58 +361,143 @@ export function DashboardAnalytics() {
         </div>
       </div>
 
+      {insights.length > 0 && (
+        <ul className="mt-4 grid gap-2 rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4 sm:grid-cols-2">
+          {insights.map((note) => (
+            <li key={note} className="flex items-start gap-2 text-[11px] leading-snug text-[#4a564f]">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#b36b3c]" />
+              {note}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* Headline figures */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-[#e5dfd2] bg-[#faf9f5] p-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{kpi.label}</p>
-            <p className="mt-1.5 text-sm font-bold text-[#26352f] sm:text-base">{kpi.value}</p>
-            {kpi.hint && (
-              <p
-                className={`mt-1 flex items-center gap-1 text-[10px] ${
-                  kpi.tone === "good" ? "text-[#4d6d55]" : kpi.tone === "warn" ? "text-[#96552c]" : "text-[#617068]"
-                }`}
-              >
-                {kpi.tone === "good" && <ArrowUpRight className="h-3 w-3" />}
-                {kpi.tone === "warn" && <ArrowDownRight className="h-3 w-3" />}
-                {kpi.hint}
-              </p>
-            )}
-          </div>
-        ))}
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <StatTile
+          label="Total liquidity"
+          value={fmtAmount(data.funds.total_liquidity)}
+          hint={`${data.funds.account_count} ${data.funds.account_count === 1 ? "account" : "accounts"}`}
+        />
+        <StatTile
+          label={`Giving (${rangeLabel})`}
+          value={fmtAmount(data.giving.window_total)}
+          hint={deltaHint(data.giving.window_total, data.previous.income)}
+          tone={
+            changePercent(data.giving.window_total, data.previous.income) === null
+              ? undefined
+              : data.giving.window_total >= data.previous.income
+                ? "good"
+                : "warn"
+          }
+        />
+        <StatTile
+          label={`Spending (${rangeLabel})`}
+          value={fmtAmount(data.expenditure.window_total)}
+          hint={deltaHint(data.expenditure.window_total, data.previous.expense)}
+        />
+        <StatTile
+          label={`Net (${rangeLabel})`}
+          value={fmtAmount(net)}
+          hint={net >= 0 ? "surplus" : "deficit"}
+          tone={net >= 0 ? "good" : "warn"}
+        />
+        <StatTile
+          label="Average gift"
+          value={fmtAmount(data.giving.givers.average)}
+          hint={`${data.giving.givers.gifts} gift${data.giving.givers.gifts === 1 ? "" : "s"} from ${data.giving.givers.givers} ${data.giving.givers.givers === 1 ? "giver" : "givers"}`}
+        />
+        <StatTile
+          label="Collections & anonymous"
+          value={fmtAmount(data.giving.givers.grouped_total)}
+          hint="no individual giver on record"
+        />
+        <StatTile
+          label={`${data.budget.year} giving to date`}
+          value={fmtAmount(data.giving.this_year)}
+          hint={
+            data.budget.has_budget
+              ? `planned ${fmtAmount(data.budget.income_target)}`
+              : `${fmtAmount(data.giving.this_month)} this month`
+          }
+        />
+        <StatTile
+          label="Members"
+          value={String(data.members.total)}
+          hint={`${data.members.friends} friends · ${data.members.new_this_month} new this month`}
+        />
       </div>
 
-      {/* Money in and out, week by week */}
+      {/* Money in and out over time */}
       <div className="mt-6 rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
             <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Giving in vs spending out
           </h3>
-          <p className="text-[11px] text-[#617068]">
-            Last {data.window_weeks} weeks · in {fmtAmount(data.giving.window_total)} · out{" "}
-            {fmtAmount(data.expenditure.window_total)}
-            {hasSeries && (
-              <span className={windowNet >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}>
-                {" "}
-                · net {fmtAmount(windowNet)}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-full border border-[#c9c5bb] bg-white p-0.5" role="group" aria-label="Granularity">
+              {(["weeks", "months"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setTrend(option)}
+                  aria-pressed={trend === option}
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold capitalize transition ${
+                    trend === option ? "bg-[#26352f] text-white" : "text-[#26352f] hover:bg-[#f2efe8]"
+                  }`}
+                >
+                  {option === "weeks" ? `Weekly (${data.window_weeks})` : "Monthly (12)"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-2 text-[11px] text-[#617068]">
+          {trend === "weeks" ? (
+            <>
+              {rangeLabel} · in {fmtAmount(data.giving.window_total)} · out{" "}
+              {fmtAmount(data.expenditure.window_total)} · net{" "}
+              <span className={net >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}>{fmtAmount(net)}</span>
+            </>
+          ) : (
+            <>
+              Last 12 months · in {fmtAmount(monthIncome)} · out {fmtAmount(monthExpense)} · net{" "}
+              <span className={monthIncome - monthExpense >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}>
+                {fmtAmount(monthIncome - monthExpense)}
               </span>
-            )}
-          </p>
-        </div>
+            </>
+          )}
+        </p>
+
         <div className="mt-4">
-          <GroupedBarChart
-            groups={data.series.map((point) => ({
-              label: point.label,
-              values: [point.income, point.expense],
-            }))}
-            series={[
-              { label: "Giving in", color: INCOME_COLOR },
-              { label: "Spending out", color: EXPENSE_COLOR },
-            ]}
-            formatValue={fmtCompact}
-            emptyLabel="No giving or spending recorded in these weeks yet."
-          />
+          {trend === "weeks" ? (
+            <GroupedBarChart
+              groups={data.series.map((point) => ({ label: point.label, values: [point.income, point.expense] }))}
+              series={[
+                { label: "Giving in", color: INCOME_COLOR },
+                { label: "Spending out", color: EXPENSE_COLOR },
+              ]}
+              formatValue={fmtCompact}
+              emptyLabel={`No giving or spending recorded in the ${rangeLabel} yet.`}
+            />
+          ) : (
+            <TrendLineChart
+              points={data.monthly.map((month) => ({ label: month.label, values: [month.income, month.expense] }))}
+              series={[
+                { label: "Giving in", color: INCOME_COLOR },
+                { label: "Spending out", color: EXPENSE_COLOR },
+              ]}
+              formatValue={fmtCompact}
+              emptyLabel="No giving or spending recorded in the last 12 months yet."
+            />
+          )}
         </div>
+        {!hasMonthly && (
+          <p className="mt-2 text-[11px] text-[#617068]">
+            The month-by-month line fills in as the church records more giving.
+          </p>
+        )}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -255,18 +506,29 @@ export function DashboardAnalytics() {
             <Wallet className="h-4 w-4 text-[#b36b3c]" /> Where the money sits
           </h3>
           <p className="mt-1 text-[11px] text-[#617068]">
-            Live balances of the {data.funds.account_count} treasury{" "}
+            {fmtAmount(data.funds.total_liquidity)} across {data.funds.account_count} treasury{" "}
             {data.funds.account_count === 1 ? "account" : "accounts"}.
           </p>
           <div className="mt-4">
-            <HorizontalBars
-              items={data.funds.accounts.map((account) => ({ label: account.name, value: account.balance }))}
+            <CompositionBar
+              items={data.funds.by_type}
               formatValue={fmtAmount}
               emptyLabel="No treasury accounts have been added yet."
-              limit={6}
-              color="#26352f"
             />
           </div>
+          {data.funds.accounts.length > 0 && (
+            <div className="mt-4 border-t border-[#dfdbd1] pt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">Largest balances</p>
+              <div className="mt-3">
+                <HorizontalBars
+                  items={data.funds.accounts.map((account) => ({ label: account.name, value: account.balance }))}
+                  formatValue={fmtAmount}
+                  limit={5}
+                  color="#26352f"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
@@ -275,13 +537,14 @@ export function DashboardAnalytics() {
           </h3>
           <p className="mt-1 text-[11px] text-[#617068]">
             {fmtAmount(data.giving.window_total)} received across {data.giving.by_account.length}{" "}
-            {data.giving.by_account.length === 1 ? "account" : "accounts"} in these weeks.
+            {data.giving.by_account.length === 1 ? "account" : "accounts"} in the {rangeLabel}.
           </p>
           <div className="mt-4">
             <HorizontalBars
               items={data.giving.by_account.map((row) => ({ label: row.label, value: row.total }))}
               formatValue={fmtAmount}
               limit={6}
+              emptyLabel={`Nothing received in the ${rangeLabel}.`}
             />
           </div>
           {data.giving.by_method.length > 0 && (
@@ -303,24 +566,110 @@ export function DashboardAnalytics() {
             <ArrowDownRight className="h-4 w-4 text-[#b36b3c]" /> Spending by category
           </h3>
           <p className="mt-1 text-[11px] text-[#617068]">
-            {fmtAmount(data.expenditure.window_total)} spent in these weeks ·{" "}
+            {fmtAmount(data.expenditure.window_total)} spent in the {rangeLabel} ·{" "}
             {fmtAmount(data.expenditure.this_year)} this year.
           </p>
           <div className="mt-4">
             <HorizontalBars
               items={data.expenditure.by_category.map((row) => ({ label: row.label, value: row.total }))}
               formatValue={fmtAmount}
-              emptyLabel="No expenditure recorded in these weeks."
+              emptyLabel={`No expenditure recorded in the ${rangeLabel}.`}
               limit={5}
               color="#96552c"
             />
           </div>
-          {data.members.pending_invitations > 0 && (
-            <p className="mt-4 border-t border-[#dfdbd1] pt-3 text-[11px] text-[#617068]">
-              {data.members.pending_invitations} invitation
-              {data.members.pending_invitations === 1 ? "" : "s"} still waiting to be accepted.
+          {data.expenditure.by_account.length > 0 && (
+            <div className="mt-4 border-t border-[#dfdbd1] pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">Paid from</p>
+              <ul className="mt-2 space-y-1.5">
+                {data.expenditure.by_account.slice(0, 4).map((row) => (
+                  <li key={row.label} className="flex items-baseline justify-between gap-3 text-[11px]">
+                    <span className="truncate text-[#617068]">{row.label}</span>
+                    <span className="shrink-0 font-semibold text-[#26352f]">{fmtAmount(row.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
+            <Users className="h-4 w-4 text-[#b36b3c]" /> Giving activity
+          </h3>
+          <p className="mt-1 text-[11px] text-[#617068]">
+            Who is giving, without naming and ranking donors — the figures are per gift, not per person.
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {[
+              { label: "Gifts recorded", value: String(data.giving.givers.gifts) },
+              { label: "Givers", value: String(data.giving.givers.givers) },
+              { label: "Average gift", value: fmtAmount(data.giving.givers.average) },
+              { label: "Largest gift", value: fmtAmount(data.giving.givers.largest) },
+              { label: "This month", value: fmtAmount(data.giving.this_month) },
+              { label: "Last month", value: fmtAmount(data.giving.last_month) },
+            ].map((row) => (
+              <div key={row.label}>
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{row.label}</dt>
+                <dd className="mt-1 text-xs font-bold text-[#26352f]">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4 flex items-center gap-2 border-t border-[#dfdbd1] pt-3 text-[11px] text-[#617068]">
+            <HandCoins className="h-3.5 w-3.5 text-[#b36b3c]" />
+            {data.giving.givers.last_gift_on
+              ? `Most recent gift: ${fmtDay(data.giving.givers.last_gift_on)}`
+              : `No gift recorded in the ${rangeLabel}.`}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
+              <Target className="h-4 w-4 text-[#b36b3c]" /> {data.budget.year} budget
+            </h3>
+            <Link href="/support/budget" className="text-[11px] font-semibold text-[#b36b3c] hover:underline">
+              Open budget →
+            </Link>
+          </div>
+          {data.budget.has_budget ? (
+            <ul className="mt-4 space-y-4">
+              <ProgressRow
+                label="Income to date"
+                actual={data.budget.income_actual}
+                target={data.budget.income_target}
+                formatValue={fmtAmount}
+              />
+              <ProgressRow
+                label="Expenditure to date"
+                actual={data.budget.expense_actual}
+                target={data.budget.expense_target}
+                formatValue={fmtAmount}
+              />
+            </ul>
+          ) : (
+            <p className="mt-3 text-[11px] leading-relaxed text-[#617068]">
+              No budget has been set for {data.budget.year}, so there is no plan to measure the year against. Record
+              one and this card turns into a progress bar for income and expenditure.
             </p>
           )}
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[#dfdbd1] pt-3 text-[11px] text-[#617068]">
+            <span className="flex items-center gap-1.5">
+              <Banknote className="h-3.5 w-3.5 text-[#b36b3c]" /> {fmtAmount(data.giving.this_year)} given this year
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Wallet className="h-3.5 w-3.5 text-[#b36b3c]" /> {fmtAmount(data.expenditure.this_year)} spent this
+              year
+            </span>
+            {data.members.pending_invitations > 0 && (
+              <span>
+                {data.members.pending_invitations} invitation
+                {data.members.pending_invitations === 1 ? "" : "s"} awaiting acceptance
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </section>

@@ -237,6 +237,11 @@ export function MemberHome() {
         <p className="mt-8 text-center text-sm text-[#617068]">Loading your dashboard…</p>
       ) : (
         <>
+          {/* Church funds and giving analytics — officers only, and first: a
+              treasurer opens this page for the church's money, not for the
+              personal giving strip in the header above. */}
+          {seesChurchFinances && <DashboardAnalytics />}
+
           {/* Quick tiles */}
           <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {tiles.map((t) => (
@@ -253,9 +258,6 @@ export function MemberHome() {
               </Link>
             ))}
           </section>
-
-          {/* Church funds and giving analytics — officers only */}
-          {seesChurchFinances && <DashboardAnalytics />}
 
           {/* Leadership strip */}
           {isLeader && (

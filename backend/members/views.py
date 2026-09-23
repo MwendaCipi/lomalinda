@@ -8,6 +8,7 @@ from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from datetime import date, datetime, timedelta
@@ -1987,6 +1988,42 @@ def _month_start(day):
     return day.replace(day=1)
 
 
+# Gifts that belong to the church as a body rather than to one person: nobody
+# can be named for them, so they must never be counted as individual givers.
+GROUPED_GIVERS = frozenset({'anonymous', 'collection', 'uncredited'})
+
+
+def _giver_identity(member_id, email, phone, name, fallback='uncredited'):
+    """One stable key per giver, strongest identity first.
+
+    A member who gives by phone and again by email is one giver, not two, so the
+    linked account wins over the email, which wins over the phone number, which
+    wins over the typed name. Anything unidentified falls back to ``uncredited``
+    so the dashboard can say how much money has no giver behind it.
+    """
+    if member_id:
+        return f'member:{member_id}'
+    cleaned_email = (email or '').strip().lower()
+    if cleaned_email:
+        return f'email:{cleaned_email}'
+    digits = ''.join(character for character in (phone or '') if character.isdigit())
+    if digits:
+        return f'phone:{digits[-9:]}'
+    cleaned_name = (name or '').strip().lower()
+    if cleaned_name:
+        return f'name:{cleaned_name}'
+    return fallback
+
+
+def _clamped_weeks(raw, default=12, low=4, high=26):
+    """The window an officer asked for, clamped so ``?weeks=`` cannot walk the ledger."""
+    try:
+        requested = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, requested))
+
+
 class DashboardAnalyticsView(APIView):
     """Church funds and giving analytics for the dashboard's charts.
 
@@ -1999,7 +2036,12 @@ class DashboardAnalyticsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    WINDOW_WEEKS = 12
+    # The week chart follows whatever window the officer picked; the month chart
+    # always covers a full year, so the two answer different questions.
+    DEFAULT_WEEKS = 12
+    MIN_WEEKS = 4
+    MAX_WEEKS = 26
+    TREND_MONTHS = 12
     TOP_ACCOUNTS = 8
 
     def get(self, request):
@@ -2009,11 +2051,14 @@ class DashboardAnalyticsView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        weeks_count = _clamped_weeks(
+            request.query_params.get('weeks'), self.DEFAULT_WEEKS, self.MIN_WEEKS, self.MAX_WEEKS
+        )
         today = timezone.localdate()
         this_week = _week_start(today)
-        window_start = this_week - timedelta(weeks=self.WINDOW_WEEKS - 1)
+        window_start = this_week - timedelta(weeks=weeks_count - 1)
 
-        weeks = [window_start + timedelta(weeks=index) for index in range(self.WINDOW_WEEKS)]
+        weeks = [window_start + timedelta(weeks=index) for index in range(weeks_count)]
         buckets = [
             {
                 'week_start': week.isoformat(),
@@ -2067,9 +2112,10 @@ class DashboardAnalyticsView(APIView):
             add_income(row.received_on, float(row.amount), row.purpose, row.payment_method)
 
         expense_totals = {}
+        expense_account_totals = {}
         window_expense = 0.0
         expense_labels = dict(Expenditure.CATEGORY_CHOICES)
-        for row in Expenditure.objects.filter(expenditure_date__gte=window_start):
+        for row in Expenditure.objects.filter(expenditure_date__gte=window_start).select_related('account'):
             bucket = bucket_for(row.expenditure_date)
             if bucket is None:
                 continue
@@ -2078,6 +2124,8 @@ class DashboardAnalyticsView(APIView):
             window_expense += amount
             label = expense_labels.get(row.category, (row.category or 'Other').replace('_', ' ').title())
             expense_totals[label] = expense_totals.get(label, 0.0) + amount
+            account_label = row.account.name if row.account else 'Not charged to an account'
+            expense_account_totals[account_label] = expense_account_totals.get(account_label, 0.0) + amount
 
         # ── The headline figures, over the periods people ask about ───────────
         month_start = _month_start(today)
@@ -2106,14 +2154,163 @@ class DashboardAnalyticsView(APIView):
         # The roster counts exclude system accounts, exactly as the member list does.
         roster = User.objects.filter(is_superuser=False)
 
+        # ── The window before this one, for a like-for-like comparison ────────
+        previous_start = window_start - timedelta(weeks=weeks_count)
+        previous_end = window_start - timedelta(days=1)
+        previous_income = income_between(previous_start, previous_end)
+        previous_expense = expense_between(previous_start, previous_end)
+        income_ytd = income_between(year_start, today)
+        expense_ytd = expense_between(year_start, today)
+
+        # ── Who gave it: counts and averages, never a league table of names ───
+        giver_keys = set()
+        grouped_total = 0.0
+        gift_count = 0
+        gift_total = 0.0
+        largest_gift = 0.0
+        last_gift_on = None
+
+        def note_gift(key, amount, day):
+            nonlocal grouped_total, gift_count, gift_total, largest_gift, last_gift_on
+            gift_count += 1
+            gift_total += amount
+            if amount > largest_gift:
+                largest_gift = amount
+            if day and (last_gift_on is None or day > last_gift_on):
+                last_gift_on = day
+            if key in GROUPED_GIVERS:
+                grouped_total += amount
+            else:
+                giver_keys.add(key)
+
+        # The very rows the window's income was built from — no extra filter — so
+        # the giver count and the bar chart can never disagree with each other.
+        for row in Contribution.objects.filter(status='completed').filter(
+            Q(paid_at__date__gte=window_start) | Q(paid_at__isnull=True, created_at__date__gte=window_start)
+        ).values('member_id', 'donor_email', 'phone_number', 'donor_name', 'amount', 'paid_at', 'created_at'):
+            note_gift(
+                _giver_identity(row['member_id'], row['donor_email'], row['phone_number'], row['donor_name']),
+                float(row['amount'] or 0),
+                timezone.localtime(row['paid_at'] or row['created_at']).date(),
+            )
+
+        for row in CashContribution.objects.filter(received_on__gte=window_start).values(
+            'entry_type', 'donor_name', 'giver_phone', 'giver_email', 'amount', 'received_on'
+        ):
+            if row['entry_type'] == 'anonymous':
+                key = 'anonymous'
+            elif row['entry_type'] == 'collection':
+                key = 'collection'
+            else:
+                key = _giver_identity(None, row['giver_email'], row['giver_phone'], row['donor_name'])
+            note_gift(key, float(row['amount'] or 0), row['received_on'])
+
+        giver_stats = {
+            'gifts': gift_count,
+            'givers': len(giver_keys),
+            'average': round(gift_total / gift_count, 2) if gift_count else 0.0,
+            'largest': largest_gift,
+            # Whole-congregation money — collections and anonymous gifts — that
+            # no individual can be thanked for.
+            'grouped_total': grouped_total,
+            'last_gift_on': last_gift_on.isoformat() if last_gift_on else None,
+        }
+
+        # ── The year so far, month by month ──────────────────────────────────
+        first_month = month_start
+        for _ in range(self.TREND_MONTHS - 1):
+            first_month = _month_start(first_month - timedelta(days=1))
+
+        month_buckets = []
+        cursor = first_month
+        for index in range(self.TREND_MONTHS):
+            month_buckets.append({
+                'month_start': cursor.isoformat(),
+                # January carries its year, so a window spanning two years is readable.
+                'label': cursor.strftime('%b %y') if cursor.month == 1 or index == 0 else cursor.strftime('%b'),
+                'income': 0.0,
+                'expense': 0.0,
+                'gifts': 0,
+            })
+            cursor = _month_start(cursor + timedelta(days=32))
+
+        def month_position(day):
+            return (day.year - first_month.year) * 12 + (day.month - first_month.month)
+
+        digital_months = (
+            Contribution.objects.filter(status='completed')
+            .filter(Q(paid_at__date__gte=first_month) | Q(paid_at__isnull=True, created_at__date__gte=first_month))
+            .annotate(month=TruncMonth(Coalesce('paid_at', 'created_at')))
+            .values('month')
+            .annotate(total=Sum('amount'), gifts=Count('id'))
+        )
+        for row in digital_months:
+            position = month_position(timezone.localtime(row['month']).date())
+            if 0 <= position < len(month_buckets):
+                month_buckets[position]['income'] += float(row['total'] or 0)
+                month_buckets[position]['gifts'] += row['gifts'] or 0
+
+        for row in (
+            CashContribution.objects.filter(received_on__gte=first_month)
+            .annotate(month=TruncMonth('received_on'))
+            .values('month')
+            .annotate(total=Sum('amount'), gifts=Count('id'))
+        ):
+            position = month_position(row['month'])
+            if 0 <= position < len(month_buckets):
+                month_buckets[position]['income'] += float(row['total'] or 0)
+                month_buckets[position]['gifts'] += row['gifts'] or 0
+
+        for row in (
+            Expenditure.objects.filter(expenditure_date__gte=first_month)
+            .annotate(month=TruncMonth('expenditure_date'))
+            .values('month')
+            .annotate(total=Sum('amount'))
+        ):
+            position = month_position(row['month'])
+            if 0 <= position < len(month_buckets):
+                month_buckets[position]['expense'] += float(row['total'] or 0)
+
+        # ── This year's budget against what has actually moved ───────────────
+        budget = ChurchBudget.objects.filter(year=today.year).first()
+        budget_block = {
+            'year': today.year,
+            'has_budget': budget is not None,
+            'income_target': float(budget.total_income) if budget else 0.0,
+            'expense_target': float(budget.total_expenses) if budget else 0.0,
+            'income_actual': income_ytd,
+            'expense_actual': expense_ytd,
+        }
+
+        # ── Where the church's money actually sits, by kind of account ───────
+        funds_by_type = {}
+        for account in accounts:
+            row = funds_by_type.setdefault(
+                account.account_type,
+                {'label': account.get_account_type_display(), 'total': 0.0, 'count': 0},
+            )
+            row['total'] += float(account.balance)
+            row['count'] += 1
+        funds_composition = sorted(funds_by_type.values(), key=lambda row: -row['total'])
+
         return Response({
-            'window_weeks': self.WINDOW_WEEKS,
+            'window_weeks': weeks_count,
+            'window_start': window_start.isoformat(),
             'as_of': today.isoformat(),
             'series': buckets,
+            'previous': {
+                'income': previous_income,
+                'expense': previous_expense,
+                'start': previous_start.isoformat(),
+                'end': previous_end.isoformat(),
+            },
+            'monthly': month_buckets,
+            'budget': budget_block,
             'funds': {
                 'total_liquidity': float(
                     accounts.aggregate(total=Sum('balance'))['total'] or 0
                 ),
+                'by_type': funds_composition,
                 'accounts': [
                     {
                         'id': account.id,
@@ -2129,8 +2326,9 @@ class DashboardAnalyticsView(APIView):
             'giving': {
                 'this_month': income_between(month_start, today),
                 'last_month': income_between(last_month_start, last_month_end),
-                'this_year': income_between(year_start, today),
+                'this_year': income_ytd,
                 'window_total': window_income,
+                'givers': giver_stats,
                 'by_account': [
                     {'label': label, 'total': total}
                     for label, total in sorted(purpose_totals.items(), key=lambda item: -item[1])[:self.TOP_ACCOUNTS]
@@ -2142,8 +2340,12 @@ class DashboardAnalyticsView(APIView):
             },
             'expenditure': {
                 'this_month': expense_between(month_start, today),
-                'this_year': expense_between(year_start, today),
+                'this_year': expense_ytd,
                 'window_total': window_expense,
+                'by_account': [
+                    {'label': label, 'total': total}
+                    for label, total in sorted(expense_account_totals.items(), key=lambda item: -item[1])
+                ],
                 'by_category': [
                     {'label': label, 'total': total}
                     for label, total in sorted(expense_totals.items(), key=lambda item: -item[1])[:self.TOP_ACCOUNTS]
