@@ -27,6 +27,8 @@ export type MemberUser = {
   gifts?: string;
   disability?: string;
   is_disfellowshipped?: boolean;
+  /** True only for the installation's owner account, which is not a member. */
+  is_superuser?: boolean;
 };
 
 type MemberFilter = "all" | "members" | "friends" | "ex_members";
@@ -1378,14 +1380,12 @@ export function UserManagement() {
     setOpenActionMenuId(id);
   };
 
-  const isSuperadminAccount = (member: MemberUser) => {
-    const username = (member.username || "").toLowerCase().replace(/[-_\s]/g, "");
-    const roleNames = (member.roles || []).map((role) => role.toLowerCase().replace(/[-_\s]/g, ""));
-    const role = (member.role || "").toLowerCase().replace(/[-_\s]/g, "");
-    return username === "superadmin" || role === "superadmin" || roleNames.includes("superadmin");
-  };
-
-  const visibleMembers = members.filter((member) => !isSuperadminAccount(member));
+  // The API already leaves system accounts out of the roster, so this is the
+  // render-side half of that rule: an account flagged as the installation's
+  // owner is never a member row. (It used to guess from the username being
+  // literally "superadmin", which missed the real owner account and put it
+  // among the congregation.)
+  const visibleMembers = members.filter((member) => !member.is_superuser);
 
   const matchesMemberFilter = (member: MemberUser) => {
     if (memberFilter === "friends") return member.account_type === "friend" && !member.is_disfellowshipped;

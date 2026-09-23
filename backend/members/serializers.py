@@ -76,6 +76,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'gifts',
             'disability',
             'is_disfellowshipped',
+            # The installation's owner account is not a member; the roster
+            # endpoints filter it out and the clients use this to be sure.
+            'is_superuser',
         )
 
 

@@ -3566,7 +3566,15 @@ class UserManagementView(generics.ListCreateAPIView):
     serializer_class = UserDetailSerializer
 
     def get_queryset(self):
-        return User.objects.all().order_by('-date_joined')
+        """The church's roster — never the deployment's system accounts.
+
+        A superuser is the owner of the installation, not a member: it holds no
+        church office (and may hold no member profile at all), so listing it here
+        put an account nobody can pastor among the congregation. Django's
+        ``is_staff``/``is_superuser`` flags are only ever set for those system
+        accounts — a church office is a role code, not a staff flag.
+        """
+        return User.objects.filter(is_superuser=False).order_by('-date_joined')
 
     def create(self, request, *args, **kwargs):
         profile = getattr(request.user, 'member_profile', None)
@@ -3831,7 +3839,13 @@ class MemberListPDFView(APIView):
         except Exception:
             church_name = "SDA Church"
 
-        users = User.objects.select_related('member_profile').order_by('first_name', 'last_name')
+        # The printed roster is the same list as the Users screen: system
+        # accounts stay out of it here too.
+        users = (
+            User.objects.filter(is_superuser=False)
+            .select_related('member_profile')
+            .order_by('first_name', 'last_name')
+        )
         members_data = []
         friend_count = 0
         for u in users:

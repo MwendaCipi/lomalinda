@@ -2323,3 +2323,37 @@ class DeaconateInventoryAPITests(APITestCase):
 
         self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self._register().status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MemberRosterSystemAccountTests(APITestCase):
+    """The member roster lists the congregation, not the deployment's owner."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user('roster.admin', 'roster.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.member = User.objects.create_user('roster.member', 'roster.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        # The owner account: a superuser, and (like the live one) it even has a
+        # member profile, which is why it used to show up as an ordinary member.
+        self.owner = User.objects.create_superuser('owner.account', 'owner@example.com', 'OwnerPass#2026')
+        MemberProfile.objects.create(user=self.owner, role='member', roles='member')
+        self.client.force_authenticate(self.admin)
+
+    def test_users_list_leaves_out_the_superuser_account(self):
+        response = self.client.get('/api/members/users/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [row['username'] for row in response.data]
+        self.assertIn('roster.member', usernames)
+        self.assertIn('roster.admin', usernames)
+        self.assertNotIn('owner.account', usernames)
+
+    def test_printed_member_roster_leaves_out_the_superuser_account(self):
+        response = self.client.get('/api/members/users/list-pdf/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        # Generated names are embedded uncompressed, so the PDF text is searchable.
+        pdf_text = response.content.decode('latin-1')
+        self.assertNotIn('owner.account', pdf_text)
+        self.assertNotIn('owner@example.com', pdf_text)

@@ -944,10 +944,14 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     st = get_pdf_styles()
     story = []
 
-    # Header
-    story.append(Paragraph(church_name.upper(), st["church_name"]))
+    # Header — every other generator titles its page with the "title" style;
+    # this one asked for a "church_name" style that does not exist, so the whole
+    # member directory raised KeyError and returned 500 instead of a PDF.
+    story.append(Paragraph(church_name.upper(), st["title"]))
     story.append(Spacer(1, 4))
-    story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["report_title"]))
+    # The directory heading takes the same "subtitle" style the contribution
+    # statement and meeting packet use for theirs.
+    story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["subtitle"]))
     story.append(Spacer(1, 4))
     generated_date = datetime.now().strftime("%d %B %Y, %I:%M %p")
     story.append(Paragraph(f"Generated: {generated_date}", st["meta"]))
