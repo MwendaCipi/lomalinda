@@ -2120,3 +2120,60 @@ class InvitationExpiryTests(APITestCase):
         stale.refresh_from_db()
         self.assertEqual(stale.status, 'pending')
         self.assertGreater(stale.expires_at, timezone.now())
+
+
+class AnnouncementEventDatesAPITests(APITestCase):
+    """Event windows date an announcement; the nearest event leads the feed."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user('event.admin', 'event.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.client.force_authenticate(self.admin)
+
+    def _announcement(self, title, **dates):
+        from .models import Announcement
+        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members', **dates)
+
+    def test_listing_prioritises_the_event_closest_in_time(self):
+        today = timezone.localdate()
+        self._announcement('General notice')
+        self._announcement('Happening now', event_date_from=today - timedelta(days=1), event_date_to=today + timedelta(days=1))
+        self._announcement('Yesterday social', event_date_from=today - timedelta(days=1), event_date_to=today - timedelta(days=1))
+        self._announcement('Next week program', event_date_from=today + timedelta(days=7), event_date_to=today + timedelta(days=7))
+        self._announcement('Last month trip', event_date_from=today - timedelta(days=30), event_date_to=today - timedelta(days=30))
+        self._announcement('Far camp', event_date_from=today + timedelta(days=100), event_date_to=today + timedelta(days=102))
+
+        response = self.client.get('/api/members/announcements/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row['title'] for row in response.data],
+            ['Happening now', 'Yesterday social', 'Next week program', 'Last month trip', 'Far camp', 'General notice'],
+        )
+
+    def test_event_dates_and_link_round_trip(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Town hall',
+            'text': 'Join us for the town hall.',
+            'visibility': 'members',
+            'sharing_option': 'site',
+            'href': 'https://meet.example.com/town-hall',
+            'event_date_from': '2026-10-01',
+            'event_date_to': '2026-10-02',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['href'], 'https://meet.example.com/town-hall')
+        self.assertEqual(response.data['event_date_from'], '2026-10-01')
+        self.assertEqual(response.data['event_date_to'], '2026-10-02')
+
+    def test_event_window_cannot_end_before_it_starts(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Backwards',
+            'text': 'Dates the wrong way round.',
+            'visibility': 'members',
+            'sharing_option': 'site',
+            'event_date_from': '2026-10-05',
+            'event_date_to': '2026-10-01',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

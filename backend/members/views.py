@@ -1214,6 +1214,34 @@ class AnnouncementView(generics.ListCreateAPIView):
             return queryset
         return queryset.filter(visibility__in=['public', 'all'])
 
+    def list(self, request, *args, **kwargs):
+        """Announcements about events lead, nearest event first.
+
+        An announcement carrying an event window sorts by how close that
+        window sits to today (0 while it is running), so the fellowship and
+        communications feeds surface what is happening next instead of only
+        what was posted most recently. Announcements without an event keep
+        their posting order (newest first) at the end.
+        """
+        queryset = list(self.filter_queryset(self.get_queryset()))
+        today = timezone.localdate()
+
+        def distance(announcement):
+            start = announcement.event_date_from or announcement.event_date_to
+            end = announcement.event_date_to or announcement.event_date_from
+            if start is None:
+                return None
+            if start <= today <= end:
+                return 0
+            return (start - today).days if today < start else (today - end).days
+
+        queryset.sort(key=lambda a: a.created_at, reverse=True)
+        dated = [a for a in queryset if distance(a) is not None]
+        # Stable sort: ties inside one distance band keep newest posting first.
+        dated.sort(key=distance)
+        undated = [a for a in queryset if distance(a) is None]
+        return Response(self.get_serializer(dated + undated, many=True).data)
+
     def perform_create(self, serializer):
         if not can_manage_announcements(self.request.user):
             from rest_framework.exceptions import PermissionDenied

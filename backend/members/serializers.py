@@ -305,9 +305,17 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Announcement text must be 500 characters or fewer.')
         return value
 
+    def validate(self, attrs):
+        instance = self.instance
+        start = attrs.get('event_date_from', instance.event_date_from if instance else None)
+        end = attrs.get('event_date_to', instance.event_date_to if instance else None)
+        if start and end and end < start:
+            raise serializers.ValidationError('The event cannot end before it starts.')
+        return attrs
+
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at')
 
 

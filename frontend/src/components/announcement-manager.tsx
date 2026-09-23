@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { RecordList } from "./record-list";
 
@@ -14,7 +15,9 @@ type Announcement = {
   id: number;
   title: string;
   text: string;
-  href?: string;
+  href?: string | null;
+  event_date_from?: string | null;
+  event_date_to?: string | null;
   attachment?: string | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
@@ -40,6 +43,9 @@ export function AnnouncementManager() {
     sharing_option: "site",
     action_prompt: "",
     expires_at: "",
+    href: "",
+    event_date_from: "",
+    event_date_to: "",
   });
   const [attachment, setAttachment] = useState<File | null>(null);
   const [message, setMessage] = useState("");
@@ -104,6 +110,9 @@ export function AnnouncementManager() {
       sharing_option: "site",
       action_prompt: "",
       expires_at: "",
+      href: "",
+      event_date_from: "",
+      event_date_to: "",
     });
     setAttachment(null);
     setMessage("");
@@ -129,10 +138,12 @@ export function AnnouncementManager() {
     try {
       const payload = new FormData();
       Object.entries(form).forEach(([key, value]) => {
-        if (key === "expires_at" && !value) return;
+        // Optional fields are omitted when blank so the row keeps a real null
+        // (an empty string would fail date parsing server-side).
+        const optional = key === "expires_at" || key === "href" || key === "event_date_from" || key === "event_date_to";
+        if (optional && !value) return;
         payload.append(key, value);
       });
-      payload.append("href", "");
       if (attachment) payload.append("attachment", attachment);
       const response = await fetch(`${API_URL}/api/members/announcements/`, {
         method: "POST",
@@ -257,6 +268,18 @@ export function AnnouncementManager() {
                     </span>
                   )}
                 </div>
+                {eventLabel(item) && (
+                  <p className="border-t border-[#eeeae2] pt-2 text-[10px] font-semibold text-[#b36b3c]">
+                    Event: {eventLabel(item)}
+                  </p>
+                )}
+                {item.href && (
+                  <p className="text-[10px]">
+                    <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
+                      Open link ↗
+                    </a>
+                  </p>
+                )}
                 {item.expires_at && (
                   <p className="border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
                     Display until: {new Date(`${item.expires_at}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
@@ -307,6 +330,14 @@ export function AnnouncementManager() {
                       {item.expires_at
                         ? new Date(`${item.expires_at}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })
                         : "—"}
+                      {eventLabel(item) && (
+                        <span className="mt-0.5 block text-[11px] font-semibold text-[#b36b3c]">Event {eventLabel(item)}</span>
+                      )}
+                      {item.href && (
+                        <a href={item.href} target="_blank" rel="noopener noreferrer" className="mt-0.5 block text-[11px] font-semibold text-[#b36b3c] underline underline-offset-2">
+                          Open link ↗
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <button
@@ -410,6 +441,17 @@ export function AnnouncementManager() {
                 </select>
               </label>
 
+              <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                Link (optional)
+                <input
+                  type="url"
+                  value={form.href}
+                  onChange={(e) => setForm({ ...form, href: e.target.value })}
+                  placeholder="https://… — meeting or registration link"
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+
               <label className="block text-xs font-semibold text-[#26352f]">
                 Share Announcement Via *<span className="font-normal text-[#617068]"> (select one or more)</span>
                 <div className="mt-1 relative" ref={sharingDropdownRef}>
@@ -474,6 +516,27 @@ export function AnnouncementManager() {
                   <option value="local_church_budget">Local Church Budget contribution</option>
                   <option value="respond">Response</option>
                 </select>
+              </label>
+
+              <label className="block text-xs font-semibold text-[#26352f]">
+                Event date — from
+                <input
+                  type="date"
+                  value={form.event_date_from}
+                  onChange={(e) => setForm({ ...form, event_date_from: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-[#26352f]">
+                Event date — to
+                <input
+                  type="date"
+                  min={form.event_date_from || undefined}
+                  value={form.event_date_to}
+                  onChange={(e) => setForm({ ...form, event_date_to: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">

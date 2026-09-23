@@ -24,18 +24,27 @@ type RecentEntry = {
   created_at: string;
 };
 
+type TreasuryAccount = {
+  id: number;
+  name: string;
+  account_number: string;
+  account_type: string;
+  account_type_display: string;
+  balance: number | string;
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const money = (n: number) =>
   `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
-const FINANCIAL_CATEGORIES: { key: string; label: string; color: string }[] = [
-  { key: "tithe",           label: "Tithes",                 color: "#26352f" },
-  { key: "local_budget",    label: "Local Church Budget",    color: "#b36b3c" },
-  { key: "offering",        label: "Combined Offering",      color: "#617068" },
-  { key: "building_fund",   label: "Building Fund",          color: "#4a6f62" },
-  { key: "welfare",         label: "Welfare Fund",           color: "#7a8c56" },
-  { key: "mission",         label: "Mission Fund",           color: "#8f6a3a" },
-];
+// Card accent per treasury account type — the accounts themselves come live
+// from admin › Treasury Accounts, nothing about them is hardcoded here.
+const ACCOUNT_COLORS: Record<string, string> = {
+  bank: "#26352f",
+  mobile_money: "#b36b3c",
+  cash: "#617068",
+  other: "#7a8c56",
+};
 
 // Pulse dot for live indicator
 function LiveDot({ active = false }: { active?: boolean }) {
@@ -51,19 +60,25 @@ function LiveDot({ active = false }: { active?: boolean }) {
 export default function LiveReportsPage() {
   const [stats, setStats] = useState<LiveStat[]>([]);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
+  const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   async function loadData() {
     try {
-      const [statsRes, recentRes] = await Promise.all([
+      const token = localStorage.getItem("access_token");
+      const [statsRes, recentRes, accountsRes] = await Promise.all([
         fetch(`${API_URL}/api/members/contributions/live-stats/`),
         fetch(`${API_URL}/api/members/contributions/recent/`),
+        fetch(`${API_URL}/api/members/treasury/accounts/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
       if (recentRes.ok) setRecent(await recentRes.json());
+      if (accountsRes.ok) setAccounts(await accountsRes.json());
       setLastUpdated(new Date());
     } catch {
       // silently retry
@@ -82,6 +97,7 @@ export default function LiveReportsPage() {
 
   // Totals
   const grandTotal = stats.reduce((s, c) => s + c.total, 0);
+  const liquidityTotal = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
 
   return (
     <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
@@ -96,7 +112,7 @@ export default function LiveReportsPage() {
               Live Reports
             </h1>
             <p className="mt-3 text-base leading-7 text-[#617068]">
-              Real-time contribution tracking across all giving categories.
+              Real-time giving and treasury account liquidity.
             </p>
           </div>
 
@@ -122,38 +138,51 @@ export default function LiveReportsPage() {
           </div>
         )}
 
-        {/* Per-Category Cards */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {loading
-            ? Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-2xl border border-[#dfdbd1] bg-white p-6 h-28"
-                />
-              ))
-            : FINANCIAL_CATEGORIES.map((cat) => {
-                const stat = stats.find((s) => s.category === cat.key);
-                return (
+        {/* Account Liquidity — live balances from admin › Treasury Accounts */}
+        <div className="mt-6">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Account Liquidity</h2>
+              <p className="text-sm text-[#617068]">Live balances of the church&apos;s treasury accounts.</p>
+            </div>
+            {!loading && accounts.length > 0 && (
+              <p className="text-2xl font-bold text-[#26352f]">{money(liquidityTotal)}</p>
+            )}
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => (
                   <div
-                    key={cat.key}
+                    key={i}
+                    className="animate-pulse rounded-2xl border border-[#dfdbd1] bg-white p-6 h-28"
+                  />
+                ))
+              : accounts.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-8 text-center text-sm text-[#617068]">
+                    No treasury accounts have been configured yet.
+                  </div>
+                )
+              : accounts.map((account) => (
+                  <div
+                    key={account.id}
                     className="rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm"
                   >
                     <div className="flex items-center justify-between">
                       <span
                         className="block h-2 w-2 rounded-full"
-                        style={{ backgroundColor: cat.color }}
+                        style={{ backgroundColor: ACCOUNT_COLORS[account.account_type] ?? ACCOUNT_COLORS.other }}
                       />
                       <span className="text-xs font-semibold text-[#617068]">
-                        {stat?.count ?? 0} contributions
+                        {account.account_type_display}
                       </span>
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-[#617068]">{cat.label}</p>
+                    <p className="mt-3 text-sm font-semibold text-[#617068]">{account.name}</p>
                     <p className="mt-1 text-2xl font-bold text-[#26352f]">
-                      {money(stat?.total ?? 0)}
+                      {money(Number(account.balance || 0))}
                     </p>
                   </div>
-                );
-              })}
+                ))}
+          </div>
         </div>
 
         {/* Recent Activity Feed */}

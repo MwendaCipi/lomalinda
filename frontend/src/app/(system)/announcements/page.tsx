@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { eventLabel } from "@/lib/announcement-dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 function getQuarterStartDate() {
@@ -21,6 +22,9 @@ type Announcement = {
   id: number;
   title: string;
   text: string;
+  href?: string | null;
+  event_date_from?: string | null;
+  event_date_to?: string | null;
   attachment?: string | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
@@ -118,6 +122,19 @@ export default function AnnouncementsPage() {
                           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
                           <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(announcement.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
                           <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148] capitalize">{announcement.visibility}</span>
+                          {eventLabel(announcement) && (
+                            <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">Event: {eventLabel(announcement)}</span>
+                          )}
+                          {announcement.href && (
+                            <a
+                              href={announcement.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-full bg-[#26352f] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+                            >
+                              Open link ↗
+                            </a>
+                          )}
                           {hasContributionAction && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Contribution Action</span>}
                           {announcement.action_type === "respond" && <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Response Action</span>}
                           {announcement.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${announcement.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}

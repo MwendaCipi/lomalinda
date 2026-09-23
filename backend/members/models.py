@@ -207,6 +207,8 @@ class Announcement(models.Model):
     action_prompt = models.CharField(max_length=255, blank=True, help_text="Optional prompt for pledge or response")
     published = models.BooleanField(default=True)
     expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
+    event_date_from = models.DateField(null=True, blank=True, help_text="First day of the event this announcement is about")
+    event_date_to = models.DateField(null=True, blank=True, help_text="Last day of that event; same as from, or blank, for a single day")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
