@@ -64,8 +64,12 @@ const statusBadge = (s: string) => {
 function GivePageContent() {
   const searchParams = useSearchParams();
   const rawPurposeParam = searchParams.get("purpose");
-  // No default: the giver must pick a purpose ("-- select --" placeholder).
-  const normalizedPurpose = rawPurposeParam ? getMinistryGivingPurpose(rawPurposeParam) : "";
+  const linkedPurpose = (rawPurposeParam ?? "").trim();
+  // No default: the giver must pick a purpose ("-- select --" placeholder). A
+  // ministry-style name falls through the ministry mapping below; an exact
+  // account name is kept as it is, so a link to "Local Church Budget" cannot
+  // be turned into the differently-named "Budget".
+  const normalizedPurpose = linkedPurpose ? getMinistryGivingPurpose(linkedPurpose) : "";
 
   const [purpose, setPurpose] = useState(normalizedPurpose);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
@@ -222,18 +226,23 @@ function GivePageContent() {
    * list — a ministry account, say. Without this the picker would fall back to
    * its first option and the giver would support the wrong account entirely.
    */
-  const ensureLinkedPurpose = (list: string[]) =>
-    normalizedPurpose && !list.includes(normalizedPurpose) ? [normalizedPurpose, ...list] : list;
+  const ensureLinkedPurpose = (list: string[], wanted: string) =>
+    wanted && !list.includes(wanted) ? [wanted, ...list] : list;
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/giving-purposes/`)
       .then((response) => (response.ok ? response.json() : []))
       .then((data: { name: string }[]) => {
         const apiNames = data.map((item) => item.name);
-        setPurposes(ensureLinkedPurpose(apiNames.length ? apiNames : defaultPurposes));
+        const published = apiNames.length ? apiNames : defaultPurposes;
+        const exact = linkedPurpose
+          ? published.find((name) => name.toLowerCase() === linkedPurpose.toLowerCase())
+          : undefined;
+        if (exact) setPurpose(exact);
+        setPurposes(ensureLinkedPurpose(published, exact ?? normalizedPurpose));
       })
-      .catch(() => setPurposes(ensureLinkedPurpose(defaultPurposes)));
-  }, [normalizedPurpose]);
+      .catch(() => setPurposes(ensureLinkedPurpose(defaultPurposes, normalizedPurpose)));
+  }, [linkedPurpose, normalizedPurpose]);
 
   async function submitGiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
