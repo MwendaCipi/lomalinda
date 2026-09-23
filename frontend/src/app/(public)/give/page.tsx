@@ -120,7 +120,8 @@ function GivePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Signed-in givers get their name filled in for them; typing still wins.
+  // Signed-in givers get their name and account email filled in for them; the
+  // name stays editable, the email is the account's own and is locked in the form.
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
@@ -130,6 +131,7 @@ function GivePageContent() {
         if (!me) return;
         const full = `${me.first_name || ""} ${me.last_name || ""}`.trim() || me.username || "";
         setDonorName((current) => (current ? current : full));
+        setDonorEmail((current) => (current ? current : me.email || ""));
       })
       .catch(() => {});
   }, []);
@@ -485,18 +487,19 @@ function GivePageContent() {
                       {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* On a phone the two actions split the row evenly. */}
+                  <div className="flex w-full items-center gap-2 sm:w-auto">
                     <button
                       type="button"
                       onClick={handlePrintMyReport}
-                      className="rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] sm:flex-none"
                     >
                       🖨️ Print My Report
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowGiveModal(true)}
-                      className="rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] sm:flex-none"
                     >
                       Give Now
                     </button>
@@ -554,7 +557,49 @@ function GivePageContent() {
                 </div>
               )}
 
-              {/* 1. Giving Account & Method of Giving */}
+              {/* 1. Who is giving — asked first, and prefilled for a signed-in
+                  member. The email is the account's own and is not retyped here:
+                  receipts only go to a verified address. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block text-sm font-medium text-[#26352f]">
+                  Your name
+                  <input
+                    value={donorName}
+                    onChange={(event) => setDonorName(event.target.value)}
+                    placeholder="Full name"
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                  />
+                </label>
+
+                {signedIn ? (
+                  <label className="block text-sm font-medium text-[#26352f]">
+                    Email
+                    <input
+                      type="email"
+                      value={donorEmail}
+                      readOnly
+                      aria-readonly="true"
+                      title="Receipts go to the email on your church account."
+                      className="mt-2 w-full cursor-not-allowed rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm text-[#617068] outline-none"
+                    />
+                    <span className="mt-1 block text-[11px] font-normal text-[#617068]">
+                      {donorEmail
+                        ? "Your receipt goes to your account email."
+                        : "Your account has no email address, so no receipt can be sent."}
+                    </span>
+                  </label>
+                ) : (
+                  <div className="flex flex-col justify-end pb-1 text-[11px] font-normal leading-relaxed text-[#617068]">
+                    Receipts are only emailed to the verified address on a member&apos;s account.{" "}
+                    <Link href="/login?next=/give" className="font-semibold text-[#b36b3c] hover:underline">
+                      Sign in
+                    </Link>{" "}
+                    and this field fills itself in.
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Giving Account & Method of Giving */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block text-sm font-medium text-[#26352f]">
                   Giving account
@@ -588,7 +633,7 @@ function GivePageContent() {
                 </label>
               </div>
 
-              {/* 2. Method-Specific Fields & Details */}
+              {/* 3. Method-Specific Fields & Details */}
               {methodOfGiving === "mpesa" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <label className="block text-sm font-medium text-[#26352f]">
@@ -689,31 +734,6 @@ function GivePageContent() {
                   </div>
                 </div>
               )}
-              {/* 3. Name & Email Row — the name rides the initiation context so
-                  the callback records who gave; signed-in givers see it prefilled. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Your name
-                  <input
-                    value={donorName}
-                    onChange={(event) => setDonorName(event.target.value)}
-                    placeholder="Full name"
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                  />
-                </label>
-
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Email
-                  <input
-                    type="email"
-                    placeholder="Email for contribution receipt"
-                    value={donorEmail}
-                    onChange={(event) => setDonorEmail(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                  />
-                </label>
-              </div>
-
               <button
                 disabled={loading}
                 className="mt-6 w-full rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm sm:text-base font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
