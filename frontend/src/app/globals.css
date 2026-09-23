@@ -48,10 +48,14 @@ html:has(.authenticated-giving-page) .authenticated-public-shell {
   height: calc(100vh - 4rem);
   height: calc(100dvh - 4rem);
 }
-html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24 {
-  /* Exactly the 57px mobile tab bar — the pinned action buttons sit on it
-     with no dead space between the panel and the bottom navigation. */
-  padding-bottom: 3.5625rem;
+/* On phones the tab bar is the only thing below these panels, so the shell
+   reserves exactly its 57px: a pinned footer bar touches the navigation
+   instead of floating above it. (Desktop keeps pb-0 — there is no bar.) */
+@media (max-width: 767px) {
+  html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24,
+  html:has(.administration-workspace) .app-shell {
+    padding-bottom: 3.5625rem;
+  }
 }
 html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {
   overflow: hidden;
@@ -68,9 +72,6 @@ html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-chil
 html:has(.administration-workspace) .app-shell {
   height: calc(100vh - 4rem);
   height: calc(100dvh - 4rem);
-  /* Same flush reserve as the giving page: the pinned footer bar of the
-     Users panel touches the tab bar instead of floating above it. */
-  padding-bottom: 3.5625rem;
 }
 
 /* Phones: these workspaces are app-like at every width, so the document is
