@@ -32,10 +32,22 @@ body:has(.authenticated-giving-page) {
   height: 100%;
 }
 
-/* Landing-page section cards do not belong in the authenticated versions of
-   About, Materials, and Giving; those pages use the original sidebars instead. */
-.authenticated-public-shell .public-section-nav {
-  display: none;
+/* From lg up the shell shows the page's own sidebar, so the landing-page
+   section cards would be a duplicate. On phones there is no sidebar at all —
+   the same cards are the page's only way to reach its other destinations — so
+   they stay visible there. */
+@media (min-width: 1024px) {
+  .authenticated-public-shell .public-section-nav {
+    display: none;
+  }
+}
+
+/* The giving page is a pinned app panel at every width; its section cards would
+   sit below the locked viewport, so they stay out of the way on phones too. */
+@media (max-width: 1023px) {
+  html:has(.authenticated-giving-page) .authenticated-public-shell .public-section-nav {
+    display: none;
+  }
 }
 
 /* The giving page is a fixed panel at every width. The shell itself needs a

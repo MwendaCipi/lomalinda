@@ -2,16 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CreditCard, Target, BarChart3, TrendingUp, ChevronRight, FileText, Gift } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
-const supportLinks = [
-  { href: "/give", label: "Money Giving", icon: CreditCard },
-  { href: "/support/in-kind", label: "In-Kind Giving", icon: Gift },
-  { href: "/support/campaigns", label: "Fund Drives", icon: Target },
-  { href: "/support/budget", label: "Church Budget", icon: BarChart3 },
-  { href: "/support/reports", label: "Live Reports", icon: TrendingUp },
-  { href: "/support/periodical-reports", label: "Periodic Reports", icon: FileText },
-];
+import { stewardshipLinks } from "@/config/site-sections";
 
 export function SupportSidebar() {
   const pathname = usePathname();
@@ -29,7 +22,7 @@ export function SupportSidebar() {
         </div>
 
         <nav className="space-y-1.5">
-          {supportLinks.map((item) => {
+          {stewardshipLinks.map((item) => {
             // next.config sets trailingSlash: true, so live paths carry a
             // trailing slash ("/support/in-kind/") that would never equal
             // the bare href — compare without it.

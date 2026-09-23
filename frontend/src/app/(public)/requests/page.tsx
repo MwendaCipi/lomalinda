@@ -57,13 +57,15 @@ export default function RequestsPage() {
         </div>
       </section>
 
-      {/* The old Requests sidebar, now part of the page: the same five destinations. */}
+      {/* The old Requests sidebar, now part of the page: the same five destinations.
+          The shell's sidebar covers them from lg up; on phones this list is the
+          only way to reach visitation, dedication, membership and partnerships. */}
       <PublicSectionNav
         eyebrow="Get started"
         title="Every request, in one place"
         description="Prayer, visitation, dedication, membership and partnerships — open the one you need and we will take it from there."
         links={requestsAndCareLinks}
-        className={signedIn ? "hidden" : "border-t border-[#dfdbd1] bg-white/60"}
+        className={signedIn ? "lg:hidden" : "border-t border-[#dfdbd1] bg-white/60"}
       />
     </main>
   );

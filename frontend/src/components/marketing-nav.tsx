@@ -16,6 +16,14 @@ const marketingLinks = [
 ];
 
 /**
+ * The sign-in surfaces: what a visitor (or a signed-out member) sees first.
+ *
+ * These are the only public pages that keep the marketing header for someone
+ * holding a token — everywhere else a member must keep the app chrome.
+ */
+const signInPrefixes = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
+
+/**
  * Header for the public website (the marketing pages).
  *
  * Deliberately free of system chrome: no notifications bell, no account
@@ -36,13 +44,13 @@ export function MarketingNav() {
     setMenuOpen(false);
   }, [pathname]);
 
-  // Materials and giving are also destinations in the signed-in app. Keep the
-  // public landing-page header for visitors, but restore the app chrome when a
-  // member reaches either section from the system navigation.
-  if (
-    signedIn &&
-    (pathname.startsWith("/materials") || pathname.startsWith("/give") || pathname.startsWith("/about"))
-  ) {
+  // A signed-in member keeps the app chrome — header, account menu and, on a
+  // phone, the bottom tab bar — everywhere in the app. This used to test a
+  // list of the sections that happened to look app-like, so tapping the mobile
+  // Fellowship (/share) or Requests (/requests) tab dropped the tab bar and
+  // stranded the member on the marketing site with no way back. Inverting the
+  // test means a new public page cannot reintroduce that.
+  if (signedIn && !signInPrefixes.some((prefix) => pathname.startsWith(prefix))) {
     return <SiteNav />;
   }
 

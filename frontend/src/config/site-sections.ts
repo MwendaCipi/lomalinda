@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Baby,
+  BarChart3,
   Book,
   BookOpen,
   Building2,
@@ -18,6 +19,7 @@ import {
   Sparkles,
   Sprout,
   Target,
+  TrendingUp,
   Users,
 } from "lucide-react";
 
@@ -185,8 +187,14 @@ export const requestsAndCareLinks: SectionLink[] = [
 ];
 
 /**
- * Beside Stewardship & Support: how to give, what the church is raising for, and
- * the treasury's published figures. Shared by Giving and a fund drive's page.
+ * Stewardship & Support: how to give, what the church is raising for, and the
+ * treasury's published figures.
+ *
+ * This is the section's only list. It backs the Stewardship & Support sidebar,
+ * the mobile cards on the hub itself, the giving page, and a fund drive's page —
+ * those used to be hand-copied lists, which is how the mobile hub ended up
+ * showing a destination (Ideas & Suggestions) that had already moved to
+ * Fellowship while missing two that still belonged to it.
  */
 export const stewardshipLinks: SectionLink[] = [
   {
@@ -209,6 +217,27 @@ export const stewardshipLinks: SectionLink[] = [
     label: "Fund Drives",
     description: "Active fundraising campaigns and how far along they are.",
     icon: Target,
+  },
+  {
+    key: "budget",
+    href: "/support/budget",
+    label: "Church Budget",
+    description: "Published annual budgets and how departments plan to use them.",
+    icon: BarChart3,
+  },
+  {
+    key: "reports",
+    href: "/support/reports",
+    label: "Live Reports",
+    description: "Real-time, transparent tracking of contributions by category.",
+    icon: TrendingUp,
+  },
+  {
+    key: "periodical-reports",
+    href: "/support/periodical-reports",
+    label: "Periodic Reports",
+    description: "Weekly, monthly, quarterly and annual published statements.",
+    icon: FileText,
   },
 ];
 
