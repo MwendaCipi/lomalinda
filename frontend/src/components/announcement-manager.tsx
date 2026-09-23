@@ -38,7 +38,8 @@ export function AnnouncementManager() {
   const [form, setForm] = useState({
     title: "",
     text: "",
-    visibility: "public",
+    // Church announcements default to the congregation, not the wider web.
+    visibility: "members",
     action_type: "none",
     sharing_option: "site",
     action_prompt: "",
@@ -105,7 +106,7 @@ export function AnnouncementManager() {
     setForm({
       title: "",
       text: "",
-      visibility: "public",
+      visibility: "members",
       action_type: "none",
       sharing_option: "site",
       action_prompt: "",

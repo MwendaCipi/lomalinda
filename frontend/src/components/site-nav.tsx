@@ -493,7 +493,7 @@ export function SiteNav() {
                       >
                         <div className="flex items-center gap-2.5">
                           <HeartHandshake className="w-4 h-4 text-slate-500" />
-                          <span>Give / Tithes &amp; Offerings</span>
+                          <span>Give / Money Giving</span>
                         </div>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                       </Link>

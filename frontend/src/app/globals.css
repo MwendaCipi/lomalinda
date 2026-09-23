@@ -49,7 +49,9 @@ html:has(.authenticated-giving-page) .authenticated-public-shell {
   height: calc(100dvh - 4rem);
 }
 html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24 {
-  padding-bottom: 4.25rem; /* 68px: the 57px tab bar + a whisker of air */
+  /* Exactly the 57px mobile tab bar — the pinned action buttons sit on it
+     with no dead space between the panel and the bottom navigation. */
+  padding-bottom: 3.5625rem;
 }
 html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {
   overflow: hidden;
@@ -66,6 +68,27 @@ html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-chil
 html:has(.administration-workspace) .app-shell {
   height: calc(100vh - 4rem);
   height: calc(100dvh - 4rem);
+  /* Same flush reserve as the giving page: the pinned footer bar of the
+     Users panel touches the tab bar instead of floating above it. */
+  padding-bottom: 3.5625rem;
+}
+
+/* Phones: these workspaces are app-like at every width, so the document is
+   locked here too — the page itself never scrolls, the record lists and card
+   areas inside scroll. (The lock above is desktop-only; without this the
+   browser could scroll the whole panel on a small viewport.) */
+@media (max-width: 767px) {
+  html:has(.administration-workspace),
+  body:has(.administration-workspace) {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  html:has(.administration-workspace) .administration-workspace {
+    overflow: hidden;
+    min-height: 0;
+    height: 100%;
+  }
 }
 html:has(.administration-workspace) .app-shell > * {
   min-height: 0;

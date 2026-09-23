@@ -3,7 +3,7 @@ import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 
 const supportCategories = [
   {
-    title: "Tithes & Offerings",
+    title: "Money Giving",
     description: "Give tithes, offerings, ministry support, building funds, or special pledges via M-Pesa, Card, or cash.",
     href: "/give",
     icon: (
@@ -77,7 +77,7 @@ export default function SupportHubPage() {
               </p>
               <div className="mt-6 flex gap-3">
                 <Link href="/give" className="rounded-full bg-[#b36b3c] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#96552e]">
-                  Give Tithes &amp; Offerings
+                  Give Now
                 </Link>
                 <Link href="/support/reports" className="rounded-full border border-white/30 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/10">
                   Live Reports

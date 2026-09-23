@@ -316,7 +316,7 @@ function GivePageContent() {
           <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
             {/* Hidden on phones: vertical space there belongs to the givings list. */}
             <h1 className="mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block">
-              Tithes &amp; Offerings
+              Money Giving
             </h1>
 
             {/* ── My Givings (signed-in members) ── */}

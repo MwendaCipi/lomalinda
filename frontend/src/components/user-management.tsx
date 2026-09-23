@@ -1519,15 +1519,38 @@ export function UserManagement() {
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <div className="flex w-full items-center gap-2 sm:w-auto">
+            {/* Phones keep one compact popover; desktop has room for the two
+                status filters as separate controls side by side. */}
             <select
               value={invitationFilter}
               onChange={(e) => setInvitationFilter(e.target.value as InvitationFilter)}
-              className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+              className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none md:hidden"
               aria-label="Account confirmation filter"
             >
               <option value="confirmed">Confirmed</option>
               <option value="pending">Pending</option>
             </select>
+            <div
+              className="hidden h-[38px] shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 md:flex"
+              role="group"
+              aria-label="Account confirmation filter"
+            >
+              {(["confirmed", "pending"] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setInvitationFilter(key)}
+                  className={`h-8 rounded-lg px-3 text-xs font-semibold capitalize transition ${
+                    invitationFilter === key
+                      ? "bg-[#26352f] text-white shadow-sm"
+                      : "text-[#617068] hover:text-[#26352f]"
+                  }`}
+                >
+                  {key}
+                  {key === "pending" && pendingInvitations.length > 0 ? ` (${pendingInvitations.length})` : ""}
+                </button>
+              ))}
+            </div>
             {invitationFilter === "confirmed" && (
               <select
                 value={memberFilter}
