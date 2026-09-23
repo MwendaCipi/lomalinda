@@ -9,7 +9,7 @@ from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
-    GivingPurpose, InKindContribution, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
+    GivingPurpose, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
@@ -888,3 +888,68 @@ class ExpenditureSerializer(serializers.ModelSerializer):
         if obj.recorded_by:
             return f"{obj.recorded_by.first_name} {obj.recorded_by.last_name}".strip() or obj.recorded_by.username
         return ''
+
+
+class InventoryMovementSerializer(serializers.ModelSerializer):
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+    state_after_display = serializers.CharField(source='get_state_after_display', read_only=True)
+
+    class Meta:
+        model = InventoryMovement
+        # The item comes from the URL, so it is never written through this serializer.
+        fields = (
+            'id', 'item', 'action', 'action_display', 'moved_by', 'destination', 'notes',
+            'state_after', 'state_after_display', 'created_at',
+        )
+        read_only_fields = ('id', 'item', 'created_at')
+
+    def validate_moved_by(self, value):
+        if not (value or '').strip():
+            raise serializers.ValidationError('Name the officer or department responsible.')
+        return value.strip()
+
+    def validate(self, attrs):
+        if attrs.get('action') == 'state_change' and not attrs.get('state_after'):
+            raise serializers.ValidationError(
+                {'state_after': 'Choose the new condition for a state change.'}
+            )
+        return attrs
+
+
+class InventoryItemSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    state_display = serializers.CharField(source='get_state_display', read_only=True)
+    # Annotated by the list view; falls back to 0 when it was not annotated.
+    movement_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = InventoryItem
+        fields = (
+            'id', 'name', 'tag_number', 'category', 'category_display', 'location', 'quantity',
+            'state', 'state_display', 'assigned_to', 'checked_out_at', 'notes',
+            'last_inspected_on', 'movement_count', 'created_at',
+        )
+        read_only_fields = ('id', 'created_at')
+
+    def validate_name(self, value):
+        name = (value or '').strip()
+        if not name:
+            raise serializers.ValidationError('Give the item a name.')
+        return name
+
+    def validate_quantity(self, value):
+        if value is None or value < 1:
+            raise serializers.ValidationError('Quantity must be at least 1.')
+        return value
+
+    def validate_tag_number(self, value):
+        """A tag identifies one item, so two items cannot share one."""
+        tag = (value or '').strip()
+        if not tag:
+            return ''
+        existing = InventoryItem.objects.filter(tag_number__iexact=tag)
+        if self.instance:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(f'Tag "{tag}" is already used by another item.')
+        return tag

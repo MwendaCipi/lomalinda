@@ -539,7 +539,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
-                    <span>Inventory &amp; Property</span>
+                    <span>Inventory</span>
                   </div>
                   {currentTab === "inventory" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </button>
@@ -554,7 +554,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
-                    <span>Inventory &amp; Property</span>
+                    <span>Inventory</span>
                   </div>
                   {currentTab === "inventory" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </Link>

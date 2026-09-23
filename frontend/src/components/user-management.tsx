@@ -815,6 +815,67 @@ function calculateDobFromAge(ageStr: string): string {
   return `${birthYear}-01-01`;
 }
 
+/** Invitation name with the email as the fallback when no name was captured. */
+function invitationName(invitation: InvitationRow): string {
+  return [invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email;
+}
+
+/** One status label + tone, so the table row and the phone card can never disagree. */
+function invitationStatusBadge(invitation: InvitationRow) {
+  const label =
+    invitation.status === "pending"
+      ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}`
+      : invitation.status === "accepted"
+        ? "Confirmed"
+        : invitation.status === "expired"
+          ? "Expired"
+          : "Withdrawn";
+  const tone =
+    invitation.status === "pending"
+      ? "bg-[#eef2ed] text-[#3d5148]"
+      : invitation.status === "accepted"
+        ? "bg-[#26352f] text-white"
+        : "bg-[#f0e6dc] text-[#96552c]";
+  return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${tone}`}>{label}</span>;
+}
+
+/** Copy link / Resend / Withdraw — identical in the table row and in the phone card. */
+function InvitationActions({
+  invitation,
+  onAction,
+}: {
+  invitation: InvitationRow;
+  onAction: (id: number, action: "resend" | "revoke") => void;
+}) {
+  return (
+    <>
+      {invitation.invite_url && (
+        <button
+          type="button"
+          onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")}
+          className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+        >
+          Copy link
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onAction(invitation.id, "resend")}
+        className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+      >
+        Resend
+      </button>
+      <button
+        type="button"
+        onClick={() => onAction(invitation.id, "revoke")}
+        className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]"
+      >
+        Withdraw
+      </button>
+    </>
+  );
+}
+
 export function UserManagement() {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1599,41 +1660,58 @@ export function UserManagement() {
 
       {/* ── Scrollable table area ── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 pb-2 custom-table-scrollbar sm:px-6">
+        {/* Pending invitations are a record list too — same table/cards pair as members. */}
         {invitationFilter === "pending" && (
-          <div className="space-y-3">
-            {pendingInvitations.length === 0 ? (
-              <div className="rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] p-8 text-center text-xs text-[#617068]">
-                No pending invitations found.
-              </div>
-            ) : (
-              pendingInvitations.map((invitation) => (
-                <div key={invitation.id} className="rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#26352f]">
-                        {[invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email}
-                      </p>
-                      <p className="truncate text-xs text-[#617068]">
-                        {invitation.email} · {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
-                      {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Confirmed" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
-                    </span>
+          <RecordList
+            rows={pendingInvitations}
+            loading={loading}
+            rowKey={(invitation) => invitation.id}
+            headers={[
+              { label: "#", className: "w-8" },
+              { label: "Name" },
+              { label: "Email" },
+              { label: "Role" },
+              { label: "Status" },
+              { label: "Actions", className: "text-right" },
+            ]}
+            loadingLabel="Loading invitations..."
+            tableEmpty="No pending invitations found."
+            cardsEmpty="No pending invitations found."
+            renderRow={(invitation, idx) => (
+              <tr key={invitation.id} className="hover:bg-[#f7f4ee]">
+                <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
+                <td className="py-3 font-semibold text-[#26352f]">{invitationName(invitation)}</td>
+                <td className="py-3 text-[#617068]">{invitation.email}</td>
+                <td className="py-3 text-[#617068]">
+                  {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
+                </td>
+                <td className="py-3">{invitationStatusBadge(invitation)}</td>
+                <td className="py-3 text-right">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <InvitationActions invitation={invitation} onAction={handleInviteAction} />
                   </div>
-                  {invitation.status !== "accepted" && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {invitation.invite_url && (
-                        <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">Copy link</button>
-                      )}
-                      <button type="button" onClick={() => handleInviteAction(invitation.id, "resend")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">Resend</button>
-                      <button type="button" onClick={() => handleInviteAction(invitation.id, "revoke")} className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]">Withdraw</button>
-                    </div>
-                  )}
-                </div>
-              ))
+                </td>
+              </tr>
             )}
-          </div>
+            renderCard={(invitation) => (
+              <div key={invitation.id} className="rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#26352f]">{invitationName(invitation)}</p>
+                    <p className="truncate text-xs text-[#617068]">
+                      {invitation.email} · {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
+                    </p>
+                  </div>
+                  {invitationStatusBadge(invitation)}
+                </div>
+                {invitation.status !== "accepted" && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <InvitationActions invitation={invitation} onAction={handleInviteAction} />
+                  </div>
+                )}
+              </div>
+            )}
+          />
         )}
 
         {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}

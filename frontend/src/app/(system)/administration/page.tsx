@@ -479,7 +479,9 @@ function AdministrationContent() {
 
             {/* Deaconate Ministry Manager */}
             {["inventory", "deaconate-rota", "deaconate-members", "deaconate-calendar"].includes(activeTab) && (
-              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
+              // The deaconate panels own their own scrolling (fixed filters, scrolling
+              // rows, fixed actions), so the page itself must not scroll.
+              <div className="h-full min-h-0">
                 <DeaconateManager
                   initialTab={
                     activeTab === "deaconate-rota"

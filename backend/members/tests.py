@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import Contribution, EnrollmentRequest, Invitation, MemberProfile, MpesaRefund, Testimony
+from .models import Contribution, EnrollmentRequest, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 
@@ -2217,3 +2217,109 @@ class LiveReportsEndpointsAPITests(APITestCase):
         self.assertEqual(response.data[0]['donor_name'], 'Fresh Cash Giver')
         self.assertEqual(response.data[1]['donor_name'], 'Older Giver')
         self.assertIsInstance(response.data[0]['amount'], float)
+
+
+class DeaconateInventoryAPITests(APITestCase):
+    """The deaconate property register: real records, and movements that stick."""
+
+    def setUp(self):
+        self.elder = User.objects.create_user('deacon.elder', 'deacon.elder@example.com', 'ElderPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.member = User.objects.create_user('plain.member', 'plain.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.client.force_authenticate(self.elder)
+
+    def _register(self, **overrides):
+        payload = {
+            'name': 'Yamaha Digital Piano P-125',
+            'tag_number': 'AV-PNO-01',
+            'category': 'electronics',
+            'location': 'Main Sanctuary Stage',
+            'quantity': 1,
+            'state': 'good',
+            'notes': 'Stage instrument.',
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/inventory/', payload, format='json')
+
+    def test_registering_an_item_persists_it_for_the_list(self):
+        created = self._register()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['category_display'], 'Electronics')
+        self.assertEqual(created.data['state_display'], 'Good')
+        self.assertEqual(created.data['movement_count'], 0)
+
+        listed = self.client.get('/api/members/inventory/')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(listed.data), 1)
+        self.assertEqual(listed.data[0]['tag_number'], 'AV-PNO-01')
+
+    def test_two_items_cannot_share_a_tag(self):
+        self.assertEqual(self._register().status_code, status.HTTP_201_CREATED)
+        clash = self._register(name='Second piano', tag_number='av-pno-01')
+        self.assertEqual(clash.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tag_number', clash.data)
+
+    def test_check_out_takes_custody_and_check_in_returns_it(self):
+        item_id = self._register().data['id']
+
+        checked_out = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+            'action': 'check_out',
+            'moved_by': 'Head Deacon John',
+            'destination': 'Fellowship Hall for Youth Rally',
+            'notes': 'Returned on Sabbath morning.',
+        }, format='json')
+
+        self.assertEqual(checked_out.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(checked_out.data['state'], 'in_use')
+        self.assertEqual(checked_out.data['assigned_to'], 'Head Deacon John')
+        self.assertEqual(checked_out.data['location'], 'Fellowship Hall for Youth Rally')
+        self.assertEqual(checked_out.data['movement_count'], 1)
+        self.assertEqual(checked_out.data['movement']['action_display'], 'Check Out')
+        self.assertEqual(InventoryMovement.objects.count(), 1)
+
+        returned = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+            'action': 'check_in',
+            'moved_by': 'Head Deacon John',
+        }, format='json')
+        self.assertEqual(returned.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(returned.data['state'], 'good')
+        self.assertEqual(returned.data['assigned_to'], '')
+        self.assertIsNone(returned.data['checked_out_at'])
+        self.assertEqual(returned.data['movement_count'], 2)
+
+    def test_state_change_records_the_reported_condition(self):
+        item_id = self._register().data['id']
+
+        response = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+            'action': 'state_change',
+            'moved_by': 'Deaconess Mary',
+            'state_after': 'needs_repair',
+            'notes': 'Two tables have loose leg brackets.',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['state'], 'needs_repair')
+        self.assertEqual(response.data['state_display'], 'Needs Repair')
+        # A condition report never moves the item out of its location.
+        self.assertEqual(response.data['location'], 'Main Sanctuary Stage')
+        self.assertEqual(response.data['assigned_to'], '')
+
+    def test_state_change_needs_the_new_condition(self):
+        item_id = self._register().data['id']
+
+        response = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+            'action': 'state_change',
+            'moved_by': 'Deaconess Mary',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('state_after', response.data)
+        self.assertEqual(InventoryMovement.objects.count(), 0)
+
+    def test_plain_members_cannot_read_or_write_the_register(self):
+        self.client.force_authenticate(self.member)
+
+        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._register().status_code, status.HTTP_403_FORBIDDEN)

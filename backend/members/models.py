@@ -915,6 +915,109 @@ class Expenditure(models.Model):
         return f"Expenditure: {self.title} (KES {self.amount})"
 
 
+class InventoryItem(models.Model):
+    """One piece of church property the deaconate keeps custody of.
+
+    The deaconate page used to hold its five sample items in a browser array,
+    so anything registered was gone on reload; these rows are the real records.
+    """
+
+    CATEGORY_CHOICES = [
+        ('audio_visual', 'Audio/Visual'),
+        ('furniture', 'Furniture'),
+        ('sacramental', 'Sacramental'),
+        ('kitchen', 'Kitchen'),
+        ('electronics', 'Electronics'),
+        ('general', 'General'),
+    ]
+    STATE_CHOICES = [
+        ('good', 'Good'),
+        ('in_use', 'In Use'),
+        ('needs_repair', 'Needs Repair'),
+        ('damaged', 'Damaged'),
+        ('retired', 'Retired'),
+    ]
+
+    name = models.CharField(max_length=200)
+    tag_number = models.CharField(max_length=80, blank=True, default='')
+    category = models.CharField(max_length=40, choices=CATEGORY_CHOICES, default='general')
+    location = models.CharField(max_length=160, blank=True, default='')
+    quantity = models.PositiveIntegerField(default=1)
+    state = models.CharField(max_length=30, choices=STATE_CHOICES, default='good')
+    # Custody: who holds it while it is out of the store, and since when.
+    assigned_to = models.CharField(max_length=160, blank=True, default='')
+    checked_out_at = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    last_inspected_on = models.DateField(null=True, blank=True)
+    registered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='inventory_items_registered',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self):
+        return f"{self.name} ({self.tag_number or 'untagged'})"
+
+    def apply_movement(self, movement):
+        """Bring condition and custody in line with a logged movement.
+
+        A check-out takes the item out of the store (In Use, held by whoever
+        signed for it), a check-in returns it (Good, back in the store), and a
+        state change records the officer's reported condition without moving
+        the item anywhere.
+        """
+        today = timezone.localdate()
+        if movement.action == 'check_out':
+            self.state = 'in_use'
+            self.assigned_to = movement.moved_by
+            self.checked_out_at = today
+            if movement.destination:
+                self.location = movement.destination
+        elif movement.action == 'check_in':
+            self.state = 'good'
+            self.assigned_to = ''
+            self.checked_out_at = None
+            if movement.destination:
+                self.location = movement.destination
+        else:
+            self.state = movement.state_after or self.state
+        self.last_inspected_on = today
+        self.save(update_fields=[
+            'state', 'assigned_to', 'checked_out_at', 'location', 'last_inspected_on',
+        ])
+
+
+class InventoryMovement(models.Model):
+    """The audit line for one movement: who moved what, where, and its state after."""
+
+    ACTION_CHOICES = [
+        ('check_out', 'Check Out'),
+        ('check_in', 'Check In'),
+        ('state_change', 'State Change'),
+    ]
+
+    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='movements')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    moved_by = models.CharField(max_length=160)
+    destination = models.CharField(max_length=200, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    state_after = models.CharField(max_length=30, choices=InventoryItem.STATE_CHOICES, blank=True, default='')
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='inventory_movements_recorded',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_action_display()}: {self.item.name} from/for {self.moved_by}"
+
+
 def giver_display_name(donor_name, *, member=None, email='', phone=''):
     """The real name behind a giving record, or '' when nobody is identifiable.
 

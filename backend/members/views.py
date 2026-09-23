@@ -7,7 +7,7 @@ from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from datetime import date, datetime, timedelta
@@ -29,7 +29,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -46,7 +46,7 @@ from .roles import (
     sync_role_groups,
     unknown_role_codes,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -4847,3 +4847,77 @@ class ExpenditureDetailView(APIView):
             return Response({"detail": "Expenditure record not found."}, status=status.HTTP_404_NOT_FOUND)
         exp.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def can_manage_deaconate(user):
+    """Who keeps the deaconate property register: admin, clerks and elders.
+
+    The deaconate desk has no role code of its own (``deacon`` is not in
+    ``roles.ROLE_DEFINITIONS``), so its register is kept by the same officers
+    who run the rest of the church office, plus staff accounts.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('admin', 'clerk', 'elder'))
+
+
+class InventoryItemListCreateView(APIView):
+    """The deaconate property register: list the items, register a new one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can view the property inventory.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        items = InventoryItem.objects.annotate(movement_count=Count('movements'))
+        return Response(InventoryItemSerializer(items, many=True).data)
+
+    def post(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can register church property.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = InventoryItemSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        item = serializer.save(registered_by=request.user)
+        return Response(InventoryItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class InventoryMovementCreateView(APIView):
+    """Log a movement or condition change and bring its item in line with it."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can record property movements.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            item = InventoryItem.objects.annotate(movement_count=Count('movements')).get(pk=pk)
+        except InventoryItem.DoesNotExist:
+            return Response({'detail': 'Property item not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = InventoryMovementSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            movement = serializer.save(item=item, recorded_by=request.user)
+            item.apply_movement(movement)
+
+        # Re-read through the annotated queryset so the row we hand back counts
+        # the movement just recorded instead of the count from before it.
+        item = InventoryItem.objects.annotate(movement_count=Count('movements')).get(pk=item.pk)
+        payload = InventoryItemSerializer(item).data
+        payload['movement'] = InventoryMovementSerializer(movement).data
+        return Response(payload, status=status.HTTP_201_CREATED)

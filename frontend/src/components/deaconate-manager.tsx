@@ -1,342 +1,324 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
+  ArrowRightLeft,
   Boxes,
-  ClipboardList,
-  UserCheck,
-  Calendar as CalendarIcon,
+  CheckCircle2,
+  Clock,
   Plus,
   Search,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  ArrowRightLeft,
   X,
-  Building2,
-  FileText,
 } from "lucide-react";
+import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 
-type InventoryState = "Good" | "Needs Repair" | "In Use" | "Damaged" | "Retired";
-type PropertyCategory = "Audio/Visual" | "Furniture" | "Sacramental" | "Kitchen" | "Electronics" | "General";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** Mirrors InventoryItem.CATEGORY_CHOICES on the backend. */
+const INVENTORY_CATEGORIES = [
+  { value: "audio_visual", label: "Audio/Visual" },
+  { value: "furniture", label: "Furniture" },
+  { value: "sacramental", label: "Sacramental" },
+  { value: "kitchen", label: "Kitchen" },
+  { value: "electronics", label: "Electronics" },
+  { value: "general", label: "General" },
+] as const;
+
+/** Mirrors InventoryItem.STATE_CHOICES on the backend. */
+const INVENTORY_STATES = [
+  { value: "good", label: "Good" },
+  { value: "in_use", label: "In Use" },
+  { value: "needs_repair", label: "Needs Repair" },
+  { value: "damaged", label: "Damaged" },
+  { value: "retired", label: "Retired" },
+] as const;
+
+type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number]["value"];
+type InventoryState = (typeof INVENTORY_STATES)[number]["value"];
+type MovementAction = "check_out" | "check_in" | "state_change";
+
+/** One row of the property register, as the API hands it over. */
 interface InventoryItem {
-  id: string;
+  id: number;
   name: string;
-  tagNo: string;
-  category: PropertyCategory;
+  tag_number: string;
+  category: InventoryCategory;
+  category_display: string;
   location: string;
   quantity: number;
   state: InventoryState;
-  assignedTo?: string;
-  checkedOutAt?: string;
-  notes?: string;
-  lastInspection?: string;
+  state_display: string;
+  assigned_to: string;
+  checked_out_at: string | null;
+  notes: string;
+  last_inspected_on: string | null;
+  movement_count: number;
+  created_at: string;
 }
 
-interface MovementLog {
-  id: string;
-  itemId: string;
-  itemName: string;
-  movedBy: string;
-  destination: string;
-  action: "Check Out" | "Check In" | "State Change";
-  timestamp: string;
-  notes?: string;
-}
-
+/** Duty rota entries are session-only for now; the rota has no backend yet. */
 interface RotaEntry {
   id: string;
   title: string;
   date: string;
   shift: string;
-  dutyType: "Ushering" | "Communion Setup" | "Audio/PA" | "Security & Parking" | "Sanctuary Care";
+  dutyType: string;
   assignedTeam: string[];
-  status: "Scheduled" | "In Progress" | "Completed";
 }
 
-interface DeaconMember {
-  id: string;
-  name: string;
-  role: "Head Deacon" | "Head Deaconess" | "Deacon" | "Deaconess";
-  phone: string;
-  email: string;
-  assignedDutiesCount: number;
+const emptyItemForm = {
+  name: "",
+  tagNo: "",
+  category: "general" as InventoryCategory,
+  location: "Main Sanctuary",
+  quantity: 1,
+  state: "good" as InventoryState,
+  notes: "",
+};
+
+const emptyMovementForm = {
+  action: "check_out" as MovementAction,
+  movedBy: "",
+  destination: "",
+  stateChange: "good" as InventoryState,
+  notes: "",
+};
+
+const emptyRotaForm = {
+  title: "",
+  date: "",
+  shift: "08:30 AM - 01:00 PM",
+  dutyType: "Ushering",
+  assignedTeam: "",
+};
+
+/** Authenticated JSON call against the members API. */
+async function apiFetch(path: string, init?: RequestInit) {
+  const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
+  return fetch(`${API_URL}/api/members${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
 }
 
-interface DeaconateEvent {
-  id: string;
-  title: string;
-  date: string;
-  type: "Communion Sabbath" | "Baptismal Service" | "Foot Washing Setup" | "Sanctuary Deep Clean" | "Meeting";
-  lead: string;
-  notes: string;
+/** The first validation message in a DRF error body, so alerts say what broke. */
+function firstErrorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  for (const value of Object.values(payload as Record<string, unknown>)) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && value.length > 0) return String(value[0]);
+  }
+  return "";
 }
 
-const INITIAL_INVENTORY: InventoryItem[] = [
-  {
-    id: "INV-101",
-    name: "Wireless Handheld Microphones (Set of 4)",
-    tagNo: "AV-MIC-01",
-    category: "Audio/Visual",
-    location: "Main Sanctuary PA Booth",
-    quantity: 4,
-    state: "Good",
-    lastInspection: "2026-09-15",
-    notes: "Requires AA batteries before each service.",
-  },
-  {
-    id: "INV-102",
-    name: "Communion Brass Trays & Cups",
-    tagNo: "SAC-TR-02",
-    category: "Sacramental",
-    location: "Deacon Treasury Room",
-    quantity: 12,
-    state: "Good",
-    lastInspection: "2026-09-10",
-    notes: "Polished and sanitized for quarterly Communion.",
-  },
-  {
-    id: "INV-103",
-    name: "Yamaha Digital Piano P-125",
-    tagNo: "AV-PNO-01",
-    category: "Electronics",
-    location: "Main Sanctuary Stage",
-    quantity: 1,
-    state: "In Use",
-    assignedTo: "Music Department",
-    checkedOutAt: "2026-09-01",
-    lastInspection: "2026-09-01",
-  },
-  {
-    id: "INV-104",
-    name: "Foldable Banquet Tables",
-    tagNo: "FUR-TBL-08",
-    category: "Furniture",
-    location: "Fellowship Hall Storage",
-    quantity: 25,
-    state: "Needs Repair",
-    notes: "2 tables have loose leg brackets.",
-    lastInspection: "2026-09-05",
-  },
-  {
-    id: "INV-105",
-    name: "Foot Washing Basins & Towels",
-    tagNo: "SAC-FW-01",
-    category: "Sacramental",
-    location: "Deaconess Store",
-    quantity: 30,
-    state: "Good",
-    lastInspection: "2026-09-01",
-  },
-];
+/** Condition badge shared by the table row and the phone card. */
+function inventoryStateBadge(item: InventoryItem) {
+  const tone =
+    item.state === "good"
+      ? "bg-emerald-100 text-emerald-800"
+      : item.state === "in_use"
+        ? "bg-blue-100 text-blue-800"
+        : item.state === "needs_repair"
+          ? "bg-amber-100 text-amber-800"
+          : item.state === "damaged"
+            ? "bg-red-100 text-red-800"
+            : "bg-[#ede8dc] text-[#617068]";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${tone}`}>
+      {item.state === "good" && <CheckCircle2 className="h-3 w-3" />}
+      {item.state === "needs_repair" && <AlertTriangle className="h-3 w-3" />}
+      {item.state === "in_use" && <Clock className="h-3 w-3" />}
+      {item.state_display}
+    </span>
+  );
+}
 
-const INITIAL_LOGS: MovementLog[] = [
-  {
-    id: "LOG-1",
-    itemId: "INV-103",
-    itemName: "Yamaha Digital Piano P-125",
-    movedBy: "Head Deacon Elder John",
-    destination: "Fellowship Hall for Youth Rally",
-    action: "Check Out",
-    timestamp: "2026-09-18 16:30",
-    notes: "Returned to Stage on Sabbath morning.",
-  },
-];
-
-const INITIAL_ROTA: RotaEntry[] = [
-  {
-    id: "ROT-1",
-    title: "Sabbath Service Ushering & Welcome",
-    date: "2026-09-26",
-    shift: "08:30 AM - 01:00 PM",
-    dutyType: "Ushering",
-    assignedTeam: ["Deacon David Miller", "Deaconess Sarah Jenkins", "Deacon Samuel Ochieng"],
-    status: "Scheduled",
-  },
-  {
-    id: "ROT-2",
-    title: "Sanctuary & Audio/PA Preparation",
-    date: "2026-09-26",
-    shift: "07:30 AM - 09:00 AM",
-    dutyType: "Audio/PA",
-    assignedTeam: ["Deacon Mark Vance", "Head Deacon James K."],
-    status: "Scheduled",
-  },
-  {
-    id: "ROT-3",
-    title: "Quarterly Communion Setup & Ordinance",
-    date: "2026-10-03",
-    shift: "07:00 AM - 02:00 PM",
-    dutyType: "Communion Setup",
-    assignedTeam: ["Head Deaconess Mary W.", "Deaconess Grace N.", "Deacon David Miller"],
-    status: "Scheduled",
-  },
-];
-
-const INITIAL_MEMBERS: DeaconMember[] = [
-  { id: "DEAC-1", name: "James Kiprono", role: "Head Deacon", phone: "+254 712 345 678", email: "james.k@sdalomalinda.or.ke", assignedDutiesCount: 5 },
-  { id: "DEAC-2", name: "Mary Wambui", role: "Head Deaconess", phone: "+254 723 456 789", email: "mary.w@sdalomalinda.or.ke", assignedDutiesCount: 4 },
-  { id: "DEAC-3", name: "David Miller", role: "Deacon", phone: "+254 734 567 890", email: "david.m@sdalomalinda.or.ke", assignedDutiesCount: 3 },
-  { id: "DEAC-4", name: "Sarah Jenkins", role: "Deaconess", phone: "+254 745 678 901", email: "sarah.j@sdalomalinda.or.ke", assignedDutiesCount: 3 },
-  { id: "DEAC-5", name: "Samuel Ochieng", role: "Deacon", phone: "+254 756 789 012", email: "samuel.o@sdalomalinda.or.ke", assignedDutiesCount: 2 },
-];
-
-const INITIAL_EVENTS: DeaconateEvent[] = [
-  {
-    id: "EV-1",
-    title: "3rd Quarter Communion Sabbath & Ordinance",
-    date: "2026-10-03",
-    type: "Communion Sabbath",
-    lead: "Head Deacon & Head Deaconess",
-    notes: "Bread baking on Friday 2 PM; Table setup 7 AM Sabbath.",
-  },
-  {
-    id: "EV-2",
-    title: "Deaconate Sanctuary Deep Cleaning",
-    date: "2026-10-10",
-    type: "Sanctuary Deep Clean",
-    lead: "Deacon Board",
-    notes: "Carpet shampooing and bench polishing.",
-  },
-];
+function custodyCell(item: InventoryItem) {
+  if (!item.assigned_to) {
+    return <span className="text-[#a1a1a1]">In Store</span>;
+  }
+  return (
+    <div>
+      <p className="font-semibold text-[#26352f]">{item.assigned_to}</p>
+      {item.checked_out_at && (
+        <p className="text-[10px]">Since {new Date(item.checked_out_at).toLocaleDateString()}</p>
+      )}
+    </div>
+  );
+}
 
 interface DeaconateManagerProps {
   initialTab?: "inventory" | "rota" | "members" | "calendar";
 }
 
 export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerProps) {
-  const [activeTab, setActiveTab] = useState<"inventory" | "rota" | "members" | "calendar">(initialTab);
+  // The admin sidebar owns which deaconate panel is open, so the tab comes
+  // straight from the URL instead of a second, in-page copy that can drift.
+  const activeTab = initialTab;
 
-  // Inventory State
-  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
-  const [logs, setLogs] = useState<MovementLog[]>(INITIAL_LOGS);
+  // Inventory state (server-backed: this is the real property register)
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("All");
-  const [stateFilter, setStateFilter] = useState<string>("All");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [stateFilter, setStateFilter] = useState<string>("all");
+  const [saving, setSaving] = useState(false);
 
-  // Modals State
+  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
-  // New Item Form
-  const [newItem, setNewItem] = useState({
-    name: "",
-    tagNo: "",
-    category: "General" as PropertyCategory,
-    location: "Main Sanctuary",
-    quantity: 1,
-    state: "Good" as InventoryState,
-    notes: "",
-  });
+  const [newItem, setNewItem] = useState(emptyItemForm);
+  const [movementForm, setMovementForm] = useState(emptyMovementForm);
 
-  // Movement Form
-  const [movementForm, setMovementForm] = useState({
-    action: "Check Out" as "Check Out" | "Check In" | "State Change",
-    movedBy: "",
-    destination: "",
-    newState: "Good" as InventoryState,
-    notes: "",
-  });
+  // Row actions menu
+  const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+  const [actionDropUp, setActionDropUp] = useState(false);
 
-  // Rota State
-  const [rota, setRota] = useState<RotaEntry[]>(INITIAL_ROTA);
+  // Duty rota (session-only until the rota gets a backend)
+  const [rota, setRota] = useState<RotaEntry[]>([]);
   const [showAddRotaModal, setShowAddRotaModal] = useState(false);
-  const [newRota, setNewRota] = useState({
-    title: "",
-    date: "",
-    shift: "08:30 AM - 01:00 PM",
-    dutyType: "Ushering" as RotaEntry["dutyType"],
-    assignedTeam: "",
-  });
+  const [newRota, setNewRota] = useState(emptyRotaForm);
 
-  // Filter Inventory
-  const filteredInventory = inventory.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.tagNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
-    const matchesState = stateFilter === "All" || item.state === stateFilter;
-    return matchesSearch && matchesCategory && matchesState;
-  });
-
-  // Add Item Handler
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItem.name.trim()) return;
-
-    const item: InventoryItem = {
-      id: `INV-${Math.floor(100 + Math.random() * 900)}`,
-      name: newItem.name.trim(),
-      tagNo: newItem.tagNo.trim() || `TAG-${Math.floor(1000 + Math.random() * 9000)}`,
-      category: newItem.category,
-      location: newItem.location.trim() || "Main Store",
-      quantity: Math.max(1, Number(newItem.quantity) || 1),
-      state: newItem.state,
-      notes: newItem.notes.trim(),
-      lastInspection: new Date().toISOString().split("T")[0],
-    };
-
-    setInventory((prev) => [item, ...prev]);
-    setShowAddModal(false);
-    setNewItem({
-      name: "",
-      tagNo: "",
-      category: "General",
-      location: "Main Sanctuary",
-      quantity: 1,
-      state: "Good",
-      notes: "",
-    });
-    showAlert("Property Added", `"${item.name}" has been registered in the inventory.`, "success");
+  const loadInventory = async () => {
+    setLoadingInventory(true);
+    try {
+      const res = await apiFetch("/inventory/");
+      if (!res.ok) {
+        setInventory([]);
+        showAlert("Could not load the inventory", firstErrorMessage(await res.json().catch(() => null)) || "The property register could not be loaded.", "error");
+        return;
+      }
+      setInventory(await res.json());
+    } catch {
+      setInventory([]);
+      showAlert("Could not load the inventory", "Check your connection and try again.", "error");
+    } finally {
+      setLoadingInventory(false);
+    }
   };
 
-  // Movement / State Update Handler
-  const handleLogMovement = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItem || !movementForm.movedBy.trim()) return;
+  useEffect(() => {
+    loadInventory();
+  }, []);
 
-    const newLog: MovementLog = {
-      id: `LOG-${Date.now()}`,
-      itemId: selectedItem.id,
-      itemName: selectedItem.name,
-      movedBy: movementForm.movedBy.trim(),
-      destination: movementForm.destination.trim() || selectedItem.location,
-      action: movementForm.action,
-      timestamp: new Date().toLocaleString(),
-      notes: movementForm.notes.trim(),
+  // Close the row actions menu when the click lands anywhere else.
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setOpenActionMenuId(null);
+      }
     };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-    setLogs((prev) => [newLog, ...prev]);
-
-    // Update item status
-    setInventory((prev) =>
-      prev.map((item) => {
-        if (item.id === selectedItem.id) {
-          return {
-            ...item,
-            state: movementForm.action === "State Change" ? movementForm.newState : movementForm.action === "Check Out" ? "In Use" : "Good",
-            assignedTo: movementForm.action === "Check Out" ? movementForm.movedBy : undefined,
-            checkedOutAt: movementForm.action === "Check Out" ? new Date().toISOString().split("T")[0] : undefined,
-            location: movementForm.destination || item.location,
-            lastInspection: new Date().toISOString().split("T")[0],
-          };
-        }
-        return item;
-      })
-    );
-
-    setShowMovementModal(false);
-    setSelectedItem(null);
-    setMovementForm({ action: "Check Out", movedBy: "", destination: "", newState: "Good", notes: "" });
-    showAlert("Movement Recorded", `Status updated for "${selectedItem.name}".`, "success");
+  const toggleActionMenu = (id: number, el: HTMLElement | null) => {
+    if (openActionMenuId === id) {
+      setOpenActionMenuId(null);
+      return;
+    }
+    // Open upward near the bottom of the viewport so the popup is not clipped
+    // by the scrolling rows area or hidden behind the bottom bar.
+    if (el) {
+      setActionDropUp(window.innerHeight - el.getBoundingClientRect().bottom < 200);
+    }
+    setOpenActionMenuId(id);
   };
 
-  // Add Duty Rota Handler
-  const handleAddRota = (e: React.FormEvent) => {
+  const filteredInventory = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const query = searchQuery.trim().toLowerCase();
+        const matchesSearch =
+          !query ||
+          item.name.toLowerCase().includes(query) ||
+          item.tag_number.toLowerCase().includes(query) ||
+          item.location.toLowerCase().includes(query);
+        const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+        const matchesState = stateFilter === "all" || item.state === stateFilter;
+        return matchesSearch && matchesCategory && matchesState;
+      }),
+    [inventory, searchQuery, categoryFilter, stateFilter]
+  );
+
+  const registerItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newItem.name.trim();
+    if (!name || saving) return;
+
+    setSaving(true);
+    try {
+      const res = await apiFetch("/inventory/", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          tag_number: newItem.tagNo.trim(),
+          category: newItem.category,
+          location: newItem.location.trim(),
+          quantity: Math.max(1, Number(newItem.quantity) || 1),
+          state: newItem.state,
+          notes: newItem.notes.trim(),
+        }),
+      });
+      if (!res.ok) {
+        showAlert("Property not saved", firstErrorMessage(await res.json().catch(() => null)) || "The item could not be registered.", "error");
+        return;
+      }
+      setShowAddModal(false);
+      setNewItem(emptyItemForm);
+      await loadInventory();
+      showAlert("Property Added", `"${name}" has been registered in the inventory.`, "success");
+    } catch {
+      showAlert("Property not saved", "Check your connection and try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const recordMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const movedBy = movementForm.movedBy.trim();
+    if (!selectedItem || !movedBy || saving) return;
+
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/inventory/${selectedItem.id}/movements/`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: movementForm.action,
+          moved_by: movedBy,
+          destination: movementForm.destination.trim(),
+          state_after: movementForm.action === "state_change" ? movementForm.stateChange : "",
+          notes: movementForm.notes.trim(),
+        }),
+      });
+      if (!res.ok) {
+        showAlert("Movement not recorded", firstErrorMessage(await res.json().catch(() => null)) || "The movement could not be recorded.", "error");
+        return;
+      }
+      const itemName = selectedItem.name;
+      setShowMovementModal(false);
+      setSelectedItem(null);
+      setMovementForm(emptyMovementForm);
+      await loadInventory();
+      showAlert("Movement Recorded", `Status updated for "${itemName}".`, "success");
+    } catch {
+      showAlert("Movement not recorded", "Check your connection and try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const scheduleRota = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRota.title.trim() || !newRota.date) return;
 
@@ -352,349 +334,259 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       shift: newRota.shift,
       dutyType: newRota.dutyType,
       assignedTeam: teamList.length > 0 ? teamList : ["Deacon Board"],
-      status: "Scheduled",
     };
 
     setRota((prev) => [entry, ...prev]);
     setShowAddRotaModal(false);
-    setNewRota({ title: "", date: "", shift: "08:30 AM - 01:00 PM", dutyType: "Ushering", assignedTeam: "" });
+    setNewRota(emptyRotaForm);
     showAlert("Duty Rota Added", `"${entry.title}" scheduled for ${entry.date}.`, "success");
   };
 
+  const inventoryEmpty = inventory.length === 0
+    ? "No property items registered yet. Use Add Church Property to record the first one."
+    : "No property items match these filters.";
+
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="rounded-2xl border border-[#dfdbd1] bg-[#26352f] p-6 text-white shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Building2 className="h-6 w-6 text-[#b36b3c]" />
-              <h1 className="text-xl font-bold tracking-tight">Deaconate Ministry</h1>
-            </div>
-            <p className="mt-1 text-xs text-[#dfd9cb] leading-relaxed">
-              Church property inventory tracking, sanctuary care, duty rota assignments, and deaconate calendar.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-full bg-[#3d4f47] px-3 py-1 text-xs font-semibold text-[#f0eade]">
-              Head Deacon &amp; Deaconess Desk
-            </span>
-          </div>
-        </div>
-
-        {/* Inner Nav Tabs */}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-[#3d4f47] pt-4">
-          <button
-            onClick={() => setActiveTab("inventory")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeTab === "inventory" ? "bg-[#b36b3c] text-white shadow" : "bg-[#3d4f47] text-[#dfd9cb] hover:bg-[#4b5f56]"
-            }`}
-          >
-            <Boxes className="h-4 w-4" />
-            Property Inventory ({inventory.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab("rota")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeTab === "rota" ? "bg-[#b36b3c] text-white shadow" : "bg-[#3d4f47] text-[#dfd9cb] hover:bg-[#4b5f56]"
-            }`}
-          >
-            <ClipboardList className="h-4 w-4" />
-            Duty Rota ({rota.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab("members")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeTab === "members" ? "bg-[#b36b3c] text-white shadow" : "bg-[#3d4f47] text-[#dfd9cb] hover:bg-[#4b5f56]"
-            }`}
-          >
-            <UserCheck className="h-4 w-4" />
-            Deaconate Roster ({INITIAL_MEMBERS.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab("calendar")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-              activeTab === "calendar" ? "bg-[#b36b3c] text-white shadow" : "bg-[#3d4f47] text-[#dfd9cb] hover:bg-[#4b5f56]"
-            }`}
-          >
-            <CalendarIcon className="h-4 w-4" />
-            Calendar &amp; Ordinances
-          </button>
-        </div>
-      </div>
-
-      {/* TAB 1: PROPERTY INVENTORY */}
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      {/* ── INVENTORY: fixed filters on top, scrolling rows, fixed actions below ── */}
       {activeTab === "inventory" && (
-        <div className="space-y-6">
-          {/* Controls Bar */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
-            <div className="flex flex-1 flex-wrap items-center gap-3">
-              <div className="relative min-w-[200px] flex-1">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
-                <input
-                  type="text"
-                  placeholder="Search item, tag number, room..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-[#dfdbd1] bg-[#faf9f5] pl-9 pr-3 py-2 text-xs font-medium text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-                />
+        <>
+          <div className="shrink-0 border-b border-[#dfdbd1] bg-white px-5 py-3 sm:px-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+                <h2 className="text-sm font-bold text-[#26352f]">Property Inventory</h2>
+                <span className="text-[11px] text-[#617068]">
+                  {inventory.length} {inventory.length === 1 ? "item" : "items"} registered
+                </span>
               </div>
-
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] px-3 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-              >
-                <option value="All">All Categories</option>
-                <option value="Audio/Visual">Audio/Visual</option>
-                <option value="Furniture">Furniture</option>
-                <option value="Sacramental">Sacramental</option>
-                <option value="Kitchen">Kitchen</option>
-                <option value="Electronics">Electronics</option>
-                <option value="General">General</option>
-              </select>
-
-              <select
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] px-3 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-              >
-                <option value="All">All Conditions</option>
-                <option value="Good">Good</option>
-                <option value="In Use">In Use</option>
-                <option value="Needs Repair">Needs Repair</option>
-                <option value="Damaged">Damaged</option>
-                <option value="Retired">Retired</option>
-              </select>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+                  aria-label="Property category filter"
+                >
+                  <option value="all">All categories</option>
+                  {INVENTORY_CATEGORIES.map((category) => (
+                    <option key={category.value} value={category.value}>{category.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={stateFilter}
+                  onChange={(e) => setStateFilter(e.target.value)}
+                  className="min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+                  aria-label="Property condition filter"
+                >
+                  <option value="all">All conditions</option>
+                  {INVENTORY_STATES.map((state) => (
+                    <option key={state.value} value={state.value}>{state.label}</option>
+                  ))}
+                </select>
+                <div className="relative min-w-0 sm:w-64">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
+                  <input
+                    type="text"
+                    placeholder="Search item, tag number, room..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] py-2.5 pl-9 pr-3 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  />
+                </div>
+              </div>
             </div>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-[#1a2420]"
-            >
-              <Plus className="h-4 w-4" />
-              Add Church Property
-            </button>
           </div>
 
-          {/* Inventory Table */}
-          <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#dfdbd1] bg-[#f4f1ea] font-bold text-[#26352f]">
-                  <tr>
-                    <th className="px-4 py-3">Tag / Serial</th>
-                    <th className="px-4 py-3">Property Name</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3">Location / Room</th>
-                    <th className="px-4 py-3 text-center">Qty</th>
-                    <th className="px-4 py-3">Condition / State</th>
-                    <th className="px-4 py-3">Assigned / Custody</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#dfdbd1]">
-                  {filteredInventory.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-[#617068]">
-                        No property items found matching your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredInventory.map((item) => (
-                      <tr key={item.id} className="transition hover:bg-[#faf8f3]">
-                        <td className="px-4 py-3 font-mono font-bold text-[#b36b3c]">{item.tagNo}</td>
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-[#26352f]">{item.name}</p>
-                          {item.notes && <p className="text-[11px] text-[#617068] italic">{item.notes}</p>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
-                            {item.category}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[#617068]">{item.location}</td>
-                        <td className="px-4 py-3 text-center font-bold text-[#26352f]">{item.quantity}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                              item.state === "Good"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : item.state === "In Use"
-                                ? "bg-blue-100 text-blue-800"
-                                : item.state === "Needs Repair"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {item.state === "Good" && <CheckCircle2 className="h-3 w-3" />}
-                            {item.state === "Needs Repair" && <AlertTriangle className="h-3 w-3" />}
-                            {item.state === "In Use" && <Clock className="h-3 w-3" />}
-                            {item.state}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[#617068]">
-                          {item.assignedTo ? (
-                            <div>
-                              <p className="font-semibold text-[#26352f]">{item.assignedTo}</p>
-                              {item.checkedOutAt && <p className="text-[10px]">Since {item.checkedOutAt}</p>}
-                            </div>
-                          ) : (
-                            <span className="text-[#a1a1a1]">In Store</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+          <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 pb-2 custom-table-scrollbar sm:px-6">
+            {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+            <RecordList
+              rows={filteredInventory}
+              loading={loadingInventory}
+              rowKey={(item) => item.id}
+              headers={[
+                { label: "Tag / Serial", className: "w-28" },
+                { label: "Property" },
+                { label: "Category" },
+                { label: "Location / Room" },
+                { label: "Qty", className: "text-center" },
+                { label: "Condition" },
+                { label: "Custody" },
+                { label: "Actions", className: "text-right" },
+              ]}
+              loadingLabel="Loading the property register..."
+              tableEmpty={inventoryEmpty}
+              cardsEmpty={inventory.length === 0 ? "No property items registered yet." : "No property items match these filters."}
+              renderRow={(item) => (
+                <tr key={item.id} className="hover:bg-[#f7f4ee]">
+                  <td className="py-3 font-mono font-bold text-[#b36b3c]">{item.tag_number || "—"}</td>
+                  <td className="py-3">
+                    <p className="font-bold text-[#26352f]">{item.name}</p>
+                    {item.notes && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
+                  </td>
+                  <td className="py-3">
+                    <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
+                      {item.category_display}
+                    </span>
+                  </td>
+                  <td className="py-3 text-[#617068]">{item.location || "—"}</td>
+                  <td className="py-3 text-center font-bold text-[#26352f]">{item.quantity}</td>
+                  <td className="py-3">{inventoryStateBadge(item)}</td>
+                  <td className="py-3 text-[#617068]">{custodyCell(item)}</td>
+                  <td className="py-3 text-right">
+                    <div className="relative inline-block" ref={openActionMenuId === item.id ? actionMenuRef : undefined}>
+                      <button
+                        onClick={(e) => toggleActionMenu(item.id, e.currentTarget)}
+                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                      >
+                        ⋯ Actions
+                      </button>
+                      {openActionMenuId === item.id && (
+                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                           <button
                             onClick={() => {
                               setSelectedItem(item);
+                              setMovementForm(emptyMovementForm);
                               setShowMovementModal(true);
+                              setOpenActionMenuId(null);
                             }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-[#dfdbd1] bg-[#faf9f5] px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#ede8dc]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                           >
-                            <ArrowRightLeft className="h-3 w-3 text-[#b36b3c]" />
-                            Log Movement
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-[#b36b3c]" />
+                            Item Movement
                           </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              renderCard={(item) => (
+                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[11px] font-bold text-[#b36b3c]">{item.tag_number || "No tag"}</p>
+                      <h3 className="font-bold text-sm text-[#26352f]">{item.name}</h3>
+                    </div>
+                    <div className="shrink-0">{inventoryStateBadge(item)}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-xs text-[#617068]">
+                    <p><span className="font-semibold text-[#26352f]">Category:</span> {item.category_display}</p>
+                    <p><span className="font-semibold text-[#26352f]">Qty:</span> {item.quantity}</p>
+                    <p className="col-span-2"><span className="font-semibold text-[#26352f]">Location:</span> {item.location || "—"}</p>
+                    <p className="col-span-2"><span className="font-semibold text-[#26352f]">Custody:</span> {custodyCell(item)}</p>
+                  </div>
+                  {item.notes && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
+                  <div className="flex flex-wrap gap-2 border-t border-[#dfdbd1]/60 pt-2">
+                    <button
+                      onClick={() => {
+                        setSelectedItem(item);
+                        setMovementForm(emptyMovementForm);
+                        setShowMovementModal(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]"
+                    >
+                      <ArrowRightLeft className="h-3 w-3 text-[#b36b3c]" />
+                      Item Movement
+                    </button>
+                  </div>
+                </div>
+              )}
+            />
           </div>
 
-          {/* Movement Log History */}
-          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-[#26352f] flex items-center gap-2">
-              <FileText className="h-4 w-4 text-[#b36b3c]" />
-              Property Movement &amp; State Audit Trail
-            </h3>
-            <div className="mt-3 divide-y divide-[#dfdbd1] rounded-xl border border-[#dfdbd1] bg-[#faf9f5]">
-              {logs.length === 0 ? (
-                <p className="p-4 text-center text-xs text-[#617068]">No movement events logged yet.</p>
-              ) : (
-                logs.map((log) => (
-                  <div key={log.id} className="flex items-center justify-between p-3 text-xs">
-                    <div>
-                      <span className="font-bold text-[#26352f]">{log.itemName}</span>
-                      <span className="mx-2 text-[#a1a1a1]">•</span>
-                      <span className="font-semibold text-[#b36b3c]">{log.action}</span>
-                      <p className="text-[11px] text-[#617068]">
-                        Handled by <span className="font-semibold text-[#26352f]">{log.movedBy}</span> ({log.destination})
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-mono text-[#617068]">{log.timestamp}</span>
-                  </div>
-                ))
-              )}
+          {/* ── Bottom bar: count + primary action, like every other table page ── */}
+          <div className="shrink-0 border-t border-[#dfdbd1] bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="hidden text-[11px] text-[#617068] sm:block">
+              {filteredInventory.length} of {inventory.length} {inventory.length === 1 ? "item" : "items"} shown
+            </p>
+            <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => { setNewItem(emptyItemForm); setShowAddModal(true); }}
+                className="flex-1 sm:flex-none rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+              >
+                + Add Church Property
+              </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* TAB 2: DUTY ROTA */}
+      {/* ── TAB: DUTY ROTA (session-only until the rota has a backend) ── */}
       {activeTab === "rota" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-bold text-[#26352f]">Deacon &amp; Deaconess Duty Rota</h2>
               <p className="text-xs text-[#617068]">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
             </div>
             <button
               onClick={() => setShowAddRotaModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-[#1a2420]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-[#1a2420]"
             >
               <Plus className="h-4 w-4" />
               Schedule Duty Rota
             </button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {rota.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-                  <span className="rounded-full bg-[#f4f1ea] px-2.5 py-0.5 text-[10px] font-bold text-[#b36b3c]">
-                    {item.dutyType}
-                  </span>
-                  <span className="text-[11px] font-bold text-[#26352f]">{item.date}</span>
-                </div>
-                <h3 className="font-bold text-sm text-[#26352f]">{item.title}</h3>
-                <p className="text-xs text-[#617068] flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5 text-[#b36b3c]" />
-                  {item.shift}
-                </p>
+          {rota.length === 0 ? (
+            <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+              No duty rota has been scheduled yet.
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {rota.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+                    <span className="rounded-full bg-[#f4f1ea] px-2.5 py-0.5 text-[10px] font-bold text-[#b36b3c]">
+                      {item.dutyType}
+                    </span>
+                    <span className="text-[11px] font-bold text-[#26352f]">{item.date}</span>
+                  </div>
+                  <h3 className="font-bold text-sm text-[#26352f]">{item.title}</h3>
+                  <p className="text-xs text-[#617068] flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-[#b36b3c]" />
+                    {item.shift}
+                  </p>
 
-                <div>
-                  <p className="text-[11px] font-bold text-[#26352f] mb-1">Assigned Officers:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {item.assignedTeam.map((member, idx) => (
-                      <span key={idx} className="rounded-lg border border-[#dfdbd1] bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#26352f]">
-                        {member}
-                      </span>
-                    ))}
+                  <div>
+                    <p className="text-[11px] font-bold text-[#26352f] mb-1">Assigned Officers:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {item.assignedTeam.map((member, idx) => (
+                        <span key={idx} className="rounded-lg border border-[#dfdbd1] bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#26352f]">
+                          {member}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* TAB 3: DEACONATE ROSTER */}
+      {/* ── TAB: DEACONATE ROSTER ── */}
       {activeTab === "members" && (
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div>
             <h2 className="text-base font-bold text-[#26352f]">Deaconate Board Roster</h2>
             <p className="text-xs text-[#617068]">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {INITIAL_MEMBERS.map((m) => (
-              <div key={m.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="rounded-md bg-[#26352f] px-2 py-0.5 text-[10px] font-bold text-white">
-                    {m.role}
-                  </span>
-                  <span className="text-[11px] font-semibold text-[#617068]">{m.assignedDutiesCount} Duties Active</span>
-                </div>
-                <h3 className="font-bold text-base text-[#26352f]">{m.name}</h3>
-                <p className="text-xs text-[#617068]">{m.phone}</p>
-                <p className="text-xs text-[#617068]">{m.email}</p>
-              </div>
-            ))}
+          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+            No deaconate members have been recorded yet.
           </div>
         </div>
       )}
 
-      {/* TAB 4: CALENDAR & ORDINANCES */}
+      {/* ── TAB: CALENDAR & ORDINANCES ── */}
       {activeTab === "calendar" && (
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div>
             <h2 className="text-base font-bold text-[#26352f]">Deaconate Ordinances &amp; Event Schedule</h2>
             <p className="text-xs text-[#617068]">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
           </div>
-
-          <div className="space-y-4">
-            {INITIAL_EVENTS.map((ev) => (
-              <div key={ev.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[#b36b3c] px-2.5 py-0.5 text-[10px] font-bold text-white">
-                      {ev.type}
-                    </span>
-                    <span className="text-xs font-bold text-[#26352f]">{ev.date}</span>
-                  </div>
-                  <h3 className="mt-2 font-bold text-sm text-[#26352f]">{ev.title}</h3>
-                  <p className="mt-1 text-xs text-[#617068]">{ev.notes}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs font-semibold text-[#26352f]">Lead: {ev.lead}</span>
-                </div>
-              </div>
-            ))}
+          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+            No deaconate events have been recorded yet.
           </div>
         </div>
       )}
@@ -709,7 +601,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={handleAddItem} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={registerItem} className="mt-4 space-y-4 text-xs">
               <div>
                 <label className="font-bold text-[#26352f]">Property Name *</label>
                 <input
@@ -737,15 +629,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                   <label className="font-bold text-[#26352f]">Category</label>
                   <select
                     value={newItem.category}
-                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value as PropertyCategory })}
+                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value as InventoryCategory })}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
                   >
-                    <option value="Audio/Visual">Audio/Visual</option>
-                    <option value="Furniture">Furniture</option>
-                    <option value="Sacramental">Sacramental</option>
-                    <option value="Kitchen">Kitchen</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="General">General</option>
+                    {INVENTORY_CATEGORIES.map((category) => (
+                      <option key={category.value} value={category.value}>{category.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -780,10 +669,9 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                   onChange={(e) => setNewItem({ ...newItem, state: e.target.value as InventoryState })}
                   className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
                 >
-                  <option value="Good">Good</option>
-                  <option value="In Use">In Use</option>
-                  <option value="Needs Repair">Needs Repair</option>
-                  <option value="Damaged">Damaged</option>
+                  {INVENTORY_STATES.map((state) => (
+                    <option key={state.value} value={state.value}>{state.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -806,8 +694,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow">
-                  Save Property Item
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                >
+                  {saving ? "Saving..." : "Save Property Item"}
                 </button>
               </div>
             </form>
@@ -815,31 +707,33 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         </div>
       )}
 
-      {/* MODAL: LOG MOVEMENT */}
+      {/* MODAL: ITEM MOVEMENT */}
       {showMovementModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
               <div>
                 <h3 className="font-bold text-base text-[#26352f]">Log Item Movement &amp; State</h3>
-                <p className="text-xs text-[#b36b3c] font-semibold">{selectedItem.name} ({selectedItem.tagNo})</p>
+                <p className="text-xs text-[#b36b3c] font-semibold">
+                  {selectedItem.name}{selectedItem.tag_number ? ` (${selectedItem.tag_number})` : ""}
+                </p>
               </div>
               <button onClick={() => setShowMovementModal(false)} className="text-[#617068] hover:text-[#26352f]">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleLogMovement} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={recordMovement} className="mt-4 space-y-4 text-xs">
               <div>
                 <label className="font-bold text-[#26352f]">Action Type</label>
                 <select
                   value={movementForm.action}
-                  onChange={(e) => setMovementForm({ ...movementForm, action: e.target.value as any })}
+                  onChange={(e) => setMovementForm({ ...movementForm, action: e.target.value as MovementAction })}
                   className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
                 >
-                  <option value="Check Out">Check Out for Event/Department</option>
-                  <option value="Check In">Check In to Store</option>
-                  <option value="State Change">Update Condition/State</option>
+                  <option value="check_out">Check Out for Event/Department</option>
+                  <option value="check_in">Check In to Store</option>
+                  <option value="state_change">Update Condition/State</option>
                 </select>
               </div>
 
@@ -866,19 +760,17 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 />
               </div>
 
-              {movementForm.action === "State Change" && (
+              {movementForm.action === "state_change" && (
                 <div>
                   <label className="font-bold text-[#26352f]">New State</label>
                   <select
-                    value={movementForm.newState}
-                    onChange={(e) => setMovementForm({ ...movementForm, newState: e.target.value as InventoryState })}
+                    value={movementForm.stateChange}
+                    onChange={(e) => setMovementForm({ ...movementForm, stateChange: e.target.value as InventoryState })}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
                   >
-                    <option value="Good">Good</option>
-                    <option value="In Use">In Use</option>
-                    <option value="Needs Repair">Needs Repair</option>
-                    <option value="Damaged">Damaged</option>
-                    <option value="Retired">Retired</option>
+                    {INVENTORY_STATES.map((state) => (
+                      <option key={state.value} value={state.value}>{state.label}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -902,8 +794,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow">
-                  Record Log
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                >
+                  {saving ? "Recording..." : "Record Log"}
                 </button>
               </div>
             </form>
@@ -921,7 +817,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={handleAddRota} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={scheduleRota} className="mt-4 space-y-4 text-xs">
               <div>
                 <label className="font-bold text-[#26352f]">Duty Title *</label>
                 <input
@@ -949,7 +845,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                   <label className="font-bold text-[#26352f]">Duty Type</label>
                   <select
                     value={newRota.dutyType}
-                    onChange={(e) => setNewRota({ ...newRota, dutyType: e.target.value as any })}
+                    onChange={(e) => setNewRota({ ...newRota, dutyType: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
                   >
                     <option value="Ushering">Ushering</option>
