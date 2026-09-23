@@ -1902,6 +1902,67 @@ class PurposeContributionsView(APIView):
         return Response(results)
 
 
+class ContributionLiveStatsView(APIView):
+    """Completed-giving totals per account for the member Live Reports page.
+
+    The page's banner sums these rows, so only money that actually arrived
+    (status ``completed``) counts toward what the church has received.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Count, Sum
+        rows = (
+            Contribution.objects.filter(status='completed')
+            .values('purpose')
+            .annotate(total=Sum('amount'), count=Count('id'))
+            .order_by('-total')
+        )
+        return Response([
+            {
+                'category': row['purpose'],
+                'label': row['purpose'],
+                'total': float(row['total'] or 0),
+                'count': row['count'],
+            }
+            for row in rows
+        ])
+
+
+class ContributionRecentView(APIView):
+    """Newest completed gifts — digital and recorded cash — for the live feed."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        items = []
+        for row in Contribution.objects.filter(status='completed').order_by('-paid_at')[:12]:
+            moment = row.paid_at or row.created_at
+            items.append({
+                'sort_at': moment,
+                # Cash rows use negative ids so React keys stay unique across both lists.
+                'id': row.id,
+                'category': row.purpose,
+                'label': row.purpose,
+                'amount': float(row.amount),
+                'donor_name': giver_display_name(row.donor_name, member=row.member, email=row.donor_email, phone=row.phone_number),
+                'created_at': moment.isoformat(),
+            })
+        for row in CashContribution.objects.filter(entry_type='individual').order_by('-created_at')[:12]:
+            items.append({
+                'sort_at': row.created_at,
+                'id': -row.id,
+                'category': row.purpose,
+                'label': row.purpose,
+                'amount': float(row.amount),
+                'donor_name': giver_display_name(row.donor_name, email=row.giver_email, phone=row.giver_phone),
+                'created_at': row.created_at.isoformat(),
+            })
+        items.sort(key=lambda item: item['sort_at'], reverse=True)
+        for item in items:
+            item.pop('sort_at')
+        return Response(items[:8])
+
+
 class ResendContributionReceiptView(APIView):
     permission_classes = [IsAuthenticated]
 

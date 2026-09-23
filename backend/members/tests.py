@@ -2177,3 +2177,43 @@ class AnnouncementEventDatesAPITests(APITestCase):
             'event_date_to': '2026-10-01',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class LiveReportsEndpointsAPITests(APITestCase):
+    """The member Live Reports page's stats and feed endpoints."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('live.viewer', 'live.viewer@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.user, role='member', roles='member')
+        self.client.force_authenticate(self.user)
+        self.now = timezone.now()
+
+    def test_live_stats_totals_only_completed_givings_per_account(self):
+        Contribution.objects.create(amount='1500.00', purpose='Tithe', status='completed', paid_at=self.now, payment_method='mpesa')
+        Contribution.objects.create(amount='300.00', purpose='Tithe', status='failed', paid_at=self.now, payment_method='mpesa')
+        Contribution.objects.create(amount='250.00', purpose='Combined Offering', status='completed', paid_at=self.now, payment_method='mpesa')
+
+        response = self.client.get('/api/members/contributions/live-stats/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tithe = next(row for row in response.data if row['category'] == 'Tithe')
+        self.assertEqual(tithe['total'], 1500.0)
+        self.assertEqual(tithe['count'], 1)
+        self.assertEqual(sum(row['total'] for row in response.data), 1750.0)
+
+    def test_recent_feed_mixes_cash_and_digital_newest_first(self):
+        Contribution.objects.create(
+            amount='99.00', purpose='Tithe', status='completed',
+            paid_at=self.now - timedelta(days=1), payment_method='mpesa', donor_name='Older Giver',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('50.00'), purpose='Tithe',
+            received_on=timezone.localdate(), payment_method='cash', donor_name='Fresh Cash Giver',
+        )
+
+        response = self.client.get('/api/members/contributions/recent/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]['donor_name'], 'Fresh Cash Giver')
+        self.assertEqual(response.data[1]['donor_name'], 'Older Giver')
+        self.assertIsInstance(response.data[0]['amount'], float)

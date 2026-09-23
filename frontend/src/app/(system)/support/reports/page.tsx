@@ -68,12 +68,11 @@ export default function LiveReportsPage() {
   async function loadData() {
     try {
       const token = localStorage.getItem("access_token");
+      const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const [statsRes, recentRes, accountsRes] = await Promise.all([
-        fetch(`${API_URL}/api/members/contributions/live-stats/`),
-        fetch(`${API_URL}/api/members/contributions/recent/`),
-        fetch(`${API_URL}/api/members/treasury/accounts/`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }),
+        fetch(`${API_URL}/api/members/contributions/live-stats/`, { headers: auth }),
+        fetch(`${API_URL}/api/members/contributions/recent/`, { headers: auth }),
+        fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: auth }),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
