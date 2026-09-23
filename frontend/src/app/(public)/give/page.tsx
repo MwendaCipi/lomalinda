@@ -215,15 +215,25 @@ function GivePageContent() {
       .catch(() => {});
   }, []);
 
+  /**
+   * The published list, plus the account this visit was linked to.
+   *
+   * A support link (?purpose=) can name an account that is not in the published
+   * list — a ministry account, say. Without this the picker would fall back to
+   * its first option and the giver would support the wrong account entirely.
+   */
+  const ensureLinkedPurpose = (list: string[]) =>
+    normalizedPurpose && !list.includes(normalizedPurpose) ? [normalizedPurpose, ...list] : list;
+
   useEffect(() => {
     fetch(`${API_URL}/api/members/giving-purposes/`)
       .then((response) => (response.ok ? response.json() : []))
       .then((data: { name: string }[]) => {
         const apiNames = data.map((item) => item.name);
-        setPurposes(apiNames.length ? apiNames : defaultPurposes);
+        setPurposes(ensureLinkedPurpose(apiNames.length ? apiNames : defaultPurposes));
       })
-      .catch(() => setPurposes(defaultPurposes));
-  }, []);
+      .catch(() => setPurposes(ensureLinkedPurpose(defaultPurposes)));
+  }, [normalizedPurpose]);
 
   async function submitGiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
