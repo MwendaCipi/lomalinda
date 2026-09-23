@@ -31,7 +31,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -56,7 +56,7 @@ from .meetings import (
     create_agendas,
     parse_clock,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -4107,6 +4107,16 @@ class UserDetailUpdateView(APIView):
         return self.patch(request, pk)
 
     def patch(self, request, pk):
+        """Propose a profile edit for the member's own approval.
+
+        A profile is the church's record of a person, and that person is best
+        placed to vouch for it: nothing written here is applied at once.
+        Instead the whole edit is parked as a pending ProfileChangeRequest and
+        the member is notified; their approval applies it verbatim, and their
+        refusal leaves the record exactly as it was. Role changes keep the old
+        immediate path — roles are the church's delegation of authority, not
+        the member's personal details.
+        """
         current_profile = getattr(request.user, 'member_profile', None)
         if not current_profile or not current_profile.has_role('admin', 'clerk'):
             return Response({'detail': 'Only church administrators or clerks can edit member profiles.'}, status=status.HTTP_403_FORBIDDEN)
@@ -4116,56 +4126,150 @@ class UserDetailUpdateView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if 'first_name' in request.data:
-            target_user.first_name = request.data['first_name']
-        if 'last_name' in request.data:
-            target_user.last_name = request.data['last_name']
-        if 'email' in request.data:
-            target_user.email = request.data['email']
-        target_user.save()
-
+        # Fields the member is asked to approve, read off the account and the
+        # profile in the same shapes UserDetailSerializer returns them in.
         target_profile, _ = MemberProfile.objects.get_or_create(user=target_user)
-        if 'phone_number' in request.data:
-            target_profile.phone_number = request.data['phone_number']
-        if 'whatsapp_number' in request.data:
-            target_profile.whatsapp_number = request.data['whatsapp_number']
-        if 'roles' in request.data or 'role' in request.data:
-            # Replaces the whole set: the legacy single 'role' is just a set of one.
-            submitted = request.data.get('roles') or request.data.get('role')
-            unknown = unknown_role_codes(parse_role_codes(submitted))
+        profile_fields = {
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+            'email': 'email',
+            'phone_number': 'phone_number',
+            'whatsapp_number': 'whatsapp_number',
+            'employment_status': 'employment_status',
+            'profession': 'profession',
+            'gender': 'gender',
+            'date_of_birth': 'date_of_birth',
+            'gifts': 'gifts',
+            'disability': 'disability',
+        }
+
+        def normalise(field, value):
+            if field in ('gifts', 'disability') and isinstance(value, list):
+                return ", ".join(str(g).strip() for g in value if str(g).strip())
+            if field == 'date_of_birth':
+                return value or None
+            return value
+
+        changes = {}
+        for field in profile_fields:
+            if field not in request.data:
+                continue
+            new_value = normalise(field, request.data.get(field))
+            if hasattr(target_user, profile_fields[field]):
+                current_value = getattr(target_user, profile_fields[field])
+            else:
+                current_value = getattr(target_profile, profile_fields[field])
+            if new_value != current_value:
+                changes[field] = new_value
+
+        if 'is_disfellowshipped' in request.data:
+            requested = bool(request.data['is_disfellowshipped'])
+            if requested != target_profile.is_disfellowshipped:
+                return Response(
+                    {'detail': 'Membership status changes are church business; use the Remove or disfellowship action instead.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        roles_payload = request.data.get('roles') or request.data.get('role')
+        if roles_payload:
+            # Roles remain the officers' to assign: they delegate authority in
+            # the church and cannot wait on a member's convenience.
+            unknown = unknown_role_codes(parse_role_codes(roles_payload))
             if unknown:
                 return Response({'roles': f"Unknown role code(s): {', '.join(unknown)}"}, status=status.HTTP_400_BAD_REQUEST)
-            error = check_system_role_change(request.user, target_user, target_profile.get_roles(), normalize_roles(submitted))
+            error = check_system_role_change(request.user, target_user, target_profile.get_roles(), normalize_roles(roles_payload))
             if error:
                 return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
-            roles_val = target_profile.set_roles(submitted, save=False)
+            roles_val = target_profile.set_roles(roles_payload, save=False)
             sync_role_groups(target_user, roles_val)
-        if 'employment_status' in request.data:
-            target_profile.employment_status = request.data['employment_status']
-        if 'profession' in request.data:
-            target_profile.profession = request.data['profession']
-        if 'gender' in request.data:
-            target_profile.gender = request.data['gender']
-        if 'date_of_birth' in request.data:
-            target_profile.date_of_birth = request.data['date_of_birth'] or None
-        if 'gifts' in request.data:
-            gifts_val = request.data['gifts']
-            if isinstance(gifts_val, list):
-                gifts_val = ", ".join(str(g).strip() for g in gifts_val if str(g).strip())
-            target_profile.gifts = str(gifts_val or '').strip()
-        if 'disability' in request.data:
-            disability_val = request.data['disability']
-            if isinstance(disability_val, list):
-                disability_val = ", ".join(str(d).strip() for d in disability_val if str(d).strip())
-            target_profile.disability = str(disability_val or '').strip()
-        if 'is_disfellowshipped' in request.data:
-            target_profile.is_disfellowshipped = bool(request.data['is_disfellowshipped'])
-            # Disfellowshipped members are demoted to plain member
-            if target_profile.is_disfellowshipped:
-                target_profile.role = 'member'
-        target_profile.save()
+            target_profile.save(update_fields=['roles', 'role'])
 
-        return Response(UserDetailSerializer(target_user).data)
+        if not changes:
+            # Nothing personal would change; the (possibly empty) role edit
+            # above was still church business done immediately.
+            return Response(UserDetailSerializer(target_user).data)
+
+        proposal = ProfileChangeRequest.objects.create(
+            member=target_user,
+            proposed_by=request.user,
+            changes=changes,
+        )
+        changed_labels = ', '.join(field.replace('_', ' ') for field in changes)
+        ChurchNotification.objects.create(
+            user=target_user,
+            title='Your profile has a proposed update',
+            message=(
+                f"The church office proposed updating your {changed_labels}. "
+                "Open your dashboard to approve the update or keep your current details."
+            ),
+        )
+        return Response(
+            {
+                **UserDetailSerializer(target_user).data,
+                'pending_change_request': ProfileChangeRequestSerializer(proposal).data,
+                'detail': (
+                    "The member must approve these changes. A proposal was saved "
+                    "and they have been notified on their dashboard."
+                ),
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class ProfileChangeRequestView(APIView):
+    """The member's own view of proposals about their profile."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        pending = ProfileChangeRequest.objects.filter(member=request.user, status='pending').first()
+        if not pending:
+            return Response({'pending': False})
+        return Response({'pending': True, 'change_request': ProfileChangeRequestSerializer(pending).data})
+
+
+class ProfileChangeDecisionView(APIView):
+    """Approve or refuse a proposed profile change. Only the member decides."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        decision = str(request.data.get('decision') or '').strip().lower()
+        if decision not in ('approve', 'keep'):
+            return Response({'detail': 'Choose "approve" or "keep".'}, status=status.HTTP_400_BAD_REQUEST)
+
+        proposal = (
+            ProfileChangeRequest.objects
+            .filter(member=request.user, status='pending')
+            .order_by('-proposed_at')
+            .first()
+        )
+        if not proposal:
+            return Response({'detail': 'You have no proposed profile changes waiting.'}, status=status.HTTP_404_NOT_FOUND)
+
+        member = proposal.member
+        profile = getattr(member, 'member_profile', None) or MemberProfile.objects.create(user=member)
+        account_fields = {'first_name', 'last_name', 'email'}
+
+        if decision == 'approve':
+            for field, value in proposal.changes.items():
+                if field in account_fields:
+                    setattr(member, field, value)
+                elif hasattr(profile, field):
+                    setattr(profile, field, value)
+            member.save(update_fields=[f for f in account_fields if f in proposal.changes])
+            profile_fields = [f for f in proposal.changes if f not in account_fields]
+            if profile_fields:
+                profile.save(update_fields=profile_fields)
+            proposal.status = 'approved'
+            proposal.decided_at = timezone.now()
+            proposal.save(update_fields=['status', 'decided_at'])
+            return Response({'detail': 'Profile updated. Thank you for confirming your details.', 'status': 'approved'})
+
+        proposal.status = 'kept'
+        proposal.decided_at = timezone.now()
+        proposal.save(update_fields=['status', 'decided_at'])
+        return Response({'detail': 'Your details were kept as they are.', 'status': 'kept'})
 
 
 class DisfellowshipView(APIView):

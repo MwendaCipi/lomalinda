@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, GivingPurpose, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, GivingPurpose, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3458,3 +3458,133 @@ class FundDriveAnnouncementsTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Announcement.objects.count(), 0)
+
+
+class ProfileChangeApprovalTests(APITestCase):
+    """An admin's profile edit waits for the member's own approval.
+
+    The profile is the church's record of a person, and that person vouches
+    for it: a clerk's edit parks as a proposal, the member is notified, and
+    the record only moves when the member approves it.
+    """
+
+    def _clerk(self, name='approval.clerk'):
+        user = User.objects.create_user(name, f'{name}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role='clerk', roles='clerk')
+        return user
+
+    def _member(self, name='approval.member', **profile_kwargs):
+        user = User.objects.create_user(name, f'{name}@example.com', 'ChurchPass#2026', first_name='Jane')
+        MemberProfile.objects.create(user=user, role='member', roles='member', phone_number='0710000001', **profile_kwargs)
+        return user
+
+    def test_editing_a_profile_parks_a_proposal_and_leaves_the_record_alone(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+
+        response = self.client.patch(f'/api/members/users/{member.id}/', {
+            'phone_number': '0722000002',
+            'profession': 'Carpenter',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        member.profile = MemberProfile.objects.get(user=member)
+        self.assertEqual(member.profile.phone_number, '0710000001')
+        proposal = ProfileChangeRequest.objects.get()
+        self.assertEqual(proposal.status, 'pending')
+        self.assertEqual(proposal.changes, {'phone_number': '0722000002', 'profession': 'Carpenter'})
+        self.assertEqual(proposal.proposed_by.username, 'approval.clerk')
+        # The member was told.
+        self.assertTrue(ChurchNotification.objects.filter(user=member, title__icontains='proposed').exists())
+
+    def test_the_member_approving_applies_the_proposed_values(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+        self.client.patch(f'/api/members/users/{member.id}/', {'phone_number': '0722000002'}, format='json')
+        self.client.force_authenticate(member)
+
+        response = self.client.post('/api/members/me/profile-changes/decide/', {'decision': 'approve'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        member.refresh_from_db()
+        profile = MemberProfile.objects.get(user=member)
+        self.assertEqual(profile.phone_number, '0722000002')
+        proposal = ProfileChangeRequest.objects.get()
+        self.assertEqual(proposal.status, 'approved')
+        self.assertIsNotNone(proposal.decided_at)
+
+    def test_the_member_keeping_their_details_changes_nothing(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+        self.client.patch(f'/api/members/users/{member.id}/', {'phone_number': '0722000002'}, format='json')
+        self.client.force_authenticate(member)
+
+        response = self.client.post('/api/members/me/profile-changes/decide/', {'decision': 'keep'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=member)
+        self.assertEqual(profile.phone_number, '0710000001')
+        self.assertEqual(ProfileChangeRequest.objects.get().status, 'kept')
+
+    def test_only_the_member_can_decide_their_own_proposal(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+        self.client.patch(f'/api/members/users/{member.id}/', {'phone_number': '0722000002'}, format='json')
+
+        other = self._member('approval.other')
+        self.client.force_authenticate(other)
+        response = self.client.post('/api/members/me/profile-changes/decide/', {'decision': 'approve'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(MemberProfile.objects.get(user=member).phone_number, '0710000001')
+
+    def test_account_fields_land_on_the_account_when_approved(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+        self.client.patch(f'/api/members/users/{member.id}/', {'first_name': 'Janet'}, format='json')
+        self.client.force_authenticate(member)
+
+        self.client.post('/api/members/me/profile-changes/decide/', {'decision': 'approve'}, format='json')
+
+        member.refresh_from_db()
+        self.assertEqual(member.first_name, 'Janet')
+
+    def test_an_unchanged_profile_edit_applies_nothing_and_proposes_nothing(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+
+        response = self.client.patch(f'/api/members/users/{member.id}/', {'phone_number': '0710000001'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(ProfileChangeRequest.objects.count(), 0)
+
+    def test_the_member_sees_their_pending_proposal(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+        self.client.patch(f'/api/members/users/{member.id}/', {'phone_number': '0722000002'}, format='json')
+        self.client.force_authenticate(member)
+
+        response = self.client.get('/api/members/me/profile-changes/')
+
+        self.assertTrue(response.data['pending'])
+        self.assertEqual(response.data['change_request']['changes'], {'phone_number': '0722000002'})
+        self.assertEqual(response.data['change_request']['proposed_by_name'], 'approval.clerk')
+
+    def test_role_changes_still_apply_immediately(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+
+        response = self.client.patch(f'/api/members/users/{member.id}/', {'roles': ['elder']}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(MemberProfile.objects.get(user=member).get_roles(), ['elder'])
+        self.assertEqual(ProfileChangeRequest.objects.count(), 0)
+
+    def test_disfellowship_is_not_a_profile_edit(self):
+        self.client.force_authenticate(self._clerk())
+        member = self._member()
+
+        response = self.client.patch(f'/api/members/users/{member.id}/', {'is_disfellowshipped': True}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ProfileChangeRequest.objects.count(), 0)

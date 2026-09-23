@@ -9,7 +9,8 @@ from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
-    GivingPurpose, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, Profession, PrayerRequest,
+    GivingPurpose, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
+    ProfileChangeRequest, Profession,
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
@@ -54,6 +55,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
     whatsapp_number = serializers.CharField(source='member_profile.whatsapp_number', read_only=True)
     disability = serializers.CharField(source='member_profile.disability', read_only=True)
     is_disfellowshipped = serializers.BooleanField(source='member_profile.is_disfellowshipped', read_only=True, default=False)
+    # True when a proposed profile edit is waiting for this member's approval;
+    # the roster shows a badge so the office knows the ball is in their court.
+    pending_profile_change = serializers.SerializerMethodField()
+
+    def get_pending_profile_change(self, obj):
+        return ProfileChangeRequest.objects.filter(member=obj, status='pending').exists()
 
     class Meta:
         model = User
@@ -77,10 +84,28 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'gifts',
             'disability',
             'is_disfellowshipped',
+            'pending_profile_change',
             # The installation's owner account is not a member; the roster
             # endpoints filter it out and the clients use this to be sure.
             'is_superuser',
         )
+
+
+class ProfileChangeRequestSerializer(serializers.ModelSerializer):
+    """One proposed profile edit, shaped for the member's approval card."""
+
+    proposed_by_name = serializers.SerializerMethodField()
+
+    def get_proposed_by_name(self, obj):
+        proposer = obj.proposed_by
+        if not proposer:
+            return 'The church office'
+        return proposer.get_full_name().strip() or proposer.get_username()
+
+    class Meta:
+        model = ProfileChangeRequest
+        fields = ('id', 'changes', 'proposed_by_name', 'proposed_at', 'status')
+        read_only_fields = fields
 
 
 class RegisterSerializer(serializers.ModelSerializer):

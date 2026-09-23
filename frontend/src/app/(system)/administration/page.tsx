@@ -271,7 +271,7 @@ function AdministrationContent() {
                         className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
                       >
                         <span className="text-3xl">👥</span>
-                        <h2 className="mt-3 text-lg font-bold">Users (Members)</h2>
+                        <h2 className="mt-3 text-lg font-bold">User Management</h2>
                         <p className="mt-1 text-xs leading-relaxed text-[#617068]">
                           View registered church members or add new member records.
                         </p>

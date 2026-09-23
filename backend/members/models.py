@@ -1137,6 +1137,44 @@ class InventoryMovement(models.Model):
     def __str__(self):
         return f"{self.get_action_display()}: {self.item.name} from/for {self.moved_by}"
 
+class ProfileChangeRequest(models.Model):
+    """A proposed profile edit awaiting the member's own approval.
+
+    The church's record of a person belongs to that person too: when an
+    administrator or clerk edits a member's profile, the edit is not applied
+    at once. It is parked here as a proposal, the member is notified, and the
+    member either approves it (the proposal is applied verbatim) or keeps
+    their details (the proposal is dismissed and nothing changes).
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('approved', 'Approved'), ('kept', 'Member kept their details')]
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile_change_requests',
+        help_text='The member whose profile is proposed to change.',
+    )
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='profile_changes_proposed',
+        help_text='The administrator or clerk who proposed the change.',
+    )
+    # The exact body the member can approve: field -> new value, as JSON.
+    changes = models.JSONField(help_text='Field-by-field proposed values for the profile.')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    proposed_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-proposed_at']
+
+    def __str__(self):
+        member_name = self.member.get_full_name() or self.member.get_username()
+        return f"Profile change for {member_name} ({self.status}, {len(self.changes)} field(s))"
+
 
 def giver_display_name(donor_name, *, member=None, email='', phone=''):
     """The real name behind a giving record, or '' when nobody is identifiable.

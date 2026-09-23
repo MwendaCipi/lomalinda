@@ -14,10 +14,12 @@ import {
   Receipt,
   ShieldCheck,
   UserRound,
+  UserRoundCheck,
   Users,
   Wallet,
 } from "lucide-react";
 import { roleLabel } from "@/components/roles-combobox";
+import { showAlert } from "@/lib/alerts";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { GroupedBarChart } from "@/components/mini-charts";
@@ -60,6 +62,13 @@ type Notification = {
   created_at: string;
 };
 
+type ProfileChange = {
+  id: number;
+  changes: Record<string, string | null>;
+  proposed_by_name: string;
+  proposed_at: string;
+};
+
 /** A member's own giving, bucketed into the last `months` calendar months. */
 function monthlyGiving(contributions: Contribution[], months = 6) {
   const now = new Date();
@@ -94,6 +103,8 @@ export function MemberHome() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
+  const [deciding, setDeciding] = useState(false);
   const [encouragement, setEncouragement] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -129,7 +140,13 @@ export function MemberHome() {
     fetch(`${API_URL}/api/members/notifications/`, { headers })
       .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => setNotifications(Array.isArray(data) ? data.slice(0, 5) : []))
-      .catch(() => setNotifications([]))
+      .catch(() => setNotifications([]));
+
+    // A proposed profile edit waits here for the member's own yes or no.
+    fetch(`${API_URL}/api/members/me/profile-changes/`, { headers })
+      .then((res) => (res.ok ? res.json() : { pending: false }))
+      .then((data) => setProfileChange(data?.pending ? (data.change_request as ProfileChange) : null))
+      .catch(() => setProfileChange(null))
       .finally(() => setLoading(false));
 
     // The church's own line of encouragement, editable in church settings.
@@ -190,6 +207,44 @@ export function MemberHome() {
   const completed = contributions.filter((c) => (c.status || "completed") === "completed");
   const encouragementLine = encouragement.trim();
 
+  const FIELD_LABELS: Record<string, string> = {
+    first_name: "First name",
+    last_name: "Last name",
+    email: "Email",
+    phone_number: "Phone number",
+    whatsapp_number: "WhatsApp number",
+    employment_status: "Employment status",
+    profession: "Profession",
+    gender: "Sex",
+    date_of_birth: "Date of birth",
+    gifts: "Gifts & talents",
+    disability: "Disability / special needs",
+  };
+
+  const decideProfileChange = async (decision: "approve" | "keep") => {
+    setDeciding(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/me/profile-changes/decide/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ decision }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not record your decision.");
+      setProfileChange(null);
+      showAlert(
+        decision === "approve" ? "Profile updated" : "Details kept",
+        data.detail || (decision === "approve" ? "Your profile has been updated." : "Your details stay as they are."),
+        "success",
+      );
+    } catch (error) {
+      showAlert("Not recorded", error instanceof Error ? error.message : "Could not record your decision.", "error");
+    } finally {
+      setDeciding(false);
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
       {/* Hero — a greeting, who you are, and the church's line of encouragement.
@@ -229,6 +284,49 @@ export function MemberHome() {
               treasurer opens this page for the church's money, not for the
               personal giving strip in the header above. */}
           {seesChurchFinances && <DashboardAnalytics />}
+
+          {/* A proposed profile edit, awaiting the member's own approval.
+              Nothing on their record moves until they choose here. */}
+          {profileChange && (
+            <section
+              aria-live="polite"
+              className="mt-6 rounded-2xl border border-[#e0c9a8] bg-[#fdf8ef] p-5 shadow-sm sm:p-6"
+            >
+              <div className="flex items-center gap-2">
+                <UserRoundCheck className="h-4 w-4 text-[#b36b3c]" />
+                <h2 className="text-base font-bold text-[#26352f]">The church office proposed an update to your profile</h2>
+              </div>
+              <p className="mt-1 text-xs text-[#617068]">
+                Proposed by {profileChange.proposed_by_name}. Nothing changes until you approve it.
+              </p>
+              <ul className="mt-3 space-y-1.5">
+                {Object.entries(profileChange.changes).map(([field, value]) => (
+                  <li key={field} className="text-sm text-[#26352f]">
+                    <span className="font-semibold">{FIELD_LABELS[field] || field}:</span>{" "}
+                    <span className="text-[#617068]">{value === null || value === "" ? "—" : String(value)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={deciding}
+                  onClick={() => decideProfileChange("approve")}
+                  className="rounded-full bg-[#26352f] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60"
+                >
+                  {deciding ? "Saving…" : "Approve update"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deciding}
+                  onClick={() => decideProfileChange("keep")}
+                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c] disabled:opacity-60"
+                >
+                  Keep my details
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* Quick tiles */}
           <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

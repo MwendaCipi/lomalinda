@@ -898,6 +898,25 @@ export function UserManagement() {
   const [addStep, setAddStep] = useState<1 | 2>(1);
   const [addAccountType, setAddAccountType] = useState<"member" | "friend">("member");
   const [editingMember, setEditingMember] = useState<MemberUser | null>(null);
+  // Members with a profile edit waiting for their own approval, by user id.
+  const [pendingChangeIds, setPendingChangeIds] = useState<number[]>([]);
+  const fetchProfileChanges = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/users/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+      setPendingChangeIds(
+        (Array.isArray(rows) ? rows : [])
+          .filter((row: MemberUser & { pending_profile_change?: boolean }) => row.pending_profile_change)
+          .map((row: MemberUser) => row.id),
+      );
+    } catch {
+      // The badge is a nicety; never let it break the roster.
+    }
+  };
 
   const [formData, setFormData] = useState(initialForm);
   const [age, setAge] = useState("");
@@ -1092,6 +1111,7 @@ export function UserManagement() {
   useEffect(() => {
     fetchMembers();
     fetchInvitations();
+    fetchProfileChanges();
     fetch(`${API_URL}/api/members/church-settings/`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setChurchName(data?.church_name || "this church"))
@@ -1326,12 +1346,19 @@ export function UserManagement() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: `Profile updated for '${editingMember.username}'.` });
+        // 202 means the edit is now a proposal the member must approve; 200
+        // means only role(s) changed, which apply at once.
+        setMessage(
+          res.status === 202
+            ? { type: "success", text: data.detail || `Update proposed for '${editingMember.username}'. They approve it on their dashboard.` }
+            : { type: "success", text: `Profile updated for '${editingMember.username}'.` },
+        );
         setEditingMember(null);
         setEditAge("");
         setEditGifts([]);
         setEditDisability([]);
         fetchMembers();
+        if (typeof fetchProfileChanges === "function") fetchProfileChanges();
       } else {
         setMessage({ type: "error", text: data.detail || "Failed to update member profile." });
       }
@@ -1635,7 +1662,7 @@ export function UserManagement() {
       {/* ── Header ── */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
-          <h2 className="text-xl font-bold text-[#26352f]">Users</h2>
+          <h2 className="text-xl font-bold text-[#26352f]">User Management</h2>
           <p className="text-xs text-[#617068]">
             {visibleMembers.length} records registered
           </p>
@@ -1799,6 +1826,14 @@ export function UserManagement() {
                     <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
                     <td className="py-3 font-semibold text-[#26352f]">
                       {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}
+                      {pendingChangeIds.includes(m.id) && (
+                        <span
+                          title="This member has a proposed profile change waiting for their approval"
+                          className="ml-2 inline-block rounded-full bg-[#f1c89e] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#26352f]"
+                        >
+                          Awaiting approval
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 text-[#617068]">
                       {m.phone_number || m.email || "—"}
@@ -1873,7 +1908,14 @@ export function UserManagement() {
                 <div key={m.id} className={`rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2 ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="font-bold text-sm text-[#26352f]">{name}</h3>
+                      <h3 className="font-bold text-sm text-[#26352f]">
+                        {name}
+                        {pendingChangeIds.includes(m.id) && (
+                          <span className="ml-2 inline-block rounded-full bg-[#f1c89e] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#26352f]">
+                            Awaiting approval
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
                     </div>
                     <span
@@ -1922,24 +1964,30 @@ export function UserManagement() {
         <p className="hidden text-[11px] text-[#617068] sm:block">
           {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
         </p>
-        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+        {/* On desktop the three actions read as one row of equal-width
+            buttons with their full names; phones keep the compact labels
+            they have room for. */}
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto sm:gap-2">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
-            className="flex-1 sm:flex-none rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+            className="rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
           >
-            ✉️ Invite
+            <span className="sm:hidden">✉️ Invite</span>
+            <span className="hidden sm:inline">Invite via Email</span>
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="flex-1 sm:flex-none rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            className="rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
           >
-            + Add
+            <span className="sm:hidden">+ Add</span>
+            <span className="hidden sm:inline">Add Manually</span>
           </button>
           <button
             onClick={handlePrintMemberList}
-            className="flex-1 sm:flex-none rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+            className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
           >
-            🖨️ Print
+            <span className="sm:hidden">🖨️ Print</span>
+            <span className="hidden sm:inline">Print Users List</span>
           </button>
         </div>
       </div>
@@ -2520,10 +2568,14 @@ export function UserManagement() {
                   <DisabilityCombobox selectedDisabilities={editDisability} onChange={setEditDisability} placeholder="Select disability (optional)..." />
                 </div>
               </div>
+              <p className="rounded-xl bg-[#fdf8ef] px-4 py-3 text-[11px] leading-relaxed text-[#617068]">
+                Profile changes take effect when <strong className="text-[#26352f]">{editingMember.first_name || editingMember.username}</strong> approves
+                them — they&apos;ll get a notification on their dashboard and can accept or keep their current details. Role changes apply immediately.
+              </p>
               <div className="flex items-center gap-3 pt-2">
                 <button type="submit" disabled={submitting}
                   className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
-                  {submitting ? "Saving..." : "Save Profile Updates"}
+                  {submitting ? "Sending…" : "Send Update for Approval"}
                 </button>
                 <button type="button" onClick={() => setEditingMember(null)}
                   className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
