@@ -286,6 +286,28 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     sharing_option = serializers.CharField(max_length=100, required=False, allow_blank=True)
     attachment_name = serializers.SerializerMethodField()
     attachment_size = serializers.SerializerMethodField()
+    # Fund drives ride in the announcements feed with their numbers and the
+    # Give now / Pledge affordances; None for ordinary announcements.
+    kind = serializers.SerializerMethodField()
+    # Writing the link takes a drive's id; reading returns the drive's numbers.
+    campaign = serializers.PrimaryKeyRelatedField(
+        queryset=FundraisingCampaign.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    campaign_id = serializers.IntegerField(read_only=True, allow_null=True)
+    fund_drive = serializers.SerializerMethodField()
+
+    FUND_DRIVE_FIELDS = ('id', 'name', 'title', 'description', 'target_amount', 'total_raised', 'percentage_raised', 'end_date', 'donor_count', 'attachment', 'attachment_name', 'attachment_size')
+
+    def get_kind(self, obj):
+        return 'fund_drive' if obj.campaign_id else 'announcement'
+
+    def get_fund_drive(self, obj):
+        if not obj.campaign_id:
+            return None
+        return FundraisingCampaignSerializer(obj.campaign, read_only=True, fields=self.FUND_DRIVE_FIELDS).data
 
     def get_attachment_name(self, obj):
         """Original file name, so the UI can label an attachment without guessing from the URL."""
@@ -319,8 +341,8 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'published', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
-        read_only_fields = ('id', 'created_at')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        read_only_fields = ('id', 'created_at', 'campaign_id')
 
 
 class ContributionSerializer(serializers.ModelSerializer):
@@ -411,6 +433,9 @@ class SupportSubmissionSerializer(serializers.ModelSerializer):
 class ContributionAllocationSerializer(serializers.Serializer):
     """One account and how much of the gift goes to it."""
     purpose = serializers.CharField(max_length=120)
+    # The short account name Safaricom shows in the prompt (12 characters);
+    # absent on older clients, where the purpose string doubles as the account.
+    account = serializers.CharField(max_length=12, required=False, allow_blank=True)
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1,
                                       error_messages={'min_value': 'Each account needs at least KES 1.'})
 
@@ -488,7 +513,11 @@ class ContributionInitiateSerializer(serializers.Serializer):
                     {'allocations': f'"{purpose}" was chosen twice — each account appears once.'}
                 )
             seen.add(key)
-            cleaned.append({'purpose': purpose, 'amount': row['amount']})
+            cleaned.append({
+                'purpose': purpose,
+                'account': (row.get('account') or purpose)[:12],
+                'amount': row['amount'],
+            })
 
         if cleaned:
             attrs['allocations'] = cleaned
@@ -497,7 +526,7 @@ class ContributionInitiateSerializer(serializers.Serializer):
             attrs['amount'] = sum(row['amount'] for row in cleaned)
             attrs['purpose'] = cleaned[0]['purpose'] if len(cleaned) == 1 else f"{len(cleaned)} accounts"
         else:
-            attrs['allocations'] = [{'purpose': attrs['purpose'], 'amount': attrs['amount']}]
+            attrs['allocations'] = [{'purpose': attrs['purpose'], 'account': attrs['purpose'][:12], 'amount': attrs['amount']}]
 
         if attrs['giving_type'] == 'financial':
             if attrs['amount'] < 1:
@@ -827,6 +856,14 @@ class CampaignCardAssignmentSerializer(serializers.ModelSerializer):
 
 
 class FundraisingCampaignSerializer(serializers.ModelSerializer):
+    # fields=() narrows the payload when the drive rides inside an announcement.
+    def __init__(self, *args, fields=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if fields is not None:
+            allowed = set(fields)
+            for field_name in set(self.fields) - allowed:
+                self.fields.pop(field_name)
+
     total_raised = serializers.SerializerMethodField()
     percentage_raised = serializers.SerializerMethodField()
     donor_count = serializers.SerializerMethodField()
@@ -834,11 +871,28 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
     group_breakdown = serializers.SerializerMethodField()
     top_fundraisers = serializers.SerializerMethodField()
 
+    attachment_name = serializers.SerializerMethodField()
+    attachment_size = serializers.SerializerMethodField()
+
+    def get_attachment_name(self, obj):
+        if not obj.attachment:
+            return None
+        return obj.attachment.name.rsplit('/', 1)[-1]
+
+    def get_attachment_size(self, obj):
+        if not obj.attachment:
+            return None
+        try:
+            return obj.attachment.size
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
     class Meta:
         model = FundraisingCampaign
         fields = (
             'id', 'name', 'title', 'account_name', 'description', 'target_amount', 'start_date',
             'end_date', 'is_active', 'is_temporary', 'generate_card', 'target_groups', 'custom_card_image',
+            'attachment', 'attachment_name', 'attachment_size',
             'member_message', 'schedule_message', 'scheduled_at', 'message_frequency', 'message_sent',
             'last_message_sent_at', 'created_by', 'created_at', 'updated_at',
             'total_raised', 'percentage_raised', 'donor_count',
@@ -942,6 +996,27 @@ class TreasuryAccountSerializer(serializers.ModelSerializer):
         model = TreasuryAccount
         fields = ('id', 'name', 'account_number', 'account_type', 'account_type_display', 'balance', 'description', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def validate_name(self, value):
+        # Safaricom's AccountReference caps at 12 characters; the name IS what
+        # the M-Pesa prompt shows, so the cap lives here, at the API.
+        cleaned = (value or '').strip()
+        if not cleaned:
+            raise serializers.ValidationError('An account name is required.')
+        if len(cleaned) > 12:
+            raise serializers.ValidationError(
+                'The account name is what M-Pesa shows in the prompt, so it must be 12 characters or fewer '
+                f'(got {len(cleaned)}). Put the full wording in the description instead.'
+            )
+        return cleaned
+
+    def validate(self, attrs):
+        # The description is what members read in the giving form and the
+        # reports; default it from the short name so an account is never a code.
+        if not (attrs.get('description') or '').strip():
+            name = attrs.get('name') or (self.instance.name if self.instance else '')
+            attrs['description'] = (name or '').strip()
+        return attrs
 
 
 class TreasuryAccountTransactionSerializer(serializers.ModelSerializer):

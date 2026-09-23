@@ -68,13 +68,13 @@ export default function LocationMapPicker({
           if (err.code === 1) {
             showAlert(
               "Location Permission Denied",
-              "Location access was not allowed. You can describe your location or click 'Show Map' if you wish to drop a pin manually.",
+              "Location access was not allowed. You can describe your location or show the map if you wish to drop a pin manually.",
               "info"
             );
           } else {
             showAlert(
               "Location Unavailable",
-              "Unable to detect GPS position. You can click 'Show Map' if you wish to drop a location pin manually.",
+              "Unable to detect GPS position. You can show the map if you wish to drop a location pin manually.",
               "warning"
             );
           }
@@ -111,7 +111,7 @@ export default function LocationMapPicker({
             </span>
           ) : (
             <span className="text-xs font-medium text-[#617068]">
-              Click 'Use My GPS Location' or 'Show Map'
+              Use My GPS Location or Show Map
             </span>
           )}
         </div>

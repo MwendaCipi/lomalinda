@@ -331,18 +331,18 @@ function VisitationContent() {
 
                   <div className="flex items-center gap-3">
                     <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 rounded-full bg-[#5f8067] py-3.5 text-center font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
-                    >
-                      {loading ? "Submitting..." : "Submit Visitation Request"}
-                    </button>
-                    <button
                       type="button"
                       onClick={() => setShowForm(false)}
                       className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
                     >
                       Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 rounded-full bg-[#5f8067] py-3.5 text-center font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+                    >
+                      {loading ? "Submitting..." : "Submit Request"}
                     </button>
                   </div>
                 </form>

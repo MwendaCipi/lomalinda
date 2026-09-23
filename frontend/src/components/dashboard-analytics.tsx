@@ -259,11 +259,11 @@ export function DashboardAnalytics() {
   const [trend, setTrend] = useState<"weeks" | "months">("weeks");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (window: number) => {
+  const load = useCallback(async (windowW: number) => {
     const token = localStorage.getItem("access_token");
     setBusy(true);
     try {
-      const res = await fetch(`${API_URL}/api/members/dashboard/analytics/?weeks=${window}`, {
+      const res = await fetch(`${API_URL}/api/members/dashboard/analytics/?weeks=${windowW}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.status === 403) {
@@ -309,9 +309,35 @@ export function DashboardAnalytics() {
   const rangeLabel = `last ${data.window_weeks} weeks`;
   const net = data.giving.window_total - data.expenditure.window_total;
   const insights = buildInsights(data);
-  const monthIncome = data.monthly.reduce((sum, month) => sum + month.income, 0);
-  const monthExpense = data.monthly.reduce((sum, month) => sum + month.expense, 0);
-  const hasMonthly = data.monthly.some((month) => month.income > 0 || month.expense > 0);
+
+  // Quarterly statistics are founded on the window_start the treasurer selected.
+  // Each quarter is a three-month window; together the four quarters cover the
+  // twelve months the dashboard presents, so the statistics track the four
+  // quarters of the year the treasurer is looking at.
+  const windowStartMs = new Date(data.window_start).getTime();
+  const quarterByIndex = Array.from({ length: 4 }, (_, index) => {
+    const quarterStart = new Date(windowStartMs + index * 3 * 30 * 24 * 60 * 60 * 1000);
+    quarterStart.setDate(1);
+    return data.monthly.filter((month) => {
+      const monthStart = new Date(month.month_start).getTime();
+      const quarterEnd = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1).getTime();
+      return monthStart >= quarterStart.getTime() && monthStart < quarterEnd;
+    });
+  });
+  const quarterLabel = (index: number) => {
+    const quarterStart = new Date(windowStartMs + index * 3 * 30 * 24 * 60 * 60 * 1000);
+    quarterStart.setDate(1);
+    const monthName = quarterStart.toLocaleDateString("en-GB", { month: "long" });
+    return `Q${index + 1} · ${monthName}`;
+  };
+
+  const quarterIncome = (index: number) =>
+    quarterByIndex[index].reduce((sum, month) => sum + month.income, 0);
+  const quarterExpense = (index: number) =>
+    quarterByIndex[index].reduce((sum, month) => sum + month.expense, 0);
+  const quarterGifts = (index: number) =>
+    quarterByIndex[index].reduce((sum, month) => sum + month.gifts, 0);
+  const hasQuarterly = quarterByIndex.some((quarter) => quarter.some((month) => month.income > 0 || month.expense > 0));
 
   return (
     <section
@@ -373,34 +399,11 @@ export function DashboardAnalytics() {
       )}
 
       {/* Headline figures */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
         <StatTile
           label="Total liquidity"
           value={fmtAmount(data.funds.total_liquidity)}
           hint={`${data.funds.account_count} ${data.funds.account_count === 1 ? "account" : "accounts"}`}
-        />
-        <StatTile
-          label={`Giving (${rangeLabel})`}
-          value={fmtAmount(data.giving.window_total)}
-          hint={deltaHint(data.giving.window_total, data.previous.income)}
-          tone={
-            changePercent(data.giving.window_total, data.previous.income) === null
-              ? undefined
-              : data.giving.window_total >= data.previous.income
-                ? "good"
-                : "warn"
-          }
-        />
-        <StatTile
-          label={`Spending (${rangeLabel})`}
-          value={fmtAmount(data.expenditure.window_total)}
-          hint={deltaHint(data.expenditure.window_total, data.previous.expense)}
-        />
-        <StatTile
-          label={`Net (${rangeLabel})`}
-          value={fmtAmount(net)}
-          hint={net >= 0 ? "surplus" : "deficit"}
-          tone={net >= 0 ? "good" : "warn"}
         />
         <StatTile
           label="Average gift"
@@ -413,91 +416,73 @@ export function DashboardAnalytics() {
           hint="no individual giver on record"
         />
         <StatTile
-          label={`${data.budget.year} giving to date`}
-          value={fmtAmount(data.giving.this_year)}
-          hint={
-            data.budget.has_budget
-              ? `planned ${fmtAmount(data.budget.income_target)}`
-              : `${fmtAmount(data.giving.this_month)} this month`
-          }
-        />
-        <StatTile
           label="Members"
           value={String(data.members.total)}
           hint={`${data.members.friends} friends · ${data.members.new_this_month} new this month`}
         />
       </div>
 
-      {/* Money in and out over time */}
+      {/* The quarterly slides a treasurer opens with: one card per quarter,
+          each with the income vs spending bar for that window and a short
+          honest read. */}
       <div className="mt-6 rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-            <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Giving in vs spending out
-          </h3>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex rounded-full border border-[#c9c5bb] bg-white p-0.5" role="group" aria-label="Granularity">
-              {(["weeks", "months"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setTrend(option)}
-                  aria-pressed={trend === option}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold capitalize transition ${
-                    trend === option ? "bg-[#26352f] text-white" : "text-[#26352f] hover:bg-[#f2efe8]"
-                  }`}
-                >
-                  {option === "weeks" ? `Weekly (${data.window_weeks})` : "Monthly (12)"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <p className="mt-2 text-[11px] text-[#617068]">
-          {trend === "weeks" ? (
-            <>
-              {rangeLabel} · in {fmtAmount(data.giving.window_total)} · out{" "}
-              {fmtAmount(data.expenditure.window_total)} · net{" "}
-              <span className={net >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}>{fmtAmount(net)}</span>
-            </>
-          ) : (
-            <>
-              Last 12 months · in {fmtAmount(monthIncome)} · out {fmtAmount(monthExpense)} · net{" "}
-              <span className={monthIncome - monthExpense >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}>
-                {fmtAmount(monthIncome - monthExpense)}
-              </span>
-            </>
-          )}
+        <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
+          <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Giving in vs spending out, by quarter
+        </h3>
+        <p className="mt-1 text-[11px] text-[#617068]">
+          Four quarters across the window the treasurer chose on the left.
         </p>
+        <div className="mt-4 gap-4 sm:gap-6">
+          {quarterByIndex.map((quarter, index) => {
+            const income = quarterIncome(index);
+            const expense = quarterExpense(index);
+            const gifts = quarterGifts(index);
+            const net = income - expense;
+            const share = income > 0 ? (gifts / income) * 100 : 0;
 
-        <div className="mt-4">
-          {trend === "weeks" ? (
-            <GroupedBarChart
-              groups={data.series.map((point) => ({ label: point.label, values: [point.income, point.expense] }))}
-              series={[
-                { label: "Giving in", color: INCOME_COLOR },
-                { label: "Spending out", color: EXPENSE_COLOR },
-              ]}
-              formatValue={fmtCompact}
-              emptyLabel={`No giving or spending recorded in the ${rangeLabel} yet.`}
-            />
-          ) : (
-            <TrendLineChart
-              points={data.monthly.map((month) => ({ label: month.label, values: [month.income, month.expense] }))}
-              series={[
-                { label: "Giving in", color: INCOME_COLOR },
-                { label: "Spending out", color: EXPENSE_COLOR },
-              ]}
-              formatValue={fmtCompact}
-              emptyLabel="No giving or spending recorded in the last 12 months yet."
-            />
-          )}
+            return (
+              <div key={index} className={`rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-4 ${index > 0 ? "sm:mt-4" : ""}`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#26352f]">{quarterLabel(index)}</p>
+                    <p className="mt-0.5 text-[11px] text-[#617068]">
+                      {quarter.length > 0 ? `${quarter.reduce((sum, month) => sum + month.income + month.expense, 0)} recorded across ${quarter.length} month${quarter.length === 1 ? "" : "s"}` : "No money recorded in this quarter yet."}
+                    </p>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-sm font-bold text-[#26352f]">{fmtAmount(income)}</span>
+                    <span className="text-sm font-bold text-[#96552c]">{fmtAmount(expense)}</span>
+                    <span className={`text-sm font-bold ${net >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}`}>
+                      {fmtAmount(net)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  {quarter.length > 0 ? (
+                    <GroupedBarChart
+                      groups={quarter.map((month) => ({ label: month.label, values: [month.income, month.expense] }))}
+                      series={[
+                        { label: "Giving in", color: INCOME_COLOR },
+                        { label: "Spending out", color: EXPENSE_COLOR },
+                      ]}
+                      formatValue={fmtCompact}
+                      emptyLabel={`No giving or spending recorded in ${quarterLabel(index)} yet.`}
+                    />
+                  ) : (
+                    <p className="text-[11px] text-[#617068]">
+                      No giving or spending recorded in this quarter yet.
+                    </p>
+                  )}
+                </div>
+                {income > 0 && (
+                  <p className="mt-2 text-[11px] text-[#617068]">
+                    {share.toFixed(0)}% of the {fmtAmount(income)} came in as collections or anonymous gifts.
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
-        {!hasMonthly && (
-          <p className="mt-2 text-[11px] text-[#617068]">
-            The month-by-month line fills in as the church records more giving.
-          </p>
-        )}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -608,8 +593,8 @@ export function DashboardAnalytics() {
               { label: "Givers", value: String(data.giving.givers.givers) },
               { label: "Average gift", value: fmtAmount(data.giving.givers.average) },
               { label: "Largest gift", value: fmtAmount(data.giving.givers.largest) },
-              { label: "This month", value: fmtAmount(data.giving.this_month) },
-              { label: "Last month", value: fmtAmount(data.giving.last_month) },
+              { label: "This quarter", value: fmtAmount(quarterIncome(0)) },
+              { label: "Next quarter", value: fmtAmount(quarterIncome(1)) },
             ].map((row) => (
               <div key={row.label}>
                 <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{row.label}</dt>

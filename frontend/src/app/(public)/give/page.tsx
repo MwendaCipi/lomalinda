@@ -22,6 +22,16 @@ const defaultPurposes = [
 
 type MethodOfGiving = "mpesa" | "bank_transfer";
 
+/** One row from /giving-accounts/: the label givers read and the short account name M-Pesa shows. */
+type GivingAccountOption = {
+  id: number;
+  name: string;
+  label: string;
+  account: string;
+  account_type: string;
+  account_type_display: string;
+};
+
 type MyGiving = {
   id: number;
   amount: string | number;
@@ -78,7 +88,7 @@ function GivePageContent() {
   const [accountAmounts, setAccountAmounts] = useState<Record<string, string>>({});
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
-  const [purposes, setPurposes] = useState<string[]>([]);
+  const [purposes, setPurposes] = useState<GivingAccountOption[]>([]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bankRefNumber, setBankRefNumber] = useState("");
   const [senderBankName, setSenderBankName] = useState("");
@@ -256,22 +266,28 @@ function GivePageContent() {
    * list — a ministry account, say. Without this the picker would fall back to
    * its first option and the giver would support the wrong account entirely.
    */
-  const ensureLinkedPurpose = (list: string[], wanted: string) =>
-    wanted && !list.includes(wanted) ? [wanted, ...list] : list;
+  const ensureLinkedPurpose = (list: GivingAccountOption[], wanted: string) =>
+    wanted && !list.some((option) => option.label.toLowerCase() === wanted.toLowerCase())
+      ? [{ id: -1, name: wanted.slice(0, 12), label: wanted, account: wanted.slice(0, 12), account_type: "other", account_type_display: "Other" }, ...list]
+      : list;
 
   useEffect(() => {
-    fetch(`${API_URL}/api/members/giving-purposes/`)
+    // Treasury accounts are the one source of giving accounts, priority-ordered
+    // by the API (Tithe, offerings, budget, camp funds, then the rest).
+    fetch(`${API_URL}/api/members/giving-accounts/`)
       .then((response) => (response.ok ? response.json() : []))
-      .then((data: { name: string }[]) => {
-        const apiNames = data.map((item) => item.name);
-        const published = apiNames.length ? apiNames : defaultPurposes;
+      .then((data: GivingAccountOption[]) => {
+        const published = data.length ? data : defaultPurposes.map((name) => ({ id: -1, name: name.slice(0, 12), label: name, account: name.slice(0, 12), account_type: "other", account_type_display: "Other" }));
         const exact = linkedPurpose
-          ? published.find((name) => name.toLowerCase() === linkedPurpose.toLowerCase())
+          ? published.find((option) => option.label.toLowerCase() === linkedPurpose.toLowerCase())
           : undefined;
-        if (exact) setSelectedAccounts([exact]);
-        setPurposes(ensureLinkedPurpose(published, exact ?? normalizedPurpose));
+        if (exact) setSelectedAccounts([exact.label]);
+        setPurposes(ensureLinkedPurpose(published, exact?.label ?? normalizedPurpose));
       })
-      .catch(() => setPurposes(ensureLinkedPurpose(defaultPurposes, normalizedPurpose)));
+      .catch(() => setPurposes(ensureLinkedPurpose(
+        defaultPurposes.map((name) => ({ id: -1, name: name.slice(0, 12), label: name, account: name.slice(0, 12), account_type: "other", account_type_display: "Other" })),
+        normalizedPurpose,
+      )));
   }, [linkedPurpose, normalizedPurpose]);
 
   async function submitGiving(event: FormEvent<HTMLFormElement>) {
@@ -292,8 +308,12 @@ function GivePageContent() {
         setLoading(false);
         return;
       }
+      // The ledger records the wording givers read (the description); the
+      // M-Pesa prompt shows the account, which Safaricom caps at 12 characters.
+      const accountByName = new Map(purposes.map((option) => [option.label, option.account]));
       const allocations = selectedAccounts.map((account) => ({
         purpose: account,
+        account: accountByName.get(account) || account.slice(0, 12),
         amount: Number(accountAmounts[account]) || 0,
       }));
 
@@ -692,19 +712,19 @@ function GivePageContent() {
                           Tick every account you are giving to
                         </p>
                         {purposes.map((item) => {
-                          const checked = selectedAccounts.includes(item);
+                          const checked = selectedAccounts.includes(item.label);
                           return (
                             <label
-                              key={item}
+                              key={`${item.id}-${item.label}`}
                               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
                             >
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => toggleAccount(item)}
+                                onChange={() => toggleAccount(item.label)}
                                 className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
                               />
-                              <span className="min-w-0 flex-1 truncate">{item}</span>
+                              <span className="min-w-0 flex-1 truncate">{item.label}</span>
                             </label>
                           );
                         })}

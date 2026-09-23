@@ -72,7 +72,10 @@ export function NextGatheringCard() {
       .then((response) => (response.ok ? response.json() : []))
       .then((data: Announcement[]) => {
         if (!Array.isArray(data)) return;
-        setAnnouncements(data.filter((item) => !localStorage.getItem(`announcement-handled-${item.id}`)));
+        // Slides play everything the church has published — nothing is
+        // marked handled here, so the same announcement still offers its
+        // actions on the announcements page and in popups.
+        setAnnouncements(data);
       })
       .catch(() => undefined);
   }, []);
@@ -114,13 +117,9 @@ export function NextGatheringCard() {
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
 
-  function dismissCurrentAnnouncement() {
-    if (!current) return;
-    localStorage.setItem(`announcement-handled-${current.id}`, "true");
-    setAnnouncements((prev) => prev.filter((item) => item.id !== current.id));
-    setSlide(0);
-    setIsInteracting(false);
-  }
+  // The landing card plays announcements as slides — they are read, not
+  // acted on here, so there is no dismiss; the announcements page is where a
+  // member responds or gives.
 
   async function handleActionSubmit(event: FormEvent) {
     event.preventDefault();
@@ -151,7 +150,6 @@ export function NextGatheringCard() {
         throw new Error(error.detail || "Unable to submit action.");
       }
 
-      localStorage.setItem(`announcement-handled-${current.id}`, "true");
       setSuccessMessage("Thank you! Your action has been recorded.");
       setPledgeAmount("");
       setResponseText("");
@@ -160,8 +158,7 @@ export function NextGatheringCard() {
 
       setTimeout(() => {
         setSuccessMessage("");
-        setAnnouncements((prev) => prev.filter((item) => item.id !== current.id));
-        setSlide(0);
+        setSlide((prev) => (prev + 1) % slideCount);
         setIsInteracting(false);
       }, 1400);
     } catch (error) {
@@ -297,14 +294,12 @@ export function NextGatheringCard() {
                 >
                   {submitting ? "Submitting..." : isContributionAction ? "Submit Contribution Action" : actionType === "respond" ? "Send Response" : "Done"}
                 </button>
-                <button
-                  type="button"
-                  onClick={dismissCurrentAnnouncement}
-                  disabled={submitting}
+                <Link
+                  href="/announcements"
                   className="rounded-full border border-[#a9bcae] px-4 py-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
                 >
-                  Dismiss
-                </button>
+                  See all announcements
+                </Link>
               </div>
             </form>
           )

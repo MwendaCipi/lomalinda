@@ -206,6 +206,16 @@ class Announcement(models.Model):
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
     is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")
     action_prompt = models.CharField(max_length=255, blank=True, help_text="Optional prompt for pledge or response")
+    # A fund drive surfaced inside the announcements feed: members see it with
+    # Give now / Pledge buttons, and the drive's own numbers ride along.
+    campaign = models.ForeignKey(
+        'members.FundraisingCampaign',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='announcements',
+        help_text='Set when this announcement is the public face of a fund drive.',
+    )
     published = models.BooleanField(default=True)
     expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
     event_date_from = models.DateField(null=True, blank=True, help_text="First day of the event this announcement is about")
@@ -452,6 +462,9 @@ class FundraisingCampaign(models.Model):
     generate_card = models.BooleanField(default=True)
     target_groups = models.JSONField(default=list, blank=True, help_text="List of assigned group/department keys")
     custom_card_image = models.ImageField(upload_to='campaign_cards/', null=True, blank=True)
+    # A flyer or poster that travels with the drive: shown with the drive's
+    # announcement and attached when the drive's message is emailed.
+    attachment = models.FileField(upload_to='campaign-attachments/', blank=True, null=True)
     member_message = models.TextField(blank=True, help_text="Broadcast notification message sent to church members")
     schedule_message = models.BooleanField(default=False, help_text="Whether to schedule the member message for automatic dispatch")
     scheduled_at = models.DateTimeField(null=True, blank=True, help_text="Scheduled date and time to broadcast to members")
@@ -907,17 +920,40 @@ class BusinessMeetingAgenda(models.Model):
 
 
 class TreasuryAccount(models.Model):
+    # The order the giving form offers accounts in. Tithe and the offering
+    # funds lead, camp-related accounts follow, everything else trails in by
+    # name — see giving_account_options(), which is the one place that reads it.
+    PRIORITY_ORDER = [
+        'Tithe',
+        'Combined Offering',
+        'Local Church Budget',
+    ]
+    CAMP_KEYWORDS = ('camp', 'camporee', 'campout', 'camp out', 'camp offering', 'camp goal')
+
     ACCOUNT_TYPE_CHOICES = [
         ('bank', 'Bank Account'),
         ('mobile_money', 'Mobile Money / Paybill'),
         ('cash', 'Cash / Petty Cash'),
         ('other', 'Other Account'),
     ]
-    name = models.CharField(max_length=160)
+    name = models.CharField(
+        max_length=12,
+        help_text=(
+            'The account, as M-Pesa shows it in the prompt. Safaricom caps the '
+            'account reference at 12 characters, so the name must be short.'
+        ),
+    )
+    # What members actually read: the giving form and the reports show this,
+    # the M-Pesa prompt shows the short name above it.
+    description = models.CharField(
+        max_length=160,
+        blank=True,
+        default='',
+        help_text='Shown in the giving form and reports (e.g. "Tithe — returned to God for gospel work").',
+    )
     account_number = models.CharField(max_length=80, blank=True, default='')
     account_type = models.CharField(max_length=30, choices=ACCOUNT_TYPE_CHOICES, default='bank')
     balance = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
-    description = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -925,7 +961,19 @@ class TreasuryAccount(models.Model):
         ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} ({self.get_account_type_display()}) - KES {self.balance}"
+        return f"{self.description or self.name} ({self.get_account_type_display()}) - KES {self.balance}"
+
+    @classmethod
+    def priority_rank(cls, account):
+        """0-first ordering key: Tithe, offerings, budget, camp funds, then the rest."""
+        name = (account.description or account.name or '').strip()
+        lowered = name.lower()
+        for rank, label in enumerate(cls.PRIORITY_ORDER):
+            if lowered == label.lower():
+                return (rank, name.lower())
+        if any(keyword in lowered for keyword in cls.CAMP_KEYWORDS):
+            return (len(cls.PRIORITY_ORDER), name.lower())
+        return (len(cls.PRIORITY_ORDER) + 1, name.lower())
 
 
 class TreasuryAccountTransaction(models.Model):

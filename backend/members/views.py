@@ -2572,7 +2572,10 @@ class InitiateContributionView(APIView):
             # so the callback can credit each account when the money arrives.
             'amount': str(data['amount']),
             'purpose': data['purpose'],
-            'allocations': [{'purpose': row['purpose'], 'amount': str(row['amount'])} for row in allocations],
+            'allocations': [
+                {'purpose': row['purpose'], 'account': row.get('account', row['purpose'])[:12], 'amount': str(row['amount'])}
+                for row in allocations
+            ],
             'phone_number': phone_number,
         }
         donor_name = (data.get('donor_name') or '').strip()
@@ -2596,7 +2599,10 @@ class InitiateContributionView(APIView):
             result = initiate_stk_push_for_context(
                 phone_number=phone_number,
                 amount=data['amount'],
-                purpose=data['purpose'],
+                # The prompt's account reference is the first gift's short
+                # account name (Safaricom shows one reference per push even
+                # when the gift is split across accounts).
+                purpose=data['allocations'][0].get('account', data['purpose']),
                 context_token=pack_callback_context(context),
             )
         except MpesaConfigurationError as error:
@@ -2664,6 +2670,8 @@ class MpesaCallbackView(APIView):
                 contribution = Contribution.objects.create(
                     amount=Decimal(str(row['amount'])),
                     giving_type='financial',
+                    # The ledger records the wording the giver read (the
+                    # description); the account stays what M-Pesa showed.
                     purpose=row['purpose'],
                     phone_number=phone,
                     donor_name=(context.get('donor_name') or '').strip() or payer_name,
@@ -3205,6 +3213,39 @@ class InKindContributionView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+def giving_account_options():
+    """The accounts the giving form offers, in the church's priority order.
+
+    Treasury accounts are the one source of giving accounts — the separate
+    giving-purpose list was retired. The order leads with Tithe, the offering
+    funds and the budget, then camp-related accounts, then everything else by
+    name (see TreasuryAccount.priority_rank). Each option carries both wordings:
+    `label` is what the giver reads (the description), `account` is the short
+    name Safaricom shows in the prompt.
+    """
+    accounts = sorted(TreasuryAccount.objects.all(), key=TreasuryAccount.priority_rank)
+    return [
+        {
+            'id': account.id,
+            'name': account.name,
+            'label': (account.description or account.name).strip() or account.name,
+            'account': account.name,
+            'account_type': account.account_type,
+            'account_type_display': account.get_account_type_display(),
+        }
+        for account in accounts
+    ]
+
+
+class GivingAccountsView(APIView):
+    """Giving accounts, sourced from treasury accounts in priority order."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response(giving_account_options())
+
+
 class GivingPurposeListCreateView(generics.ListCreateAPIView):
     serializer_class = GivingPurposeSerializer
 
@@ -3215,17 +3256,12 @@ class GivingPurposeListCreateView(generics.ListCreateAPIView):
         return GivingPurpose.objects.filter(active=True)
 
     def list(self, request, *args, **kwargs):
-        active_campaigns = list(FundraisingCampaign.objects.filter(is_active=True).values_list('name', flat=True))
-        for name in active_campaigns:
-            gp, created = GivingPurpose.objects.get_or_create(name=name)
-            if not gp.active:
-                gp.active = True
-                gp.save(update_fields=['active'])
-
-        queryset = list(self.get_queryset())
-        queryset.sort(key=lambda p: (0 if p.name in active_campaigns else 1, p.name))
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        # Giving accounts moved to treasury accounts; the legacy purposes list
+        # now serves the same shapes so older builds keep working until every
+        # client is updated. New code reads /giving-accounts/.
+        accounts = giving_account_options()
+        names = [row['label'] for row in accounts]
+        return Response([{'id': index, 'name': name, 'account_name': '', 'active': True} for index, name in enumerate(names)])
 
     def perform_create(self, serializer):
         if not is_finance_manager(self.request.user):
@@ -3415,15 +3451,9 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church treasurers or administrators can create fundraising campaigns.')
         campaign = serializer.save(created_by=self.request.user)
-        purpose, _ = GivingPurpose.objects.get_or_create(name=campaign.name)
-        if not purpose.active:
-            purpose.active = True
-            purpose.save(update_fields=['active'])
-        if campaign.account_name and campaign.account_name != campaign.name:
-            acc_purpose, _ = GivingPurpose.objects.get_or_create(name=campaign.account_name)
-            if not acc_purpose.active:
-                acc_purpose.active = True
-                acc_purpose.save(update_fields=['active'])
+        # Giving accounts are treasury accounts now; a drive is offered in the
+        # giving form when the treasurer links it to an account, not by minting
+        # a giving-purpose row for its name (the old behaviour retired).
 
         group_role_map = {
             'choir': ('choir_director', 'Choir Ministry'),

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from .views import CHILDREN_LESSON_SOURCES, _WeeklyLessonParser, first_children_lesson_url, send_invitation_email
+from .views import CHILDREN_LESSON_SOURCES, _WeeklyLessonParser, first_children_lesson_url, send_invitation_email, GivingAccountsView
 
 
 class WeeklyLessonParserTests(TestCase):
@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, GivingPurpose, InventoryMovement, Invitation, MemberProfile, MpesaRefund, Testimony, TreasuryAccount, Announcement
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -218,7 +218,7 @@ class MpesaInitiationAPITests(APITestCase):
             {
                 'amount': '100.00',
                 'purpose': 'Tithe',
-                'allocations': [{'purpose': 'Tithe', 'amount': '100.00'}],
+                'allocations': [{'purpose': 'Tithe', 'account': 'Tithe', 'amount': '100.00'}],
                 'phone_number': '254712345678',
             },
         )
@@ -759,7 +759,7 @@ class PdfGenerationAPITests(APITestCase):
     def test_treasury_accounts_and_expenditures(self):
         from .models import TreasuryAccount, Expenditure
         response = self.client.post('/api/members/treasury/accounts/', {
-            "name": "KCB Main Account",
+            "name": "KCB Main",
             "account_number": "1122334455",
             "account_type": "bank",
             "balance": "50000.00",
@@ -769,7 +769,7 @@ class PdfGenerationAPITests(APITestCase):
         acc1_id = response.data['id']
 
         response2 = self.client.post('/api/members/treasury/accounts/', {
-            "name": "Paybill Account",
+            "name": "Paybill",
             "account_number": "522522",
             "account_type": "mobile_money",
             "balance": "20000.00",
@@ -2955,7 +2955,10 @@ class SplitGivingTests(APITestCase):
         context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
         self.assertEqual(
             context['allocations'],
-            [{'purpose': 'Tithe', 'amount': '500.00'}, {'purpose': 'Building Fund', 'amount': '1000.00'}],
+            [
+                {'purpose': 'Tithe', 'account': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'account': 'Building Fun', 'amount': '1000.00'},
+            ],
         )
         self.assertEqual(context['amount'], '1500.00')
 
@@ -3299,3 +3302,159 @@ class ChurchLegalDocumentsTests(APITestCase):
 
         self.assertEqual(cleared.status_code, status.HTTP_200_OK)
         self.assertEqual(ChurchSettings.objects.get().privacy_policy, '')
+
+
+class GivingAccountsFromTreasuryTests(APITestCase):
+    """Treasury accounts are the giving form's one source of accounts.
+
+    The separate giving-purpose list is retired: the form reads
+    /giving-accounts/, which serves the treasury accounts in the church's
+    priority order with both wordings — the description givers read, and the
+    12-character account name Safaricom shows in the prompt.
+    """
+
+    URL = '/api/members/giving-accounts/'
+
+    def test_priority_order_leads_with_tithe_offering_budget_then_camp(self):
+        TreasuryAccount.objects.create(name='Choir', description='Choir Fund')
+        TreasuryAccount.objects.create(name='Camporee', description='Camporee 2026')
+        TreasuryAccount.objects.create(name='LCB', description='Local Church Budget')
+        TreasuryAccount.objects.create(name='Combined', description='Combined Offering')
+        TreasuryAccount.objects.create(name='Tithe', description='Tithe')
+
+        rows = GivingAccountsView().get(self._dummy_request()).data
+
+        labels = [row['label'] for row in rows]
+        self.assertEqual(labels[:3], ['Tithe', 'Combined Offering', 'Local Church Budget'])
+        self.assertEqual(labels[3], 'Camporee 2026')
+        self.assertEqual(labels[-1], 'Choir Fund')
+
+    def _dummy_request(self):
+        from rest_framework.test import APIRequestFactory
+        return APIRequestFactory().get(self.URL)
+
+    def test_each_account_carries_both_wordings(self):
+        TreasuryAccount.objects.create(name='Tithe', description='Tithe — returning to God')
+
+        rows = GivingAccountsView().get(self._dummy_request()).data
+
+        self.assertEqual(rows[0]['account'], 'Tithe')
+        self.assertEqual(rows[0]['label'], 'Tithe — returning to God')
+
+    def test_a_missing_description_defaults_to_the_account_name(self):
+        TreasuryAccount.objects.create(name='Rent', description='')
+
+        rows = GivingAccountsView().get(self._dummy_request()).data
+
+        self.assertEqual(rows[0]['label'], 'Rent')
+
+    def test_a_name_past_safaricoms_twelve_characters_is_refused(self):
+        self._sign_in_finance()
+        response = self.client.post('/api/members/treasury/accounts/', {
+            'name': 'Adventist Men Ministry',
+            'account_type': 'bank',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('12 characters', str(response.data))
+        self.assertEqual(TreasuryAccount.objects.count(), 0)
+
+    def test_a_name_at_the_cap_is_accepted_and_the_prompt_shows_it(self):
+        self._sign_in_finance()
+        response = self.client.post('/api/members/treasury/accounts/', {
+            'name': 'AdventistMen',
+            'account_type': 'bank',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        account = TreasuryAccount.objects.get()
+        self.assertEqual(account.name, 'AdventistMen')
+        # The description defaults from the name, so the form still reads it.
+        self.assertEqual(account.description, 'AdventistMen')
+        # And the M-Pesa push uses the short name as the reference.
+        from .mpesa import account_reference_for_purpose
+        self.assertEqual(account_reference_for_purpose(account.name), 'ADVENTISTMEN')
+
+    def test_an_empty_name_is_refused(self):
+        self._sign_in_finance()
+        response = self.client.post('/api/members/treasury/accounts/', {
+            'name': '   ',
+            'account_type': 'bank',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def _sign_in_finance(self):
+        treasurer = User.objects.create_user('giving.finance', 'gf@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(treasurer)
+
+    def test_giving_purposes_now_serves_treasury_accounts_for_older_builds(self):
+        TreasuryAccount.objects.create(name='Tithe', description='Tithe')
+        TreasuryAccount.objects.create(name='LCB', description='Local Church Budget')
+
+        response = self.client.get('/api/members/giving-purposes/')
+
+        self.assertEqual(
+            [row['name'] for row in response.data],
+            ['Tithe', 'Local Church Budget'],
+        )
+
+
+class FundDriveAnnouncementsTests(APITestCase):
+    """A fund drive appears in the announcements feed with its own numbers.
+
+    Members see drives and announcements in one feed; a drive's card carries
+    Give now / Pledge affordances because the API marks it as a fund drive and
+    includes the drive's target, total and deadline.
+    """
+
+    URL = '/api/members/announcements/'
+
+    def _clerk(self, name='drive.announcer'):
+        user = User.objects.create_user(name, f'{name}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role='clerk', roles='clerk')
+        return user
+
+    def test_a_drive_backed_announcement_reports_itself_as_a_fund_drive(self):
+        self.client.force_authenticate(self._clerk())
+        campaign = FundraisingCampaign.objects.create(name='Camp Drive', target_amount=Decimal('50000.00'))
+        response = self.client.post(self.URL, {
+            'title': 'Camp Drive',
+            'text': 'Help our young people reach camp.',
+            'visibility': 'members',
+            'campaign': campaign.id,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['kind'], 'fund_drive')
+        self.assertEqual(response.data['fund_drive']['name'], 'Camp Drive')
+        self.assertEqual(Decimal(str(response.data['fund_drive']['target_amount'])), Decimal('50000.00'))
+        announcement = Announcement.objects.get()
+        self.assertEqual(announcement.campaign_id, campaign.id)
+
+    def test_an_ordinary_announcement_has_no_drive(self):
+        self.client.force_authenticate(self._clerk('plain.announcer'))
+        response = self.client.post(self.URL, {
+            'title': 'Choir practice moves',
+            'text': 'Practice now meets on Thursday.',
+            'visibility': 'members',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['kind'], 'announcement')
+        self.assertIsNone(response.data['fund_drive'])
+
+    def test_a_member_still_cannot_post_announcements_even_with_a_drive(self):
+        member = User.objects.create_user('drive.member', 'dm@example.com', 'ChurchPass#2026')
+        campaign = FundraisingCampaign.objects.create(name='Roof Fund', target_amount=Decimal('100000.00'))
+        self.client.force_authenticate(member)
+        response = self.client.post(self.URL, {
+            'title': 'Roof Fund',
+            'text': 'The roof fund drive continues.',
+            'visibility': 'members',
+            'campaign': campaign.id,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Announcement.objects.count(), 0)

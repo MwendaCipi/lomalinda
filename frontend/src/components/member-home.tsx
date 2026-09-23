@@ -202,7 +202,7 @@ export function MemberHome() {
         <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
           {greeting}, {firstName}.
         </h1>
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           {roles.map((r) => (
             <span
               key={r}
@@ -213,12 +213,12 @@ export function MemberHome() {
               {roleLabel(r)}
             </span>
           ))}
+          {encouragementLine && (
+            <p className="mt-0 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:mt-0 sm:text-base sm:ml-3">
+              {encouragementLine}
+            </p>
+          )}
         </div>
-        {encouragementLine && (
-          <p className="mt-3 max-w-md text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
-            {encouragementLine}
-          </p>
-        )}
       </section>
 
       {loading ? (

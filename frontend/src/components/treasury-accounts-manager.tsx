@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Copy, MessageCircle } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 
@@ -46,6 +46,21 @@ export function TreasuryAccountsManager() {
 
   // Modals
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  // The row actions menu, and the account being edited in its dialog.
+  const [openMenuAccountId, setOpenMenuAccountId] = useState<number | null>(null);
+  const [editAccount, setEditAccount] = useState<TreasuryAccount | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setOpenMenuAccountId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [showCreditDebitModal, setShowCreditDebitModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   // The account whose support link is being shared with the congregation.
@@ -59,6 +74,8 @@ export function TreasuryAccountsManager() {
     balance: "",
     description: "",
   });
+
+  const [editForm, setEditForm] = useState({ name: "", description: "", account_number: "", account_type: "bank" as TreasuryAccount["account_type"] });
 
   const [creditDebitForm, setCreditDebitForm] = useState({
     account_id: "",
@@ -86,6 +103,21 @@ export function TreasuryAccountsManager() {
     return token
       ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
       : { "Content-Type": "application/json" };
+  };
+
+  const authErrors = (value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) return (value as unknown[]).map(authErrors).filter(Boolean).join(" ");
+    if (typeof value === "object") {
+      const err = value as Record<string, unknown>;
+      if (err.detail) return authErrors(err.detail);
+      return Object.values(err)
+        .map(authErrors)
+        .filter(Boolean)
+        .join(" ");
+    }
+    return "";
   };
 
   const fetchAccountsAndTransactions = async () => {
@@ -230,7 +262,10 @@ export function TreasuryAccountsManager() {
    */
   const supportLinkFor = (account: TreasuryAccount) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sdalomalinda.or.ke";
-    return `${origin}/give?purpose=${encodeURIComponent(account.name)}`;
+    // The giving form keys accounts by their description (what givers read);
+    // fall back to the short name for accounts that never got a description.
+    const label = (account.description || account.name).trim();
+    return `${origin}/give?purpose=${encodeURIComponent(label)}`;
   };
 
   const copySupportLink = async (account: TreasuryAccount) => {
@@ -240,6 +275,70 @@ export function TreasuryAccountsManager() {
       showAlert("Link copied", `Paste it wherever members can act on it — it opens the giving form with ${account.name} already selected.`, "success");
     } catch {
       showAlert("Copy this link", link, "info");
+    }
+  };
+
+  const openEditForAccount = (account: TreasuryAccount) => {
+    setEditForm({
+      name: account.name,
+      description: account.description || "",
+      account_number: account.account_number || "",
+      account_type: account.account_type,
+    });
+    setEditAccount(account);
+    setOpenMenuAccountId(null);
+  };
+
+  const handleEditAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAccount) return;
+    setSubmitting(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/accounts/${editAccount.id}/`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(editForm),
+      });
+      if (res.ok) {
+        setEditAccount(null);
+        setActionMessage("Treasury account updated.");
+        await fetchAccountsAndTransactions();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        // The API's wording explains the 12-character M-Pesa cap by name.
+        const detail = typeof err === "object" && err !== null ? Object.values(err).flat().join(" ") : "Failed to update account.";
+        setActionMessage(detail || "Failed to update account.");
+      }
+    } catch {
+      setActionMessage("Network error updating account.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteAccount = async (account: TreasuryAccount, fromMenu?: boolean) => {
+    if (!window.confirm(`Delete "${account.description || account.name}"? Its movement history goes with it.`)) return;
+    setActionMessage(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/accounts/${account.id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        setActionMessage("Treasury account deleted.");
+        if (fromMenu) setOpenMenuAccountId(null);
+        await fetchAccountsAndTransactions();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const detail = authErrors(err);
+        setActionMessage(detail || "Failed to delete account.");
+      }
+    } catch {
+      setActionMessage("Network error deleting account.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -326,10 +425,10 @@ export function TreasuryAccountsManager() {
           headCellClassName=""
           headers={[
             { label: "#", className: "w-12 px-4 py-3 text-left" },
+            { label: "Description", className: "px-4 py-3" },
             { label: "Account", className: "px-4 py-3" },
             { label: "Account No.", className: "px-4 py-3" },
             { label: "Type", className: "px-4 py-3" },
-            { label: "Description", className: "px-4 py-3" },
             { label: "Balance (KES)", className: "px-4 py-3 text-right" },
             { label: "Actions", className: "px-4 py-3 text-center" },
           ]}
@@ -374,38 +473,39 @@ export function TreasuryAccountsManager() {
                   </span>
                 </div>
                 {acc.description && <p className="text-[11px] leading-relaxed text-[#617068]">{acc.description}</p>}
-                <div className="flex items-center gap-2 border-t border-[#eeeae2] pt-2">
+                <div className="mt-2 rounded-2xl border border-[#dfdbd1] bg-white p-1.5">
                   <button
-                    onClick={() => openCreditDebitForAccount(acc.id, "credit")}
-                    className="inline-flex items-center gap-1 rounded-lg bg-[#eef2ed] px-2.5 py-1 text-[11px] font-bold text-[#3d7146] transition hover:bg-[#dce6da]"
+                    onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
+                    aria-expanded={openMenuAccountId === acc.id}
+                    aria-label={`Actions for ${acc.description || acc.name}`}
+                    className="flex w-full items-center justify-between gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
                   >
-                    <ArrowDownLeft className="h-3 w-3" />
-                    <span>Credit</span>
+                    <span className="text-[#617068]">More</span>
+                    <MoreVertical className="h-3.5 w-3.5 text-[#617068]" />
                   </button>
-                  <button
-                    onClick={() => openCreditDebitForAccount(acc.id, "debit")}
-                    className="inline-flex items-center gap-1 rounded-lg bg-[#fdf2f2] px-2.5 py-1 text-[11px] font-bold text-[#b91c1c] transition hover:bg-[#fde8e8]"
-                  >
-                    <ArrowUpRight className="h-3 w-3" />
-                    <span>Debit</span>
-                  </button>
-                  <button
-                    onClick={() => openTransferFromAccount(acc.id)}
-                    disabled={accounts.length < 2}
-                    title="Transfer from this account"
-                    className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:opacity-40"
-                  >
-                    <ArrowRightLeft className="h-3 w-3 text-[#b36b3c]" />
-                    <span>Transfer</span>
-                  </button>
-                  <button
-                    onClick={() => setSupportAccount(acc)}
-                    title="Share a giving link for this account"
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-bold text-[#26352f] transition hover:bg-[#f7f4ee]"
-                  >
-                    <HandHeart className="h-3 w-3 text-[#b36b3c]" />
-                    <span>Support</span>
-                  </button>
+                  {openMenuAccountId === acc.id && (
+                    <div className="mt-1 w-46 rounded-2xl border border-[#dfdbd1] bg-white p-1 shadow-2xl ring-1 ring-black/5">
+                      {([
+                        { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "credit"); } },
+                        { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "debit"); } },
+                        { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); openTransferFromAccount(acc.id); }, disabled: accounts.length < 2 },
+                        { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); setSupportAccount(acc); } },
+                        { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => { setOpenMenuAccountId(null); openEditForAccount(acc); } },
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); handleDeleteAccount(acc); } },
+                      ] as const).map((action) => (
+                        <button
+                          key={action.label}
+                          type="button"
+                          disabled={"disabled" in action && action.disabled}
+                          onClick={action.run}
+                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {action.icon}
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>            )}
           renderRow={(acc, idx) => (
@@ -413,9 +513,14 @@ export function TreasuryAccountsManager() {
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="rounded-lg bg-[#f7f4ee] p-1.5">{getAccountIcon(acc.account_type)}</div>
-                        <span className="font-semibold text-[#26352f]">{acc.name}</span>
+                        <div className="shrink-0 rounded-lg bg-[#f7f4ee] p-1.5">{getAccountIcon(acc.account_type)}</div>
+                        <span className="font-semibold text-[#26352f]" title={acc.description || acc.name}>
+                          {acc.description || acc.name}
+                        </span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-[#617068]" title="Shown in the M-Pesa prompt (max 12 characters)">
+                      {acc.name}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-[#617068]">{acc.account_number || "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">
@@ -423,45 +528,43 @@ export function TreasuryAccountsManager() {
                         {acc.account_type_display || acc.account_type}
                       </span>
                     </td>
-                    <td className="max-w-[260px] truncate px-4 py-3 text-xs text-[#617068]" title={acc.description || undefined}>
-                      {acc.description || "—"}
-                    </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-[#26352f]">
                       KES {Number(acc.balance || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="relative flex items-center justify-center" ref={openMenuAccountId === acc.id ? actionsMenuRef : undefined}>
                         <button
-                          onClick={() => openCreditDebitForAccount(acc.id, "credit")}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#eef2ed] px-2.5 py-1 text-xs font-semibold text-[#3d7146] transition hover:bg-[#dce6da]"
+                          onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
+                          aria-expanded={openMenuAccountId === acc.id}
+                          aria-label={`Actions for ${acc.description || acc.name}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
                         >
-                          <ArrowDownLeft className="h-3.5 w-3.5" />
-                          <span>Credit</span>
+                          Actions
+                          <MoreVertical className="h-3.5 w-3.5 text-[#617068]" />
                         </button>
-                        <button
-                          onClick={() => openCreditDebitForAccount(acc.id, "debit")}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#fdf2f2] px-2.5 py-1 text-xs font-semibold text-[#b91c1c] transition hover:bg-[#fde8e8]"
-                        >
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                          <span>Debit</span>
-                        </button>
-                        <button
-                          onClick={() => openTransferFromAccount(acc.id)}
-                          disabled={accounts.length < 2}
-                          title="Transfer from this account"
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:opacity-40"
-                        >
-                          <ArrowRightLeft className="h-3.5 w-3.5 text-[#b36b3c]" />
-                          <span>Transfer</span>
-                        </button>
-                        <button
-                          onClick={() => setSupportAccount(acc)}
-                          title="Share a giving link for this account"
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
-                        >
-                          <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
-                          <span>Support</span>
-                        </button>
+                        {openMenuAccountId === acc.id && (
+                          <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-[#dfdbd1] bg-white p-1.5 shadow-2xl ring-1 ring-black/5">
+                            {([
+                              { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => openCreditDebitForAccount(acc.id, "credit") },
+                              { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => openCreditDebitForAccount(acc.id, "debit") },
+                              { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => openTransferFromAccount(acc.id), disabled: accounts.length < 2 },
+                              { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => setSupportAccount(acc) },
+                              { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => openEditForAccount(acc) },
+                              { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => handleDeleteAccount(acc) },
+                            ] as const).map((action) => (
+                              <button
+                                key={action.label}
+                                type="button"
+                                disabled={"disabled" in action && action.disabled}
+                                onClick={() => { setOpenMenuAccountId(null); action.run(); }}
+                                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {action.icon}
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -661,7 +764,7 @@ export function TreasuryAccountsManager() {
                 Copy link
               </button>
               <Link
-                href={`/give?purpose=${encodeURIComponent(supportAccount.name)}`}
+                href={`/give?purpose=${encodeURIComponent(supportAccount.description || supportAccount.name)}`}
                 target="_blank"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c]"
               >
@@ -779,7 +882,91 @@ export function TreasuryAccountsManager() {
         </div>
       )}
 
-      {/* Modal 2: Credit / Debit Account */}
+      {/* Modal 2: Edit Account */}
+      {editAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
+            <h3 className="text-xl font-bold text-[#26352f]">Edit Treasury Account</h3>
+            <form onSubmit={handleEditAccount} className="space-y-4 text-sm">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Name</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={12}
+                  title="Shown in the M-Pesa prompt (max 12 characters)"
+                  placeholder="e.g. Tithe, Camporee"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                />
+                <p className="mt-1 text-[11px] text-[#617068]">
+                  What M-Pesa shows in the prompt — Safaricom caps it at 12 characters.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Description</label>
+                <input
+                  type="text"
+                  maxLength={160}
+                  placeholder="e.g. Adventist Men Ministry"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                />
+                <p className="mt-1 text-[11px] text-[#617068]">
+                  What givers read on the giving form and in reports.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Type</label>
+                  <select
+                    value={editForm.account_type}
+                    onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value as TreasuryAccount["account_type"] })}
+                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                  >
+                    <option value="bank">Bank Account</option>
+                    <option value="mobile_money">Mobile Money / Paybill</option>
+                    <option value="cash">Petty Cash</option>
+                    <option value="other">Other Account</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account / Ref #</label>
+                  <input
+                    type="text"
+                    value={editForm.account_number}
+                    onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })}
+                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+                <button
+                  type="button"
+                  onClick={() => setEditAccount(null)}
+                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-60"
+                >
+                  {submitting ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Credit / Debit Account */}
       {showCreditDebitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
@@ -874,7 +1061,7 @@ export function TreasuryAccountsManager() {
         </div>
       )}
 
-      {/* Modal 3: Transfer Funds */}
+      {/* Modal 4: Transfer Funds */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">

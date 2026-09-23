@@ -90,6 +90,8 @@ export function CampaignManagement({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // A flyer or poster that travels with the drive's announcement and emails.
+  const [driveAttachment, setDriveAttachment] = useState<File | null>(null);
 
   // Card Issuance Modal State
   const [issuingCampaign, setIssuingCampaign] = useState<Campaign | null>(null);
@@ -195,6 +197,7 @@ export function CampaignManagement({
       scheduled_at: "",
       message_frequency: "once",
     });
+    setDriveAttachment(null);
     setShowCreateModal(false);
   }
 
@@ -223,26 +226,40 @@ export function CampaignManagement({
 
     setIsSubmitting(true);
     try {
+      // Multipart when a flyer rides along, JSON otherwise — the endpoint
+      // accepts both, and the attachment travels with the drive from birth.
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        title: form.title.trim() || form.name.trim(),
+        account_name: form.account_name.trim() || form.name.trim(),
+        is_temporary: form.is_temporary,
+        target_amount: numericTarget,
+        start_date: form.start_date || todayStr,
+        end_date: form.end_date || null,
+        generate_card: false,
+        member_message: form.member_message.trim(),
+        schedule_message: form.schedule_message,
+        scheduled_at: form.schedule_message && form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
+        message_frequency: form.message_frequency,
+      };
+      let body: BodyInit;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (driveAttachment) {
+        const multipart = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) multipart.append(key, String(value));
+        });
+        multipart.append("attachment", driveAttachment);
+        body = multipart;
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify(payload);
+      }
+
       const res = await fetch(`${API_URL}/api/members/campaigns/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          title: form.title.trim() || form.name.trim(),
-          account_name: form.account_name.trim() || form.name.trim(),
-          is_temporary: form.is_temporary,
-          target_amount: numericTarget,
-          start_date: form.start_date || todayStr,
-          end_date: form.end_date || null,
-          generate_card: false,
-          member_message: form.member_message.trim(),
-          schedule_message: form.schedule_message,
-          scheduled_at: form.schedule_message && form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
-          message_frequency: form.message_frequency,
-        }),
+        headers,
+        body,
       });
 
       const data = await res.json();
@@ -527,6 +544,17 @@ export function CampaignManagement({
                       />
                     </label>
                   </div>
+
+                  {/* Attachment (flyer / poster) */}
+                  <label className="block text-xs font-semibold text-[#26352f]">
+                    Attachment <span className="font-normal text-[#617068]">(Optional — shown with the drive's announcement and attached to its emails)</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf,.doc,.docx"
+                      onChange={(e) => setDriveAttachment(e.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full cursor-pointer rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3 py-2 text-xs text-[#26352f] file:mr-3 file:rounded-lg file:border-0 file:bg-[#26352f] file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
+                    />
+                  </label>
 
                   {/* Broadcast Message Options */}
                   <div className="rounded-2xl bg-[#faf9f5] p-4 ring-1 ring-[#dfdbd1] space-y-3">

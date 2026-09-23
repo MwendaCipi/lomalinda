@@ -11,6 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type TreasuryAccount = {
   id: number;
   name: string;
+  description?: string;
   account_number: string;
   account_type: string;
   account_type_display: string;
@@ -200,7 +201,7 @@ export default function LiveReportsPage() {
                           <p className="mt-1 font-mono text-xs text-[#617068]">A/C {account.account_number}</p>
                         )}
                         <Link
-                          href={supportHref(account.name)}
+                          href={supportHref(account.description || account.name)}
                           className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#faf7f2]"
                         >
                           <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
