@@ -24,6 +24,14 @@ export const materialDestinations = [
     isExternal: true,
   },
   {
+    key: "ya-lesson",
+    href: `${API_URL}/api/members/lesson-reading/ya/`,
+    label: "YA Lesson",
+    description: "The Young Adult (YA) lesson series on inverse — conversation-style study for ages 18–35.",
+    icon: "🔦",
+    isExternal: true,
+  },
+  {
     key: "adult-mission",
     href: `${API_URL}/api/members/mission-reading/adult/`,
     label: "Adult Mission Reading",
@@ -56,6 +64,30 @@ export const materialDestinations = [
     isExternal: false,
   },
 ] as const;
+
+/**
+ * The PC sidebar's grouping: the weekly study reads lead (adult and young
+ * adult lessons together), the children's weekly study follows, then the
+ * mission quarterlies, and the always-open reference shelf last.
+ */
+export const materialGroups: { label: string; items: readonly (typeof materialDestinations)[number][] }[] = [
+  {
+    label: "Adult Weekly",
+    items: materialDestinations.filter((d) => d.key === "adult-lesson" || d.key === "ya-lesson"),
+  },
+  {
+    label: "Children Weekly",
+    items: materialDestinations.filter((d) => d.key === "children-lessons"),
+  },
+  {
+    label: "Mission Stories",
+    items: materialDestinations.filter((d) => d.key === "adult-mission" || d.key === "children-mission"),
+  },
+  {
+    label: "Reference",
+    items: materialDestinations.filter((d) => d.key === "bible-egw"),
+  },
+];
 
 export function MaterialsDestinationCards({ activeKey }: { activeKey?: string }) {
   return (
@@ -134,29 +166,38 @@ export function MaterialsSidebar() {
             Sabbath School lessons, mission readings, scripture &amp; E.G. White writings.
           </p>
         </div>
-        <nav className="space-y-1">
-          {materialDestinations.map((dest) => {
-            const isActive = activeKey === dest.key;
-            const row = (
-              <>
-                <span className="shrink-0 text-lg" aria-hidden="true">{dest.icon}</span>
-                <span className="min-w-0 flex-1 truncate">{dest.label}</span>
-                {dest.isExternal && <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />}
-              </>
-            );
-            const cls = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
-              isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#f7f4ee]"
-            }`;
-            return dest.isExternal ? (
-              <a key={dest.key} href={dest.href} className={cls}>
-                {row}
-              </a>
-            ) : (
-              <Link key={dest.key} href={dest.href} className={cls}>
-                {row}
-              </Link>
-            );
-          })}
+        <nav className="space-y-4">
+          {materialGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((dest) => {
+                  const isActive = activeKey === dest.key;
+                  const row = (
+                    <>
+                      <span className="shrink-0 text-lg" aria-hidden="true">{dest.icon}</span>
+                      <span className="min-w-0 flex-1 truncate">{dest.label}</span>
+                      {dest.isExternal && <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />}
+                    </>
+                  );
+                  const cls = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                    isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#f7f4ee]"
+                  }`;
+                  return dest.isExternal ? (
+                    <a key={dest.key} href={dest.href} className={cls}>
+                      {row}
+                    </a>
+                  ) : (
+                    <Link key={dest.key} href={dest.href} className={cls}>
+                      {row}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </div>
     </aside>

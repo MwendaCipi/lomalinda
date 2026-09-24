@@ -434,6 +434,8 @@ MISSION_READING_SOURCES = {
 SSNET_SOURCE = 'https://ssnet.org/'
 SSNET_WEEKLY_LESSON_URL = 'https://ssnet.org/lessons/current.html'
 ADULT_LESSON_SOURCE = SSNET_SOURCE
+# The Young Adult (YA) lesson, published on the inverse Sabbath School site.
+YA_LESSON_URL = 'https://inverse.sspmadventist.org/study'
 CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
     'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
@@ -1423,6 +1425,21 @@ class AdultLessonRedirectView(APIView):
             except Exception:
                 destination = SSNET_WEEKLY_LESSON_URL
         return HttpResponseRedirect(destination or SSNET_WEEKLY_LESSON_URL)
+
+
+class YaLessonRedirectView(APIView):
+    """The Young Adult (YA) lesson on the inverse Sabbath School site.
+
+    Inverse publishes one study page whose current quarter is always live, so
+    unlike the adult lesson there is nothing to scrape — the redirect is the
+    site itself.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return HttpResponseRedirect(YA_LESSON_URL)
 
 
 class AdultLessonPdfRedirectView(APIView):

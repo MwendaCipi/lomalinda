@@ -102,6 +102,35 @@ html:has(.authenticated-giving-page) .authenticated-public-shell {
   html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24::after {
     content: none;
   }
+  /* Plain (system) pages — the Fellowship hub, Announcements, the support
+     and community pages — scroll the document on a phone. Their flex height
+     chain (shell 780px → main stretched → inner h-full) clamps the page to
+     the viewport while the overflowing cards paint past it, so the last
+     card hides behind the fixed tab bar and the shell's pb-24 reserve never
+     applies (it sits inside the shell box, under the overflow). On a phone
+     the page must simply grow with its content: release every level of the
+     chain to natural height and let the main's own bottom padding — bar +
+     device inset + a small gap — be the reserve.
+
+     Pinned workspaces keep the chain: the member space and the ledger carry
+     an always-on (unprefixed) overflow-y-auto scroller that needs a bounded
+     height, so :has() excludes them. The scan skips anything inside the
+     page's <aside> sidebars, whose own scroll containers are always plain
+     overflow-y-auto (sidebars are hidden on phones, so they can't justify
+     a desktop-style height chain there). */
+  .app-shell:not(.authenticated-public-shell) {
+    height: auto;
+    padding-bottom: 0;
+  }
+  .app-shell:not(.authenticated-public-shell) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) {
+    flex: 0 0 auto;
+    min-height: 0;
+    height: auto;
+    padding-bottom: calc(4.1875rem + env(safe-area-inset-bottom, 0px));
+  }
+  .app-shell:not(.authenticated-public-shell) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) > div {
+    height: auto;
+  }
 }
 
 /* The hub pages' marketing section cards keep a smaller bottom margin on a

@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Users,
   BookOpen,
-  HandHeart,
   CircleDollarSign,
   Church,
   Info,
@@ -228,11 +227,6 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       active: pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements"),
     },
     { href: "/materials", label: "Materials", active: pathname.startsWith("/materials") },
-    {
-      href: "/community/prayer",
-      label: "Requests",
-      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll"),
-    },
     { href: "/give", label: "Giving", active: pathname.startsWith("/support") || pathname.startsWith("/give") },
     { href: "/about", label: "About", active: pathname.startsWith("/about") },
     ...(isStaff
@@ -272,14 +266,6 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       label: "Materials",
       icon: BookOpen,
       active: pathname.startsWith("/materials"),
-    },
-    {
-      // Opens the Requests hub (the cards, like Fellowship's hub) — not the
-      // prayer form, which is one card among the section's destinations.
-      href: "/requests",
-      label: "Requests",
-      icon: HandHeart,
-      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll"),
     },
     // About moved into the user menu; the office reaches its console from the
     // tab bar instead.
