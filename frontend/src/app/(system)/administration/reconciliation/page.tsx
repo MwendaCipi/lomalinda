@@ -394,15 +394,10 @@ export default function ReconciliationPage() {
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-[#dfdbd1] overflow-hidden">
             
-            {/* Header Controls (Flex-shrink-0) */}
+            {/* Header Controls (Flex-shrink-0) — no page heading; the view
+                switcher names the mode already. */}
             <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <div className="hidden lg:flex items-center gap-3">
-                <h1 className="text-xl font-semibold sm:text-2xl text-[#26352f]">
-                  {viewMode === "all_givings"
-                    ? "Individual Givings"
-                    : "Contributions Ledger"}
-                </h1>
-              </div>
+              <div className="hidden lg:flex items-center gap-3" />
 
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
                 {/* View Mode Switcher occupying full width */}

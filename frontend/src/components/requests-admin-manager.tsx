@@ -97,6 +97,9 @@ type UnifiedRow = {
 
 type KindFilter = "all" | RequestKind;
 
+/** The review-state filter: everything, still to answer, or already answered. */
+type StatusFilter = "all" | "pending" | "approved";
+
 const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   join: { label: "Join requests", badge: "bg-[#b36b3c]/10 text-[#b36b3c]" },
   prayer: { label: "Prayer requests", badge: "bg-[#f1c89e]/25 text-[#96552c]" },
@@ -148,6 +151,9 @@ interface RequestsAdminManagerProps {
 
 export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManagerProps) {
   const [activeTab, setActiveTab] = useState<KindFilter>(initialTab === "transfers" ? "transfer" : initialTab);
+  // The review-state filter. Pending leads by default — the desk exists to
+  // answer people — while the desks filter itself starts at all.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [prayerRequests, setPrayerRequests] = useState<PrayerItem[]>([]);
   const [visitationRequests, setVisitationRequests] = useState<VisitationItem[]>([]);
   const [childDedications, setChildDedications] = useState<ChildDedicationItem[]>([]);
@@ -161,9 +167,11 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
   // The one search box, matched against names, contacts and summaries.
   const [search, setSearch] = useState("");
 
-  // The filter popover.
+  // The filter popovers.
   const [filterOpen, setFilterOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialTab) {
@@ -175,6 +183,9 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
     function handleClickOutside(e: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
         setFilterOpen(false);
+      }
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -397,6 +408,10 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
+      // The review-state filter maps each desk's own statuses onto the three
+      // buckets: waiting-on-us, answered-yes, and everything else.
+      if (statusFilter === "pending" && !(row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received")) return false;
+      if (statusFilter === "approved" && row.status !== "approved" && row.status !== "completed") return false;
       if (!query) return true;
       return (
         row.title.toLowerCase().includes(query) ||
@@ -411,6 +426,22 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
 
   const kindCount = (kind: KindFilter) => (kind === "all" ? rows.length : rows.filter((r) => r.kind === kind).length);
 
+  const statusCount = (filter: StatusFilter) =>
+    rows.filter((row) => {
+      if (activeTab !== "all" && row.kind !== activeTab) return false;
+      if (filter === "pending") return row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received";
+      if (filter === "approved") return row.status === "approved" || row.status === "completed";
+      return true;
+    }).length;
+
+  const statusFilterOptions: { value: StatusFilter; label: string }[] = [
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "all", label: "All" },
+  ];
+
+  const activeStatusLabel = statusFilterOptions.find((option) => option.value === statusFilter)?.label || "Pending";
+
   const filterOptions: { value: KindFilter; label: string }[] = [
     { value: "all", label: "All requests" },
     { value: "join", label: "Join requests" },
@@ -424,10 +455,14 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
   const activeFilterLabel = activeTab === "all" ? "All requests" : KIND_META[activeTab].label;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="flex h-full min-h-0 flex-col p-4 sm:p-6 lg:p-8">
+      {/* Pinned header: title row, then one toolbar row — search, the two
+          filter popovers, and the metrics on the far right. The table
+          beneath scrolls under it. */}
+      <div className="shrink-0 space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-[#26352f]">Pastoral &amp; Member Requests</h2>
+          <h2 className="text-2xl font-semibold text-[#26352f]">Received Requests</h2>
           <p className="mt-0.5 text-sm text-[#617068]">
             Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
           </p>
@@ -440,7 +475,7 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
         </button>
       </div>
 
-      {/* One search bar + one popover filter — no more wall of tabs. */}
+      {/* One search bar + two popover filters + metrics, all on one row. */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-0 flex-1 sm:max-w-sm">
           <svg
@@ -458,6 +493,59 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
             placeholder="Search name, contact, details..."
             className="w-full rounded-full border border-[#c9c5bb] bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#b36b3c]"
           />
+        </div>
+
+        {/* Status filter: pending by default — the desk exists to answer. */}
+        <div className="relative" ref={statusRef}>
+          <button
+            type="button"
+            onClick={() => setStatusOpen((open) => !open)}
+            aria-expanded={statusOpen}
+            className="inline-flex items-center gap-2 rounded-full border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+          >
+            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : "bg-[#617068]"}`} viewBox="0 0 8 8" aria-hidden="true" />
+            {activeStatusLabel}
+            <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{statusCount(statusFilter)}</span>
+            <svg className={`h-3 w-3 text-[#617068] transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {statusOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
+            >
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+                Show by review state
+              </p>
+              {statusFilterOptions.map((option) => {
+                const count = statusCount(option.value);
+                const selected = statusFilter === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() => {
+                      setStatusFilter(option.value);
+                      setStatusOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
+                      selected ? "bg-[#f7f4ee] font-semibold text-[#26352f]" : "text-[#415047] hover:bg-[#f7f4ee]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {selected && <span className="text-[#b36b3c]">✓</span>}
+                      <span className={selected ? "" : "pl-5"}>{option.label}</span>
+                    </span>
+                    <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="relative" ref={filterRef}>
@@ -482,7 +570,7 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
           {filterOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-50 mt-2 w-64 rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
+              className="absolute right-0 z-50 mt-2 max-h-80 w-64 overflow-y-auto rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
             >
               <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
                 Show requests by desk
@@ -517,6 +605,20 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
         </div>
       </div>
 
+      {/* The metrics sit on the toolbar row's far right; the table beneath
+          is the scrolling region. */}
+      <div className="flex shrink-0 items-center justify-end pb-1 text-xs text-[#617068]">
+        <span className="text-right">
+          {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
+          {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
+          {statusFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
+          {search.trim() ? ` · matching “${search.trim()}”` : ""}
+        </span>
+      </div>
+      </div>
+
+      {/* The table scrolls beneath the pinned toolbar. */}
+      <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
       {loading && (
         <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
           Loading requests...
@@ -525,14 +627,6 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
 
       {!loading && (
         <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white">
-          <div className="flex items-center justify-between border-b border-[#dfdbd1] px-4 py-2.5 text-xs text-[#617068]">
-            <span>
-              {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
-              {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
-              {search.trim() ? ` · matching “${search.trim()}”` : ""}
-            </span>
-          </div>
-
           {filteredRows.length === 0 ? (
             <div className="p-8 sm:p-12 text-center">
               <span className="text-4xl" aria-hidden="true">
@@ -660,6 +754,7 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
           <TransferManagement />
         </div>
       )}
+      </div>
     </div>
   );
 }

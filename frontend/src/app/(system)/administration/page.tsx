@@ -364,8 +364,8 @@ function AdministrationContent() {
                     >
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🙏</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Pastoral Requests</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Review prayer requests, visitation, child dedications, and support submissions.</span>
+                          <span className="block text-sm font-bold text-[#26352f]">Received Requests</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Review join, prayer, visitation, dedication, and support requests.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>
@@ -445,10 +445,11 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Pastoral & Member Requests Manager (including Transfers) */}
+            {/* Received Requests Manager (including Transfers) — the manager
+                owns its own scrolling: toolbar pinned, table scrolls. */}
             {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin) && (
-              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
-                <RequestsAdminManager initialTab={activeTab === "transfers" ? "transfers" : "prayer"} />
+              <div className="h-full min-h-0">
+                <RequestsAdminManager initialTab={activeTab === "transfers" ? "transfers" : "all"} />
               </div>
             )}
 

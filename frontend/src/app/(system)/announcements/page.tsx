@@ -100,9 +100,6 @@ export default function AnnouncementsPage() {
           <div className="max-w-5xl mx-auto space-y-6 container">
             <div className="max-w-3xl">
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
-              <p className="hidden sm:block mt-2 text-base text-[#617068]">
-                Church announcements and fund drives in one feed — search by keyword or date.
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#dfdbd1] bg-white px-4 py-3 shadow-sm lg:grid-cols-4">
