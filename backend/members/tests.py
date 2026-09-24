@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, GivingPurpose, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3389,16 +3389,13 @@ class GivingAccountsFromTreasuryTests(APITestCase):
         MemberProfile.objects.create(user=treasurer, role='treasurer', roles='treasurer')
         self.client.force_authenticate(treasurer)
 
-    def test_giving_purposes_now_serves_treasury_accounts_for_older_builds(self):
-        TreasuryAccount.objects.create(name='Tithe', description='Tithe')
-        TreasuryAccount.objects.create(name='LCB', description='Local Church Budget')
-
+    def test_giving_purposes_endpoint_is_gone(self):
+        # The legacy purposes list was retired with its model: the giving form
+        # and every newer client read /giving-accounts/, fed by treasury
+        # accounts. The old endpoint must not linger half-alive.
         response = self.client.get('/api/members/giving-purposes/')
 
-        self.assertEqual(
-            [row['name'] for row in response.data],
-            ['Tithe', 'Local Church Budget'],
-        )
+        self.assertEqual(response.status_code, 404)
 
 
 class FundDriveAnnouncementsTests(APITestCase):

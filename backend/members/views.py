@@ -31,7 +31,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, GivingPurpose, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -56,7 +56,7 @@ from .meetings import (
     create_agendas,
     parse_clock,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, GivingPurposeSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -3244,118 +3244,6 @@ class GivingAccountsView(APIView):
 
     def get(self, request):
         return Response(giving_account_options())
-
-
-class GivingPurposeListCreateView(generics.ListCreateAPIView):
-    serializer_class = GivingPurposeSerializer
-
-    def get_permissions(self):
-        return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
-
-    def get_queryset(self):
-        return GivingPurpose.objects.filter(active=True)
-
-    def list(self, request, *args, **kwargs):
-        # Giving accounts moved to treasury accounts; the legacy purposes list
-        # now serves the same shapes so older builds keep working until every
-        # client is updated. New code reads /giving-accounts/.
-        accounts = giving_account_options()
-        names = [row['label'] for row in accounts]
-        return Response([{'id': index, 'name': name, 'account_name': '', 'active': True} for index, name in enumerate(names)])
-
-    def perform_create(self, serializer):
-        if not is_finance_manager(self.request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only finance managers can add giving purposes.')
-        serializer.save()
-
-
-class GivingPurposeDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = GivingPurposeSerializer
-    queryset = GivingPurpose.objects.all()
-
-    def perform_update(self, serializer):
-        if not is_finance_manager(self.request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only finance managers can edit giving purposes.')
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        if not is_finance_manager(self.request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only finance managers can remove giving purposes.')
-        instance.active = False
-        instance.save(update_fields=['active'])
-
-
-class RestoreDefaultGivingPurposesView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        if not is_finance_manager(request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only finance managers can restore default giving purposes.')
-
-        # Purposes to remove / deactivate if present
-        purposes_to_remove = [
-            'General giving',
-            'General Giving',
-            'Offering',
-            'Offerings',
-            'Missions',
-            'Chaplaincy ministry',
-            'Chaplaincy Ministry',
-            'Prayer ministry',
-            'Prayer Ministry',
-            'Personal ministry',
-            'Personal Ministries',
-            'Worship ministry',
-            'Worship Ministry',
-            'Health ministry',
-            'Health Ministry',
-            'Family life ministry',
-            'Family Life Ministry',
-            'Adventist Muslim Relations (AMR)',
-            'Adventist Muslim Relations',
-            'Adventist Muslim',
-            'AMR',
-        ]
-        GivingPurpose.objects.filter(name__in=purposes_to_remove).update(active=False)
-
-        default_purposes = [
-            ('Tithe', 'tithe'),
-            ('Combined Offering', 'combined_offering'),
-            ('13th Sabbath', '13th_sabbath'),
-            ('Camp Expenses', 'camp_expenses'),
-            ('Camp Goal', 'camp_goal'),
-            ('Local Church Budget', 'local_church_budget'),
-        ]
-        restored = []
-        for name, account_name in default_purposes:
-            gp, created = GivingPurpose.objects.get_or_create(
-                name=name,
-                defaults={'account_name': account_name, 'active': True}
-            )
-            update_fields = []
-            if not gp.active:
-                gp.active = True
-                update_fields.append('active')
-            if not gp.account_name and account_name:
-                gp.account_name = account_name
-                update_fields.append('account_name')
-            if update_fields:
-                gp.save(update_fields=update_fields)
-            restored.append(name)
-
-        # Deactivate every other purpose so only the defaults remain active
-        GivingPurpose.objects.exclude(name__in=[name for name, _ in default_purposes]).update(active=False)
-
-        active_purposes = GivingPurpose.objects.filter(active=True)
-        serializer = GivingPurposeSerializer(active_purposes, many=True)
-        return Response({
-            'detail': f'Default giving purposes loaded ({len(restored)} purposes verified).',
-            'purposes': serializer.data,
-        })
 
 
 class ProfessionListCreateView(generics.ListCreateAPIView):

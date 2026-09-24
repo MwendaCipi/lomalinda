@@ -2,28 +2,14 @@ from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django_tenants.utils import schema_context, get_tenant_model
 
-from members.models import GivingPurpose
-
 
 class Command(BaseCommand):
-    help = (
-        "Seed production-safe defaults only: church role groups and the default "
-        "giving purposes. Creates no demo members, contributions, or other sample data."
-    )
+    help = "Seed production-safe defaults only: church role groups. Creates no demo members, contributions, or other sample data."
 
     ROLE_PERMISSION_MODELS = (
         'sabbathevent', 'churchsettings', 'churchfinancialreport',
         'churchbudget', 'prayerrequest',
     )
-
-    DEFAULT_PURPOSES = [
-        ('Tithe', 'tithe'),
-        ('Combined Offering', 'combined_offering'),
-        ('13th Sabbath', '13th_sabbath'),
-        ('Camp Expenses', 'camp_expenses'),
-        ('Camp Goal', 'camp_goal'),
-        ('Local Church Budget', 'local_church_budget'),
-    ]
 
     def handle(self, *args, **options):
         TenantModel = get_tenant_model()
@@ -36,7 +22,6 @@ class Command(BaseCommand):
             with schema_context(tenant.schema_name):
                 self.stdout.write(self.style.SUCCESS(f"--- Seeding defaults for schema: {tenant.schema_name} ({tenant.name}) ---"))
                 self.seed_role_groups()
-                self.seed_giving_purposes()
 
     def seed_role_groups(self):
         """Create the church role groups with their permission sets (idempotent).
@@ -64,31 +49,3 @@ class Command(BaseCommand):
             group.permissions.set(role_permissions_queryset)
 
         self.stdout.write(self.style.SUCCESS(f"Verified {len(role_permissions)} church role groups."))
-
-    def seed_giving_purposes(self):
-        """Ensure the default giving purposes exist and everything else is inactive."""
-        for name, account_name in self.DEFAULT_PURPOSES:
-            purpose, created = GivingPurpose.objects.get_or_create(
-                name=name,
-                defaults={'account_name': account_name, 'active': True},
-            )
-            if not created:
-                update_fields = []
-                if not purpose.active:
-                    purpose.active = True
-                    update_fields.append('active')
-                if not purpose.account_name and account_name:
-                    purpose.account_name = account_name
-                    update_fields.append('account_name')
-                if update_fields:
-                    purpose.save(update_fields=update_fields)
-
-        default_names = [name for name, _ in self.DEFAULT_PURPOSES]
-        deactivated = (
-            GivingPurpose.objects.exclude(name__in=default_names).filter(active=True).update(active=False)
-        )
-
-        self.stdout.write(self.style.SUCCESS(
-            f"Verified {len(default_names)} default giving purposes "
-            f"({deactivated} other purpose(s) deactivated)."
-        ))

@@ -9,7 +9,7 @@ from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
-    GivingPurpose, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
+    InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
@@ -584,22 +584,6 @@ class InKindContributionSerializer(serializers.ModelSerializer):
         if not items:
             raise serializers.ValidationError('Add at least one item — one item per row.')
         return '\n'.join(items)
-
-
-class GivingPurposeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GivingPurpose
-        fields = ('id', 'name', 'account_name', 'active')
-        read_only_fields = ('id',)
-
-    def validate_name(self, value):
-        name = validate_text_min_length(value, 2, 'Giving account name').strip()
-        words = name.split()
-        if len(words) > 2:
-            raise serializers.ValidationError('Giving account name must be at most 2 words.')
-        if len(name) > 20:
-            raise serializers.ValidationError('Giving account name must be at most 20 characters.')
-        return name
 
 
 class ProfessionSerializer(serializers.ModelSerializer):

@@ -417,19 +417,6 @@ class Friend(models.Model):
         return self.name or self.email
 
 
-class GivingPurpose(models.Model):
-    name = models.CharField(max_length=120, unique=True)
-    account_name = models.CharField(max_length=60, blank=True, help_text="M-Pesa / Giving account reference name (e.g. tithe, offering)")
-    active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
 class Profession(models.Model):
     name = models.CharField(max_length=120, unique=True)
     is_default = models.BooleanField(default=True)

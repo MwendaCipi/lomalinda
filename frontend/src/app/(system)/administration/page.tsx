@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { GivingPurposeManager } from "@/components/giving-purpose-manager";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
@@ -31,7 +30,6 @@ type StaffRole =
   | "men_ministry"
   | "women_ministry"
   | "chaplaincy"
-  | "finance"
   | "treasurer"
   | "member";
 
@@ -45,7 +43,6 @@ const officialRoles: StaffRole[] = [
   "men_ministry",
   "women_ministry",
   "chaplaincy",
-  "finance",
   "treasurer",
 ];
 
@@ -76,7 +73,6 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   accounts: "treasury accounts",
   expenditures: "expenditure records",
   refunds: "M-Pesa refunds",
-  finance: "the contributions ledger",
   inventory: "the inventory register",
   "deaconate-rota": "the duty rota",
   "deaconate-members": "the deaconate team",
@@ -186,14 +182,14 @@ function AdministrationContent() {
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "finance", "refunds", "announcements", "requests", "transfers", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "refunds", "announcements", "requests", "transfers", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
     if (searchTab) {
       setActiveTab(searchTab);
     } else if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-      const defaultTab = isClerk ? "users" : isElder ? "announcements" : isFinance ? "finance" : "settings";
+      const defaultTab = isClerk ? "users" : isElder ? "announcements" : isFinance ? "accounts" : "settings";
       setActiveTab(defaultTab);
     } else {
       setActiveTab("overview");
@@ -390,23 +386,6 @@ function AdministrationContent() {
 
                   {isFinance && (
                     <>
-                      <div
-                        onClick={() => {
-                          setActiveTab("finance");
-                          router.push("/administration?tab=finance", { scroll: false });
-                        }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
-                      >
-                        <span className="text-3xl">🏷️</span>
-                        <h2 className="mt-3 text-lg font-bold">Giving Accounts &amp; Drives</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Manage giving accounts and fund drives shown on the giving forms.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Manage Accounts &rarr;
-                        </span>
-                      </div>
-
                       <Link
                         href="/administration/reconciliation"
                         className="rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
@@ -508,13 +487,6 @@ function AdministrationContent() {
             {activeTab === "refunds" && isFinance && (
               <div className="h-full min-h-0">
                 <MpesaRefundManager />
-              </div>
-            )}
-
-            {/* Giving Accounts & Fund Drives Manager */}
-            {activeTab === "finance" && isFinance && (
-              <div className="h-full min-h-0">
-                <GivingPurposeManager />
               </div>
             )}
 

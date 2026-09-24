@@ -9,7 +9,6 @@ import {
   Crown,
   Briefcase,
   Shield,
-  Tag,
   Scale,
   Megaphone,
   Settings,
@@ -373,39 +372,6 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
               Treasury &amp; Finance
             </p>
             <nav className="mt-2 space-y-1">
-              {onSelectTab && !isReconPage ? (
-                <button
-                  type="button"
-                  onClick={() => handleTabClick("finance")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "finance" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Tag className="h-4 w-4 shrink-0" />
-                    <span>Giving Accounts</span>
-                  </div>
-                  {currentTab === "finance" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </button>
-              ) : (
-                <Link
-                  href="/administration?tab=finance"
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                    currentTab === "finance" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Tag className="h-4 w-4 shrink-0" />
-                    <span>Giving Accounts</span>
-                  </div>
-                  {currentTab === "finance" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
-                </Link>
-              )}
-
               {onSelectTab && !isReconPage ? (
                 <button
                   type="button"
