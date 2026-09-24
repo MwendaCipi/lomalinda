@@ -98,7 +98,7 @@ type UnifiedRow = {
 type KindFilter = "all" | RequestKind;
 
 /** The review-state filter: everything, still to answer, or already answered. */
-type StatusFilter = "all" | "pending" | "approved";
+type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   join: { label: "Join requests", badge: "bg-[#b36b3c]/10 text-[#b36b3c]" },
@@ -115,6 +115,31 @@ const JOINING_MODE_LABELS: Record<string, string> = {
   friend: "Friend of the church",
   sabbath_school: "Sabbath School attendee",
 };
+
+/**
+ * Which review-state bucket a row belongs in — the one place that maps every
+ * desk's own statuses onto the filter's choices, so a new desk or a renamed
+ * status only has to be added here:
+ *
+ *   pending  — waiting on the office (incl. "received" welfare items and
+ *              "new" prayer requests, which nobody has answered yet)
+ *   approved — answered yes / done (approved, completed, prayed)
+ *   rejected — answered no or lapsed (rejected, cancelled, closed, expired)
+ *   all      — everything
+ */
+function reviewBucket(row: { status: string }): StatusFilter {
+  if (row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received" || row.status === "new") {
+    return "pending";
+  }
+  if (row.status === "approved" || row.status === "completed" || row.status === "prayed") {
+    return "approved";
+  }
+  if (row.status === "rejected" || row.status === "cancelled" || row.status === "closed" || row.status === "expired") {
+    return "rejected";
+  }
+  // Unknown status: show it among the unanswered rather than dropping it.
+  return "pending";
+}
 
 function statusOfJoin(item: JoinItem): { status: string; statusLabel: string } {
   if (item.status === "verification_pending") return { status: "verification_pending", statusLabel: "Awaiting their email" };
@@ -408,10 +433,7 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
-      // The review-state filter maps each desk's own statuses onto the three
-      // buckets: waiting-on-us, answered-yes, and everything else.
-      if (statusFilter === "pending" && !(row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received")) return false;
-      if (statusFilter === "approved" && row.status !== "approved" && row.status !== "completed") return false;
+      if (statusFilter !== "all" && reviewBucket(row) !== statusFilter) return false;
       if (!query) return true;
       return (
         row.title.toLowerCase().includes(query) ||
@@ -429,14 +451,14 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
   const statusCount = (filter: StatusFilter) =>
     rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
-      if (filter === "pending") return row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received";
-      if (filter === "approved") return row.status === "approved" || row.status === "completed";
-      return true;
+      if (filter === "all") return true;
+      return reviewBucket(row) === filter;
     }).length;
 
   const statusFilterOptions: { value: StatusFilter; label: string }[] = [
     { value: "pending", label: "Pending" },
     { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Rejected" },
     { value: "all", label: "All" },
   ];
 
@@ -503,7 +525,7 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
             aria-expanded={statusOpen}
             className="inline-flex items-center gap-2 rounded-full border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
           >
-            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : "bg-[#617068]"}`} viewBox="0 0 8 8" aria-hidden="true" />
+            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : statusFilter === "rejected" ? "bg-rose-500" : "bg-[#617068]"}`} viewBox="0 0 8 8" aria-hidden="true" />
             {activeStatusLabel}
             <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{statusCount(statusFilter)}</span>
             <svg className={`h-3 w-3 text-[#617068] transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
