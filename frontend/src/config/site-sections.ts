@@ -173,7 +173,7 @@ export const requestsAndCareLinks: SectionLink[] = [
   {
     key: "enroll",
     href: "/enroll",
-    label: "Membership & Transfers",
+    label: "Membership",
     description: "Join through baptism or transfer, or request a transfer out.",
     icon: Handshake,
   },

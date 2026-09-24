@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -264,16 +265,14 @@ function AdministrationContent() {
                           setActiveTab("users");
                           router.push("/administration?tab=users", { scroll: false });
                         }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">👥</span>
-                        <h2 className="mt-3 text-lg font-bold">User Management</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          View registered church members or add new member records.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Manage Members &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👥</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">User Management</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">View registered church members or add new member records.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
 
                       <div
@@ -281,16 +280,14 @@ function AdministrationContent() {
                           setActiveTab("leaders");
                           router.push("/administration?tab=leaders", { scroll: false });
                         }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">👑</span>
-                        <h2 className="mt-3 text-lg font-bold">Church Leaders</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Set, update, or unset leadership roles for church members.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Manage Leaders &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👑</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Church Leaders</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Set, update, or unset leadership roles for church members.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
 
                       <div
@@ -298,16 +295,14 @@ function AdministrationContent() {
                           setActiveTab("transfers");
                           router.push("/administration?tab=transfers", { scroll: false });
                         }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">📋</span>
-                        <h2 className="mt-3 text-lg font-bold">Membership Transfers</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Process incoming & outgoing church membership transfer requests.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Manage Transfers &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📋</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Membership Transfers</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Process incoming & outgoing church membership transfer requests.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
 
                       <div
@@ -315,16 +310,14 @@ function AdministrationContent() {
                           setActiveTab("board");
                           router.push("/administration?tab=board", { scroll: false });
                         }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">🛡️</span>
-                        <h2 className="mt-3 text-lg font-bold">Board Meetings</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Schedule board meetings, attach documents per agenda, record minutes, and invite board members.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Board Meetings &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🛡️</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Board Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Schedule board meetings, attach documents per agenda, record minutes, and invite board members.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
 
                       <div
@@ -332,16 +325,14 @@ function AdministrationContent() {
                           setActiveTab("business");
                           router.push("/administration?tab=business", { scroll: false });
                         }}
-                        className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">💼</span>
-                        <h2 className="mt-3 text-lg font-bold">Business Meetings</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Manage business meeting schedules, agendas, supporting files, and minutes.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Business Meetings &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">💼</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Business Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Manage business meeting schedules, agendas, supporting files, and minutes.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
                     </>
                   )}
@@ -352,16 +343,14 @@ function AdministrationContent() {
                         setActiveTab("announcements");
                         router.push("/administration?tab=announcements", { scroll: false });
                       }}
-                      className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
-                      <span className="text-3xl">📢</span>
-                      <h2 className="mt-3 text-lg font-bold">Announcements</h2>
-                      <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                        Publish Sabbath & weekly public announcements and track pledges.
-                      </p>
-                      <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                        Manage Announcements &rarr;
-                      </span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📢</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Announcements</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Publish Sabbath & weekly public announcements and track pledges.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>
                   )}
 
@@ -371,16 +360,14 @@ function AdministrationContent() {
                         setActiveTab("requests");
                         router.push("/administration?tab=requests", { scroll: false });
                       }}
-                      className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
-                      <span className="text-3xl">🙏</span>
-                      <h2 className="mt-3 text-lg font-bold">Pastoral Requests</h2>
-                      <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                        Review prayer requests, visitation, child dedications, and support submissions.
-                      </p>
-                      <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                        View Requests &rarr;
-                      </span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🙏</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Pastoral Requests</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Review prayer requests, visitation, child dedications, and support submissions.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>
                   )}
 
@@ -388,16 +375,14 @@ function AdministrationContent() {
                     <>
                       <Link
                         href="/administration/reconciliation"
-                        className="rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
-                        <span className="text-3xl">⚖️</span>
-                        <h2 className="mt-3 text-lg font-bold">Contributions Ledger</h2>
-                        <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                          Record cash receipts and track all giving breakdown ledgers.
-                        </p>
-                        <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                          Open Ledger &rarr;
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">⚖️</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Contributions Ledger</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Record cash receipts and track all giving breakdown ledgers.</span>
                         </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </Link>
                     </>
                   )}
@@ -408,16 +393,14 @@ function AdministrationContent() {
                         setActiveTab("settings");
                         router.push("/administration?tab=settings", { scroll: false });
                       }}
-                      className="cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
-                      <span className="text-3xl">⚙️</span>
-                      <h2 className="mt-3 text-lg font-bold">Church Settings</h2>
-                      <p className="mt-1 text-xs leading-relaxed text-[#617068]">
-                        Configure homepage clarion call message, church location, and church parameters.
-                      </p>
-                      <span className="mt-4 inline-block text-xs font-bold text-[#b36b3c]">
-                        Manage Settings &rarr;
-                      </span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">⚙️</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Church Settings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Configure homepage clarion call message, church location, and church parameters.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>
                   )}
                 </div>

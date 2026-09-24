@@ -58,7 +58,7 @@ export function PublicSectionNav({
                   <span className="block text-base font-semibold tracking-tight">{link.label}</span>
                   <span className="mt-1.5 block text-sm leading-6 text-[#617068]">{link.description}</span>
                   <span className="mt-3 inline-block text-sm font-semibold text-[#b36b3c] group-hover:underline">
-                    {isActive ? "You are here" : "Open →"}
+                    Open &rarr;
                   </span>
                 </span>
               </Link>

@@ -15,7 +15,19 @@ export default function RequestsPage() {
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
-      <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
+      {/* Signed in, this page is the Requests hub the tab opens — the cards
+          are the point, so a phone gets the compact hub heading and the
+          marketing hero returns from lg up, where the sidebar makes room. */}
+      <section className={signedIn ? "px-5 pt-5 lg:hidden" : "px-6 pt-14 lg:px-8"}>
+        <div className="max-w-5xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Requests &amp; Care</h1>
+          <p className="mt-2 text-sm leading-6 text-[#617068]">
+            Prayer, visitation, dedication, membership, partnership — open the one you need.
+          </p>
+        </div>
+      </section>
+      <section className={signedIn ? "hidden px-5 py-5 sm:px-8 lg:block lg:px-10" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Requests &amp; Care</h1>
@@ -26,7 +38,7 @@ export default function RequestsPage() {
         </div>
       </section>
 
-      <section className={signedIn ? "border-t border-[#dfdbd1] bg-white px-5 py-8 sm:px-8 lg:px-10" : "px-6 py-12 lg:px-8 lg:py-14"}>
+      <section className={signedIn ? "hidden border-t border-[#dfdbd1] bg-white px-5 py-8 sm:px-8 lg:block lg:px-10" : "px-6 py-12 lg:px-8 lg:py-14"}>
         <div className={signedIn ? "max-w-5xl rounded-[1.5rem] bg-[#26352f] px-6 py-8 text-white shadow-sm sm:px-8" : "mx-auto max-w-6xl rounded-[2rem] bg-[#26352f] px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">How we can help</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">How can we support you today?</h2>
@@ -58,8 +70,7 @@ export default function RequestsPage() {
       </section>
 
       {/* The old Requests sidebar, now part of the page: the same five destinations.
-          The shell's sidebar covers them from lg up; on phones this list is the
-          only way to reach visitation, dedication, membership and partnerships. */}
+          On a phone this list sits directly under the heading — it IS the hub. */}
       <PublicSectionNav
         eyebrow="Get started"
         title="Every request, in one place"

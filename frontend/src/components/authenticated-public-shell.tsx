@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AboutSidebar } from "./sidebars/about-sidebar";
-import { MaterialsSidebar } from "./sidebars/materials-sidebar";
+import { MaterialsSidebar } from "./materials-destinations";
 import { SupportSidebar } from "./sidebars/support-sidebar";
 import { RequestsSidebar } from "./sidebars/requests-sidebar";
 

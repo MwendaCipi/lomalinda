@@ -8,7 +8,7 @@ const requestLinks = [
   { href: "/community/prayer", label: "Prayer Requests", icon: Heart },
   { href: "/community/visitation", label: "Pastoral Visitation", icon: Calendar },
   { href: "/community/child-dedication", label: "Child Dedication", icon: Baby },
-  { href: "/enroll", label: "Membership & Transfers", icon: Handshake },
+  { href: "/enroll", label: "Membership", icon: Handshake },
   { href: "/partnerships", label: "Partnership Requests", icon: Sprout },
 ];
 

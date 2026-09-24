@@ -274,7 +274,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       active: pathname.startsWith("/materials"),
     },
     {
-      href: "/community/prayer",
+      // Opens the Requests hub (the cards, like Fellowship's hub) — not the
+      // prayer form, which is one card among the section's destinations.
+      href: "/requests",
       label: "Requests",
       icon: HandHeart,
       active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll") || pathname.startsWith("/partnerships"),
