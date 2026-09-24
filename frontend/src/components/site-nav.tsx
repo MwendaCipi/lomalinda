@@ -262,6 +262,12 @@ export function SiteNav() {
       active: pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements"),
     },
     {
+      href: "/support",
+      label: "Giving",
+      icon: CircleDollarSign,
+      active: pathname.startsWith("/support") || pathname.startsWith("/give"),
+    },
+    {
       href: "/materials",
       label: "Materials",
       icon: BookOpen,
@@ -273,18 +279,18 @@ export function SiteNav() {
       icon: HandHeart,
       active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll") || pathname.startsWith("/partnerships"),
     },
-    {
-      href: "/support",
-      label: "Giving",
-      icon: CircleDollarSign,
-      active: pathname.startsWith("/support") || pathname.startsWith("/give"),
-    },
-    {
-      href: "/about",
-      label: "About",
-      icon: Info,
-      active: pathname.startsWith("/about"),
-    },
+    // About moved into the user menu; the office reaches its console from the
+    // tab bar instead.
+    ...(isStaff
+      ? [
+          {
+            href: "/administration",
+            label: "Admin",
+            icon: ShieldCheck,
+            active: pathname.startsWith("/administration"),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -512,6 +518,18 @@ export function SiteNav() {
                         <div className="flex items-center gap-2.5">
                           <Calendar className="w-4 h-4 text-slate-500" />
                           <span>Church Calendar</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      </Link>
+
+                      <Link
+                        href="/about"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Info className="w-4 h-4 text-slate-500" />
+                          <span>About the Church</span>
                         </div>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                       </Link>
