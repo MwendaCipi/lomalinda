@@ -26,11 +26,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * columns keeps the same grid for every roster.
  */
 const COL_INDEX = "w-8";
-const COL_NAME = "w-[17rem]";
-const COL_CONTACT = "w-[12rem]";
-const COL_ROLE = "w-[11rem]";
-const COL_TYPE = "w-[7.5rem]";
-const COL_SEX = "w-[4.5rem]";
+const COL_NAME = "w-[19rem]";
+const COL_CONTACT = "w-[10rem]";
+const COL_ROLE = "w-[12rem]";
+const COL_TYPE = "w-[9rem]";
+const COL_SEX = "w-[4rem]";
 
 export type MemberUser = {
   id: number;
@@ -1800,29 +1800,25 @@ export function UserManagement() {
           tableEmpty="No members found matching your search."
           cardsEmpty="No members found."
           renderRow={(m, idx) => (
-                  <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""}`}>
+                  <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
                     <td className={`py-3 text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
                     <td className={`py-3 font-semibold text-[#26352f] ${COL_NAME}`}>
-                      {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</span>
+                        <span className="shrink-0 text-[11px] font-normal text-[#8b9790]">@{m.username}</span>
+                      </div>
                       {m.is_active === false && (
                         <span
                           title="Email confirmed but this account is waiting for leadership approval — they cannot sign in yet"
-                          className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
+                          className="mt-0.5 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
                         >
                           Not approved
                         </span>
                       )}
-                      {pendingChangeIds.includes(m.id) && (
-                        <span
-                          title="This member has a proposed profile change waiting for their approval"
-                          className="ml-2 inline-block rounded-full bg-[#f1c89e] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#26352f]"
-                        >
-                          Awaiting approval
-                        </span>
-                      )}
                     </td>
                     <td className={`py-3 text-[#617068] ${COL_CONTACT}`}>
-                      {m.phone_number || m.email || "—"}
+                      <div className="truncate">{m.phone_number || m.email || "—"}</div>
+                      {m.phone_number && m.email && <div className="truncate text-[11px]">{m.email}</div>}
                     </td>
                     <td className={`py-3 ${COL_ROLE}`}>
                       <RolesCombobox
@@ -1894,7 +1890,7 @@ export function UserManagement() {
               const name = m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
               const contact = m.phone_number || m.email || "—";
               return (
-                <div key={m.id} className={`rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2 ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""}`}>
+                <div key={m.id} className={`rounded-2xl border border-[#dfdbd1] p-4 shadow-sm space-y-2 ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-sm text-[#26352f]">
@@ -1904,12 +1900,8 @@ export function UserManagement() {
                             Not approved
                           </span>
                         )}
-                        {pendingChangeIds.includes(m.id) && (
-                          <span className="ml-2 inline-block rounded-full bg-[#f1c89e] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#26352f]">
-                            Awaiting approval
-                          </span>
-                        )}
                       </h3>
+                      <p className="text-[11px] text-[#8b9790] mt-0.5">@{m.username}</p>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
                     </div>
                     {/* The type combobox sits where the role badge used to be,

@@ -3844,3 +3844,39 @@ class FundDriveTotalTests(APITestCase):
 
         response = self.client.get(f'/api/members/campaigns/{drive.id}/')
         self.assertEqual(response.data['total_raised'], 500.0)
+
+
+class SabbathSchoolAccountTypeTests(APITestCase):
+    """Sabbath School attendees are their own kind of record.
+
+    They sit between friend and member: present at church every week, on the
+    roll as an account of their own, and settable from the Users table's type
+    combobox like every other type.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('ss.admin', 'ss.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.person = User.objects.create_user('ss.person', 'ss.person@example.com', 'PersonPass#2026')
+        MemberProfile.objects.create(user=self.person, role='member', roles='member')
+        self.client.force_authenticate(self.admin)
+
+    def test_a_person_can_become_a_sabbath_school_attendee(self):
+        response = self.client.patch(
+            f'/api/members/users/{self.person.id}/account-type/',
+            {'account_type': 'sabbath_school'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=self.person)
+        self.assertEqual(profile.account_type, 'sabbath_school')
+        self.assertFalse(profile.is_disfellowshipped)
+        self.assertIn('Sabbath School', response.data['detail'])
+
+    def test_the_users_list_reports_the_sabbath_school_type(self):
+        MemberProfile.objects.filter(user=self.person).update(account_type='sabbath_school')
+
+        listed = {row['username']: row for row in self.client.get('/api/members/users/').data}
+
+        self.assertEqual(listed['ss.person']['account_type'], 'sabbath_school')

@@ -6,6 +6,7 @@ import { showAlert } from "@/lib/alerts";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { RecordList } from "./record-list";
+import { AddReceiptModal } from "./add-receipt-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -106,6 +107,10 @@ export function CampaignManagement({
 
   // Actions menu dropdown state
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  // The drive being edited — when set, the create modal opens prefilled in edit mode.
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  // The drive a manual receipt is being recorded against.
+  const [receiptCampaign, setReceiptCampaign] = useState<Campaign | null>(null);
   // Only once, so closing the form after arriving from "Add Fund Drive" keeps it closed.
   const openedCreateForm = useRef(false);
 
@@ -200,7 +205,81 @@ export function CampaignManagement({
       allow_personal_invitations: false,
     });
     setDriveAttachment(null);
+    setEditingCampaign(null);
     setShowCreateModal(false);
+  }
+
+  /** Open the create modal prefilled with a drive's details (edit mode). */
+  function handleOpenEdit(campaign: Campaign) {
+    setEditingCampaign(campaign);
+    setForm({
+      name: campaign.name || "",
+      title: campaign.title || "",
+      account_name: campaign.account_name || "",
+      is_temporary: campaign.is_temporary ?? true,
+      target_amount: campaign.target_amount ? String(campaign.target_amount) : "",
+      start_date: campaign.start_date || todayStr,
+      end_date: campaign.end_date || "",
+      member_message: campaign.member_message || "",
+      schedule_message: campaign.schedule_message || false,
+      scheduled_at: campaign.scheduled_at ? campaign.scheduled_at.slice(0, 16) : "",
+      message_frequency: campaign.message_frequency || "once",
+      allow_personal_invitations: campaign.allow_personal_invitations || false,
+    });
+    setDriveAttachment(null);
+    setShowCreateModal(true);
+  }
+
+  /** PATCH the drive's details (edit mode of the same modal). */
+  async function handleUpdateCampaign(e: FormEvent) {
+    e.preventDefault();
+    if (!editingCampaign) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    const numericTarget = parseFloat(form.target_amount);
+    if (!form.name.trim()) {
+      showAlert("Missing Campaign Name", "Please enter a campaign name.", "error");
+      return;
+    }
+    if (isNaN(numericTarget) || numericTarget <= 0) {
+      showAlert("Invalid Goal", "Please enter a positive fund drive target goal amount.", "error");
+      return;
+    }
+    if (!form.start_date) {
+      showAlert("Missing Date", "Please select a beginning date.", "error");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/${editingCampaign.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          title: form.title.trim() || form.name.trim(),
+          account_name: form.account_name.trim() || form.name.trim(),
+          is_temporary: form.is_temporary,
+          target_amount: numericTarget,
+          start_date: form.start_date || todayStr,
+          end_date: form.end_date || null,
+          member_message: form.member_message.trim(),
+          allow_personal_invitations: form.allow_personal_invitations,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Failed to update the drive.");
+
+      showAlert("Fund Drive Updated", `Fund drive "${data.name || form.name}" was updated successfully.`, "success");
+      resetAndCloseModal();
+      fetchCampaigns(token);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error updating campaign";
+      showAlert("Update Failed", msg, "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleCreateCampaign(e: FormEvent) {
@@ -468,10 +547,12 @@ export function CampaignManagement({
                 <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
                   <div>
                     <h2 id="create-campaign-title" className="text-xl font-bold text-[#26352f]">
-                      New Fund Drive
+                      {editingCampaign ? "Edit Fund Drive" : "New Fund Drive"}
                     </h2>
                     <p className="mt-1 text-xs text-[#617068]">
-                      Set fund drive details, account reference, target goal, and member broadcast options.
+                      {editingCampaign
+                        ? "Update the drive's details, account reference, target goal, and dates."
+                        : "Set fund drive details, account reference, target goal, and member broadcast options."}
                     </p>
                   </div>
                   <button
@@ -485,7 +566,7 @@ export function CampaignManagement({
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateCampaign} className="mt-6 space-y-4">
+                <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="mt-6 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block text-xs font-semibold text-[#26352f]">
                       Fund Drive Name *
@@ -646,7 +727,7 @@ export function CampaignManagement({
                       disabled={isSubmitting}
                       className="rounded-full bg-[#5f8067] px-6 py-2.5 text-xs font-bold text-white transition hover:bg-[#4d6d55] disabled:opacity-60 shadow-sm"
                     >
-                      {isSubmitting ? "Creating Drive..." : "Create Drive"}
+                      {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : "Create Drive"}
                     </button>
                   </div>
                 </form>
@@ -880,6 +961,21 @@ export function CampaignManagement({
             </div>
           )}
 
+          {/* Manual receipt for a drive — the same modal the contributions
+              ledger uses, with the drive's account preset as the purpose so
+              the money lands in the drive's total. */}
+          <AddReceiptModal
+            open={Boolean(receiptCampaign)}
+            presetPurpose={receiptCampaign ? receiptCampaign.account_name || receiptCampaign.name : undefined}
+            onClose={() => setReceiptCampaign(null)}
+            onSaved={(deliveryMessage) => {
+              showAlert("Receipt Sent", deliveryMessage, "success");
+              setReceiptCampaign(null);
+              const token = localStorage.getItem("access_token");
+              if (token) fetchCampaigns(token);
+            }}
+          />
+
           {/* Existing Campaigns List */}
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-[#26352f]">
@@ -1014,6 +1110,28 @@ export function CampaignManagement({
 
                                       {isAdminMode && canEdit && (
                                         <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOpenActionsId(null);
+                                              handleOpenEdit(c);
+                                            }}
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
+                                          >
+                                            ✏️ Edit Drive
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOpenActionsId(null);
+                                              setReceiptCampaign(c);
+                                            }}
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
+                                          >
+                                            🧾 Add Receipt
+                                          </button>
+
                                           <button
                                             type="button"
                                             onClick={() => {
