@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import type { LucideIcon } from "lucide-react";
 import {
   Users,
@@ -102,6 +103,11 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   // Fund drives are their own page, so their item is highlighted by the URL
   // rather than by the tab the main workspace is showing.
   const isFundDrivesPage = pathname.replace(/\/$/, "") === "/administration/fund-drives";
+
+  // The Requests desk badge: everything leadership still owes an answer on.
+  // Hidden while loading and when there is nothing pending, so a plain "0"
+  // never draws the eye.
+  const pendingRequests = usePendingRequestCounts();
 
   const handleTabClick = (tab: string) => {
     if (onSelectTab) {
@@ -307,7 +313,17 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     <HeartHandshake className="h-4 w-4 shrink-0" />
                     <span>Requests</span>
                   </div>
-                  {currentTab === "requests" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                  <span className="flex items-center gap-1.5">
+                    {pendingRequests.total > 0 && (
+                      <span
+                        title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
+                        className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      >
+                        {pendingRequests.total}
+                      </span>
+                    )}
+                    {currentTab === "requests" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                  </span>
                 </button>
               ) : (
                 <Link
@@ -322,7 +338,17 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     <HeartHandshake className="h-4 w-4 shrink-0" />
                     <span>Requests</span>
                   </div>
-                  {currentTab === "requests" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                  <span className="flex items-center gap-1.5">
+                    {pendingRequests.total > 0 && (
+                      <span
+                        title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
+                        className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      >
+                        {pendingRequests.total}
+                      </span>
+                    )}
+                    {currentTab === "requests" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
+                  </span>
                 </Link>
               )}
 

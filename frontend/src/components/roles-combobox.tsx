@@ -125,19 +125,21 @@ export const SYSTEM_ROLE_LOCKED_HELP =
   "Administrator is a system role: it cannot be removed from this account.";
 
 export type AccountTypeOption = {
-  value: "member" | "friend" | "ex_member";
+  value: "member" | "friend" | "sabbath_school" | "ex_member";
   label: string;
   help: string;
 };
 
 /**
- * How the church records a person: a member, a friend of the church, or an
- * ex-member. Two stored fields (account_type and is_disfellowshipped) express
- * the three states; this is the one place that reads them back as one answer.
+ * How the church records a person: a member, a friend of the church, a Sabbath
+ * School attendee, or an ex-member. Two stored fields (account_type and
+ * is_disfellowshipped) express the four states; this is the one place that
+ * reads them back as one answer.
  */
 export const ACCOUNT_TYPE_OPTIONS: AccountTypeOption[] = [
   { value: "member", label: "Member", help: "A member of this church, on the church roll." },
   { value: "friend", label: "Friend", help: "A friend of the church who is not a member." },
+  { value: "sabbath_school", label: "Sabbath School", help: "Attends Sabbath School; not yet a baptised member." },
   { value: "ex_member", label: "Ex-member", help: "Has left or been removed; kept on record." },
 ];
 
@@ -146,6 +148,7 @@ export function accountTypeOf(
   isDisfellowshipped?: boolean | null
 ): AccountTypeOption["value"] {
   if (isDisfellowshipped) return "ex_member";
+  if (accountType === "sabbath_school") return "sabbath_school";
   return accountType === "friend" ? "friend" : "member";
 }
 

@@ -54,13 +54,14 @@ export type MemberUser = {
   gifts?: string;
   disability?: string;
   is_disfellowshipped?: boolean;
+  /** False while leadership has not yet approved a friend/Sabbath School joining. */
+  is_active?: boolean;
   /** True only for the installation's owner account, which is not a member. */
   is_superuser?: boolean;
 };
 
 type MemberFilter = "all" | "members" | "friends" | "ex_members";
 type InvitationFilter = "confirmed" | "pending";
-type RemovalReason = "disciplinary" | "death" | "transfer_out";
 
 export const AVAILABLE_GIFTS = [
   "Preaching",
@@ -1393,10 +1394,6 @@ export function UserManagement() {
   const [leadershipSubmitting, setLeadershipSubmitting] = useState(false);
 
   // Removal request modal
-  const [removeMember, setRemoveMember] = useState<MemberUser | null>(null);
-  const [removalReason, setRemovalReason] = useState<RemovalReason>("disciplinary");
-  const [removalNotes, setRemovalNotes] = useState("");
-  const [removalSubmitting, setRemovalSubmitting] = useState(false);
 
   // Close action menu on outside click
   useEffect(() => {
@@ -1571,7 +1568,7 @@ export function UserManagement() {
 
     setUpdatingTypeId(member.id);
     const optimistic = {
-      account_type: nextType === "friend" ? "friend" : "member",
+      account_type: nextType === "friend" || nextType === "sabbath_school" ? nextType : "member",
       is_disfellowshipped: nextType === "ex_member",
     };
     setMembers((prev) => prev.map((m) => (m.id === member.id ? { ...m, ...optimistic } : m)));
@@ -1621,43 +1618,7 @@ export function UserManagement() {
     }
   };
 
-  // ── Removal request handler ──────────────────────────────────────────────
-  const handleRemovalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!removeMember) return;
-    if (removalReason === "transfer_out") {
-      setTransferMember(removeMember);
-      setTransferReason(removalNotes);
-      setRemoveMember(null);
-      setRemovalReason("disciplinary");
-      setRemovalNotes("");
-      return;
-    }
-    setRemovalSubmitting(true);
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/removal-requests/`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ member: removeMember.id, reason: removalReason, notes: removalNotes }),
-      });
-      if (res.ok || res.status === 201) {
-        setMessage({ type: "success", text: `Removal request submitted for elder approval.` });
-        setRemoveMember(null);
-        setRemovalReason("disciplinary");
-        setRemovalNotes("");
-      } else {
-        const d = await res.json();
-        setMessage({ type: "error", text: d.detail || "Failed to submit removal request." });
-      }
-    } catch {
-      setMessage({ type: "error", text: "Network error." });
-    } finally {
-      setRemovalSubmitting(false);
-    }
-  };
-
-  // ── Print handler ────────────────────────────────────────────────────────
+  // ── Print handler ────────────────────────────────────────────────────────────
   const handlePrintMemberList = () => {
     const token = localStorage.getItem("access_token");
     // Fetch with the Authorization header and open the blob: putting the JWT
@@ -1843,6 +1804,14 @@ export function UserManagement() {
                     <td className={`py-3 text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
                     <td className={`py-3 font-semibold text-[#26352f] ${COL_NAME}`}>
                       {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}
+                      {m.is_active === false && (
+                        <span
+                          title="Email confirmed but this account is waiting for leadership approval — they cannot sign in yet"
+                          className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
+                        >
+                          Not approved
+                        </span>
+                      )}
                       {pendingChangeIds.includes(m.id) && (
                         <span
                           title="This member has a proposed profile change waiting for their approval"
@@ -1915,13 +1884,6 @@ export function UserManagement() {
                             >
                               👑 Assign Leadership
                             </button>
-                            <div className="my-1 border-t border-[#dfdbd1]" />
-                            <button
-                              onClick={() => { setRemoveMember(m); setRemovalReason("disciplinary"); setRemovalNotes(""); setOpenActionMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-red-600 hover:bg-[#f7f4ee]"
-                            >
-                              🚫 Remove
-                            </button>
                           </div>
                         )}
                       </div>
@@ -1937,6 +1899,11 @@ export function UserManagement() {
                     <div>
                       <h3 className="font-bold text-sm text-[#26352f]">
                         {name}
+                        {m.is_active === false && (
+                          <span className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]">
+                            Not approved
+                          </span>
+                        )}
                         {pendingChangeIds.includes(m.id) && (
                           <span className="ml-2 inline-block rounded-full bg-[#f1c89e] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#26352f]">
                             Awaiting approval
@@ -1999,13 +1966,6 @@ export function UserManagement() {
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                           >
                             👑 Assign Leadership
-                          </button>
-                          <div className="my-1 border-t border-[#dfdbd1]" />
-                          <button
-                            onClick={() => { setRemoveMember(m); setRemovalReason("disciplinary"); setRemovalNotes(""); setOpenActionMenuId(null); }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-red-600 hover:bg-[#f7f4ee]"
-                          >
-                            🚫 Remove
                           </button>
                         </div>
                       )}
@@ -2718,46 +2678,6 @@ export function UserManagement() {
         </div>
       )}
 
-      {/* ══ Remove Member (Removal Request) Modal ══ */}
-      {removeMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
-            <h3 className="text-base font-bold text-[#26352f] mb-1">
-              🚫 Remove Member
-            </h3>
-            <p className="text-xs text-[#617068] mb-4">
-              Submit a removal request for {removeMember.first_name || removeMember.username}. This will require elder approval before taking effect.
-            </p>
-            <form onSubmit={handleRemovalSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Reason for Removal *</label>
-                <select required value={removalReason} onChange={(e) => setRemovalReason(e.target.value as RemovalReason)}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none">
-                  <option value="disciplinary">Disciplinary</option>
-                  <option value="death">Death</option>
-                  <option value="transfer_out">Transfer Out</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Notes (Optional)</label>
-                <textarea rows={3} placeholder="Additional context for the review..." value={removalNotes}
-                  onChange={(e) => setRemovalNotes(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none" />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={removalSubmitting}
-                  className="rounded-xl bg-red-600 px-5 py-2 text-xs font-semibold text-white hover:bg-red-700">
-                  {removalSubmitting ? "Submitting..." : "Submit Removal Request"}
-                </button>
-                <button type="button" onClick={() => setRemoveMember(null)}
-                  className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

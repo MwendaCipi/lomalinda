@@ -6,7 +6,7 @@ import { showAlert } from "@/lib/alerts";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export type TransferDirection = "transfer_in" | "transfer_out";
-export type JoiningMode = "baptism" | "membership_transfer" | "friend";
+export type JoiningMode = "baptism" | "membership_transfer" | "friend" | "sabbath_school";
 
 const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]";
 
@@ -65,7 +65,7 @@ export function EnrollmentForm({
   const [loading, setLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  const accountType: "member" | "friend" = joiningMode === "friend" ? "friend" : "member";
+  const accountType: "member" | "friend" | "sabbath_school" = joiningMode === "friend" ? "friend" : joiningMode === "sabbath_school" ? "sabbath_school" : "member";
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -143,7 +143,7 @@ export function EnrollmentForm({
     }
 
     if (transferDirection === "transfer_in") {
-      if ((joiningMode === "friend" || joiningMode === "membership_transfer") && !form.current_church.trim()) {
+      if ((joiningMode === "friend" || joiningMode === "sabbath_school" || joiningMode === "membership_transfer") && !form.current_church.trim()) {
         showAlert("Missing information", "Please specify the name of your current/previous church.", "warning");
         return;
       }
@@ -239,7 +239,7 @@ export function EnrollmentForm({
       {showAccountTypeChoice && (
         <div>
           <span className="block text-sm font-semibold text-[#26352f]">I am joining as</span>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => {
@@ -274,6 +274,24 @@ export function EnrollmentForm({
               <span className="block text-sm font-semibold text-[#26352f]">A friend of the church</span>
               <span className="mt-1 block text-xs text-[#617068]">
                 Stay connected with announcements, giving and events.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setJoiningMode("sabbath_school");
+                setMessage("");
+              }}
+              aria-pressed={accountType === "sabbath_school"}
+              className={`rounded-2xl border p-4 text-left transition ${
+                accountType === "sabbath_school"
+                  ? "border-[#b36b3c] bg-[#fdf6f0] ring-1 ring-[#b36b3c]"
+                  : "border-[#dfdbd1] bg-white hover:border-[#c9c5bb]"
+              }`}
+            >
+              <span className="block text-sm font-semibold text-[#26352f]">A Sabbath School attendee</span>
+              <span className="mt-1 block text-xs text-[#617068]">
+                Attend Sabbath School while considering baptism.
               </span>
             </button>
           </div>
@@ -350,6 +368,7 @@ export function EnrollmentForm({
                   <option value="baptism">Baptism</option>
                   <option value="membership_transfer">Membership Transfer</option>
                   <option value="friend">Friend of SDA Loma Linda</option>
+                  <option value="sabbath_school">Sabbath School</option>
                 </select>
               </label>
             )}
@@ -364,6 +383,7 @@ export function EnrollmentForm({
                 >
                   <option value="baptism">Baptism</option>
                   <option value="membership_transfer">Membership Transfer</option>
+                  <option value="sabbath_school">Sabbath School</option>
                 </select>
               </label>
             )}
@@ -378,7 +398,7 @@ export function EnrollmentForm({
               />
             </label>
 
-            {(joiningMode === "membership_transfer" || joiningMode === "friend") && (
+            {(joiningMode === "membership_transfer" || joiningMode === "friend" || joiningMode === "sabbath_school") && (
               <label className="block text-sm font-medium sm:col-span-2">
                 Current / Previous Church Name
                 <input

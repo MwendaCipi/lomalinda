@@ -53,7 +53,7 @@ function EnrollmentConfirmContent() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "This verification link is invalid or has expired.");
         setEmail(data.email);
-        setAccountType(data.joining_mode === "friend" ? "friend" : "member");
+        setAccountType(data.joining_mode === "friend" ? "friend" : data.joining_mode === "sabbath_school" ? "sabbath_school" : "member");
       })
       .catch((error) =>
         setLinkError(
@@ -143,7 +143,7 @@ function EnrollmentConfirmContent() {
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Set up your {accountType === "friend" ? "friend" : "church"} account
+          Set up your {accountType === "friend" ? "friend" : accountType === "sabbath_school" ? "Sabbath School" : "church"} account
         </h1>
         {email && !linkError && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}
 

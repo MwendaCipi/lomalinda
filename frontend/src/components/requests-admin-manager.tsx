@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
 import { TransferManagement } from "./transfer-management";
@@ -14,16 +14,20 @@ type PrayerItem = {
   phone_number?: string;
   anonymous?: boolean;
   request_text: string;
+  status?: string;
   created_at: string;
 };
 
 type VisitationItem = {
   id: number;
-  name: string;
+  requester_name: string;
   phone_number?: string;
+  email?: string;
+  visitation_type?: string;
   address?: string;
   reason?: string;
   preferred_date?: string;
+  preferred_time?: string;
   notes?: string;
   status?: string;
   created_at?: string;
@@ -53,54 +57,129 @@ type SupportItem = {
   created_at?: string;
 };
 
-type RemovalItem = {
-  id: number;
-  member: number;
-  member_name: string;
-  member_email?: string;
-  reason: "disciplinary" | "death" | "transfer_out";
-  notes?: string;
-  status: "pending" | "approved" | "rejected";
-  requested_by_name?: string;
-  created_at: string;
-  reviewed_at?: string | null;
-};
-
 type JoinItem = {
   id: number;
   full_name: string;
   email: string;
   phone_number?: string;
-  joining_mode: "baptism" | "membership_transfer" | "friend";
+  joining_mode: "baptism" | "membership_transfer" | "friend" | "sabbath_school";
   current_church?: string;
   status: "verification_pending" | "pending" | "approved" | "rejected" | "completed" | "expired";
   has_account: boolean;
   created_at: string;
 };
 
-type ActiveTab = "joins" | "prayer" | "visitation" | "dedication" | "welfare" | "removals" | "transfers";
+/** Every request kind in one table, tagged by desk. */
+type RequestKind = "join" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer";
 
-interface RequestsAdminManagerProps {
-  initialTab?: ActiveTab;
+type UnifiedRow = {
+  key: string;
+  kind: RequestKind;
+  /** The person or child the request is about. */
+  title: string;
+  /** Best contact line: phone and/or email. */
+  contact: string;
+  /** The one-line detail: the prayer text, visit type, join mode, and so on. */
+  summary: string;
+  /** Optional second detail line (church, dates, category). */
+  meta?: string;
+  status: string;
+  /** Plain text for the status pill: "Awaiting approval", "New", ... */
+  statusLabel: string;
+  created_at?: string;
+  /** Whether review actions (approve/reject) make sense for this row. */
+  reviewable: boolean;
+  /** Only set on join rows. */
+  join?: JoinItem;
+  /** Only set on transfer rows. */
+  transferId?: number;
+};
+
+type KindFilter = "all" | RequestKind;
+
+const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
+  join: { label: "Join requests", badge: "bg-[#b36b3c]/10 text-[#b36b3c]" },
+  prayer: { label: "Prayer requests", badge: "bg-[#f1c89e]/25 text-[#96552c]" },
+  visitation: { label: "Visitation", badge: "bg-[#5f8067]/10 text-[#2d5d39]" },
+  dedication: { label: "Child dedications", badge: "bg-[#26352f]/10 text-[#26352f]" },
+  welfare: { label: "Welfare & support", badge: "bg-[#9a741c]/10 text-[#7c5d16]" },
+  transfer: { label: "Membership transfers", badge: "bg-[#617068]/10 text-[#415047]" },
+};
+
+const JOINING_MODE_LABELS: Record<string, string> = {
+  baptism: "Joining by baptism",
+  membership_transfer: "Membership transfer in",
+  friend: "Friend of the church",
+  sabbath_school: "Sabbath School attendee",
+};
+
+function statusOfJoin(item: JoinItem): { status: string; statusLabel: string } {
+  if (item.status === "verification_pending") return { status: "verification_pending", statusLabel: "Awaiting their email" };
+  if (item.status === "pending") return { status: "pending", statusLabel: "Awaiting approval" };
+  if (item.status === "approved") return { status: "approved", statusLabel: "Approved" };
+  if (item.status === "completed") return { status: "completed", statusLabel: "Completed" };
+  if (item.status === "rejected") return { status: "rejected", statusLabel: "Rejected" };
+  return { status: item.status, statusLabel: item.status };
 }
 
-export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminManagerProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
+function statusOfTransfer(status?: string): { status: string; statusLabel: string } {
+  if (status === "pending") return { status: "pending", statusLabel: "Awaiting approval" };
+  if (status === "under_review") return { status: "under_review", statusLabel: "Under review" };
+  if (status === "approved") return { status: "approved", statusLabel: "Approved" };
+  if (status === "completed") return { status: "completed", statusLabel: "Completed" };
+  if (status === "cancelled") return { status: "cancelled", statusLabel: "Rejected" };
+  return { status: status || "pending", statusLabel: status ? status.replace(/_/g, " ") : "Pending" };
+}
+
+function contactLine(...parts: (string | undefined)[]): string {
+  const joined = parts.filter((part) => part && part.trim()).join(" · ");
+  return joined || "—";
+}
+
+function formatDate(value?: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" });
+}
+
+interface RequestsAdminManagerProps {
+  initialTab?: KindFilter | "transfers";
+}
+
+export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManagerProps) {
+  const [activeTab, setActiveTab] = useState<KindFilter>(initialTab === "transfers" ? "transfer" : initialTab);
   const [prayerRequests, setPrayerRequests] = useState<PrayerItem[]>([]);
   const [visitationRequests, setVisitationRequests] = useState<VisitationItem[]>([]);
   const [childDedications, setChildDedications] = useState<ChildDedicationItem[]>([]);
   const [supportSubmissions, setSupportSubmissions] = useState<SupportItem[]>([]);
-  const [removalRequests, setRemovalRequests] = useState<RemovalItem[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinItem[]>([]);
+  const [transfers, setTransfers] = useState<TransferRow[]>([]);
   const [isElder, setIsElder] = useState(false);
-  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // The one search box, matched against names, contacts and summaries.
+  const [search, setSearch] = useState("");
+
+  // The filter popover.
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab === "transfers" ? "transfer" : initialTab);
     }
   }, [initialTab]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const getToken = () =>
     typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -114,20 +193,20 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
     setLoading(true);
     const headers = authHeaders();
     try {
-      const [jRes, pRes, vRes, dRes, sRes, rRes] = await Promise.all([
+      const [jRes, pRes, vRes, dRes, sRes, tRes] = await Promise.all([
         fetch(`${API_URL}/api/members/enrollment-requests/`, { headers }),
         fetch(`${API_URL}/api/members/prayer-requests/`, { headers }),
         fetch(`${API_URL}/api/members/visitations/`, { headers }),
         fetch(`${API_URL}/api/members/child-dedications/`, { headers }),
         fetch(`${API_URL}/api/members/support-submissions/`, { headers }),
-        fetch(`${API_URL}/api/members/removal-requests/`, { headers }),
+        fetch(`${API_URL}/api/members/transfers/`, { headers }),
       ]);
       setJoinRequests(jRes.ok ? await jRes.json() : []);
       setPrayerRequests(pRes.ok ? await pRes.json() : []);
       setVisitationRequests(vRes.ok ? await vRes.json() : []);
       setChildDedications(dRes.ok ? await dRes.json() : []);
       setSupportSubmissions(sRes.ok ? await sRes.json() : []);
-      setRemovalRequests(rRes.ok ? await rRes.json() : []);
+      setTransfers(tRes.ok ? await tRes.json() : []);
     } catch {
       // ignore
     } finally {
@@ -154,46 +233,13 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleReviewRemoval = async (id: number, decision: "approved" | "rejected") => {
-    const confirmText = decision === "approved"
-      ? "Approve this removal? The member will lose member access."
-      : "Reject this removal request?";
-    if (!confirm(confirmText)) return;
-
-    setReviewingId(id);
-    try {
-      const res = await fetch(`${API_URL}/api/members/removal-requests/${id}/`, {
-        method: "PATCH",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ status: decision }),
-      });
-      if (res.ok) {
-        showAlert(
-          decision === "approved" ? "Removal Approved" : "Removal Rejected",
-          decision === "approved"
-            ? "The membership removal has been approved and applied."
-            : "The removal request was rejected.",
-          "success"
-        );
-        fetchAll();
-      } else {
-        const data = await res.json().catch(() => null);
-        showAlert("Review Failed", data?.detail || "Could not update the removal request.", "error");
-      }
-    } catch {
-      showAlert("Network Error", "Could not reach the server.", "error");
-    } finally {
-      setReviewingId(null);
-    }
-  };
-
   const handleReviewJoin = async (id: number, decision: "approved" | "rejected") => {
     const confirmText = decision === "approved"
       ? "Approve this join request? The account will be activated and they can sign in."
       : "Reject this join request?";
     if (!confirm(confirmText)) return;
 
-    setReviewingId(id);
+    setReviewingId(`join-${id}`);
     try {
       const res = await fetch(`${API_URL}/api/members/enrollment-requests/${id}/decision/`, {
         method: "POST",
@@ -220,23 +266,170 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
     }
   };
 
-  const tabs: { key: ActiveTab; label: string; count?: number }[] = [
-    { key: "joins", label: "Join Requests", count: joinRequests.filter((j) => j.status === "pending" || j.status === "verification_pending").length },
-    { key: "prayer", label: "Prayer Requests", count: prayerRequests.length },
-    { key: "visitation", label: "Visitation", count: visitationRequests.length },
-    { key: "dedication", label: "Child Dedications", count: childDedications.length },
-    { key: "welfare", label: "Welfare & Support", count: supportSubmissions.length },
-    { key: "removals", label: "Removal Requests", count: removalRequests.filter((r) => r.status === "pending").length },
-    { key: "transfers", label: "Membership Transfers" },
+  const handleReviewTransfer = async (id: number, decision: "approved" | "cancelled") => {
+    const confirmText = decision === "approved"
+      ? "Approve this transfer request?"
+      : "Reject this transfer request?";
+    if (!confirm(confirmText)) return;
+
+    setReviewingId(`transfer-${id}`);
+    try {
+      const res = await fetch(`${API_URL}/api/members/transfers/${id}/`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      });
+      if (res.ok) {
+        showAlert(
+          decision === "approved" ? "Transfer Approved" : "Transfer Rejected",
+          decision === "approved"
+            ? "The transfer request has been approved."
+            : "The transfer request was rejected.",
+          "success"
+        );
+        fetchAll();
+      } else {
+        const data = await res.json().catch(() => null);
+        showAlert("Review Failed", data?.detail || "Could not update the transfer request.", "error");
+      }
+    } catch {
+      showAlert("Network Error", "Could not reach the server.", "error");
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  // ── One table out of every ledger, newest first. ─────────────────────────
+  const rows: UnifiedRow[] = useMemo(() => {
+    const joinRows: UnifiedRow[] = joinRequests.map((item) => {
+      const { status, statusLabel } = statusOfJoin(item);
+      return {
+        key: `join-${item.id}`,
+        kind: "join",
+        title: item.full_name,
+        contact: contactLine(item.phone_number, item.email),
+        summary: JOINING_MODE_LABELS[item.joining_mode] || item.joining_mode,
+        meta: item.current_church ? `From ${item.current_church}` : undefined,
+        status,
+        statusLabel,
+        created_at: item.created_at,
+        reviewable: status === "pending" || status === "verification_pending",
+        join: item,
+      };
+    });
+
+    const prayerRows: UnifiedRow[] = prayerRequests.map((item) => ({
+      key: `prayer-${item.id}`,
+      kind: "prayer",
+      title: item.anonymous ? "Anonymous" : item.name || "Church member",
+      contact: contactLine(item.phone_number, item.email),
+      summary: item.request_text,
+      status: item.status || "new",
+      statusLabel: item.status === "prayed" ? "Prayed" : item.status === "closed" ? "Closed" : "New",
+      created_at: item.created_at,
+      reviewable: false,
+    }));
+
+    const visitationRows: UnifiedRow[] = visitationRequests.map((item) => ({
+      key: `visitation-${item.id}`,
+      kind: "visitation",
+      title: item.requester_name,
+      contact: contactLine(item.phone_number, item.email),
+      summary: item.reason || `${item.visitation_type ? item.visitation_type.replace(/_/g, " ") : "Visit"} request`,
+      meta: [item.preferred_date, item.preferred_time].filter(Boolean).join(" ") || undefined,
+      status: item.status || "pending",
+      statusLabel: (item.status || "pending").replace(/_/g, " "),
+      created_at: item.created_at,
+      reviewable: false,
+    }));
+
+    const dedicationRows: UnifiedRow[] = childDedications.map((item) => ({
+      key: `dedication-${item.id}`,
+      kind: "dedication",
+      title: item.child_name,
+      contact: contactLine(item.phone_number),
+      summary: [item.father_name && `Father: ${item.father_name}`, item.mother_name && `Mother: ${item.mother_name}`]
+        .filter(Boolean)
+        .join(" · "),
+      meta: item.child_dob ? `Born ${item.child_dob}` : undefined,
+      status: item.status || "pending",
+      statusLabel: (item.status || "pending").replace(/_/g, " "),
+      created_at: item.created_at,
+      reviewable: false,
+    }));
+
+    const welfareRows: UnifiedRow[] = supportSubmissions.map((item) => ({
+      key: `welfare-${item.id}`,
+      kind: "welfare",
+      title: item.anonymous ? "Anonymous" : item.name || "Church member",
+      contact: contactLine(item.phone_number, item.email),
+      summary: item.content,
+      meta: item.category ? `Category: ${item.category}` : item.submission_type?.replace(/_/g, " "),
+      status: "received",
+      statusLabel: "Received",
+      created_at: item.created_at,
+      reviewable: false,
+    }));
+
+    const transferRows: UnifiedRow[] = transfers.map((t) => {
+      const { status, statusLabel } = statusOfTransfer(t.status);
+      return {
+        key: `transfer-${t.id}`,
+        kind: "transfer",
+        title: t.member_name,
+        contact: contactLine(t.phone_number, t.email),
+        summary: t.transfer_type === "outgoing" ? `Transfer out to ${t.other_church}` : `Transfer in from ${t.other_church}`,
+        meta: t.reason,
+        status,
+        statusLabel,
+        created_at: t.created_at,
+        reviewable: status === "pending" || status === "under_review",
+        transferId: t.id,
+      };
+    });
+
+    return [...joinRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
+      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
+  }, [joinRequests, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
+
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (activeTab !== "all" && row.kind !== activeTab) return false;
+      if (!query) return true;
+      return (
+        row.title.toLowerCase().includes(query) ||
+        row.contact.toLowerCase().includes(query) ||
+        row.summary.toLowerCase().includes(query) ||
+        (row.meta || "").toLowerCase().includes(query) ||
+        row.statusLabel.toLowerCase().includes(query) ||
+        KIND_META[row.kind].label.toLowerCase().includes(query)
+      );
+    });
+  }, [rows, activeTab, search]);
+
+  const kindCount = (kind: KindFilter) => (kind === "all" ? rows.length : rows.filter((r) => r.kind === kind).length);
+
+  const filterOptions: { value: KindFilter; label: string }[] = [
+    { value: "all", label: "All requests" },
+    { value: "join", label: "Join requests" },
+    { value: "prayer", label: "Prayer requests" },
+    { value: "visitation", label: "Visitation" },
+    { value: "dedication", label: "Child dedications" },
+    { value: "welfare", label: "Welfare & support" },
+    { value: "transfer", label: "Membership transfers" },
   ];
+
+  const activeFilterLabel = activeTab === "all" ? "All requests" : KIND_META[activeTab].label;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-[#26352f]">Pastoral & Member Requests</h2>
+          <h2 className="text-2xl font-semibold text-[#26352f]">Pastoral &amp; Member Requests</h2>
           <p className="mt-0.5 text-sm text-[#617068]">
-            Review join requests, prayer, visitation, dedications, welfare, and membership transfers.
+            Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
           </p>
         </div>
         <button
@@ -247,30 +440,81 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
         </button>
       </div>
 
-      {/* Sub-tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-              activeTab === tab.key
-                ? "bg-[#26352f] text-white"
-                : "bg-[#f7f4ee] text-[#26352f] hover:bg-[#ede8dc]"
-            }`}
+      {/* One search bar + one popover filter — no more wall of tabs. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+          <svg
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#617068]"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            {tab.label}
-            {tab.count !== undefined && (
-              <span
-                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  activeTab === tab.key ? "bg-white text-[#26352f]" : "bg-[#dfdbd1] text-[#617068]"
-                }`}
-              >
-                {tab.count}
-              </span>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, contact, details..."
+            className="w-full rounded-full border border-[#c9c5bb] bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#b36b3c]"
+          />
+        </div>
+
+        <div className="relative" ref={filterRef}>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((open) => !open)}
+            aria-expanded={filterOpen}
+            className="inline-flex items-center gap-2 rounded-full border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+          >
+            <svg className="h-4 w-4 text-[#617068]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" />
+            </svg>
+            Filter
+            {activeTab !== "all" && (
+              <span className="rounded-full bg-[#26352f] px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterLabel}</span>
             )}
+            <svg className={`h-3 w-3 text-[#617068] transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
           </button>
-        ))}
+
+          {filterOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-50 mt-2 w-64 rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
+            >
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+                Show requests by desk
+              </p>
+              {filterOptions.map((option) => {
+                const count = kindCount(option.value);
+                const selected = activeTab === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() => {
+                      setActiveTab(option.value);
+                      setFilterOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
+                      selected ? "bg-[#f7f4ee] font-semibold text-[#26352f]" : "text-[#415047] hover:bg-[#f7f4ee]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {selected && <span className="text-[#b36b3c]">✓</span>}
+                      <span className={selected ? "" : "pl-5"}>{option.label}</span>
+                    </span>
+                    <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {loading && (
@@ -279,318 +523,140 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
         </div>
       )}
 
-      {/* Join Requests (friend / baptism enrollments awaiting approval) */}
-      {!loading && activeTab === "joins" && (
-        <div className="space-y-4">
-          {joinRequests.length === 0 ? (
-            <EmptyState icon="\ud83e\udd1d" label="No join requests yet." />
+      {!loading && (
+        <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white">
+          <div className="flex items-center justify-between border-b border-[#dfdbd1] px-4 py-2.5 text-xs text-[#617068]">
+            <span>
+              {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
+              {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
+              {search.trim() ? ` · matching “${search.trim()}”` : ""}
+            </span>
+          </div>
+
+          {filteredRows.length === 0 ? (
+            <div className="p-8 sm:p-12 text-center">
+              <span className="text-4xl" aria-hidden="true">
+                🤝
+              </span>
+              <h3 className="mt-3 text-lg font-semibold text-[#26352f]">No requests found</h3>
+              <p className="mt-1 text-sm text-[#617068]">
+                {rows.length === 0
+                  ? "Join, prayer, visitation, dedication, welfare and transfer requests will appear here."
+                  : "Try a different search or clear the filter."}
+              </p>
+            </div>
           ) : (
-            joinRequests.map((item) => {
-              const awaiting = item.status === "pending" || item.status === "verification_pending";
-              return (
-                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-[#26352f]">{item.full_name}</p>
-                      <p className="text-xs text-[#617068]">
-                        {item.email}
-                        {item.phone_number ? ` \u00b7 ${item.phone_number}` : ""}
-                      </p>
-                      <p className="text-xs text-[#617068]">
-                        Submitted {new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
-                        {item.current_church ? ` \u00b7 From ${item.current_church}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
-                        {item.joining_mode === "friend" ? "Friend of church" : item.joining_mode === "baptism" ? "Baptism" : "Membership transfer"}
-                      </span>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                          item.status === "approved" || item.status === "completed"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : item.status === "rejected"
-                              ? "bg-rose-100 text-rose-800"
-                              : item.status === "verification_pending"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {item.status === "verification_pending"
-                          ? "Awaiting their email"
-                          : item.status === "pending"
-                            ? "Awaiting approval"
-                            : item.status}
-                      </span>
-                    </div>
-                  </div>
-                  {!item.has_account && item.status === "verification_pending" && (
-                    <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl">
-                      Still verifying their email. You can approve now \u2014 the account activates when they finish signing up.
-                    </p>
-                  )}
-                  {!item.has_account && item.status === "approved" && (
-                    <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl">
-                      Approved early \u2014 the account activates as soon as they complete their email verification.
-                    </p>
-                  )}
-                  {isElder && awaiting && (
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={reviewingId === item.id}
-                        onClick={() => handleReviewJoin(item.id, "approved")}
-                        className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                      >
-                        {reviewingId === item.id ? "Processing..." : "\u2713 Approve"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={reviewingId === item.id}
-                        onClick={() => handleReviewJoin(item.id, "rejected")}
-                        className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
-                      >
-                        \u2715 Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] uppercase tracking-wide text-[#617068]">
+                    <th className="px-4 py-3 font-semibold">Request</th>
+                    <th className="px-4 py-3 font-semibold">Desk</th>
+                    <th className="px-4 py-3 font-semibold">Details</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Submitted</th>
+                    <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((row) => (
+                    <tr key={row.key} className="border-b border-[#dfdbd1]/60 align-top last:border-0 hover:bg-[#faf9f5]">
+                      <td className="max-w-[220px] px-4 py-3">
+                        <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
+                          {KIND_META[row.kind].label}
+                        </span>
+                      </td>
+                      <td className="max-w-[280px] px-4 py-3">
+                        <p className="line-clamp-2 text-[#415047]">{row.summary}</p>
+                        {row.meta && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                            row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "new" || row.status === "received"
+                              ? "bg-amber-100 text-amber-800"
+                              : row.status === "approved" || row.status === "completed"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : row.status === "rejected" || row.status === "cancelled"
+                                  ? "bg-rose-100 text-rose-800"
+                                  : "bg-[#f7f4ee] text-[#617068]"
+                          }`}
+                        >
+                          {row.statusLabel}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">{formatDate(row.created_at)}</td>
+                      <td className="px-4 py-3">
+                        {row.reviewable && isElder && (
+                          <div className="flex justify-end gap-2">
+                            {row.join && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={reviewingId === row.key}
+                                  onClick={() => handleReviewJoin(row.join!.id, "approved")}
+                                  className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                                >
+                                  {reviewingId === row.key ? "..." : "✓ Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={reviewingId === row.key}
+                                  onClick={() => handleReviewJoin(row.join!.id, "rejected")}
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  ✕ Reject
+                                </button>
+                              </>
+                            )}
+                            {row.transferId && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={reviewingId === row.key}
+                                  onClick={() => handleReviewTransfer(row.transferId!, "approved")}
+                                  className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                                >
+                                  {reviewingId === row.key ? "..." : "✓ Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={reviewingId === row.key}
+                                  onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  ✕ Reject
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
-      {/* Prayer Requests */}
-      {!loading && activeTab === "prayer" && (
-        <div className="space-y-4">
-          {prayerRequests.length === 0 ? (
-            <EmptyState icon="🙏" label="No prayer requests submitted yet." />
-          ) : (
-            prayerRequests.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-[#26352f]">
-                      {item.anonymous ? "Anonymous" : item.name || "Church Member"}
-                    </p>
-                    {!item.anonymous && (item.email || item.phone_number) && (
-                      <p className="text-xs text-[#617068]">
-                        {[item.email, item.phone_number].filter(Boolean).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-xs text-[#617068]">
-                    {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}
-                  </span>
-                </div>
-                <p className="text-sm leading-6 text-[#3d5148] bg-[#f7f4ee] rounded-xl px-4 py-3">
-                  {item.request_text}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
+      {/* Still verifying their email — a hint the old joins tab carried. */}
+      {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join") && (
+        <p className="rounded-2xl bg-[#f7f4ee] p-4 text-xs italic text-[#415047]">
+          Requests marked <strong>Awaiting their email</strong> can be approved now — the account activates as soon as the person
+          finishes signing up.
+        </p>
       )}
 
-      {/* Visitation Requests */}
-      {!loading && activeTab === "visitation" && (
-        <div className="space-y-4">
-          {visitationRequests.length === 0 ? (
-            <EmptyState icon="🏠" label="No visitation requests submitted yet." />
-          ) : (
-            visitationRequests.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-[#26352f]">{item.name}</p>
-                    {item.phone_number && (
-                      <p className="text-xs text-[#617068]">{item.phone_number}</p>
-                    )}
-                  </div>
-                  <div className="text-right space-y-1">
-                    {item.status && (
-                      <span className="inline-block rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold capitalize text-[#5f8067]">
-                        {item.status}
-                      </span>
-                    )}
-                    {item.created_at && (
-                      <p className="text-xs text-[#617068]">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 text-xs text-[#617068]">
-                  {item.address && <Field label="Address" value={item.address} />}
-                  {item.preferred_date && <Field label="Preferred Date" value={item.preferred_date} />}
-                  {item.reason && <Field label="Reason" value={item.reason} />}
-                  {item.notes && <Field label="Notes" value={item.notes} />}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Child Dedications */}
-      {!loading && activeTab === "dedication" && (
-        <div className="space-y-4">
-          {childDedications.length === 0 ? (
-            <EmptyState icon="👶" label="No child dedication requests submitted yet." />
-          ) : (
-            childDedications.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-[#26352f]">{item.child_name}</p>
-                    {item.child_dob && (
-                      <p className="text-xs text-[#617068]">DOB: {item.child_dob}</p>
-                    )}
-                  </div>
-                  <div className="text-right space-y-1">
-                    {item.status && (
-                      <span className="inline-block rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold capitalize text-[#5f8067]">
-                        {item.status}
-                      </span>
-                    )}
-                    {item.created_at && (
-                      <p className="text-xs text-[#617068]">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 text-xs text-[#617068]">
-                  {item.father_name && <Field label="Father" value={item.father_name} />}
-                  {item.mother_name && <Field label="Mother" value={item.mother_name} />}
-                  {item.phone_number && <Field label="Phone" value={item.phone_number} />}
-                  {item.notes && <Field label="Notes" value={item.notes} />}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Welfare & Support Submissions */}
-      {!loading && activeTab === "welfare" && (
-        <div className="space-y-4">
-          {supportSubmissions.length === 0 ? (
-            <EmptyState icon="🤝" label="No welfare or support submissions yet." />
-          ) : (
-            supportSubmissions.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-[#26352f]">
-                      {item.anonymous ? "Anonymous" : item.name || "Church Member"}
-                    </p>
-                    {!item.anonymous && (item.email || item.phone_number) && (
-                      <p className="text-xs text-[#617068]">
-                        {[item.email, item.phone_number].filter(Boolean).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right space-y-1">
-                    {item.submission_type && (
-                      <span className="inline-block rounded-full bg-[#f7f0e8] px-2.5 py-0.5 text-[10px] font-bold capitalize text-[#b36b3c]">
-                        {item.submission_type.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    {item.created_at && (
-                      <p className="text-xs text-[#617068]">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {item.category && (
-                  <p className="text-xs text-[#617068]">Category: <span className="font-medium">{item.category}</span></p>
-                )}
-                <p className="text-sm leading-6 text-[#3d5148] bg-[#f7f4ee] rounded-xl px-4 py-3">
-                  {item.content}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Removal Requests Sub-tab */}
-      {!loading && activeTab === "removals" && (
-        <div className="space-y-4">
-          {removalRequests.length === 0 ? (
-            <EmptyState icon="🚫" label="No membership removal requests yet." />
-          ) : (
-            removalRequests.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 space-y-2">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-[#26352f]">{item.member_name}</p>
-                    {item.member_email && <p className="text-xs text-[#617068]">{item.member_email}</p>}
-                    <p className="text-xs text-[#617068]">
-                      Requested by {item.requested_by_name || "church official"}
-                      {item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString()}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        item.reason === "death"
-                          ? "bg-slate-100 text-slate-700"
-                          : item.reason === "transfer_out"
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {item.reason.replace(/_/g, " ")}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        item.status === "approved"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : item.status === "rejected"
-                            ? "bg-rose-100 text-rose-800"
-                            : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {item.status === "pending" ? "Pending elder approval" : item.status}
-                    </span>
-                  </div>
-                </div>
-                {item.notes && (
-                  <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl">&quot;{item.notes}&quot;</p>
-                )}
-                {isElder && item.status === "pending" && (
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      disabled={reviewingId === item.id}
-                      onClick={() => handleReviewRemoval(item.id, "approved")}
-                      className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                    >
-                      {reviewingId === item.id ? "Processing..." : "✓ Approve"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={reviewingId === item.id}
-                      onClick={() => handleReviewRemoval(item.id, "rejected")}
-                      className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-                    >
-                      ✕ Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Membership Transfers Sub-tab */}
-      {activeTab === "transfers" && (
-        <div>
+      {/* The manual transfer desk keeps its fuller manager (add records, change
+          statuses) — reachable from the filter, labelled the same way. */}
+      {activeTab === "transfer" && (
+        <div className="pt-2">
           <TransferManagement />
         </div>
       )}
@@ -598,20 +664,14 @@ export function RequestsAdminManager({ initialTab = "prayer" }: RequestsAdminMan
   );
 }
 
-function EmptyState({ icon, label }: { icon: string; label: string }) {
-  return (
-    <div className="rounded-3xl border border-dashed border-[#c9c5bb] bg-white p-8 sm:p-12 text-center">
-      <span className="text-4xl">{icon}</span>
-      <p className="mt-3 text-sm text-[#617068]">{label}</p>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="font-semibold text-[#26352f]">{label}: </span>
-      {value}
-    </div>
-  );
-}
+type TransferRow = {
+  id: number;
+  member_name: string;
+  transfer_type: "incoming" | "outgoing";
+  other_church: string;
+  reason?: string;
+  phone_number?: string;
+  email?: string;
+  status: "pending" | "under_review" | "approved" | "completed" | "cancelled";
+  created_at: string;
+};
