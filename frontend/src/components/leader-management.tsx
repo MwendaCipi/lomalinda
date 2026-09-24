@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS } from "./roles-combobox";
+import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS, refreshRoleRegister } from "./roles-combobox";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -14,6 +14,7 @@ type MemberUser = {
   last_name: string;
   role: string;
   roles?: string[];
+  assistant_roles?: string[];
   account_type?: string;
   is_disfellowshipped?: boolean;
   phone_number?: string;
@@ -31,6 +32,7 @@ export function LeaderManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberUser | null>(null);
   const [modalSelectedRoles, setModalSelectedRoles] = useState<string[]>(["elder"]);
+  const [modalSelectedAssistants, setModalSelectedAssistants] = useState<string[]>([]);
   const [modalSearch, setModalSearch] = useState("");
   const [submittingModal, setSubmittingModal] = useState(false);
 
@@ -51,10 +53,12 @@ export function LeaderManagement() {
     fetchMembers();
   }, []);
 
-  const handleRolesChange = async (userId: number, newRoles: string[]) => {
+  const handleRolesChange = async (userId: number, newRoles: string[], newAssistants: string[] = []) => {
     setUpdatingId(userId);
     setMessage(null);
-    const previousRoles = members.find((m) => m.id === userId)?.roles || ["member"];
+    const previous = members.find((m) => m.id === userId);
+    const previousRoles = previous?.roles || ["member"];
+    const previousAssistants = previous?.assistant_roles || [];
     const token = localStorage.getItem("access_token");
     try {
       const res = await fetch(`${API_URL}/api/members/users/${userId}/role/`, {
@@ -63,19 +67,28 @@ export function LeaderManagement() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ roles: newRoles }),
+        body: JSON.stringify({ roles: newRoles, assistant_roles: newAssistants }),
       });
       const data = await res.json();
       if (res.ok) {
+        refreshRoleRegister();
         setMessage({ type: "success", text: data.detail || "Roles updated successfully. Notification and email sent to member." });
         setMembers((prev) =>
-          prev.map((m) => (m.id === userId ? { ...m, roles: newRoles, role: newRoles[0] || "member" } : m))
+          prev.map((m) =>
+            m.id === userId
+              ? { ...m, roles: newRoles, assistant_roles: newAssistants, role: newRoles[0] || "member" }
+              : m
+          )
         );
       } else {
         setMembers((prev) =>
-          prev.map((m) => (m.id === userId ? { ...m, roles: previousRoles, role: previousRoles[0] || "member" } : m))
+          prev.map((m) =>
+            m.id === userId
+              ? { ...m, roles: previousRoles, assistant_roles: previousAssistants, role: previousRoles[0] || "member" }
+              : m
+          )
         );
-        setMessage({ type: "error", text: data.detail || "Failed to update roles." });
+        setMessage({ type: "error", text: data.detail || data.roles || "Failed to update roles." });
       }
     } catch {
       setMessage({ type: "error", text: "Network error updating roles." });
@@ -161,7 +174,12 @@ export function LeaderManagement() {
     // Merge with the member's existing roles instead of replacing them
     const existing = (selectedMember.roles || [selectedMember.role || "member"]).filter((r) => r !== "member");
     const merged = Array.from(new Set([...existing, ...modalSelectedRoles]));
-    await handleRolesChange(selectedMember.id, merged.length > 0 ? merged : ["member"]);
+    // Assistants follow the roles: a ticked assistant that is not in the merged
+    // set would be refused by the church rule anyway.
+    const mergedAssistants = Array.from(
+      new Set([...(selectedMember.assistant_roles || []), ...modalSelectedAssistants])
+    ).filter((code) => merged.includes(code));
+    await handleRolesChange(selectedMember.id, merged.length > 0 ? merged : ["member"], mergedAssistants);
     setSubmittingModal(false);
     setIsModalOpen(false);
   };
@@ -235,9 +253,12 @@ export function LeaderManagement() {
                 <label className="text-xs font-medium text-[#617068]">Role(s):</label>
                 <RolesCombobox
                   selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                  onChange={(newRoles) => handleRolesChange(m.id, newRoles)}
+                  onChange={(newRoles, newAssistants) => handleRolesChange(m.id, newRoles, newAssistants)}
                   disabled={updatingId === m.id}
                   lockedRoles={heldSystemRoles(m.roles, m.role)}
+                  memberId={m.id}
+                  assistants={m.assistant_roles || []}
+                  showAssistants
                   align="right"
                 />
               </div>
@@ -259,9 +280,12 @@ export function LeaderManagement() {
                   <td className="py-3.5">
                     <RolesCombobox
                       selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                      onChange={(newRoles) => handleRolesChange(m.id, newRoles)}
+                      onChange={(newRoles, newAssistants) => handleRolesChange(m.id, newRoles, newAssistants)}
                       disabled={updatingId === m.id}
                       lockedRoles={heldSystemRoles(m.roles, m.role)}
+                      memberId={m.id}
+                      assistants={m.assistant_roles || []}
+                      showAssistants
                       align="right"
                     />
                   </td>
@@ -381,7 +405,17 @@ export function LeaderManagement() {
                 <p className="text-[10px] text-[#617068]">
                   Tick every role to assign. Roles are added to any the member already holds.
                 </p>
-                <RolesCombobox selected={modalSelectedRoles} onChange={setModalSelectedRoles} align="left" />
+                <RolesCombobox
+                  selected={modalSelectedRoles}
+                  onChange={(roles, assists) => {
+                    setModalSelectedRoles(roles);
+                    setModalSelectedAssistants(assists);
+                  }}
+                  memberId={selectedMember?.id}
+                  assistants={modalSelectedAssistants}
+                  showAssistants
+                  align="left"
+                />
               </div>
 
               {/* Modal Actions */}

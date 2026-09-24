@@ -166,7 +166,7 @@ export function MemberHome() {
   const hasAny = (list: string[]) => list.some((r) => roles.includes(r));
   // The whole church's money is for the officers who keep it; the endpoint
   // refuses anyone else, and members still get their own giving below.
-  const seesChurchFinances = hasAny(["treasurer", "finance", "admin", "elder", "clerk"]);
+  const seesChurchFinances = hasAny(["treasurer", "admin", "elder", "clerk"]);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -189,7 +189,7 @@ export function MemberHome() {
     { href: "/member", label: "My Profile", desc: "Details and giving history", icon: UserRound },
     { href: "/requests", label: "Requests", desc: "Prayer, visitation, dedication", icon: ClipboardList },
     // Leadership: deeper tools first-class on the dashboard.
-    ...(hasAny(["treasurer", "finance"])
+    ...(hasAny(["treasurer", "admin"])
       ? [{ href: "/administration?tab=finance", label: "Treasury", desc: "Accounts, receipts, refunds", icon: Wallet }]
       : []),
     ...(hasAny(["elder", "admin", "clerk"])
@@ -213,7 +213,6 @@ export function MemberHome() {
     email: "Email",
     phone_number: "Phone number",
     whatsapp_number: "WhatsApp number",
-    employment_status: "Employment status",
     profession: "Profession",
     gender: "Sex",
     date_of_birth: "Date of birth",
@@ -363,7 +362,7 @@ export function MemberHome() {
                   <Link href="/administration" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                     Open Administration
                   </Link>
-                  {hasAny(["treasurer", "finance"]) && (
+                  {hasAny(["treasurer", "admin"]) && (
                     <Link href="/administration/reconciliation" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                       Reconciliation
                     </Link>
@@ -373,7 +372,7 @@ export function MemberHome() {
                       Post announcement
                     </Link>
                   )}
-                  {hasAny(["treasurer", "finance"]) && (
+                  {hasAny(["treasurer", "admin"]) && (
                     <Link href="/support/budget" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
                       Church budget
                     </Link>

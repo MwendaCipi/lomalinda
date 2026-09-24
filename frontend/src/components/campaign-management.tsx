@@ -132,12 +132,11 @@ export function CampaignManagement({
           "men_ministry",
           "women_ministry",
           "chaplaincy",
-          "finance",
           "treasurer",
         ];
 
         const allowedView = user && (userRoles.some((r) => officialRoles.includes(r)) || user.is_staff || user.is_superuser);
-        const allowedEdit = user && (userRoles.some((r) => ["treasurer", "finance", "admin"].includes(r)) || user.is_staff || user.is_superuser);
+        const allowedEdit = user && (userRoles.some((r) => ["treasurer", "admin"].includes(r)) || user.is_staff || user.is_superuser);
 
         setIsOfficial(allowedView);
         setCanEdit(allowedEdit && isAdminMode);

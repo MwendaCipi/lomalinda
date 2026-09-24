@@ -40,7 +40,7 @@ export function ChurchSettingsManager() {
   const [encouragementLine, setEncouragementLine] = useState("Jesus is coming again.");
   const ENCOURAGEMENT_MAX = 140;
   const [boardRoles, setBoardRoles] = useState<string[]>([
-    "elder", "clerk", "treasurer", "finance", "admin"
+    "elder", "first_elder", "second_elder", "third_elder", "clerk", "treasurer", "admin"
   ]);
   const [bankName, setBankName] = useState("KCB Bank Kenya");
   const [bankAccountName, setBankAccountName] = useState("SDA Church Main Account");

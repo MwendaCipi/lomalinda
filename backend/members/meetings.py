@@ -138,7 +138,7 @@ def board_audience():
     """Who the church considers a board member, per the configured board roles."""
     settings_obj = ChurchSettings.objects.first()
     configured_roles = (settings_obj.board_roles if settings_obj and settings_obj.board_roles
-                        else ['elder', 'clerk', 'treasurer', 'finance', 'admin'])
+                        else ['elder', 'clerk', 'treasurer', 'admin'])
     return User.objects.filter(is_active=True).filter(
         Q(member_profile__role__in=configured_roles) | Q(is_superuser=True) | Q(is_staff=True)
     ).distinct()

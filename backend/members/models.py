@@ -38,16 +38,54 @@ class MemberProfile(models.Model):
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='member')
     role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES, help_text="Primary/legacy role kept in sync with 'roles'")
     roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes; a member can hold several roles")
+    # Roles this member shares as their leader's assistant. Always a subset of
+    # ``roles``: an assistant holds the role too, and the leader it assists
+    # already exists (see members/roles.py).
+    assistant_roles = models.CharField(max_length=250, blank=True, default='', help_text="Comma-separated role codes held as an assistant to the role's leader")
     current_church = models.CharField(max_length=160, blank=True, help_text="Church the person currently attends (mainly for friends)")
     baptismal_status = models.CharField(max_length=30, choices=BAPTISMAL_STATUS_CHOICES, blank=True, help_text="Baptismal status (mainly for friends)")
-    employment_status = models.CharField(max_length=80, blank=True)
     profession = models.CharField(max_length=120, blank=True)
     gender = models.CharField(max_length=20, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     gifts = models.TextField(blank=True, default='', help_text="Spiritual gifts and talents of the member")
     disability = models.TextField(blank=True, default='', help_text="Disability or special needs of the member")
+    MINISTRY_CHOICES = [
+        ('adventist_men', 'Adventist Men'),
+        ('adventist_women', 'Adventist Women'),
+        ('young_adults', 'Young Adults'),
+        ('ambassadors', 'Ambassadors'),
+    ]
+    ministry = models.CharField(
+        max_length=30, choices=MINISTRY_CHOICES, blank=True,
+        help_text="Ministry the member belongs to, self-declared at profile update",
+    )
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
     must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
+    profile_update_pending = models.BooleanField(
+        default=False,
+        help_text="Require sex, gifts, ministry and disability to be completed at the next login",
+    )
+
+    def missing_profile_details(self):
+        """Which of the details a member must confirm are still blank.
+
+        The forced profile update asks for sex, gifts, ministry and disability;
+        a member is only released from it once all four carry a value.
+        """
+        missing = []
+        if not (self.gender or '').strip():
+            missing.append('gender')
+        if not (self.gifts or '').strip():
+            missing.append('gifts')
+        if not (self.ministry or '').strip():
+            missing.append('ministry')
+        if not (self.disability or '').strip():
+            missing.append('disability')
+        return missing
+
+    def needs_profile_update(self):
+        """True while the member still owes the church the four details."""
+        return bool(self.profile_update_pending) or bool(self.missing_profile_details())
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
     privacy_policy_version = models.CharField(max_length=20, blank=True, default='')
     terms_accepted_at = models.DateTimeField(null=True, blank=True)
@@ -63,13 +101,26 @@ class MemberProfile(models.Model):
             codes.append(legacy)
         return codes or ['member']
 
-    def set_roles(self, codes, save=True):
-        """Store ``codes`` as this member's role set, keeping ``role`` in sync."""
+    def get_assistant_roles(self):
+        """Return the roles this member holds as an assistant (never the leader)."""
+        codes = [c.strip() for c in (self.assistant_roles or '').split(',') if c.strip()]
+        held = set(self.get_roles())
+        return [code for code in codes if code in held]
+
+    def set_roles(self, codes, save=True, assistants=None):
+        """Store ``codes`` as this member's role set, keeping ``role`` in sync.
+
+        ``assistants`` is the subset of ``codes`` held as an assistant. Anything
+        else is dropped: an assistant holds the role itself, so the flag cannot
+        outlive the role.
+        """
         role_codes = normalize_roles(codes)
+        assistant_codes = [code for code in (assistants if assistants is not None else self.get_assistant_roles()) if code in role_codes]
         self.roles = ', '.join(role_codes)
+        self.assistant_roles = ', '.join(assistant_codes)
         self.role = role_codes[0]
         if save:
-            self.save(update_fields=['roles', 'role'])
+            self.save(update_fields=['roles', 'assistant_roles', 'role'])
         return role_codes
 
     def has_role(self, *codes):

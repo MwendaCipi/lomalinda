@@ -1110,7 +1110,7 @@ class ChurchRoleTests(APITestCase):
     """Church roles are hard-coded, and Administrator is a protected system role."""
 
     def setUp(self):
-        for name in ('Administrators', 'Church Leaders', 'Finance Team'):
+        for name in ('Administrators', 'Church Leaders', 'Treasury'):
             Group.objects.get_or_create(name=name)
 
         self.admin_user = User.objects.create_user('role.admin', 'role.admin@example.com', 'ChurchAdmin#2026')
@@ -1154,14 +1154,16 @@ class ChurchRoleTests(APITestCase):
         )
 
     def test_role_update_stores_the_set_and_syncs_the_role_groups(self):
-        response = self._set_roles(self.admin_user, self.member_user, ['treasurer', 'clerk'])
+        # `clerk` and `treasurer` are single-holder roles and setUp's clerk holds
+        # `clerk`, so this assigns the free elder seat alongside the treasury.
+        response = self._set_roles(self.admin_user, self.member_user, ['treasurer', 'elder'])
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile = MemberProfile.objects.get(user=self.member_user)
-        self.assertEqual(profile.roles, 'clerk, treasurer')
-        self.assertEqual(profile.role, 'clerk')
+        self.assertEqual(profile.roles, 'elder, treasurer')
+        self.assertEqual(profile.role, 'elder')
         self.assertEqual(
             sorted(self.member_user.groups.values_list('name', flat=True)),
-            ['Church Leaders', 'Finance Team'],
+            ['Church Leaders', 'Treasury'],
         )
 
     def test_role_update_rejects_unknown_codes(self):
@@ -1186,7 +1188,7 @@ class ChurchRoleTests(APITestCase):
         self.assertEqual(MemberProfile.objects.get(user=self.admin_user).get_roles(), ['admin'])
 
     def test_administrator_can_promote_another_member(self):
-        response = self._set_roles(self.admin_user, self.member_user, ['admin', 'clerk'])
+        response = self._set_roles(self.admin_user, self.member_user, ['admin', 'elder'])
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('Administrators', self.member_user.groups.values_list('name', flat=True))
 
@@ -3585,3 +3587,135 @@ class ProfileChangeApprovalTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(ProfileChangeRequest.objects.count(), 0)
+
+
+class RoleRegisterAndAssistantTests(APITestCase):
+    """One leader per role, assistants only under a leader, and no Finance Team.
+
+    The church is organised one leader per department: the picker refuses to put
+    a second person in a role that is taken, and an assistant can only be named
+    once the leader exists. The elder roles take no assistant at all.
+    """
+
+    def setUp(self):
+        Group.objects.get_or_create(name='Church Leaders')
+        Group.objects.get_or_create(name='Treasury')
+        self.admin = User.objects.create_user('roster.admin', 'roster.admin@example.com', 'ChurchAdmin#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.first = self._member('roster.one')
+        self.second = self._member('roster.two')
+
+    def _member(self, username):
+        user = User.objects.create_user(username, f'{username}@example.com', 'MemberPass#2026', first_name=username)
+        MemberProfile.objects.create(user=user, role='member', roles='member')
+        return user
+
+    def _set(self, target, roles, assistants=None):
+        self.client.force_authenticate(user=self.admin)
+        payload = {'roles': roles}
+        if assistants is not None:
+            payload['assistant_roles'] = assistants
+        return self.client.patch(f'/api/members/users/{target.pk}/role/', payload, format='json')
+
+    def _register(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get('/api/members/roles/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return {row['code']: row for row in response.data['roles']}
+
+    def test_the_register_lists_the_churchs_own_roles(self):
+        register = self._register()
+        for code in (
+            'first_elder', 'second_elder', 'third_elder', 'head_deacon', 'head_deaconess',
+            'pm_leader', 'chaplaincy', 'children_ministry', 'health_leader', 'ambassadors_leader',
+            'education_leader', 'family_life', 'pathfinders_leader', 'adventurers_leader',
+            'publishing_head', 'welfare_leader', 'interest_coordinator', 'development',
+            'choir_director', 'youth_leader', 'admin',
+        ):
+            self.assertIn(code, register, f'{code} is missing from the role list')
+        self.assertNotIn('finance', register)
+        self.assertEqual(register['men_ministry']['label'], 'APM Leader')
+        self.assertEqual(register['women_ministry']['label'], 'AWM Leader')
+        self.assertEqual(register['elder']['label'], 'Elder')
+
+    def test_the_elder_roles_take_no_assistant(self):
+        register = self._register()
+        for code in ('elder', 'first_elder', 'second_elder', 'third_elder'):
+            self.assertFalse(register[code]['assistant'], f'{code} should not take an assistant')
+
+    def test_two_people_cannot_lead_the_same_role(self):
+        self.assertEqual(self._set(self.first, ['first_elder']).status_code, status.HTTP_200_OK)
+
+        response = self._set(self.second, ['first_elder'])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(self.first.username, response.data['detail'])
+        self.assertEqual(MemberProfile.objects.get(user=self.second).get_roles(), ['member'])
+
+    def test_the_role_can_be_handed_over_once_the_holder_is_removed(self):
+        self._set(self.first, ['first_elder'])
+        self.assertEqual(self._set(self.first, ['member']).status_code, status.HTTP_200_OK)
+
+        self.assertEqual(self._set(self.second, ['first_elder']).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._register()['first_elder']['leader']['id'], self.second.id)
+
+    def test_an_assistant_may_be_named_before_the_leader(self):
+        """An assistant takes the work whether or not the leader is appointed yet."""
+        response = self._set(self.second, ['pm_leader'], assistants=['pm_leader'])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=self.second)
+        self.assertEqual(profile.get_roles(), ['pm_leader'])
+        self.assertEqual(profile.get_assistant_roles(), ['pm_leader'])
+        # The role still reads as leaderless in the register.
+        self.assertIsNone(self._register()['pm_leader']['leader'])
+
+    def test_an_assistant_is_recorded_beside_the_leader(self):
+        self._set(self.first, ['pm_leader'])
+
+        response = self._set(self.second, ['pm_leader'], assistants=['pm_leader'])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = MemberProfile.objects.get(user=self.second)
+        self.assertEqual(profile.get_roles(), ['pm_leader'])
+        self.assertEqual(profile.get_assistant_roles(), ['pm_leader'])
+        register = self._register()['pm_leader']
+        self.assertEqual(register['leader']['id'], self.first.id)
+        self.assertEqual([a['id'] for a in register['assistants']], [self.second.id])
+
+    def test_the_elder_roles_refuse_an_assistant(self):
+        self._set(self.first, ['elder'])
+
+        response = self._set(self.second, ['elder'], assistants=['elder'])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('does not take an assistant', response.data['detail'])
+
+    def test_an_assistant_flag_cannot_outlive_the_role(self):
+        self._set(self.first, ['pm_leader'])
+
+        response = self._set(self.second, ['member'], assistants=['pm_leader'])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('can only be an assistant on a role', response.data['detail'])
+
+    def test_the_role_register_is_serialized_on_the_roster(self):
+        self._set(self.first, ['head_deacon'])
+        self._set(self.second, ['head_deacon'], assistants=['head_deacon'])
+
+        response = self.client.get(f'/api/members/users/{self.second.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['roles'], ['head_deacon'])
+        self.assertEqual(response.data['assistant_roles'], ['head_deacon'])
+
+    def test_the_clerk_takes_an_assistant(self):
+        """The clerk is a shared office, so a second person may assist."""
+        self._set(self.first, ['clerk'])
+
+        response = self._set(self.second, ['clerk'], assistants=['clerk'])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        register = self._register()['clerk']
+        self.assertTrue(register['assistant'])
+        self.assertEqual(register['leader']['id'], self.first.id)
+        self.assertEqual([a['id'] for a in register['assistants']], [self.second.id])

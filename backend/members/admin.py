@@ -134,8 +134,8 @@ class MemberProfileAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
     search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name', 'phone_number')
     fields = (
         'user', 'account_type', 'roles', 'roles_legend', 'phone_number', 'whatsapp_number',
-        'current_church', 'baptismal_status', 'employment_status', 'profession', 'gender',
-        'date_of_birth', 'gifts', 'disability', 'is_disfellowshipped',
+        'current_church', 'baptismal_status', 'profession', 'gender',
+        'date_of_birth', 'gifts', 'ministry', 'disability', 'is_disfellowshipped',
     )
 
     def get_form(self, request, obj=None, change=False, **kwargs):

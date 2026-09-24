@@ -49,6 +49,14 @@ function LoginContent() {
         return;
       }
 
+      // Members who have not yet confirmed sex, gifts, ministry and disability
+      // are sent to the profile form first; it hands them on to `next` after.
+      if (data.profile_update_pending) {
+        const destination = nextParam || "/dashboard";
+        router.push(`/complete-profile?next=${encodeURIComponent(destination)}`);
+        return;
+      }
+
       // Everyone lands on the system dashboard, whose role-aware tiles link
       // leaders on to Administration. The site home stays the marketing page.
       router.push(nextParam || "/dashboard");

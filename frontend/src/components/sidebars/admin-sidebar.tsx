@@ -42,7 +42,6 @@ type StaffRole =
   | "men_ministry"
   | "women_ministry"
   | "chaplaincy"
-  | "finance"
   | "treasurer"
   | "member";
 
@@ -96,7 +95,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   const isAdmin = permissions?.isAdmin ?? hasAnyRole("admin");
   const isClerk = permissions?.isClerk ?? hasAnyRole("clerk", "admin");
   const isElder = permissions?.isElder ?? hasAnyRole("elder", "admin");
-  const isFinance = permissions?.isFinance ?? hasAnyRole("finance", "treasurer", "admin");
+  const isFinance = permissions?.isFinance ?? hasAnyRole("treasurer", "admin");
   const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
 
   const isReconPage = pathname === "/administration/reconciliation";

@@ -46,6 +46,22 @@ export default function ChangePasswordPage() {
         setError(Object.values(data).flat().join(" ") || "Unable to change your password.");
         return;
       }
+      // A member who still owes the church sex, gifts, ministry and disability
+      // is sent on to that form before reaching the page they asked for.
+      try {
+        const meResponse = await fetch(`${API_URL}/api/members/me/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          if (meData?.profile_update_pending) {
+            router.replace(`/complete-profile?next=${encodeURIComponent(nextPath)}`);
+            return;
+          }
+        }
+      } catch {
+        // The profile check is best-effort; never block the password success.
+      }
       router.replace(nextPath);
     } catch {
       setError("We could not reach the church server. Check your connection and try again.");

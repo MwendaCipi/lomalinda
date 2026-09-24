@@ -27,11 +27,12 @@ from .validators import (
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
+    # The subset of ``roles`` this member shares as an assistant.
+    assistant_roles = serializers.SerializerMethodField()
     phone_number = serializers.CharField(source='member_profile.phone_number', read_only=True, default='')
     current_church = serializers.CharField(source='member_profile.current_church', read_only=True, default='')
     baptismal_status = serializers.CharField(source='member_profile.baptismal_status', read_only=True, default='')
     account_type = serializers.CharField(source='member_profile.account_type', read_only=True, default='regular')
-    employment_status = serializers.CharField(source='member_profile.employment_status', read_only=True, default='')
     profession = serializers.CharField(source='member_profile.profession', read_only=True, default='')
 
     def get_role(self, obj):
@@ -49,10 +50,15 @@ class UserDetailSerializer(serializers.ModelSerializer):
         if obj.is_superuser or obj.is_staff:
             return ['admin']
         return ['member']
+
+    def get_assistant_roles(self, obj):
+        profile = getattr(obj, 'member_profile', None)
+        return profile.get_assistant_roles() if profile else []
     gender = serializers.CharField(source='member_profile.gender', read_only=True)
     date_of_birth = serializers.DateField(source='member_profile.date_of_birth', read_only=True)
     gifts = serializers.CharField(source='member_profile.gifts', read_only=True)
     whatsapp_number = serializers.CharField(source='member_profile.whatsapp_number', read_only=True)
+    ministry = serializers.CharField(source='member_profile.ministry', read_only=True)
     disability = serializers.CharField(source='member_profile.disability', read_only=True)
     is_disfellowshipped = serializers.BooleanField(source='member_profile.is_disfellowshipped', read_only=True, default=False)
     # True when a proposed profile edit is waiting for this member's approval;
@@ -72,16 +78,17 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'last_name',
             'role',
             'roles',
+            'assistant_roles',
             'phone_number',
             'whatsapp_number',
             'current_church',
             'baptismal_status',
             'account_type',
-            'employment_status',
             'profession',
             'gender',
             'date_of_birth',
             'gifts',
+            'ministry',
             'disability',
             'is_disfellowshipped',
             'pending_profile_change',

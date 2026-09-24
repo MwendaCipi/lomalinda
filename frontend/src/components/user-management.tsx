@@ -7,6 +7,7 @@ import {
   accountTypeLabel,
   type AccountTypeOption,
   RolesCombobox,
+  refreshRoleRegister,
   formatRoles,
   heldSystemRoles,
   SYSTEM_ROLE_HELP,
@@ -39,12 +40,13 @@ export type MemberUser = {
   last_name: string;
   role: string;
   roles?: string[];
+  /** Roles this member shares as an assistant (a subset of ``roles``). */
+  assistant_roles?: string[];
   current_church?: string;
   baptismal_status?: string;
   phone_number?: string;
   whatsapp_number?: string;
   account_type?: string;
-  employment_status?: string;
   profession?: string;
   gender?: string;
   date_of_birth?: string;
@@ -750,22 +752,11 @@ export function ProfessionCombobox({
   );
 }
 
-const EMPLOYMENT_STATUSES = [
-  "Employed (Full-time)",
-  "Employed (Part-time)",
-  "Self-Employed / Business",
-  "Unemployed",
-  "Student",
-  "Retired",
-  "Other",
-];
-
 const MINISTRIES = [
   { value: "", label: "-- Select Ministry --" },
   { value: "youth_leader", label: "Adventist Youth" },
   { value: "women_ministry", label: "Adventist Women" },
   { value: "men_ministry", label: "Adventist Men" },
-  { value: "children_ministry", label: "Children" },
 ];
 
 interface InvitationRow {
@@ -812,7 +803,6 @@ const initialForm = {
   disability: [] as string[],
   profession: "",
   date_of_birth: "",
-  employment_status: "",
 };
 
 function calculateAgeFromDob(dobStr: string): string {
@@ -1314,7 +1304,6 @@ export function UserManagement() {
       phone_number: member.phone_number || "",
       whatsapp_number: member.whatsapp_number || "",
       role: member.role || "member",
-      employment_status: member.employment_status || "",
       profession: member.profession || "",
       gender: member.gender || "",
       date_of_birth: member.date_of_birth || "",
@@ -1398,6 +1387,8 @@ export function UserManagement() {
   // Leadership modal
   const [leadershipMember, setLeadershipMember] = useState<MemberUser | null>(null);
   const [newRoles, setNewRoles] = useState<string[]>(["member"]);
+  // The subset of those roles the member would share as an assistant.
+  const [newAssistants, setNewAssistants] = useState<string[]>([]);
   const [leadershipSubmitting, setLeadershipSubmitting] = useState(false);
 
   // Removal request modal
@@ -1457,7 +1448,6 @@ export function UserManagement() {
       (m.phone_number && m.phone_number.includes(search)) ||
       (m.whatsapp_number && m.whatsapp_number.includes(search)) ||
       (m.profession && m.profession.toLowerCase().includes(query)) ||
-      (m.employment_status && m.employment_status.toLowerCase().includes(query)) ||
       (m.gifts && m.gifts.toLowerCase().includes(query)) ||
       (m.disability && m.disability.toLowerCase().includes(query));
     return matchesMemberFilter(m) && matchesSearch;
@@ -1510,16 +1500,18 @@ export function UserManagement() {
       const res = await fetch(`${API_URL}/api/members/users/${leadershipMember.id}/role/`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ roles: newRoles }),
+        body: JSON.stringify({ roles: newRoles, assistant_roles: newAssistants }),
       });
       if (res.ok) {
         setMessage({ type: "success", text: `Roles updated for ${leadershipMember.first_name || leadershipMember.username}.` });
         setLeadershipMember(null);
         setNewRoles(["member"]);
+        setNewAssistants([]);
+        refreshRoleRegister();
         fetchMembers();
       } else {
         const d = await res.json();
-        setMessage({ type: "error", text: d.detail || "Failed to update roles." });
+        setMessage({ type: "error", text: d.detail || d.roles || "Failed to update roles." });
       }
     } catch {
       setMessage({ type: "error", text: "Network error." });
@@ -1529,25 +1521,34 @@ export function UserManagement() {
   };
 
   // ── Quick role change from the table combo (multi-role) ─────────────────
-  const handleQuickRolesChange = async (userId: number, newRoles: string[]) => {
+  const handleQuickRolesChange = async (userId: number, newRoles: string[], newAssistants: string[] = []) => {
     setUpdatingRoleId(userId);
-    const previousRoles = members.find((m) => m.id === userId)?.roles || ["member"];
+    const previous = members.find((m) => m.id === userId);
+    const previousRoles = previous?.roles || ["member"];
+    const previousAssistants = previous?.assistant_roles || [];
     // Optimistic update
-    setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: newRoles, role: newRoles[0] || "member" } : m)));
+    setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: newRoles, assistant_roles: newAssistants, role: newRoles[0] || "member" } : m)));
     const token = localStorage.getItem("access_token");
     try {
       const res = await fetch(`${API_URL}/api/members/users/${userId}/role/`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ roles: newRoles }),
+        body: JSON.stringify({ roles: newRoles, assistant_roles: newAssistants }),
       });
       if (res.ok) {
         const d = await res.json().catch(() => ({}));
+        refreshRoleRegister();
         setMessage({ type: "success", text: d.detail || "Roles updated successfully. Notification and email sent to member." });
       } else {
         const d = await res.json().catch(() => ({}));
-        setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: previousRoles, role: previousRoles[0] || "member" } : m)));
-        setMessage({ type: "error", text: d.detail || "Failed to update roles." });
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === userId
+              ? { ...m, roles: previousRoles, assistant_roles: previousAssistants, role: previousRoles[0] || "member" }
+              : m
+          )
+        );
+        setMessage({ type: "error", text: d.detail || d.roles || "Failed to update roles." });
       }
     } catch {
       setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: previousRoles, role: previousRoles[0] || "member" } : m)));
@@ -1856,9 +1857,12 @@ export function UserManagement() {
                     <td className={`py-3 ${COL_ROLE}`}>
                       <RolesCombobox
                         selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                        onChange={(newRoles) => handleQuickRolesChange(m.id, newRoles)}
+                        onChange={(newRoles, newAssistants) => handleQuickRolesChange(m.id, newRoles, newAssistants)}
                         disabled={updatingRoleId === m.id || m.account_type === "friend"}
                         lockedRoles={heldSystemRoles(m.roles, m.role)}
+                        memberId={m.id}
+                        assistants={m.assistant_roles || []}
+                        showAssistants
                         fill
                       />
                     </td>
@@ -1900,7 +1904,12 @@ export function UserManagement() {
                               🔄 Transfer Member
                             </button>
                             <button
-                              onClick={() => { setLeadershipMember(m); setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]); setOpenActionMenuId(null); }}
+                              onClick={() => {
+                                setLeadershipMember(m);
+                                setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]);
+                                setNewAssistants(m.assistant_roles || []);
+                                setOpenActionMenuId(null);
+                              }}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                             >
                               👑 Assign Leadership
@@ -1960,14 +1969,59 @@ export function UserManagement() {
                     />
                   </div>
                   {m.gender && <p className="text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>}
-                  <div className="pt-2 border-t border-[#dfdbd1]/60 flex flex-wrap gap-2">
-                    <button onClick={() => handleStartEdit(m)} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#b36b3c] hover:bg-[#f7f4ee]">✏️ Edit</button>
-                    <button onClick={() => handleContactMember(m)} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]">📞 Contact</button>
-                    <button onClick={() => setTransferMember(m)} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]">🔄 Transfer</button>
-                    <button onClick={() => { setLeadershipMember(m); setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]); }} className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]">👑 Role</button>
-                    <button onClick={() => { setRemoveMember(m); setRemovalReason("disciplinary"); setRemovalNotes(""); }} className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-[#f7f4ee]">
-                      🚫 Remove
-                    </button>
+                  {/* The card's actions live in one menu, like the table row —
+                      nothing shows until it is asked for. */}
+                  <div className="flex justify-end border-t border-[#dfdbd1]/60 pt-2">
+                    <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
+                      <button
+                        onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
+                        aria-expanded={openActionMenuId === m.id}
+                        aria-label={`Actions for ${name}`}
+                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                      >
+                        ⋯ Actions
+                      </button>
+                      {openActionMenuId === m.id && (
+                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
+                          <button
+                            onClick={() => { handleStartEdit(m); setOpenActionMenuId(null); }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                          >
+                            ✏️ Edit Profile
+                          </button>
+                          <button
+                            onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                          >
+                            📞 Contact Member
+                          </button>
+                          <button
+                            onClick={() => { setTransferMember(m); setOpenActionMenuId(null); }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                          >
+                            🔄 Transfer Member
+                          </button>
+                          <button
+                            onClick={() => {
+                              setLeadershipMember(m);
+                              setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]);
+                              setNewAssistants(m.assistant_roles || []);
+                              setOpenActionMenuId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                          >
+                            👑 Assign Leadership
+                          </button>
+                          <div className="my-1 border-t border-[#dfdbd1]" />
+                          <button
+                            onClick={() => { setRemoveMember(m); setRemovalReason("disciplinary"); setRemovalNotes(""); setOpenActionMenuId(null); }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-red-600 hover:bg-[#f7f4ee]"
+                          >
+                            🚫 Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -2277,16 +2331,6 @@ export function UserManagement() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#26352f]">Employment Status</label>
-                      <select value={formData.employment_status}
-                        onChange={(e) => setFormData({ ...formData, employment_status: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
-                        <option value="">-- Select Employment Status --</option>
-                        {EMPLOYMENT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
                       <label className="block text-xs font-semibold text-[#26352f]">Ministry / Role</label>
                       <select value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -2565,14 +2609,6 @@ export function UserManagement() {
                     className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Employment Status</label>
-                  <select value={editFormData.employment_status || ""} onChange={(e) => setEditFormData({ ...editFormData, employment_status: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none">
-                    <option value="">-- Select Employment Status --</option>
-                    {EMPLOYMENT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="block text-xs font-medium text-[#26352f]">Profession / Occupation</label>
                   <ProfessionCombobox value={editFormData.profession || ""} onChange={(val) => setEditFormData({ ...editFormData, profession: val })} />
                 </div>
@@ -2661,8 +2697,14 @@ export function UserManagement() {
                 <div className="mt-2">
                   <RolesCombobox
                     selected={newRoles}
-                    onChange={setNewRoles}
+                    onChange={(roles, assists) => {
+                      setNewRoles(roles);
+                      setNewAssistants(assists);
+                    }}
                     lockedRoles={heldSystemRoles(leadershipMember.roles, leadershipMember.role)}
+                    memberId={leadershipMember.id}
+                    assistants={newAssistants}
+                    showAssistants
                     align="left"
                   />
                 </div>

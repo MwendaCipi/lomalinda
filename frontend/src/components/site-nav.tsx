@@ -38,7 +38,6 @@ const staffRoles = [
   "men_ministry",
   "women_ministry",
   "chaplaincy",
-  "finance",
   "treasurer"
 ];
 

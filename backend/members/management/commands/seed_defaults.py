@@ -36,7 +36,9 @@ class Command(BaseCommand):
         role_permissions = {
             'Administrators': all_permissions,
             'Church Leaders': permissions,
-            'Finance Team': permissions.filter(content_type__model__in={'churchfinancialreport', 'churchbudget'}),
+            # The treasurer's permission bundle. It used to be called "Finance
+            # Team", a role the church has retired.
+            'Treasury': permissions.filter(content_type__model__in={'churchfinancialreport', 'churchbudget'}),
             'Choir Director': view_permissions.filter(content_type__model='sabbathevent'),
             'Children Ministry': view_permissions.filter(content_type__model='sabbathevent'),
             'Adventist Men Ministries': view_permissions.filter(content_type__model='sabbathevent'),

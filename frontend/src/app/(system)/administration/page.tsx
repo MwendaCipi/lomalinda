@@ -178,7 +178,7 @@ function AdministrationContent() {
   const isElder = hasAnyRole("elder", "admin");
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
-  const isFinance = hasAnyRole("finance", "treasurer", "admin");
+  const isFinance = hasAnyRole("treasurer", "admin");
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.

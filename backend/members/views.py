@@ -41,10 +41,12 @@ from .roles import (
     DEFAULT_ROLE,
     ROLE_CODES,
     ROLE_GROUP_MAP,
+    assignment_error,
     check_system_role_change,
     normalize_roles,
     parse_role_codes,
     role_labels,
+    role_register,
     sync_role_groups,
     unknown_role_codes,
 )
@@ -405,7 +407,7 @@ def is_finance_manager(user):
     official_roles = (
         'admin', 'clerk', 'elder', 'youth_leader', 'choir_director',
         'children_ministry', 'men_ministry', 'women_ministry', 'chaplaincy',
-        'finance', 'treasurer'
+        'treasurer'
     )
     return bool(profile and profile.has_role(*official_roles))
 
@@ -416,7 +418,7 @@ def is_treasurer_or_admin(user):
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('treasurer', 'finance', 'admin'))
+    return bool(profile and profile.has_role('treasurer', 'admin'))
 
 
 def user_has_role(user, *codes):
@@ -1459,7 +1461,23 @@ class MeView(APIView):
 
     def get(self, request):
         profile = getattr(request.user, 'member_profile', None)
-        return Response({'id': request.user.id, 'username': request.user.username, 'email': request.user.email, 'first_name': request.user.first_name, 'last_name': request.user.last_name, 'phone_number': profile.phone_number if profile else '', 'role': profile.role if profile else 'member', 'roles': profile.get_roles() if profile else ['member'], 'is_staff': request.user.is_staff, 'is_superuser': request.user.is_superuser})
+        return Response({
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'phone_number': profile.phone_number if profile else '',
+            'role': profile.role if profile else 'member',
+            'roles': profile.get_roles() if profile else ['member'],
+            'is_staff': request.user.is_staff,
+            'is_superuser': request.user.is_superuser,
+            'gender': profile.gender if profile else '',
+            'gifts': profile.gifts if profile else '',
+            'ministry': profile.ministry if profile else '',
+            'disability': profile.disability if profile else '',
+            'profile_update_pending': bool(profile and profile.needs_profile_update()),
+        })
 
     def patch(self, request):
         """Let a member set or correct the email on their own account.
@@ -1475,6 +1493,61 @@ class MeView(APIView):
         request.user.email = serializer.validated_data['email']
         request.user.save(update_fields=['email'])
         return self.get(request)
+
+
+class ProfileUpdateView(APIView):
+    """The forced profile update: sex, gifts, ministry and disability.
+
+    Members whose sign-in response says ``profile_update_pending`` land here
+    before anything else. The endpoint only accepts those four fields, so the
+    form can never quietly write something else, and it clears the pending
+    flag only once every field carries a value — an empty gifts box cannot
+    dismiss the request.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    MINISTRY_VALUES = {code for code, _label in MemberProfile.MINISTRY_CHOICES}
+
+    def post(self, request):
+        profile = MemberProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            profile = MemberProfile.objects.create(user=request.user)
+
+        def as_text(value):
+            """Accept a string or a list of picks; store one comma-joined line."""
+            if isinstance(value, list):
+                return ', '.join(str(item).strip() for item in value if str(item).strip())
+            return str(value or '').strip()
+
+        if 'gender' in request.data:
+            profile.gender = as_text(request.data.get('gender'))[:20]
+        if 'gifts' in request.data:
+            profile.gifts = as_text(request.data.get('gifts'))
+        if 'ministry' in request.data:
+            ministry = as_text(request.data.get('ministry'))
+            if ministry and ministry not in self.MINISTRY_VALUES:
+                return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
+            profile.ministry = ministry
+        if 'disability' in request.data:
+            profile.disability = as_text(request.data.get('disability'))
+
+        missing = profile.missing_profile_details()
+        if missing:
+            labels = {
+                'gender': 'sex',
+                'gifts': 'gifts & talents',
+                'ministry': 'ministry',
+                'disability': 'disability / special needs',
+            }
+            return Response(
+                {'detail': f"Please complete: {', '.join(labels[field] for field in missing)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile.profile_update_pending = False
+        profile.save()
+        return Response({'detail': 'Thank you — your details have been saved.', 'profile_update_pending': False})
 
 
 class EnrollmentDetailsView(APIView):
@@ -2000,7 +2073,7 @@ def can_view_church_finances(user):
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('admin', 'clerk', 'elder', 'treasurer', 'finance'))
+    return bool(profile and profile.has_role('admin', 'clerk', 'elder', 'treasurer'))
 
 
 def _week_start(day):
@@ -3087,7 +3160,7 @@ class ChurchFinancialReportsView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user if self.request.user.is_authenticated else None
         profile = getattr(user, 'member_profile', None) if user else None
-        if profile and profile.has_role('admin', 'finance'):
+        if profile and profile.has_role('admin', 'treasurer'):
             return ChurchFinancialReport.objects.all()
         return ChurchFinancialReport.objects.filter(published_to_members=True)
 
@@ -3136,7 +3209,7 @@ class InKindContributionView(APIView):
         is_leader = bool(
             request.user.is_authenticated and (
                 request.user.is_staff
-                or (profile and profile.has_role('admin', 'clerk', 'elder', 'finance', 'treasurer'))
+                or (profile and profile.has_role('admin', 'clerk', 'elder', 'treasurer'))
             )
         )
         if is_leader:
@@ -3877,7 +3950,6 @@ class UserManagementView(generics.ListCreateAPIView):
         phone_number = (request.data.get('phone_number') or '').strip()
         whatsapp_number = (request.data.get('whatsapp_number') or '').strip()
         role = request.data.get('role') or 'member'
-        employment_status = request.data.get('employment_status', '')
         profession = request.data.get('profession', '')
         gender = request.data.get('gender', '')
         date_of_birth = request.data.get('date_of_birth') or None
@@ -3963,7 +4035,6 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj.must_change_password = True
         profile_obj.current_church = current_church
         profile_obj.baptismal_status = baptismal_status
-        profile_obj.employment_status = employment_status
         profile_obj.profession = profession
         profile_obj.gender = gender
         profile_obj.gifts = str(gifts or '').strip()
@@ -4023,7 +4094,6 @@ class UserDetailUpdateView(APIView):
             'email': 'email',
             'phone_number': 'phone_number',
             'whatsapp_number': 'whatsapp_number',
-            'employment_status': 'employment_status',
             'profession': 'profession',
             'gender': 'gender',
             'date_of_birth': 'date_of_birth',
@@ -4068,6 +4138,10 @@ class UserDetailUpdateView(APIView):
             error = check_system_role_change(request.user, target_user, target_profile.get_roles(), normalize_roles(roles_payload))
             if error:
                 return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
+            rule_error = assignment_error(target_user, normalize_roles(roles_payload))
+            if rule_error:
+                field, message = rule_error
+                return Response({'detail': message, field: message}, status=status.HTTP_400_BAD_REQUEST)
             roles_val = target_profile.set_roles(roles_payload, save=False)
             sync_role_groups(target_user, roles_val)
             target_profile.save(update_fields=['roles', 'role'])
@@ -4249,6 +4323,21 @@ class MemberListPDFView(APIView):
         return response
 
 
+class RoleRegisterView(APIView):
+    """Every church role with who holds it.
+
+    The role pickers need this to know which roles are free, which are held by
+    someone else (so they cannot be handed out twice), and which already have a
+    leader to assist. It is a small leadership directory built from the same
+    hard-coded role list the rest of the app uses.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'roles': role_register()})
+
+
 class UserRoleUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -4277,7 +4366,15 @@ class UserRoleUpdateView(APIView):
             error = check_system_role_change(request.user, target_user, old_roles, submitted)
             if error:
                 return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
-            roles_param = target_profile.set_roles(submitted)
+            # Which of those roles the member shares as an assistant. Validated
+            # as submitted (so a flag on a role that is not held is reported
+            # rather than quietly dropped); ``set_roles`` does the storing.
+            submitted_assistants = parse_role_codes(request.data.get('assistant_roles'))
+            rule_error = assignment_error(target_user, submitted, submitted_assistants)
+            if rule_error:
+                field, message = rule_error
+                return Response({'detail': message, field: message}, status=status.HTTP_400_BAD_REQUEST)
+            roles_param = target_profile.set_roles(submitted, assistants=submitted_assistants)
             sync_role_groups(target_user, roles_param)
             added = [r for r in roles_param if r not in old_roles]
             removed = [r for r in old_roles if r not in roles_param and r != 'member']
@@ -4323,6 +4420,10 @@ class UserRoleUpdateView(APIView):
         error = check_system_role_change(request.user, target_user, target_profile.get_roles(), [new_role])
         if error:
             return Response({'role': error}, status=status.HTTP_403_FORBIDDEN)
+        rule_error = assignment_error(target_user, [new_role])
+        if rule_error:
+            field, message = rule_error
+            return Response({'detail': message, field: message}, status=status.HTTP_400_BAD_REQUEST)
         new_role = target_profile.set_roles([new_role])[0]
         sync_role_groups(target_user, [new_role])
 
@@ -5034,7 +5135,7 @@ class TreasuryAccountListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can create treasury accounts."}, status=status.HTTP_403_FORBIDDEN)
         serializer = TreasuryAccountSerializer(data=request.data)
         if serializer.is_valid():
@@ -5064,7 +5165,7 @@ class TreasuryAccountDetailView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can update treasury accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -5091,7 +5192,7 @@ class TreasuryAccountCreditView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can credit accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -5132,7 +5233,7 @@ class TreasuryAccountDebitView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can debit accounts."}, status=status.HTTP_403_FORBIDDEN)
         try:
             account = TreasuryAccount.objects.get(pk=pk)
@@ -5173,7 +5274,7 @@ class TreasuryAccountTransferView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can transfer funds between accounts."}, status=status.HTTP_403_FORBIDDEN)
 
         source_id = request.data.get("source_account_id")
@@ -5258,7 +5359,7 @@ class ExpenditureListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can record expenditures."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ExpenditureSerializer(data=request.data)
@@ -5292,7 +5393,7 @@ class ExpenditureDetailView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer", "finance")):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
             return Response({"detail": "Only finance team can update expenditure records."}, status=status.HTTP_403_FORBIDDEN)
         try:
             exp = Expenditure.objects.get(pk=pk)
