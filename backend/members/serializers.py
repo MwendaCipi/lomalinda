@@ -876,12 +876,17 @@ class CampaignCardAssignmentSerializer(serializers.ModelSerializer):
 
 class FundraisingCampaignSerializer(serializers.ModelSerializer):
     # fields=() narrows the payload when the drive rides inside an announcement.
+    # brief=True (the list view) drops the per-viewer/report fields, which each
+    # scan the drive's ledger — too costly to compute per row of a list.
     def __init__(self, *args, fields=None, **kwargs):
         super().__init__(*args, **kwargs)
         if fields is not None:
             allowed = set(fields)
             for field_name in set(self.fields) - allowed:
                 self.fields.pop(field_name)
+        elif self.context.get('brief'):
+            for field_name in ('contribution_breakdown', 'ministry_breakdown', 'donors', 'deficit'):
+                self.fields.pop(field_name, None)
 
     total_raised = serializers.SerializerMethodField()
     percentage_raised = serializers.SerializerMethodField()
@@ -889,6 +894,13 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
     assigned_cards_count = serializers.SerializerMethodField()
     group_breakdown = serializers.SerializerMethodField()
     top_fundraisers = serializers.SerializerMethodField()
+    # The drive's full money picture: my gifts, what my personal link brought
+    # in, and everyone else's — the numbers the drive page's breakdown and
+    # pie chart read. Empty for the detail-level fields=() calls.
+    contribution_breakdown = serializers.SerializerMethodField()
+    ministry_breakdown = serializers.SerializerMethodField()
+    donors = serializers.SerializerMethodField()
+    deficit = serializers.SerializerMethodField()
 
     attachment_name = serializers.SerializerMethodField()
     attachment_size = serializers.SerializerMethodField()
@@ -910,12 +922,13 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         model = FundraisingCampaign
         fields = (
             'id', 'name', 'title', 'account_name', 'description', 'target_amount', 'start_date',
-            'end_date', 'is_active', 'is_temporary', 'generate_card', 'target_groups', 'custom_card_image',
+            'end_date', 'is_active', 'is_temporary', 'generate_card', 'target_groups', 'allow_personal_invitations', 'custom_card_image',
             'attachment', 'attachment_name', 'attachment_size',
             'member_message', 'schedule_message', 'scheduled_at', 'message_frequency', 'message_sent',
             'last_message_sent_at', 'created_by', 'created_at', 'updated_at',
             'total_raised', 'percentage_raised', 'donor_count',
-            'assigned_cards_count', 'group_breakdown', 'top_fundraisers'
+            'assigned_cards_count', 'group_breakdown', 'top_fundraisers',
+            'contribution_breakdown', 'ministry_breakdown', 'donors', 'deficit'
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'message_sent', 'last_message_sent_at')
 
@@ -1000,6 +1013,143 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         count2 = Contribution.objects.filter(query, status='completed').count()
         count3 = CashContribution.objects.filter(query).count()
         return max(count1, count2, count3)
+
+    # -- Drive-page breakdown helpers -------------------------------------
+
+    def _purpose_query(self, obj):
+        """The Q filter naming this drive on a contribution's purpose line."""
+        from django.db.models import Q
+        query = Q(purpose=obj.name)
+        if obj.account_name:
+            query |= Q(purpose=obj.account_name)
+        return query
+
+    def _drive_mpesa(self, obj):
+        """Every completed M-Pesa gift tied to the drive, deduplicated.
+
+        Linked money and purpose-named money overlap, so the set is the union:
+        linked contributions plus purpose-matched ones not already linked.
+        """
+        linked = obj.contributions.filter(status='completed')
+        extra = Contribution.objects.filter(
+            self._purpose_query(obj), status='completed'
+        ).exclude(campaign=obj)
+        return linked, extra
+
+    def get_contribution_breakdown(self, obj):
+        """Who gave what: the signed-in viewer, their invitees, everyone else.
+
+        ``request`` carries the viewer; an anonymous caller gets no "my"
+        figures. Invitee money is the gifts attributed to card assignments
+        held by the viewer; everything else is the remainder, never negative.
+        """
+        from django.db.models import Sum
+        request = self.context.get('request')
+        viewer = getattr(request, 'user', None)
+        linked, extra = self._drive_mpesa(obj)
+        all_gifts = list(linked) + list(extra)
+
+        my_amount = 0
+        my_gifts = 0
+        invitee_amount = 0
+        invitee_gifts = 0
+        invitee_names = set()
+        if viewer and viewer.is_authenticated:
+            my_assignment_ids = set(obj.card_assignments.filter(member=viewer).values_list('id', flat=True))
+            for gift in all_gifts:
+                if gift.member_id == viewer.id:
+                    my_amount += float(gift.amount or 0)
+                    my_gifts += 1
+                elif gift.card_assignment_id and gift.card_assignment_id in my_assignment_ids:
+                    invitee_amount += float(gift.amount or 0)
+                    invitee_gifts += 1
+                    name = (gift.donor_name or '').strip()
+                    if name:
+                        invitee_names.add(name)
+
+        total = self.get_total_raised(obj)
+        others_amount = max(0.0, total - my_amount - invitee_amount)
+        return {
+            'my_amount': round(my_amount, 2),
+            'my_gifts': my_gifts,
+            'invitees_amount': round(invitee_amount, 2),
+            'invitees_gifts': invitee_gifts,
+            'invitee_names': sorted(invitee_names),
+            'others_amount': round(others_amount, 2),
+            'total_raised': round(float(total), 2),
+        }
+
+    def get_ministry_breakdown(self, obj):
+        """Drive money grouped by the ministry each giver serves.
+
+        A gift belongs to a ministry through its giver's profile (Ambassadors,
+        Adventist Youth, Adventist Men, Adventist Women — the offices the
+        church actually reports by). Everything with no ministry lands in
+        'General'. Reads only completed M-Pesa gifts and manual receipts.
+        """
+        from django.contrib.auth.models import User
+        from django.db.models import Sum
+
+        def ministry_of(user):
+            if not user:
+                return 'General'
+            profile = getattr(user, 'member_profile', None)
+            ministry = (getattr(profile, 'ministry', '') or '').strip() if profile else ''
+            return ministry or 'General'
+
+        totals = {}
+        linked, extra = self._drive_mpesa(obj)
+        for gift in list(linked) + list(extra):
+            label = ministry_of(gift.member)
+            totals[label] = totals.get(label, 0.0) + float(gift.amount or 0)
+        cash_query = self._purpose_query(obj)
+        for row in CashContribution.objects.filter(cash_query).values('donor_name', 'giver_email', 'amount'):
+            giver = None
+            email = (row.get('giver_email') or '').strip().lower()
+            if email:
+                giver = User.objects.filter(email__iexact=email).first()
+            label = ministry_of(giver)
+            totals[label] = totals.get(label, 0.0) + float(row['amount'] or 0)
+        return [
+            {'ministry': label, 'amount': round(amount, 2)}
+            for label, amount in sorted(totals.items(), key=lambda kv: -kv[1])
+        ]
+
+    def get_donors(self, obj):
+        """The donor list behind the headline: name, amount, gift count.
+
+        Clicking the donor count opens this. Manual receipts name their giver
+        on the row; M-Pesa gifts carry the giver's account or the typed name.
+        """
+        from django.db.models import Sum
+        donors = {}
+
+        def add(name, amount):
+            name = (name or '').strip()
+            if not name:
+                name = 'Anonymous giver'
+            entry = donors.setdefault(name, {'name': name, 'amount': 0.0, 'gifts': 0})
+            entry['amount'] += float(amount or 0)
+            entry['gifts'] += 1
+
+        linked, extra = self._drive_mpesa(obj)
+        for gift in list(linked) + list(extra):
+            name = (gift.donor_name or '').strip()
+            if not name and gift.member_id:
+                name = f"{gift.member.first_name} {gift.member.last_name}".strip() or gift.member.username
+            add(name, gift.amount)
+        for row in CashContribution.objects.filter(self._purpose_query(obj)):
+            add(row.donor_name, row.amount)
+        ranked = sorted(donors.values(), key=lambda d: -d['amount'])
+        for entry in ranked:
+            entry['amount'] = round(entry['amount'], 2)
+        return ranked
+
+    def get_deficit(self, obj):
+        target = float(obj.target_amount or 0)
+        if target <= 0:
+            return 0.0
+        return round(max(0.0, target - self.get_total_raised(obj)), 2)
 
 
 class BusinessMeetingAgendaSerializer(serializers.ModelSerializer):

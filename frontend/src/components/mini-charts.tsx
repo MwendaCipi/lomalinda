@@ -295,6 +295,74 @@ export function CompositionBar({ items, formatValue, emptyLabel = "Nothing to sh
   );
 }
 
+type DonutChartProps = {
+  items: { label: string; value: number; color: string }[];
+  /** Value at the centre of the ring; formatted by the caller. */
+  centerLabel: string;
+  centerValue: string;
+  emptyLabel?: string;
+};
+
+/** A donut: one ring slice per item, remainder to 100% shown as neutral. */
+export function DonutChart({ items, centerLabel, centerValue, emptyLabel = "Nothing to show yet." }: DonutChartProps) {
+  const positive = items.filter((item) => item.value > 0);
+  const total = positive.reduce((sum, item) => sum + item.value, 0);
+  if (positive.length === 0 || total <= 0) {
+    return <p className="rounded-xl bg-[#faf9f5] px-4 py-6 text-center text-xs text-[#617068]">{emptyLabel}</p>;
+  }
+
+  const radius = 15.915; // circumference = 100, so a stroke dash is a percentage
+  const circumference = 2 * Math.PI * radius;
+  let offset = 25; // start at 12 o'clock
+  const segments = positive.map((item) => {
+    const share = (item.value / total) * 100;
+    const seg = { ...item, share, dash: `${share} ${100 - share}`, offset };
+    offset -= share;
+    return seg;
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+      <svg viewBox="0 0 42 42" className="h-36 w-36 shrink-0 -rotate-0" role="img" aria-label={positive.map((i) => `${i.label}: ${i.value.toFixed(0)}%`).join(", ")}>
+        {/* The neutral remainder — the part not yet given of the whole. */}
+        <circle cx="21" cy="21" r={radius} fill="none" stroke="#eeeae2" strokeWidth="5" />
+        {segments.map((seg) => (
+          <circle
+            key={seg.label}
+            cx="21"
+            cy="21"
+            r={radius}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth="5"
+            strokeDasharray={seg.dash}
+            strokeDashoffset={seg.offset}
+          >
+            <title>{`${seg.label}: ${seg.share.toFixed(1)}%`}</title>
+          </circle>
+        ))}
+        <text x="21" y="20" textAnchor="middle" dominantBaseline="middle" className="fill-[#26352f]" style={{ fontSize: 5, fontWeight: 700 }}>
+          {centerValue}
+        </text>
+        <text x="21" y="26.5" textAnchor="middle" dominantBaseline="middle" className="fill-[#617068]" style={{ fontSize: 2.6 }}>
+          {centerLabel}
+        </text>
+      </svg>
+      <ul className="w-full space-y-2">
+        {segments.map((seg) => (
+          <li key={seg.label} className="flex items-center justify-between gap-3 text-xs">
+            <span className="flex min-w-0 items-center gap-2 text-[#617068]">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: seg.color }} />
+              <span className="truncate font-semibold text-[#26352f]">{seg.label}</span>
+            </span>
+            <span className="shrink-0 font-bold text-[#26352f]">{seg.share.toFixed(0)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 type HorizontalBarsProps = {
   items: { label: string; value: number }[];
   formatValue: (value: number) => string;

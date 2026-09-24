@@ -501,6 +501,14 @@ class FundraisingCampaign(models.Model):
     is_temporary = models.BooleanField(default=True, help_text="Designates whether this is a temporary campaign with a specific timeline")
     generate_card = models.BooleanField(default=True)
     target_groups = models.JSONField(default=list, blank=True, help_text="List of assigned group/department keys")
+    # When off, the only link members share is the drive's general one — the
+    # "Give" page with the drive preselected. When on, each issued invitee
+    # also gets a personal referral link, and the drive page tracks who gave
+    # through whose invite.
+    allow_personal_invitations = models.BooleanField(
+        default=False,
+        help_text="Whether members may be issued personal invite links for this drive",
+    )
     custom_card_image = models.ImageField(upload_to='campaign_cards/', null=True, blank=True)
     # A flyer or poster that travels with the drive: shown with the drive's
     # announcement and attached when the drive's message is emailed.

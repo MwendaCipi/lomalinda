@@ -3337,7 +3337,7 @@ class ProfessionListCreateView(generics.ListCreateAPIView):
 def broadcast_campaign_message(campaign, custom_message=None):
     from django.contrib.auth.models import User
     msg_text = custom_message or campaign.member_message or (
-        f"Support our church fundraising campaign: {campaign.title or campaign.name}. "
+        f"Support our church fund drive: {campaign.title or campaign.name}. "
         f"Goal: KES {campaign.target_amount:,.2f}. Giving reference: {campaign.account_name or campaign.name}."
     )
 
@@ -3397,7 +3397,14 @@ def broadcast_campaign_message(campaign, custom_message=None):
 
 
 class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
+    # brief=True: the list skips the per-viewer breakdowns, which scan the
+    # ledger per drive and would multiply across every row of the list.
     serializer_class = FundraisingCampaignSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['brief'] = True
+        return context
 
     def get_permissions(self):
         return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
@@ -3410,7 +3417,7 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         if not is_treasurer_or_admin(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church treasurers or administrators can create fundraising campaigns.')
+            raise PermissionDenied('Only church treasurers or administrators can create fund drives.')
         campaign = serializer.save(created_by=self.request.user)
         # Giving accounts are treasury accounts now; a drive is offered in the
         # giving form when the treasurer links it to an account, not by minting
@@ -3452,8 +3459,8 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
                 )
                 if created:
                     ChurchNotification.objects.create(
-                        title=f"Fundraising Card Assigned: {campaign.name}",
-                        message=f"You have been assigned a personal fundraising card for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
+                        title=f"Fund Drive Invite Assigned: {campaign.name}",
+                        message=f"You have been assigned a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
                     )
 
         # Broadcast member message if immediate dispatch is requested
@@ -3533,8 +3540,8 @@ class CampaignIssueCardsView(APIView):
             if created:
                 created_count += 1
                 ChurchNotification.objects.create(
-                    title=f"Fundraising Card Issued: {campaign.name}",
-                    message=f"You have been issued a personal fundraising card for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
+                    title=f"Fund Drive Invite Issued: {campaign.name}",
+                    message=f"You have been issued a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
                 )
 
         return Response({
@@ -3571,13 +3578,13 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         if not is_treasurer_or_admin(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church treasurers or administrators can edit fundraising campaigns.')
+            raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
         serializer.save()
 
     def perform_destroy(self, instance):
         if not is_finance_manager(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church officials can delete fundraising campaigns.')
+            raise PermissionDenied('Only church officials can delete fund drives.')
         instance.delete()
 
 

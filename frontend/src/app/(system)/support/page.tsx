@@ -33,7 +33,8 @@ export default function SupportHubPage() {
               </div>
             </div>
 
-            {/* Mobile Cards View (hidden on desktop) — the same sections as the sidebar above */}
+            {/* Mobile Cards View (hidden on desktop) — the same sections as the sidebar above.
+                The two money sections lead because that is what members open first. */}
             <div className="mt-6 grid gap-4 sm:gap-5 md:grid-cols-2 lg:hidden">
               {stewardshipLinks.map((section) => {
                 const Icon = section.icon;

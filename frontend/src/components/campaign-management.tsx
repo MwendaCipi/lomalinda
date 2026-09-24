@@ -22,6 +22,7 @@ interface Campaign {
   is_temporary?: boolean;
   generate_card: boolean;
   target_groups?: string[];
+  allow_personal_invitations?: boolean;
   custom_card_image?: string | null;
   member_message?: string;
   schedule_message?: boolean;
@@ -87,6 +88,7 @@ export function CampaignManagement({
     schedule_message: false,
     scheduled_at: "",
     message_frequency: "once",
+    allow_personal_invitations: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -195,6 +197,7 @@ export function CampaignManagement({
       schedule_message: false,
       scheduled_at: "",
       message_frequency: "once",
+      allow_personal_invitations: false,
     });
     setDriveAttachment(null);
     setShowCreateModal(false);
@@ -211,7 +214,7 @@ export function CampaignManagement({
       return;
     }
     if (isNaN(numericTarget) || numericTarget <= 0) {
-      showAlert("Invalid Goal", "Please enter a positive fundraising target goal amount.", "error");
+      showAlert("Invalid Goal", "Please enter a positive fund drive target goal amount.", "error");
       return;
     }
     if (!form.start_date) {
@@ -240,6 +243,7 @@ export function CampaignManagement({
         schedule_message: form.schedule_message,
         scheduled_at: form.schedule_message && form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
         message_frequency: form.message_frequency,
+        allow_personal_invitations: form.allow_personal_invitations,
       };
       let body: BodyInit;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -553,6 +557,23 @@ export function CampaignManagement({
                       onChange={(e) => setDriveAttachment(e.target.files?.[0] ?? null)}
                       className="mt-1 block w-full cursor-pointer rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3 py-2 text-xs text-[#26352f] file:mr-3 file:rounded-lg file:border-0 file:bg-[#26352f] file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
                     />
+                  </label>
+
+                  {/* Personal invitations: when off, members share only the drive's
+                      general link; when on, the office can issue personal ones. */}
+                  <label className="flex items-start gap-2.5 text-xs font-medium text-[#26352f] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.allow_personal_invitations}
+                      onChange={(e) => setForm({ ...form, allow_personal_invitations: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#5f8067]"
+                    />
+                    <span>
+                      Allow personal invitations
+                      <span className="block text-[11px] font-normal text-[#617068]">
+                        Members get personal invite links they can share, and the drive tracks who gave through each invite. Leave unchecked to share one general link only.
+                      </span>
+                    </span>
                   </label>
 
                   {/* Broadcast Message Options */}
@@ -1001,7 +1022,7 @@ export function CampaignManagement({
                                             }}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#b36b3c] hover:bg-[#f7f4ee] transition-colors"
                                           >
-                                            🎴 + Issue Invites
+                                            🎴 {c.allow_personal_invitations ? "+ Issue Invites" : "+ General Link"}
                                           </button>
 
                                           <button
@@ -1117,7 +1138,7 @@ export function CampaignManagement({
                                       }}
                                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#b36b3c] hover:bg-[#f7f4ee] transition-colors"
                                     >
-                                      🎴 + Issue Cards
+                                      🎴 {c.allow_personal_invitations ? "+ Issue Cards" : "+ General Link"}
                                     </button>
 
                                     <button

@@ -446,7 +446,18 @@ function GivePageContent() {
             {signedIn && (
               <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
                 <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
-                  <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                    {/* The second quick trigger: the panel's own Give Now, so
+                        a signed-in giver never has to scroll to the footer. */}
+                    <button
+                      type="button"
+                      onClick={() => setShowGiveModal(true)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+                    >
+                      Give Now
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-2 md:flex-row md:items-center">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />

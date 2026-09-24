@@ -198,25 +198,18 @@ export const requestsAndCareLinks: SectionLink[] = [
  */
 export const stewardshipLinks: SectionLink[] = [
   {
+    key: "campaigns",
+    href: "/support/campaigns",
+    label: "Fund Drives",
+    description: "Active fund drives and how far along they are.",
+    icon: Target,
+  },
+  {
     key: "give",
     href: "/give",
     label: "Money Giving",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: CreditCard,
-  },
-  {
-    key: "in-kind",
-    href: "/support/in-kind",
-    label: "In-Kind Giving",
-    description: "Offer goods, equipment, services or time instead of money.",
-    icon: Gift,
-  },
-  {
-    key: "campaigns",
-    href: "/support/campaigns",
-    label: "Fund Drives",
-    description: "Active fundraising campaigns and how far along they are.",
-    icon: Target,
   },
   {
     key: "budget",
