@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
+import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -96,20 +97,7 @@ export default function ReconciliationPage() {
   const [cashReceipts, setCashReceipts] = useState<CashReceipt[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "denied">("loading");
   const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [purposes, setPurposes] = useState<string[]>([]);
-  const [cashForm, setCashForm] = useState({ amount: "", purpose: "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
-  const [itemDescription, setItemDescription] = useState("");
-  const [sendSms, setSendSms] = useState(true);
-  const [sendEmail, setSendEmail] = useState(true);
-  const [customPurpose, setCustomPurpose] = useState("");
-  const [receiptMessage, setReceiptMessage] = useState("");
-  const [isCustomMessage, setIsCustomMessage] = useState(false);
-  const [settingsReceiptTemplate, setSettingsReceiptTemplate] = useState(
-    "Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!"
-  );
 
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
@@ -139,43 +127,35 @@ export default function ReconciliationPage() {
 
   const headers = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` });
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/members/giving-purposes/`, { headers: headers() })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: { name: string }[]) => {
-        const apiNames = data.map((item) => item.name);
-        setPurposes(apiNames.length ? apiNames : defaultPurposes);
-      })
-      .catch(() => setPurposes(defaultPurposes));
-  }, []);
-
-  // Fetch receipt message template from church settings on mount
-  useEffect(() => {
-    fetch(`${API_URL}/api/members/church-settings/`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.default_receipt_message) {
-          setSettingsReceiptTemplate(data.default_receipt_message);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
-
-  const formatReceiptDefaultMsg = (name: string, amt: string, purp: string, custPurp: string, itemDesc: string, type: string, pm: string) => {
-    const nameVal = name.trim() || "{name}";
-    const amountVal = amt.trim() ? `kes ${amt.trim()}` : "kes {amount}";
-    const purposeVal = purp === "Other" ? (custPurp.trim() || "{purpose}") : (purp || "{purpose}");
-    return settingsReceiptTemplate
-      .replace("{name}", nameVal)
-      .replace("{amount}", amountVal)
-      .replace("{purpose}", purposeVal);
-  };
-
-  useEffect(() => {
-    if (isModalOpen && !isCustomMessage) {
-      setReceiptMessage(formatReceiptDefaultMsg(cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, "individual", paymentMethod));
+  // After the shared Add Receipt modal saves, refresh the ledgers and show
+  // the honest delivery feedback line (same banner as before the extraction).
+  async function handleReceiptSaved(deliveryMessage: string, receipt: { received_on: string }) {
+    let nextFrom = fromDate;
+    let nextTo = toDate;
+    if (receipt.received_on) {
+      if (receipt.received_on < nextFrom) nextFrom = receipt.received_on;
+      if (receipt.received_on > nextTo) nextTo = receipt.received_on;
     }
-  }, [isModalOpen, isCustomMessage, cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, itemDescription, paymentMethod]);
+    if (nextFrom !== fromDate) setFromDate(nextFrom);
+    if (nextTo !== toDate) setToDate(nextTo);
+    await load(nextFrom, nextTo);
+    await loadAllGivings(nextFrom, nextTo);
+    if (expandedPurpose) {
+      try {
+        const pRes = await fetch(
+          `${API_URL}/api/members/treasury/purpose-contributions/?purpose=${encodeURIComponent(expandedPurpose)}&from_date=${nextFrom}&to_date=${nextTo}`,
+          { headers: headers() }
+        );
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          setPurposeGivings((prev) => ({ ...prev, [expandedPurpose]: pData }));
+        }
+      } catch {}
+    }
+    // Set after load(): load() clears the banner first, so setting before the
+    // reloads batched both updates and the delivery feedback never rendered.
+    setMessage(deliveryMessage);
+  }
 
   const loadAllGivings = async (fDate = fromDate, tDate = toDate) => {
     setLoadingAllGivings(true);
@@ -305,79 +285,6 @@ export default function ReconciliationPage() {
     }
   };
 
-  async function addCash(event: FormEvent) {
-    event.preventDefault(); setSaving(true); setMessage("");
-    const finalPurpose = cashForm.purpose === "Other" && customPurpose.trim() ? customPurpose.trim() : cashForm.purpose;
-    if (cashForm.purpose === "Other" && customPurpose.trim()) {
-      const words = customPurpose.trim().split(/\s+/);
-      if (words.length > 2) {
-        setMessage("Custom giving purpose must be at most 2 words (e.g. 'Youth' or 'Camp Goal').");
-        setSaving(false);
-        return;
-      }
-      if (customPurpose.trim().length > 20) {
-        setMessage("Custom giving purpose must be at most 20 characters.");
-        setSaving(false);
-        return;
-      }
-    }
-    const finalDonorName = cashForm.donor_name;
-
-    const receiptDate = cashForm.received_on || toDate || localDate();
-    let nextFrom = fromDate;
-    let nextTo = toDate;
-    if (receiptDate < fromDate) nextFrom = receiptDate;
-    if (receiptDate > toDate) nextTo = receiptDate;
-    if (nextFrom !== fromDate) setFromDate(nextFrom);
-    if (nextTo !== toDate) setToDate(nextTo);
-
-    const response = await fetch(`${API_URL}/api/members/treasury/cash-contributions/`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        ...cashForm,
-        notes: receiptMessage,
-        donor_name: finalDonorName,
-        entry_type: "individual",
-        payment_method: paymentMethod,
-        item_description: "",
-        amount: cashForm.amount,
-        purpose: finalPurpose,
-        received_on: receiptDate,
-        send_sms: sendSms,
-        send_email: sendEmail,
-      })
-    });
-    setSaving(false);
-    if (!response.ok) { const body = await response.json().catch(() => ({})); setMessage(body.amount?.[0] || body.detail || "Could not save the receipt."); return; }
-    setCashForm({ amount: "", purpose: "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
-    setPaymentMethod("cash");
-    setItemDescription("");
-    setCustomPurpose("");
-    setReceiptMessage("");
-    setIsCustomMessage(false);
-    setSendSms(true);
-    setSendEmail(true);
-    setIsModalOpen(false);
-    const deliveryMessage = (await response.clone().json().catch(() => ({}))).receipt_delivery_message || "Receipt saved successfully.";
-    await load(nextFrom, nextTo);
-    await loadAllGivings(nextFrom, nextTo);
-    if (expandedPurpose) {
-      try {
-        const pRes = await fetch(
-          `${API_URL}/api/members/treasury/purpose-contributions/?purpose=${encodeURIComponent(expandedPurpose)}&from_date=${nextFrom}&to_date=${nextTo}`,
-          { headers: headers() }
-        );
-        if (pRes.ok) {
-          const pData = await pRes.json();
-          setPurposeGivings((prev) => ({ ...prev, [expandedPurpose]: pData }));
-        }
-      } catch {}
-    }
-    // Set after load(): load() clears the banner first, so setting before the
-    // reloads batched both updates and the delivery feedback never rendered.
-    setMessage(deliveryMessage);
-  }
 
   if (status === "loading") return <main className="min-h-screen bg-[#f7f4ee] p-10 text-center text-[#617068]">Loading reconciliation workspace…</main>;
   if (status === "denied") return <main className="min-h-screen bg-[#f7f4ee] p-10"><div className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm"><h1 className="text-2xl font-semibold text-[#26352f]">Finance access required</h1><p className="mt-3 text-[#617068]">This workspace is available to treasurers, finance managers, church leaders, and administrators.</p><Link href="/administration" className="mt-6 inline-block font-semibold text-[#b36b3c]">Back to administration</Link></div></main>;
@@ -1310,209 +1217,13 @@ export default function ReconciliationPage() {
         </div>
       )}
 
-      {/* Add Receipt Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div
-            className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl ring-1 ring-[#dfdbd1]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-              <div>
-                <h2 className="text-xl font-semibold text-[#26352f]">Add Receipt</h2>
-                <p className="mt-0.5 text-xs text-[#617068]">Record a manual payment or contribution for treasury reconciliation.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={addCash} className="mt-4 grid gap-4 sm:grid-cols-2">
-              {/* Method of Giving */}
-              <label className="text-sm font-medium text-[#26352f]">
-                Method of Giving
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mpesa">M-Pesa</option>
-                  <option value="bank_transfer">Bank-to-Bank</option>
-                  <option value="cheque">Cheque</option>
-                </select>
-              </label>
-
-              {/* Receipt Date */}
-              <label className="text-sm font-medium text-[#26352f]">
-                Receipt Date
-                <input
-                  type="date"
-                  required
-                  value={cashForm.received_on}
-                  onChange={(e) => setCashForm({ ...cashForm, received_on: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-
-              {/* Giving Purpose */}
-              <label className="text-sm font-medium text-[#26352f]">
-                Giving Purpose
-                <select
-                  required
-                  value={cashForm.purpose}
-                  onChange={(e) => setCashForm({ ...cashForm, purpose: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                >
-                  {purposes.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {cashForm.purpose === "Other" && (
-                <label className="text-sm font-medium text-[#26352f]">
-                  Specify Purpose
-                  <input
-                    required
-                    placeholder="Enter custom purpose..."
-                    value={customPurpose}
-                    onChange={(e) => setCustomPurpose(e.target.value)}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                  />
-                </label>
-              )}
-
-              {/* Amount */}
-              <label className="text-sm font-medium text-[#26352f]">
-                Amount (KES)
-                <input
-                  required
-                  min="0.01"
-                  step="0.01"
-                  type="number"
-                  value={cashForm.amount}
-                  onChange={(e) => setCashForm({ ...cashForm, amount: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                  placeholder="0.00"
-                />
-              </label>
-
-              {/* Conditional Giver details based on Receipt Type */}
-              {(
-                <>
-                  <label className="text-sm font-medium text-[#26352f]">
-                    Giver Full Name
-                    <input
-                      required
-                      value={cashForm.donor_name}
-                      onChange={(e) => setCashForm({ ...cashForm, donor_name: e.target.value })}
-                      className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                      placeholder="e.g. Jane Doe"
-                    />
-                  </label>
-
-                  <label className="text-sm font-medium text-[#26352f]">
-                    Phone (optional)
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]{10}"
-                      maxLength={10}
-                      minLength={10}
-                      placeholder="07XXXXXXXX"
-                      value={cashForm.giver_phone}
-                      onChange={(e) => setCashForm({ ...cashForm, giver_phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                      className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
-
-                  <label className="text-sm font-medium text-[#26352f]">
-                    Email (optional)
-                    <input
-                      type="email"
-                      placeholder="giver@example.com"
-                      value={cashForm.giver_email}
-                      onChange={(e) => setCashForm({ ...cashForm, giver_email: e.target.value })}
-                      className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
-
-                  <div className="rounded-xl bg-[#f4f7f4] px-3 py-2 text-xs text-[#617068]">
-                    <p className="font-semibold text-[#26352f]">Send receipt through</p>
-                    <div className="mt-2 flex gap-5">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Email</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} /> SMS</label>
-                    </div>
-                    <p className="mt-1">SMS will report that only email was sent until an SMS gateway is configured.</p>
-                  </div>
-                </>
-              )}
-
-              {false && (
-                <label className="text-sm font-medium text-[#26352f] sm:col-span-2">
-                  Collection Name / Title
-                  <input
-                    required
-                    value={cashForm.donor_name}
-                    onChange={(e) => setCashForm({ ...cashForm, donor_name: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                    placeholder="e.g. Sabbath School Offertory, Main Service Collection"
-                  />
-                </label>
-              )}
-
-              {/* Receipt Notes Textarea */}
-              <label className="text-sm font-medium text-[#26352f] sm:col-span-2">
-                <div className="flex items-center justify-between pb-1">
-                  <span>Receipt Notes</span>
-                  {isCustomMessage && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomMessage(false)}
-                      className="text-xs font-semibold text-[#b36b3c] hover:underline"
-                    >
-                      Reset default
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  rows={3}
-                  value={receiptMessage}
-                  onChange={(e) => {
-                    setReceiptMessage(e.target.value);
-                    setIsCustomMessage(true);
-                  }}
-                  placeholder="Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!"
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c] leading-relaxed"
-                />
-              </label>
-
-              <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-[#dfdbd1]">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-sm font-semibold text-[#617068] hover:bg-[#f7f4ee]"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={saving}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
-                >
-                  {saving ? "Saving..." : "Send Receipt"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Receipt Modal — the same modal the contributions ledger uses,
+          shared with the fund drives console. */}
+      <AddReceiptModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSaved={handleReceiptSaved}
+      />
     </main>
   );
 }
