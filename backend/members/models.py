@@ -733,6 +733,12 @@ class ChurchSettings(models.Model):
     bank_branch = models.CharField(max_length=120, default='Meru', blank=True)
     bank_swift_code = models.CharField(max_length=50, default='KCBKNEN', blank=True)
     bank_paybill_number = models.CharField(max_length=50, default='522522', blank=True)
+    # The M-Pesa paying-in details, shown to members who give from their phone
+    # by Send Money or Pay Bill — the counterpart of the bank box above.
+    mpesa_paybill_number = models.CharField(max_length=20, blank=True, default='', help_text='Pay Bill number members send money to (leave blank to hide)')
+    mpesa_account_number = models.CharField(max_length=60, blank=True, default='', help_text='Account number members type in the M-Pesa prompt (e.g. TITHE)')
+    mpesa_account_name = models.CharField(max_length=160, blank=True, default='', help_text='Name registered on the M-Pesa receiving account')
+    mpesa_phone_number = models.CharField(max_length=20, blank=True, default='', help_text='Phone number for Send Money instructions (leave blank to hide)')
     # One short line of encouragement on the dashboard greeting. Kept short on
     # purpose: it sits under the greeting on every member's phone, so a paragraph
     # would push their actual work off the screen.

@@ -331,6 +331,7 @@ class ChurchSettingsAdmin(admin.ModelAdmin):
         ('Church location', {'fields': ('church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude')}),
         ('Regular gatherings', {'fields': ('midweek_vespers_time', 'midweek_vespers_link', 'friday_vespers_time', 'sabbath_time')}),
         ('Live service', {'fields': ('live_service_link', 'live_service_active')}),
+        ('M-Pesa payment details', {'fields': ('mpesa_paybill_number', 'mpesa_account_number', 'mpesa_account_name', 'mpesa_phone_number')}),
     )
 
     def has_add_permission(self, request):

@@ -241,6 +241,13 @@ function GivePageContent() {
     bank_branch: "Meru",
     bank_swift_code: "KCBKNEN",
   });
+  // The M-Pesa paying-in details, as set in church settings; hidden when unset.
+  const [churchMpesaDetails, setChurchMpesaDetails] = useState({
+    mpesa_paybill_number: "",
+    mpesa_account_number: "",
+    mpesa_account_name: "",
+    mpesa_phone_number: "",
+  });
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/church-settings/`)
@@ -253,6 +260,12 @@ function GivePageContent() {
             bank_account_number: data.bank_account_number || "1122334455",
             bank_branch: data.bank_branch || "Nairobi West",
             bank_swift_code: data.bank_swift_code || "KCBKNEN",
+          });
+          setChurchMpesaDetails({
+            mpesa_paybill_number: data.mpesa_paybill_number || "",
+            mpesa_account_number: data.mpesa_account_number || "",
+            mpesa_account_name: data.mpesa_account_name || "",
+            mpesa_phone_number: data.mpesa_phone_number || "",
           });
         }
       })
@@ -798,6 +811,30 @@ function GivePageContent() {
               {/* 4. Method-Specific Fields & Details */}
               {methodOfGiving === "mpesa" && (
                 <div className="grid grid-cols-1 gap-4">
+                  {/* The church's own M-Pesa paying-in details, when the office
+                      has set them — for members giving by Send Money or Pay
+                      Bill from their own phone rather than the STK prompt. */}
+                  {(churchMpesaDetails.mpesa_paybill_number || churchMpesaDetails.mpesa_phone_number) && (
+                    <div className="rounded-2xl border border-[#dfdbd1] bg-[#f4f7f2] p-4 text-xs space-y-2">
+                      <p className="font-bold text-[#26352f] text-sm flex items-center gap-2">
+                        <span>📱</span> Church M-Pesa Details
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#3d5148] pt-1">
+                        {churchMpesaDetails.mpesa_paybill_number && (
+                          <div><span className="font-semibold text-[#26352f]">Pay Bill:</span> {churchMpesaDetails.mpesa_paybill_number}</div>
+                        )}
+                        {churchMpesaDetails.mpesa_account_number && (
+                          <div><span className="font-semibold text-[#26352f]">Account:</span> {churchMpesaDetails.mpesa_account_number}</div>
+                        )}
+                        {churchMpesaDetails.mpesa_account_name && (
+                          <div><span className="font-semibold text-[#26352f]">Account Name:</span> {churchMpesaDetails.mpesa_account_name}</div>
+                        )}
+                        {churchMpesaDetails.mpesa_phone_number && (
+                          <div><span className="font-semibold text-[#26352f]">Send Money:</span> {churchMpesaDetails.mpesa_phone_number}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <label className="block text-sm font-medium text-[#26352f]">
                     Phone number
                     <input

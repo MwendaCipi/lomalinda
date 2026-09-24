@@ -719,7 +719,8 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'board_roles',
             'invitation_link_lifetime_days',
             'bank_name', 'bank_account_name', 'bank_account_number',
-            'bank_branch', 'bank_swift_code', 'bank_paybill_number'
+            'bank_branch', 'bank_swift_code', 'bank_paybill_number',
+            'mpesa_paybill_number', 'mpesa_account_number', 'mpesa_account_name', 'mpesa_phone_number'
         )
 
 
@@ -956,16 +957,31 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         return top[:10]
 
     def get_total_raised(self, obj):
+        """Every shilling the drive has raised, from all channels.
+
+        M-Pesa contributions link to the drive directly (or name it as their
+        purpose), but the finance team's manually-receipted gifts — cash at
+        the desk, a cheque, a bank transfer — record no campaign link. They
+        still name the account on their purpose line, so the total is the
+        linked M-Pesa money plus every completed manual receipt whose purpose
+        names the drive or its account reference. Before this, a drive that
+        collected half its money at the desk read as if it had raised only
+        the M-Pesa half.
+        """
         from django.db.models import Sum, Q
         contributions = obj.contributions.filter(status='completed')
         total = contributions.aggregate(Sum('amount'))['amount__sum'] or 0
-        if total == 0:
-            query = Q(purpose=obj.name)
-            if obj.account_name:
-                query |= Q(purpose=obj.account_name)
-            purpose_total = Contribution.objects.filter(query, status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
-            total += purpose_total
-        return float(total)
+        query = Q(purpose=obj.name)
+        if obj.account_name:
+            query |= Q(purpose=obj.account_name)
+        purpose_total = Contribution.objects.filter(query, status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+        # The manual receipts: same purpose match, on the cash ledger. Cash
+        # rows are completed money by definition — they are entered after the
+        # money is in hand.
+        cash_total = CashContribution.objects.filter(query).aggregate(Sum('amount'))['amount__sum'] or 0
+        # Purpose-matched money can overlap with the linked money when a gift
+        # both links to the drive and names it, so take the larger, not the sum.
+        return float(total + max(purpose_total, cash_total))
 
     def get_percentage_raised(self, obj):
         total = self.get_total_raised(obj)
@@ -975,13 +991,15 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_donor_count(self, obj):
+        """Gifts across all channels: linked M-Pesa gifts plus purpose-matched manual receipts."""
         from django.db.models import Q
         count1 = obj.contributions.filter(status='completed').count()
         query = Q(purpose=obj.name)
         if obj.account_name:
             query |= Q(purpose=obj.account_name)
         count2 = Contribution.objects.filter(query, status='completed').count()
-        return max(count1, count2)
+        count3 = CashContribution.objects.filter(query).count()
+        return max(count1, count2, count3)
 
 
 class BusinessMeetingAgendaSerializer(serializers.ModelSerializer):
