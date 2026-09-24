@@ -34,6 +34,7 @@ ROLE_DEFINITIONS = (
     ('head_deaconess', 'Head Deaconess', 'Church Leaders', False, True),
     ('treasurer', 'Treasurer', 'Treasury', False, True),
     ('pm_leader', 'PM Leader', None, False, True),
+    ('apm_leader', 'APM Leader', 'Adventist Possibility Ministries', False, True),
     # `men_ministry` / `women_ministry` keep their long-standing codes: every
     # permission check in the app names them, and a code is not what anyone
     # reads — the labels below are. AMM = Adventist Men Ministries; APM

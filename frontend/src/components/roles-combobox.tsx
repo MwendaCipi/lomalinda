@@ -32,6 +32,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "head_deaconess", label: "Head Deaconess", group: "Church Leaders", assistant: true },
   { value: "treasurer", label: "Treasurer", group: "Treasury", assistant: true },
   { value: "pm_leader", label: "PM Leader", assistant: true },
+  { value: "apm_leader", label: "APM Leader", group: "Adventist Possibility Ministries", assistant: true },
   { value: "men_ministry", label: "AMM Leader", group: "Adventist Men Ministries", assistant: true },
   { value: "women_ministry", label: "AWM Leader", group: "Adventist Women Ministries", assistant: true },
   { value: "youth_leader", label: "Youth Leader", assistant: true },
