@@ -601,7 +601,7 @@ export default function CampaignDetailClient() {
               ) : (
                 <p className="text-[11px] leading-relaxed text-[#617068]">
                   Your receipt is sent by SMS.{" "}
-                  <Link href={`/login?next=/campaigns/${campaignId}`} className="font-semibold text-[#b36b3c] hover:underline">
+                  <Link href={`/login?next=/support/campaigns/${campaignId}`} className="font-semibold text-[#b36b3c] hover:underline">
                     Sign in
                   </Link>{" "}
                   to get it by email too.

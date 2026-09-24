@@ -1,14 +1,14 @@
-import { Suspense } from "react";
-import CampaignDetailClient from "./campaign-detail-client";
+import { redirect } from "next/navigation";
 
+// Fund-drive pages live behind the app shell now — the drive detail needs the
+// sidebar and tab bar like every other member page. (generateStaticParams
+// keeps the static export happy; the ids are a formality, the redirect runs
+// client-side for whatever id arrives.)
 export function generateStaticParams() {
-  return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].map((id) => ({ id }));
+  return ["1"].map((id) => ({ id }));
 }
 
-export default function CampaignDetailPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-[#617068]">Loading campaign...</div>}>
-      <CampaignDetailClient />
-    </Suspense>
-  );
+export default async function CampaignRedirectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  redirect(`/support/campaigns/${id}`);
 }

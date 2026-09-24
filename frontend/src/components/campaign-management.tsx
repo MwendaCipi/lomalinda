@@ -924,7 +924,7 @@ export function CampaignManagement({
                           <tr key={c.id} className="transition hover:bg-[#fcfbf9]">
                             <td className="px-5 py-4 align-middle">
                               <Link
-                                href={`/campaigns/${c.id}`}
+                                href={`/support/campaigns/${c.id}`}
                                 className="group block"
                               >
                                 <div className="font-bold text-[#26352f] group-hover:text-[#b36b3c] transition-colors text-sm">
@@ -1005,7 +1005,7 @@ export function CampaignManagement({
                                     />
                                     <div className="absolute right-0 mt-1.5 z-20 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left">
                                       <Link
-                                        href={`/campaigns/${c.id}`}
+                                        href={`/support/campaigns/${c.id}`}
                                         onClick={() => setOpenActionsId(null)}
                                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] hover:text-[#b36b3c] transition-colors"
                                       >
@@ -1061,27 +1061,31 @@ export function CampaignManagement({
                           </tr>
                   )}
                   renderCard={(c) => (
-                    <div key={c.id} className="flex flex-col justify-between rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] transition hover:shadow-md space-y-4">
+                    /* The whole card opens the drive — no actions menu here.
+                       Officers manage drives from the admin console. */
+                    <Link
+                      key={c.id}
+                      href={`/support/campaigns/${c.id}`}
+                      className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-[#dfdbd1] transition hover:-translate-y-0.5 hover:ring-[#b36b3c]/50 space-y-3"
+                    >
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-[#e8f3ec] text-[#2d5d39]" : "bg-[#f3e8e8] text-[#8c2e2e]"}`}>
-                              {c.is_active ? "Active" : "Ended"}
-                            </span>
-                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-[#e8f3ec] text-[#2d5d39]" : "bg-[#f3e8e8] text-[#8c2e2e]"}`}>
+                            {c.is_active ? "Active" : "Ended"}
+                          </span>
                           {isAdminMode && (
-                            <span className="text-xs text-[#617068]">Invites Issued: <strong className="text-[#26352f]">{c.assigned_cards_count || 0}</strong></span>
+                            <span className="text-xs text-[#617068]">Invites: <strong className="text-[#26352f]">{c.assigned_cards_count || 0}</strong></span>
                           )}
                         </div>
 
-                        <Link href={`/campaigns/${c.id}`} className="group block cursor-pointer">
-                          <h3 className="text-lg font-bold text-[#26352f] group-hover:text-[#b36b3c] transition-colors">{c.title || c.name}</h3>
-                          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#617068]">
-                            <span>Account Ref: <code className="font-mono font-bold text-[#b36b3c]">{c.account_name || c.name}</code></span>
+                        <div>
+                          <h3 className="text-lg font-bold text-[#26352f]">{c.title || c.name}</h3>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#617068]">
+                            <code className="font-mono font-bold text-[#b36b3c]">{c.account_name || c.name}</code>
                             <span>&bull;</span>
                             <span>{c.start_date} {c.end_date ? `to ${c.end_date}` : "(Ongoing)"}</span>
                           </div>
-                        </Link>
+                        </div>
 
                         {/* Progress details */}
                         <div>
@@ -1098,83 +1102,11 @@ export function CampaignManagement({
                         </div>
                       </div>
 
-                      {/* Mobile Actions Dropdown */}
-                      <div className="flex items-center justify-between border-t border-[#dfdbd1]/60 pt-3">
-                        <span className="text-xs text-[#617068] font-medium">Drive Options</span>
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            onClick={() => setOpenActionsId(openActionsId === c.id ? null : c.id)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] shadow-sm hover:bg-[#f7f4ee] hover:border-[#b36b3c] transition-colors focus:outline-none"
-                          >
-                            <span>Actions</span>
-                            <svg className={`w-3.5 h-3.5 transition-transform ${openActionsId === c.id ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-
-                          {openActionsId === c.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenActionsId(null)}
-                              />
-                              <div className="absolute right-0 bottom-full mb-1.5 z-20 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left">
-                                <Link
-                                  href={`/campaigns/${c.id}`}
-                                  onClick={() => setOpenActionsId(null)}
-                                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] hover:text-[#b36b3c] transition-colors"
-                                >
-                                  💳 View Card &rarr;
-                                </Link>
-
-                                {isAdminMode && canEdit && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        handleOpenIssueCards(c);
-                                      }}
-                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#b36b3c] hover:bg-[#f7f4ee] transition-colors"
-                                    >
-                                      🎴 {c.allow_personal_invitations ? "+ Issue Cards" : "+ General Link"}
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        handleBroadcastMessage(c.id, c.title || c.name);
-                                      }}
-                                      disabled={broadcastingId === c.id}
-                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#5f8067] hover:bg-[#f7f4ee] disabled:opacity-50 transition-colors"
-                                    >
-                                      📢 {broadcastingId === c.id ? "Sending..." : "Message Members"}
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        handleToggleCampaignActive(c.id, c.is_active);
-                                      }}
-                                      className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
-                                        c.is_active
-                                          ? "text-red-700 hover:bg-red-50"
-                                          : "text-emerald-700 hover:bg-emerald-50"
-                                      }`}
-                                    >
-                                      {c.is_active ? "⏸️ End Fund Drives" : "▶️ Reactivate Drive"}
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                      {/* The one action: open the drive page. */}
+                      <span className="flex items-center justify-center rounded-xl bg-[#26352f] px-4 py-2.5 text-xs font-semibold text-white transition group-hover:bg-[#b36b3c]">
+                        Open Drive
+                      </span>
+                    </Link>
                   )}
                 />
               </>

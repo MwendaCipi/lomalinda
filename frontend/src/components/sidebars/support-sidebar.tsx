@@ -32,7 +32,7 @@ export function SupportSidebar() {
               normalized === target ||
               (item.href === "/give" && normalized === "/support/give") ||
               (item.href === "/support/campaigns" &&
-                (normalized === "/support/campaigns" || normalized.startsWith("/campaigns")));
+                normalized.startsWith("/support/campaigns"));
             const Icon = item.icon;
             return (
               <Link
