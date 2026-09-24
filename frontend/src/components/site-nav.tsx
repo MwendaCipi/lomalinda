@@ -231,7 +231,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     {
       href: "/community/prayer",
       label: "Requests",
-      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll") || pathname.startsWith("/partnerships"),
+      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll"),
     },
     { href: "/give", label: "Giving", active: pathname.startsWith("/support") || pathname.startsWith("/give") },
     { href: "/about", label: "About", active: pathname.startsWith("/about") },
@@ -279,7 +279,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       href: "/requests",
       label: "Requests",
       icon: HandHeart,
-      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll") || pathname.startsWith("/partnerships"),
+      active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll"),
     },
     // About moved into the user menu; the office reaches its console from the
     // tab bar instead.

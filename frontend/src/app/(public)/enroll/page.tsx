@@ -168,7 +168,7 @@ export default function EnrollPage() {
       <PublicSectionNav
         eyebrow="Get started"
         title="Other ways to reach the church"
-        description="Prayer, visitation, child dedication and partnerships all start with a short form."
+        description="Prayer, visitation and child dedication all start with a short form."
         links={requestsAndCareLinks}
         activeKey="enroll"
         className="border-t border-[#dfdbd1] bg-white/60"

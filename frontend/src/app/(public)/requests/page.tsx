@@ -23,7 +23,7 @@ export default function RequestsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Requests &amp; Care</h1>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
-            Prayer, visitation, dedication, membership, partnership — open the one you need.
+            Prayer, visitation, dedication and membership — open the one you need.
           </p>
         </div>
       </section>
@@ -32,8 +32,8 @@ export default function RequestsPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Requests &amp; Care</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-[#617068]">
-            We are here to walk with you through prayer, pastoral visitation, child dedication, membership, and
-            partnership. Tell us what you need and the right person will follow up.
+            We are here to walk with you through prayer, pastoral visitation, child dedication, and
+            membership. Tell us what you need and the right person will follow up.
           </p>
         </div>
       </section>
@@ -43,27 +43,21 @@ export default function RequestsPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">How we can help</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">How can we support you today?</h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
-            Submit a prayer request, book a pastoral or home visit, arrange a child dedication, apply to join the
-            church or transfer your membership, or start a conversation about partnering with us.
+            Submit a prayer request, book a pastoral or home visit, arrange a child dedication, or apply to join
+            the church or transfer your membership.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
-              href="/community/prayer"
+              href="/community/prayer-visitation"
               className="rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#96552e]"
             >
-              Submit a prayer request
-            </Link>
-            <Link
-              href="/community/visitation"
-              className="rounded-full bg-[#5f8067] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#4d6d55]"
-            >
-              Request a visit
+              Prayer &amp; visitation requests
             </Link>
             <Link
               href="/enroll"
               className="rounded-full border border-white/25 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white/50"
             >
-              Membership &amp; transfers
+              Membership
             </Link>
           </div>
         </div>
@@ -74,7 +68,7 @@ export default function RequestsPage() {
       <PublicSectionNav
         eyebrow="Get started"
         title="Every request, in one place"
-        description="Prayer, visitation, dedication, membership and partnerships — open the one you need and we will take it from there."
+        description="Prayer, visitation, dedication and membership — open the one you need and we will take it from there."
         links={requestsAndCareLinks}
         className={signedIn ? "lg:hidden" : "border-t border-[#dfdbd1] bg-white/60"}
       />

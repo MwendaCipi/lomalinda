@@ -41,7 +41,7 @@ export type SectionLink = {
   icon: LucideIcon;
 };
 
-/** Beside About: the church's story, its calendar, partnerships and privacy. */
+/** Beside About: the church's story, its calendar and privacy. */
 export const aboutSectionLinks: SectionLink[] = [
   {
     key: "about",
@@ -56,13 +56,6 @@ export const aboutSectionLinks: SectionLink[] = [
     label: "Church Calendar",
     description: "Sabbaths, vespers, programmes and upcoming events.",
     icon: Calendar,
-  },
-  {
-    key: "partnerships",
-    href: "/partnerships",
-    label: "Partnerships",
-    description: "Work with the church in ministry and community impact.",
-    icon: Handshake,
   },
   {
     key: "privacy",
@@ -145,23 +138,16 @@ export const materialSectionLinks: SectionLink[] = materialSections.map((section
 }));
 
 /**
- * Beside Requests & Care: the ways someone can ask the church for help, join it,
- * or work with it. Shared by the Requests hub, Partnerships and Membership.
+ * Beside Requests & Care: the ways someone can ask the church for help or join
+ * it. Prayer and visitation are one desk; partnership requests were retired.
  */
 export const requestsAndCareLinks: SectionLink[] = [
   {
-    key: "prayer",
-    href: "/community/prayer",
-    label: "Prayer Requests",
-    description: "Send a prayer request and our prayer team will intercede with you.",
+    key: "prayer-visitation",
+    href: "/community/prayer-visitation",
+    label: "Prayer & Visitation Requests",
+    description: "Request prayer or a pastoral visit — one desk for both.",
     icon: Heart,
-  },
-  {
-    key: "visitation",
-    href: "/community/visitation",
-    label: "Pastoral Visitation",
-    description: "Ask for a pastoral, home or hospital visit.",
-    icon: Calendar,
   },
   {
     key: "child-dedication",
@@ -176,13 +162,6 @@ export const requestsAndCareLinks: SectionLink[] = [
     label: "Membership",
     description: "Join through baptism or transfer, or request a transfer out.",
     icon: Handshake,
-  },
-  {
-    key: "partnerships",
-    href: "/partnerships",
-    label: "Partnership Requests",
-    description: "Partner with us in ministry, community impact and shared initiatives.",
-    icon: Sprout,
   },
 ];
 

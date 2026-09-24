@@ -1,5 +1,6 @@
-import VisitationPage from "@/app/(system)/community/visitation/page";
+import { redirect } from "next/navigation";
 
+// Prayer and visitation are one desk now — see /community/prayer-visitation.
 export default function SpiritualVisitationPage() {
-  return <VisitationPage />;
+  redirect("/community/prayer-visitation");
 }

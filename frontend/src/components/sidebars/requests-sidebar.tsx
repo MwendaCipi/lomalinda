@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, Calendar, Baby, Handshake, Sprout, ChevronRight } from "lucide-react";
+import { Heart, Calendar, Baby, Handshake, ChevronRight } from "lucide-react";
 
+// Prayer and visitation are one desk now — a single merged page holds both
+// forms and both ledgers. Dedication and membership complete the walk-with-you
+// set; partnership requests were retired.
 const requestLinks = [
-  { href: "/community/prayer", label: "Prayer Requests", icon: Heart },
-  { href: "/community/visitation", label: "Pastoral Visitation", icon: Calendar },
+  { href: "/community/prayer-visitation", label: "Prayer & Visitation Requests", icon: Heart },
   { href: "/community/child-dedication", label: "Child Dedication", icon: Baby },
   { href: "/enroll", label: "Membership", icon: Handshake },
-  { href: "/partnerships", label: "Partnership Requests", icon: Sprout },
 ];
 
 export function RequestsSidebar() {
@@ -31,9 +32,8 @@ export function RequestsSidebar() {
           {requestLinks.map((item) => {
             const isActive =
               pathname === item.href ||
-              (item.href === "/community/prayer" && pathname === "/spiritual/prayer") ||
-              (item.href === "/community/visitation" && pathname === "/spiritual/visitation") ||
-              (item.href === "/community/child-dedication" && pathname === "/spiritual/child-dedication") ||
+              (item.href === "/community/prayer-visitation" &&
+                (pathname === "/community/prayer" || pathname === "/community/visitation")) ||
               (item.href === "/enroll" && pathname?.startsWith("/enroll"));
             const Icon = item.icon;
             return (
@@ -46,11 +46,11 @@ export function RequestsSidebar() {
                     : "text-[#26352f] hover:bg-[#f7f4ee]"
                 }`}
               >
-                <div className="flex items-center gap-3 truncate">
+                <span className="flex items-center gap-3 min-w-0">
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
-                </div>
-                {isActive && <ChevronRight className="h-4 w-4 font-bold" />}
+                </span>
+                {isActive && <ChevronRight className="h-4 w-4 shrink-0 font-bold" />}
               </Link>
             );
           })}

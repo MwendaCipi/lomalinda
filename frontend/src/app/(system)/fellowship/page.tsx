@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Megaphone, Camera, Heart, Sparkles, Lightbulb, ChevronRight } from "lucide-react";
+import { Megaphone, Camera, Heart, Sparkles, Lightbulb, ChevronRight, Baby, Handshake } from "lucide-react";
 
 /**
  * The Fellowship hub the phone tab bar opens.
@@ -7,8 +7,9 @@ import { Megaphone, Camera, Heart, Sparkles, Lightbulb, ChevronRight } from "luc
  * The desktop bar takes a signed-in member straight into the announcements
  * feed, where the Fellowship sidebar offers the other destinations; a phone
  * has no sidebar, so the tab opens this hub instead and the same destinations
- * are the cards. Prayer Requests points at the same page the Requests tab's
- * prayer card does.
+ * are the cards. Requests and Care merged into Fellowship here: prayer and
+ * visitation are one desk, child dedication and membership are part of the
+ * same walk-with-you set, and partnership requests were retired.
  */
 const cards = [
   {
@@ -24,9 +25,9 @@ const cards = [
     icon: Camera,
   },
   {
-    href: "/community/prayer",
-    label: "Prayer Requests",
-    description: "Send a prayer request and our prayer team will intercede with you.",
+    href: "/community/prayer-visitation",
+    label: "Prayer & Visitation Requests",
+    description: "Request prayer or a pastoral visit — one desk for both.",
     icon: Heart,
   },
   {
@@ -34,6 +35,18 @@ const cards = [
     label: "Testimonies",
     description: "Read and share how God is at work among us.",
     icon: Sparkles,
+  },
+  {
+    href: "/community/child-dedication",
+    label: "Child Dedication",
+    description: "Begin a conversation about dedicating your child during worship.",
+    icon: Baby,
+  },
+  {
+    href: "/enroll",
+    label: "Membership",
+    description: "Join through baptism or transfer, or request a transfer out.",
+    icon: Handshake,
   },
   {
     href: "/support/ideas",

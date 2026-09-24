@@ -40,11 +40,6 @@ const ways = [
     title: "Share your story",
     text: "Testimonies, live services and the fellowship that happens between Sabbaths.",
   },
-  {
-    href: "/partnerships",
-    title: "Partnerships",
-    text: "Work with the church on ministry, community impact and shared initiatives.",
-  },
 ];
 
 const footerColumns = [
@@ -61,7 +56,6 @@ const footerColumns = [
     heading: "Giving",
     links: [
       { href: "/give", label: "Give" },
-      { href: "/partnerships", label: "Partnerships" },
       { href: "/about", label: "About the church" },
     ],
   },
@@ -231,10 +225,10 @@ export function MarketingHome() {
               Give now
             </Link>
             <Link
-              href="/partnerships"
+              href="/requests"
               className="rounded-full border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white"
             >
-              Partner with us
+              Prayer &amp; care
             </Link>
           </div>
         </div>
