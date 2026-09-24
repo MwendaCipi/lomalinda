@@ -742,6 +742,8 @@ class EnrollmentOAuthVerifyView(APIView):
         current_church = str(request.data.get('current_church', '')).strip()
         if joining_mode == 'friend' and not current_church:
             return Response({'current_church': 'Enter your current church.'}, status=status.HTTP_400_BAD_REQUEST)
+        if joining_mode == 'sabbath_school' and not current_church:
+            return Response({'current_church': 'Enter your current church.'}, status=status.HTTP_400_BAD_REQUEST)
         enrollment, _ = EnrollmentRequest.objects.update_or_create(
             email=email,
             defaults={
@@ -790,7 +792,7 @@ class EnrollmentCompleteView(APIView):
         MemberProfile.objects.create(
             user=user,
             phone_number=enrollment.phone_number,
-            account_type='friend' if enrollment.joining_mode == 'friend' else 'member',
+            account_type={'friend': 'friend', 'sabbath_school': 'sabbath_school'}.get(enrollment.joining_mode, 'member'),
             privacy_accepted_at=enrollment.privacy_accepted_at or timezone.now(),
             privacy_policy_version=enrollment.privacy_policy_version or CURRENT_PRIVACY_POLICY_VERSION,
             terms_accepted_at=enrollment.terms_accepted_at or timezone.now(),
@@ -926,7 +928,7 @@ class InvitationListCreateView(generics.ListCreateAPIView):
             return Response({'roles': error}, status=status.HTTP_403_FORBIDDEN)
 
         account_type = str(request.data.get('account_type') or 'member').strip()
-        if account_type not in ('member', 'friend'):
+        if account_type not in ('member', 'friend', 'sabbath_school'):
             account_type = 'member'
 
         invitation = Invitation.objects.filter(email__iexact=email, status='pending').first()
@@ -1180,17 +1182,19 @@ class PasswordResetConfirmView(APIView):
 def can_manage_announcements(user):
     """Leadership test shared by the announcement endpoints.
 
-    Every held role counts (an elder whose primary role is 'member' still
-    passes), and Django staff/superusers count as administrators here just
-    as they do everywhere else in the app — the site owner must be able to
-    post, edit and delete announcements.
+    Posting is a right carried by roles (see ``roles.DEFAULT_ROLE_RIGHTS`` and
+    the Church Roles Configuration screen), so the test is now rights-based:
+    every held role counts — including its assistant holders — and the
+    administrator role carries every right by definition. Django staff and
+    superusers still count as administrators so the site owner can always
+    post, edit and delete.
     """
     if not user or not user.is_authenticated:
         return False
     if user.is_staff or user.is_superuser:
         return True
-    profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('admin', 'clerk', 'elder'))
+    from .roles import user_has_right
+    return user_has_right(user, 'announcements')
 
 
 class AnnouncementView(generics.ListCreateAPIView):
@@ -2451,6 +2455,7 @@ class DashboardAnalyticsView(APIView):
             'members': {
                 'total': roster.count(),
                 'friends': MemberProfile.objects.filter(account_type='friend').count(),
+                'sabbath_school': MemberProfile.objects.filter(account_type='sabbath_school').count(),
                 'new_this_month': roster.filter(date_joined__date__gte=month_start).count(),
                 'ex_members': MemberProfile.objects.filter(is_disfellowshipped=True).count(),
                 'pending_invitations': Invitation.objects.filter(status='pending').count(),
@@ -3967,7 +3972,7 @@ class UserManagementView(generics.ListCreateAPIView):
         if isinstance(disability, list):
             disability = ", ".join(str(d).strip() for d in disability if str(d).strip())
         account_type = request.data.get('account_type') or 'member'
-        if account_type not in ('member', 'friend'):
+        if account_type not in ('member', 'friend', 'sabbath_school'):
             account_type = 'member'
         current_church = (request.data.get('current_church') or '').strip()
         baptismal_status = (request.data.get('baptismal_status') or '').strip()
@@ -4483,7 +4488,7 @@ class UserAccountTypeUpdateView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    VALID_TYPES = ('member', 'friend', 'ex_member')
+    VALID_TYPES = ('member', 'friend', 'sabbath_school', 'ex_member')
 
     def patch(self, request, pk):
         current_profile = getattr(request.user, 'member_profile', None)
@@ -4496,7 +4501,7 @@ class UserAccountTypeUpdateView(APIView):
         requested = (request.data.get('account_type') or '').strip()
         if requested not in self.VALID_TYPES:
             return Response(
-                {'account_type': "Choose one of: member, friend, ex_member."},
+                {'account_type': "Choose one of: member, friend, sabbath_school, ex_member."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -4512,7 +4517,7 @@ class UserAccountTypeUpdateView(APIView):
             )
 
         profile, _ = MemberProfile.objects.get_or_create(user=target_user)
-        previous = 'ex_member' if profile.is_disfellowshipped else ('friend' if profile.account_type == 'friend' else 'member')
+        previous = 'ex_member' if profile.is_disfellowshipped else profile.account_type
 
         if requested == 'ex_member':
             # Someone who left keeps whatever they were before, so restoring them
@@ -4542,6 +4547,7 @@ class UserAccountTypeUpdateView(APIView):
 ACCOUNT_TYPE_LABELS = {
     'member': 'a member',
     'friend': 'a friend',
+    'sabbath_school': 'a Sabbath School attendee',
     'ex_member': 'an ex-member',
 }
 

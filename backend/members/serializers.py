@@ -62,6 +62,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
     ministry = serializers.CharField(source='member_profile.ministry', read_only=True)
     disability = serializers.CharField(source='member_profile.disability', read_only=True)
     is_disfellowshipped = serializers.BooleanField(source='member_profile.is_disfellowshipped', read_only=True, default=False)
+    # Friends and Sabbath School attendees join as inactive accounts; leadership
+    # sees this on the roster so "Confirmed" never reads as "can sign in".
+    is_active = serializers.BooleanField(read_only=True)
     # True when a proposed profile edit is waiting for this member's approval;
     # the roster shows a badge so the office knows the ball is in their court.
     pending_profile_change = serializers.SerializerMethodField()
@@ -93,6 +96,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'ministry',
             'disability',
             'is_disfellowshipped',
+            'is_active',
             'pending_profile_change',
             # The installation's owner account is not a member; the roster
             # endpoints filter it out and the clients use this to be sure.
@@ -692,16 +696,40 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
     def get_invitation_placeholders(self, obj):
         return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in MEETING_PLACEHOLDERS]
 
-    def validate_board_roles(self, value):
-        """Board roles are chosen from the hard-coded role codes.
+    role_rights = serializers.SerializerMethodField()
 
-        Administrator is a system role, so it is always on the board.
+    def get_role_rights(self, obj):
+        """The effective rights per role, defaults included, for the settings UI.
+
+        ``rights`` is the whole vocabulary with its labels and descriptions so
+        the settings screen never hard-codes a copy of it.
         """
-        unknown = unknown_role_codes(parse_role_codes(value))
-        if unknown:
-            raise serializers.ValidationError(f"Unknown role code(s): {', '.join(unknown)}")
-        selected = set(parse_role_codes(value)) | {ADMIN_ROLE}
-        return [code for code in ROLE_CODES if code in selected]
+        from .roles import role_rights_settings, ROLE_RIGHTS
+        configured = role_rights_settings(obj)
+        return {
+            'rights': [
+                {'code': code, 'label': label, 'description': description}
+                for code, label, description in ROLE_RIGHTS
+            ],
+            'by_role': configured,
+        }
+
+    def validate_role_rights(self, value):
+        """Keep only known role codes and right codes; shape stays {role: [rights]}."""
+        from .roles import ROLE_RIGHT_CODES
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('role_rights must be an object of role → rights list.')
+        cleaned = {}
+        for role_code, rights in value.items():
+            if role_code not in ROLE_CODES:
+                raise serializers.ValidationError(f"Unknown role code: {role_code}")
+            if not isinstance(rights, (list, tuple)):
+                raise serializers.ValidationError(f'Rights for {role_code} must be a list.')
+            unknown = [r for r in rights if r not in ROLE_RIGHT_CODES]
+            if unknown:
+                raise serializers.ValidationError(f"Unknown right code(s) for {role_code}: {', '.join(map(str, unknown))}")
+            cleaned[role_code] = list(dict.fromkeys(rights))
+        return cleaned
 
     class Meta:
         model = ChurchSettings
@@ -716,7 +744,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'privacy_policy',
             'terms_of_use',
             'invitation_placeholders',
-            'board_roles',
+            'role_rights',
             'invitation_link_lifetime_days',
             'bank_name', 'bank_account_name', 'bank_account_number',
             'bank_branch', 'bank_swift_code', 'bank_paybill_number',

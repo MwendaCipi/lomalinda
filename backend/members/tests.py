@@ -2703,7 +2703,6 @@ class MeetingInvitationTests(APITestCase):
 
         self.settings_row = ChurchSettings.objects.create(
             church_name='SDA Loma Linda, Meru',
-            board_roles=['elder'],
         )
         self.client.force_authenticate(self.clerk)
 
@@ -2744,9 +2743,10 @@ class MeetingInvitationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # One message per member, each addressed on its own: the board's
-        # addresses are not put on each other's To: line.
-        self.assertEqual(len(mail.outbox), 2)
-        self.assertEqual(sorted(len(message.to) for message in mail.outbox), [1, 1])
+        # addresses are not put on each other's To: line. The clerk who
+        # scheduled the meeting sits on the board too, so three messages.
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(sorted(len(message.to) for message in mail.outbox), [1, 1, 1])
         bodies = {message.to[0]: message.body for message in mail.outbox}
         esther = bodies['board.a@example.com']
         samuel = bodies['board.b@example.com']
@@ -2763,14 +2763,16 @@ class MeetingInvitationTests(APITestCase):
         self.assertIn('11:30 AM', esther)
         self.assertIn('SDA Loma Linda, Meru', esther)
         self.assertNotIn('{', esther)
-        self.assertEqual(response.data['invitations'], {'invited': 2, 'emailed': 2})
+        # The clerk who scheduled the meeting sits on the board too.
+        self.assertEqual(response.data['invitations'], {'invited': 3, 'emailed': 3})
 
     def test_the_message_edited_on_the_form_is_the_one_members_receive(self):
         from django.core import mail
 
         self._schedule(notification_message='{greeting}, {name}. Board meets {day} at {start_time} in {location}.')
 
-        self.assertEqual(len(mail.outbox), 2)
+        # The clerk who scheduled the meeting sits on the board too.
+        self.assertEqual(len(mail.outbox), 3)
         self.assertTrue(mail.outbox[0].body.startswith(eat_greeting()))
         self.assertIn('Board meets Saturday at 9:00 AM in Board Room.', mail.outbox[0].body)
 
@@ -2785,10 +2787,12 @@ class MeetingInvitationTests(APITestCase):
         response = self._schedule()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(len(mail.outbox), 2)
+        # The clerk who scheduled the meeting sits on the board too.
+        self.assertEqual(len(mail.outbox), 3)
+        esther = next(m for m in mail.outbox if m.to == ['board.a@example.com'])
         # Unknown tokens stay as written instead of taking the message down.
-        self.assertIn('{agenda}', mail.outbox[0].body)
-        self.assertIn('Dear Esther', mail.outbox[0].body)
+        self.assertIn('{agenda}', esther.body)
+        self.assertIn('Dear Esther', esther.body)
 
     def test_two_accounts_sharing_one_mailbox_get_one_invitation_between_them(self):
         from django.core import mail
@@ -2801,10 +2805,12 @@ class MeetingInvitationTests(APITestCase):
         response = self._schedule()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['invitations'], {'invited': 2, 'emailed': 1})
-        self.assertEqual([message.to for message in mail.outbox], [['board.a@example.com']])
-        # Both people still get their own in-app notice.
-        self.assertEqual(ChurchNotification.objects.count(), 2)
+        # Esther and Samuel share a mailbox (one email between them) and the
+        # clerk who scheduled the meeting sits on the board too: 3 invited,
+        # 2 emails, and an in-app notice per person.
+        self.assertEqual(response.data['invitations'], {'invited': 3, 'emailed': 2})
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ['board.a@example.com', 'meet.clerk@example.com'])
+        self.assertEqual(ChurchNotification.objects.count(), 3)
 
     def test_scheduling_without_notifying_anyone_says_so_and_sends_nothing(self):
         from django.core import mail
@@ -3716,3 +3722,78 @@ class RoleRegisterAndAssistantTests(APITestCase):
         self.assertTrue(register['assistant'])
         self.assertEqual(register['leader']['id'], self.first.id)
         self.assertEqual([a['id'] for a in register['assistants']], [self.second.id])
+
+
+class BoardMembershipTests(TestCase):
+    """The church board is every role holder; assistants do not sit on it."""
+
+    def _member(self, username, roles, assistants=''):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role=roles.split(', ')[0], roles=roles, assistant_roles=assistants)
+        return user
+
+    def test_role_holders_are_board_members_and_plain_members_are_not(self):
+        from .meetings import board_audience
+
+        elder = self._member('board.elder', 'elder')
+        member = self._member('plain.member', 'member')
+
+        audience = board_audience()
+        self.assertIn(elder, audience)
+        self.assertNotIn(member, audience)
+
+    def test_an_assistant_only_holder_is_not_invited(self):
+        from .meetings import board_audience
+
+        leader = self._member('pm.leader', 'pm_leader')
+        assistant = self._member('pm.assistant', 'pm_leader', assistants='pm_leader')
+
+        audience = board_audience()
+        self.assertIn(leader, audience)
+        self.assertNotIn(assistant, audience)
+
+    def test_a_holder_with_a_mixed_role_set_is_invited(self):
+        """A member whose roles mix plain and assistant holdings still sits on the board."""
+        from .meetings import board_audience
+
+        mixed = self._member('mixed.holder', 'clerk, pm_leader', assistants='pm_leader')
+
+        self.assertIn(mixed, board_audience())
+
+
+class AnnouncementRightsTests(APITestCase):
+    """Posting announcements is the role's ``announcements`` right, editable in church settings."""
+
+    def _profile(self, username, roles):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role=roles.split(', ')[0], roles=roles)
+        return user
+
+    def test_the_clerks_announcements_right_can_be_withdrawn(self):
+        clerk = self._profile('rights.clerk', 'clerk')
+        self.client.force_authenticate(clerk)
+        ok = self.client.post('/api/members/announcements/', {
+            'title': 'Allowed', 'text': 'Default rights allow this.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
+
+        settings_row, _ = ChurchSettings.objects.get_or_create(pk=1)
+        settings_row.role_rights = {'clerk': ['board_invitations', 'business_invitations', 'members_admin', 'requests_admin']}
+        settings_row.save()
+
+        denied = self.client.post('/api/members/announcements/', {
+            'title': 'Refused', 'text': 'The right was withdrawn.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_treasurer_gains_the_right_when_the_church_grants_it(self):
+        treasurer = self._profile('rights.treasurer', 'treasurer')
+        settings_row, _ = ChurchSettings.objects.get_or_create(pk=1)
+        settings_row.role_rights = {'treasurer': ['finance', 'treasury_accounts', 'reports', 'announcements']}
+        settings_row.save()
+
+        self.client.force_authenticate(treasurer)
+        ok = self.client.post('/api/members/announcements/', {
+            'title': 'Granted', 'text': 'The church granted this right.', 'visibility': 'members',
+        }, format='json')
+        self.assertEqual(ok.status_code, status.HTTP_201_CREATED)

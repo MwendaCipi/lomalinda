@@ -17,6 +17,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db.models import Q
+
+from .roles import DEFAULT_ROLE
 from django.utils.dateparse import parse_date
 
 from .models import ChurchNotification, ChurchSettings, format_clock
@@ -135,13 +137,25 @@ def invitation_template(kind, settings_obj=None):
 
 
 def board_audience():
-    """Who the church considers a board member, per the configured board roles."""
-    settings_obj = ChurchSettings.objects.first()
-    configured_roles = (settings_obj.board_roles if settings_obj and settings_obj.board_roles
-                        else ['elder', 'clerk', 'treasurer', 'admin'])
-    return User.objects.filter(is_active=True).filter(
-        Q(member_profile__role__in=configured_roles) | Q(is_superuser=True) | Q(is_staff=True)
-    ).distinct()
+    """The church board: holders of every church role, assistants excluded.
+
+    Membership of the board is what a role *is* — there is no separate board
+    configuration any more. An assistant shares the role's work but does not
+    sit on the board by it, so members whose every role is held as an
+    assistant are not invited. Office accounts (staff and superusers) always
+    are.
+    """
+    from .models import MemberProfile
+
+    board_profile_ids = set()
+    for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+        held = set(profile.get_roles()) - {DEFAULT_ROLE}
+        assistants = set(profile.get_assistant_roles())
+        if held - assistants:
+            board_profile_ids.add(profile.user_id)
+    return User.objects.filter(
+        Q(id__in=board_profile_ids) | Q(is_superuser=True) | Q(is_staff=True)
+    ).filter(is_active=True).distinct()
 
 
 def meeting_audience(kind):

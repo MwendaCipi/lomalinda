@@ -3,14 +3,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
-import { ROLE_OPTIONS, SYSTEM_ROLE_CODES, SYSTEM_ROLE_HELP } from "./roles-combobox";
+import { ROLE_OPTIONS } from "./roles-combobox";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-// Board roles are chosen from the same hard-coded role list as everywhere else.
-const AVAILABLE_ROLES = ROLE_OPTIONS.map((role) => ({ key: role.value, label: role.label, system: role.system }));
+// The right the settings screen shows for each role, straight from the API —
+// the label/description text is the backend's, so the two never drift.
+type RoleRight = { code: string; label: string; description: string };
+type RoleRightsPayload = { rights: RoleRight[]; by_role: Record<string, string[]> };
 
 export function ChurchSettingsManager() {
   const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
@@ -39,9 +41,10 @@ export function ChurchSettingsManager() {
   // at the same length this input does.
   const [encouragementLine, setEncouragementLine] = useState("Jesus is coming again.");
   const ENCOURAGEMENT_MAX = 140;
-  const [boardRoles, setBoardRoles] = useState<string[]>([
-    "elder", "first_elder", "second_elder", "third_elder", "clerk", "treasurer", "admin"
-  ]);
+  // Per-role rights as configured on the Church Roles Configuration box.
+  const [roleRights, setRoleRights] = useState<RoleRightsPayload>({ rights: [], by_role: {} });
+  // Which role's rights the settings screen is currently showing.
+  const [rightsRole, setRightsRole] = useState<string>("clerk");
   const [bankName, setBankName] = useState("KCB Bank Kenya");
   const [bankAccountName, setBankAccountName] = useState("SDA Church Main Account");
   const [bankAccountNumber, setBankAccountNumber] = useState("1122334455");
@@ -90,8 +93,8 @@ export function ChurchSettingsManager() {
           if (data.default_board_meeting_invitation_message) {
             setDefaultBoardMeetingInvitationMessage(data.default_board_meeting_invitation_message);
           }
-          if (Array.isArray(data.board_roles)) {
-            setBoardRoles(data.board_roles);
+          if (data.role_rights && Array.isArray(data.role_rights.rights)) {
+            setRoleRights(data.role_rights);
           }
           if (data.bank_name) setBankName(data.bank_name);
           if (data.bank_account_name) setBankAccountName(data.bank_account_name);
@@ -112,10 +115,14 @@ export function ChurchSettingsManager() {
       .finally(() => setLoading(false));
   }, []);
 
-  const toggleBoardRole = (roleKey: string) => {
-    setBoardRoles((prev) =>
-      prev.includes(roleKey) ? prev.filter((r) => r !== roleKey) : [...prev, roleKey]
-    );
+  const toggleRoleRight = (role: string, right: string) => {
+    setRoleRights((prev) => {
+      const current = prev.by_role[role] ?? [];
+      const next = current.includes(right)
+        ? current.filter((r) => r !== right)
+        : [...current, right];
+      return { ...prev, by_role: { ...prev.by_role, [role]: next } };
+    });
   };
 
   async function handleSave(e: FormEvent) {
@@ -141,8 +148,7 @@ export function ChurchSettingsManager() {
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
         dashboard_encouragement_line: encouragementLine.trim(),
-        // System roles always stay on the board, whatever the tick boxes say.
-        board_roles: Array.from(new Set([...boardRoles, ...SYSTEM_ROLE_CODES])),
+        role_rights: roleRights.by_role,
         bank_name: bankName,
         bank_account_name: bankAccountName,
         bank_account_number: bankAccountNumber,
@@ -390,48 +396,71 @@ export function ChurchSettingsManager() {
           </div>
         </div>
 
-        {/* Board Roles Configuration Box */}
+        {/* Church Roles Configuration Box */}
         <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#faf7f2] p-5">
           <h3 className="text-base font-bold text-[#b36b3c] flex items-center gap-2">
-            <span>🛡️</span> Church Board Roles Configuration
+            <span>🛡️</span> Church Roles Configuration
           </h3>
           <p className="mt-1 text-xs text-[#617068]">
-            Select which church leadership roles automatically belong to the Church Board. Board meeting invitations and notifications will be sent to members holding these roles.
+            Every role holder (assistants included) sits on the church board by default — board invitations go to them
+            automatically. Pick a role below to give or take away what its holders may do in the app.
           </p>
 
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {AVAILABLE_ROLES.map((roleObj) => {
-              // Administrator is a system role, so it always sits on the board.
-              const isChecked = roleObj.system || boardRoles.includes(roleObj.key);
-              return (
-                <label
-                  key={roleObj.key}
-                  title={roleObj.system ? SYSTEM_ROLE_HELP : undefined}
-                  className={`flex items-center gap-2.5 rounded-xl border p-3 transition text-xs font-semibold ${
-                    roleObj.system ? "cursor-not-allowed" : "cursor-pointer"
-                  } ${
-                    isChecked
-                      ? "border-[#b36b3c] bg-white text-[#26352f] shadow-sm"
-                      : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    disabled={roleObj.system}
-                    onChange={() => toggleBoardRole(roleObj.key)}
-                    className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c] disabled:cursor-not-allowed"
-                  />
-                  <span>{roleObj.label}</span>
-                  {roleObj.system && (
-                    <span className="rounded bg-[#f0e6dc] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#96552c]">
-                      system
-                    </span>
-                  )}
-                </label>
-              );
-            })}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {ROLE_OPTIONS.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => setRightsRole(role.value)}
+                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                  rightsRole === role.value
+                    ? "border-[#b36b3c] bg-white text-[#26352f] shadow-sm"
+                    : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
+                }`}
+              >
+                {role.label}
+              </button>
+            ))}
           </div>
+
+          {(() => {
+            const selected = ROLE_OPTIONS.find((r) => r.value === rightsRole) ?? ROLE_OPTIONS[0];
+            const held = new Set(roleRights.by_role[selected.value] ?? []);
+            return (
+              <div className="mt-4 rounded-xl border border-[#dfdbd1] bg-white p-4">
+                <p className="text-sm font-bold text-[#26352f]">
+                  {selected.label}
+                  <span className="ml-2 text-xs font-medium text-[#617068]">— rights held by this role</span>
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {roleRights.rights.map((right) => {
+                    const isHeld = held.has(right.code);
+                    return (
+                      <label
+                        key={right.code}
+                        className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition ${
+                          isHeld
+                            ? "border-[#b36b3c] bg-[#faf7f2] text-[#26352f] shadow-sm"
+                            : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isHeld}
+                          onChange={() => toggleRoleRight(selected.value, right.code)}
+                          className="mt-0.5 h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-bold">{right.label}</span>
+                          <span className="mt-0.5 block leading-5">{right.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Meeting Invitation Templates Box */}

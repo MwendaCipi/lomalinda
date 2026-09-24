@@ -24,7 +24,7 @@ def invitation_token_hash(raw_token):
 
 
 class MemberProfile(models.Model):
-    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of SDA Loma Linda')]
+    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')]
     # Hard-coded church roles; see members/roles.py for the full definitions.
     ROLE_CHOICES = list(ROLE_CHOICES)
     BAPTISMAL_STATUS_CHOICES = [
@@ -135,7 +135,7 @@ class MemberProfile(models.Model):
 
 class EnrollmentRequest(models.Model):
     STATUS_CHOICES = [('verification_pending', 'Verification pending'), ('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
-    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Loma Linda')]
+    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
@@ -730,10 +730,13 @@ class ChurchSettings(models.Model):
         ),
         blank=True
     )
-    board_roles = models.JSONField(
-        default=list,
+    # Per-role rights, as edited on the Church Roles Configuration screen:
+    # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
+    # defaults in members.roles.DEFAULT_ROLE_RIGHTS.
+    role_rights = models.JSONField(
+        default=dict,
         blank=True,
-        help_text="List of role keys that belong to the church board"
+        help_text="Rights per role: {role_code: [right_code, ...]}"
     )
     bank_name = models.CharField(max_length=160, default='KCB Bank Kenya', blank=True)
     bank_account_name = models.CharField(max_length=160, default='SDA Church Main Account', blank=True)

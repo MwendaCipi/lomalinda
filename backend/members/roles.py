@@ -86,6 +86,91 @@ def role_allows_assistant(code):
     return code in ASSISTANT_ROLE_CODES
 
 
+# -- Per-role rights ---------------------------------------------------
+#
+# Every role carries its own bundle of rights — what a holder may do in the
+# app by virtue of the office. The rights are the vocabulary the rest of the
+# code checks; the Church Roles Configuration screen in church settings decides
+# which rights each role carries, and the defaults below are what a church
+# gets before it touches anything.
+
+#: The whole rights vocabulary, in display order: (code, label, description).
+ROLE_RIGHTS = (
+    ('finance', 'Finance', 'Open the finance desk: reconciliation, cash receipts, refunds and fund drives.'),
+    ('treasury_accounts', 'Treasury Accounts', 'Create and manage treasury accounts, transfers and expenditures.'),
+    ('board_invitations', 'Board Invitations', 'Schedule board meetings and send board invitations.'),
+    ('business_invitations', 'Business Invitations', 'Schedule business meetings and send the invitations.'),
+    ('announcements', 'Announcements', 'Publish announcements to the church.'),
+    ('requests_admin', 'Requests Desk', 'Review prayer, visitation and dedication requests.'),
+    ('members_admin', 'Member Records', 'Edit member records, invitations and transfers.'),
+    ('reports', 'Financial Reports', 'See the live reports and published financial figures.'),
+)
+
+ROLE_RIGHT_CODES = tuple(code for code, _label, _desc in ROLE_RIGHTS)
+
+#: What each role may do before the church edits anything. The administrator
+#: role is not listed — a system role always carries every right.
+DEFAULT_ROLE_RIGHTS = {
+    'clerk': ('board_invitations', 'business_invitations', 'announcements', 'members_admin', 'requests_admin'),
+    'elder': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
+    'first_elder': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
+    'second_elder': ('board_invitations', 'business_invitations', 'announcements'),
+    'third_elder': ('board_invitations', 'business_invitations', 'announcements'),
+    'treasurer': ('finance', 'treasury_accounts', 'reports'),
+    'head_deacon': ('requests_admin',),
+    'head_deaconess': ('requests_admin',),
+    'youth_leader': ('announcements',),
+    'choir_director': ('announcements',),
+    'children_ministry': ('announcements',),
+    'men_ministry': ('announcements',),
+    'women_ministry': ('announcements',),
+    'chaplaincy': ('requests_admin',),
+}
+
+
+def role_rights_settings(settings_obj=None):
+    """The configured rights per role, falling back to the shipped defaults.
+
+    The stored shape is ``{role_code: [right_code, …]}``; empty or missing
+    entries fall back per-role to the defaults, so a church that has only
+    customised one role keeps the shipped rights everywhere else.
+    """
+    if settings_obj is None:
+        from .models import ChurchSettings
+        settings_obj = ChurchSettings.objects.first()
+    stored = getattr(settings_obj, 'role_rights', None) or {}
+    configured = {}
+    for code in ROLE_CODES:
+        if code in stored and isinstance(stored[code], (list, tuple)):
+            configured[code] = [r for r in stored[code] if r in ROLE_RIGHT_CODES]
+        elif code in DEFAULT_ROLE_RIGHTS:
+            configured[code] = list(DEFAULT_ROLE_RIGHTS[code])
+        else:
+            configured[code] = []
+    return configured
+
+
+def user_has_right(user, right):
+    """Whether ``user`` may do ``right`` through any role they hold.
+
+    Administrators and staff hold every right by definition — the system role
+    carries all of them even when its holder is not a Django staff account.
+    Assistants count: they hold the role, and the office's rights ride on the
+    role.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
+        return True
+    profile = getattr(user, 'member_profile', None)
+    if not profile:
+        return False
+    if any(is_system_role(code) for code in profile.get_roles()):
+        return True
+    rights = role_rights_settings()
+    return any(right in rights.get(code, ()) for code in profile.get_roles())
+
+
 def parse_role_codes(value):
     """Split a submitted role value into a clean, de-duplicated code list.
 
