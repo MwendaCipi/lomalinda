@@ -1560,13 +1560,13 @@ class EnrollmentDetailsView(APIView):
         enrollment = self._enrollment(request)
         if not enrollment:
             return Response({'detail': 'No enrollment request is linked to this account.'}, status=status.HTTP_404_NOT_FOUND)
-        return Response({'date_of_birth': enrollment.date_of_birth, 'county_of_birth': enrollment.county_of_birth, 'education_level': enrollment.education_level, 'profession': enrollment.profession, 'current_church': enrollment.current_church})
+        return Response({'date_of_birth': enrollment.date_of_birth, 'county_of_birth': enrollment.county_of_birth, 'education_level': enrollment.education_level, 'profession': enrollment.profession, 'residence': enrollment.residence, 'current_church': enrollment.current_church})
 
     def patch(self, request):
         enrollment = self._enrollment(request)
         if not enrollment:
             return Response({'detail': 'No enrollment request is linked to this account.'}, status=status.HTTP_404_NOT_FOUND)
-        allowed = ('date_of_birth', 'county_of_birth', 'education_level', 'profession', 'current_church')
+        allowed = ('date_of_birth', 'county_of_birth', 'education_level', 'profession', 'residence', 'current_church')
         for field in allowed:
             if field in request.data:
                 setattr(enrollment, field, request.data.get(field) or '')
@@ -4095,6 +4095,7 @@ class UserDetailUpdateView(APIView):
             'phone_number': 'phone_number',
             'whatsapp_number': 'whatsapp_number',
             'profession': 'profession',
+            'residence': 'residence',
             'gender': 'gender',
             'date_of_birth': 'date_of_birth',
             'gifts': 'gifts',

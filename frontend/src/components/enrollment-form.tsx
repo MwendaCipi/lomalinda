@@ -36,6 +36,7 @@ const emptyForm = {
   email: "",
   name: "",
   phone_number: "",
+  residence: "",
   current_church: "",
   destination_church: "",
   transfer_reason: "",
@@ -160,6 +161,7 @@ export function EnrollmentForm({
             phone_number: cleanPhone,
             email: form.email.trim(),
             joining_mode: joiningMode,
+            residence: form.residence.trim(),
             current_church: form.current_church.trim(),
             privacy_accepted: true,
             terms_accepted: termsAccepted,
@@ -365,6 +367,16 @@ export function EnrollmentForm({
                 </select>
               </label>
             )}
+
+            <label className="block text-sm font-medium sm:col-span-2">
+              Residence
+              <input
+                value={form.residence}
+                onChange={(event) => update("residence", event.target.value)}
+                className={inputClass}
+                placeholder="Estate, street or town (optional)"
+              />
+            </label>
 
             {(joiningMode === "membership_transfer" || joiningMode === "friend") && (
               <label className="block text-sm font-medium sm:col-span-2">

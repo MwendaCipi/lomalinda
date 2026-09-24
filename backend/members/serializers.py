@@ -34,6 +34,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     baptismal_status = serializers.CharField(source='member_profile.baptismal_status', read_only=True, default='')
     account_type = serializers.CharField(source='member_profile.account_type', read_only=True, default='regular')
     profession = serializers.CharField(source='member_profile.profession', read_only=True, default='')
+    residence = serializers.CharField(source='member_profile.residence', read_only=True, default='')
 
     def get_role(self, obj):
         profile = getattr(obj, 'member_profile', None)
@@ -85,6 +86,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'baptismal_status',
             'account_type',
             'profession',
+            'residence',
             'gender',
             'date_of_birth',
             'gifts',
@@ -151,7 +153,7 @@ class EnrollmentRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EnrollmentRequest
-        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'date_of_birth', 'county_of_birth', 'current_church', 'privacy_accepted', 'terms_accepted')
+        fields = ('email', 'first_name', 'last_name', 'phone_number', 'joining_mode', 'id_number', 'education_level', 'profession', 'residence', 'date_of_birth', 'county_of_birth', 'current_church', 'privacy_accepted', 'terms_accepted')
 
     def to_internal_value(self, data):
         data = data.copy() if hasattr(data, 'copy') else dict(data)

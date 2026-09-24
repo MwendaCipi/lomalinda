@@ -48,6 +48,7 @@ export type MemberUser = {
   whatsapp_number?: string;
   account_type?: string;
   profession?: string;
+  residence?: string;
   gender?: string;
   date_of_birth?: string;
   gifts?: string;
@@ -2611,6 +2612,12 @@ export function UserManagement() {
                 <div>
                   <label className="block text-xs font-medium text-[#26352f]">Profession / Occupation</label>
                   <ProfessionCombobox value={editFormData.profession || ""} onChange={(val) => setEditFormData({ ...editFormData, profession: val })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#26352f]">Residence</label>
+                  <input type="text" placeholder="Estate, street or town" value={editFormData.residence || ""}
+                    onChange={(e) => setEditFormData({ ...editFormData, residence: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#26352f]">Gifts &amp; Talents</label>

@@ -8,7 +8,7 @@ import { MemberSidebar } from "@/components/sidebars/member-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
-type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; current_church: string };
+type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
 
 export default function MemberPage() {
   const [contributions, setContributions] = useState<Contribution[]>([]);
@@ -106,6 +106,10 @@ export default function MemberPage() {
                 <label className="block text-sm font-medium">
                   Profession
                   <input value={details.profession || ""} onChange={(event) => setDetails({ ...details, profession: event.target.value })} className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5" />
+                </label>
+                <label className="block text-sm font-medium">
+                  Residence
+                  <input value={details.residence || ""} placeholder="Estate, street or town" onChange={(event) => setDetails({ ...details, residence: event.target.value })} className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5" />
                 </label>
                 {details.current_church !== undefined && (
                   <label className="block text-sm font-medium sm:col-span-2">
