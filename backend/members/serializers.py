@@ -1009,20 +1009,19 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         collected half its money at the desk read as if it had raised only
         the M-Pesa half.
         """
-        from django.db.models import Sum, Q
-        contributions = obj.contributions.filter(status='completed')
-        total = contributions.aggregate(Sum('amount'))['amount__sum'] or 0
-        query = Q(purpose=obj.name)
-        if obj.account_name:
-            query |= Q(purpose=obj.account_name)
-        purpose_total = Contribution.objects.filter(query, status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
+        from django.db.models import Sum
+        linked, extra = self._drive_mpesa(obj)
+        mpesa_total = (
+            linked.aggregate(Sum('amount'))['amount__sum'] or 0
+        ) + (
+            extra.aggregate(Sum('amount'))['amount__sum'] or 0
+        )
         # The manual receipts: same purpose match, on the cash ledger. Cash
         # rows are completed money by definition — they are entered after the
-        # money is in hand.
-        cash_total = CashContribution.objects.filter(query).aggregate(Sum('amount'))['amount__sum'] or 0
-        # Purpose-matched money can overlap with the linked money when a gift
-        # both links to the drive and names it, so take the larger, not the sum.
-        return float(total + max(purpose_total, cash_total))
+        # money is in hand — and they live in their own table, so they can
+        # never overlap the M-Pesa set.
+        cash_total = CashContribution.objects.filter(self._purpose_query(obj)).aggregate(Sum('amount'))['amount__sum'] or 0
+        return float(mpesa_total + cash_total)
 
     def get_percentage_raised(self, obj):
         total = self.get_total_raised(obj)
@@ -1032,15 +1031,9 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_donor_count(self, obj):
-        """Gifts across all channels: linked M-Pesa gifts plus purpose-matched manual receipts."""
-        from django.db.models import Q
-        count1 = obj.contributions.filter(status='completed').count()
-        query = Q(purpose=obj.name)
-        if obj.account_name:
-            query |= Q(purpose=obj.account_name)
-        count2 = Contribution.objects.filter(query, status='completed').count()
-        count3 = CashContribution.objects.filter(query).count()
-        return max(count1, count2, count3)
+        """Gifts across all channels: the M-Pesa union plus purpose-matched manual receipts."""
+        linked, extra = self._drive_mpesa(obj)
+        return linked.count() + extra.count() + CashContribution.objects.filter(self._purpose_query(obj)).count()
 
     # -- Drive-page breakdown helpers -------------------------------------
 

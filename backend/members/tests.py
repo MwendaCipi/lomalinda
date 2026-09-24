@@ -3797,3 +3797,50 @@ class AnnouncementRightsTests(APITestCase):
             'title': 'Granted', 'text': 'The church granted this right.', 'visibility': 'members',
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
+
+
+class FundDriveTotalTests(APITestCase):
+    """The drive total is the union of its M-Pesa gifts plus its manual receipts."""
+
+    def _drive(self, **kwargs):
+        defaults = dict(name='Welfare', title='Welfare', account_name='Welfare', target_amount=Decimal('10000.00'))
+        defaults.update(kwargs)
+        return FundraisingCampaign.objects.create(**defaults)
+
+    def test_mpesa_gift_and_manual_receipt_both_count(self):
+        """The reported defect: a visible M-Pesa gift vanished from the total
+        because the cash ledger held a bigger figure and the old code took
+        max(linked, purpose-matched) across the two ledgers."""
+        from members.models import CashContribution
+
+        drive = self._drive()
+        giver = User.objects.create_user('drive.giver', 'drive.giver@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        treasurer = User.objects.create_user('drive.treasurer', 'drive.treasurer@example.com', 'ChurchPass#2026')
+        Contribution.objects.create(
+            member=giver, amount=Decimal('300.00'), giving_type='money',
+            purpose='Welfare', campaign=drive, status='completed', payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_on=timezone.now().date(), amount=Decimal('4500.00'),
+            purpose='Welfare', entry_type='individual', donor_name='Desk giver',
+            received_by=treasurer,
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_raised'], 4800.0)
+        self.assertEqual(response.data['donor_count'], 2)
+
+    def test_a_gift_that_both_links_and_names_the_drive_counts_once(self):
+        """Linked money and purpose-named money overlap without doubling."""
+        drive = self._drive()
+        giver = User.objects.create_user('drive.once', 'drive.once@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        Contribution.objects.create(
+            member=giver, amount=Decimal('500.00'), giving_type='money',
+            purpose='Welfare', campaign=drive, status='completed', payment_method='mpesa',
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 500.0)
