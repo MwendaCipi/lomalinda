@@ -110,7 +110,9 @@ export default function LocationMapPicker({
               Tap on the map below to drop your location pin
             </span>
           ) : (
-            <span className="text-xs font-medium text-[#617068]">
+            // Phones show the two buttons themselves; the sentence explaining
+            // them only earns its space on a wider screen.
+            <span className="hidden text-xs font-medium text-[#617068] sm:inline">
               Use My GPS Location or Show Map
             </span>
           )}

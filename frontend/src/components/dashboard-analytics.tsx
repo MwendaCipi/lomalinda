@@ -310,33 +310,46 @@ export function DashboardAnalytics() {
   const net = data.giving.window_total - data.expenditure.window_total;
   const insights = buildInsights(data);
 
-  // Quarterly statistics are founded on the window_start the treasurer selected.
-  // Each quarter is a three-month window; together the four quarters cover the
-  // twelve months the dashboard presents, so the statistics track the four
-  // quarters of the year the treasurer is looking at.
-  const windowStartMs = new Date(data.window_start).getTime();
-  const quarterByIndex = Array.from({ length: 4 }, (_, index) => {
-    const quarterStart = new Date(windowStartMs + index * 3 * 30 * 24 * 60 * 60 * 1000);
-    quarterStart.setDate(1);
-    return data.monthly.filter((month) => {
-      const monthStart = new Date(month.month_start).getTime();
-      const quarterEnd = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1).getTime();
-      return monthStart >= quarterStart.getTime() && monthStart < quarterEnd;
+  // The four quarters of the year, taken from the calendar rather than counted
+  // out in 90-day steps: months are bucketed by the quarter they actually fall
+  // in, so a division is Q1 Jan–Mar, and no month can land in two quarters —
+  // the old arithmetic made July–September one quarter and September–December
+  // the next, counting September twice. A twelve-month series that straddles
+  // New Year is still ordered oldest-first.
+  const QUARTER_SPANS = ["Jan–Mar", "Apr–Jun", "Jul–Sep", "Oct–Dec"];
+  const quarters = (() => {
+    const buckets = new Map<number, { year: number; quarter: number; months: MonthPoint[] }>();
+    data.monthly.forEach((month) => {
+      const start = new Date(month.month_start);
+      const year = start.getFullYear();
+      const quarter = Math.floor(start.getMonth() / 3) + 1;
+      const key = year * 10 + quarter;
+      const bucket = buckets.get(key) ?? { year, quarter, months: [] };
+      bucket.months.push(month);
+      buckets.set(key, bucket);
     });
-  });
-  const quarterLabel = (index: number) => {
-    const quarterStart = new Date(windowStartMs + index * 3 * 30 * 24 * 60 * 60 * 1000);
-    quarterStart.setDate(1);
-    const monthName = quarterStart.toLocaleDateString("en-GB", { month: "long" });
-    return `Q${index + 1} · ${monthName}`;
-  };
+    return [...buckets.values()]
+      .sort((a, b) => a.year - b.year || a.quarter - b.quarter)
+      .slice(-4);
+  })();
+  const quarterByIndex = quarters.map((quarter) => quarter.months);
+  const quarterLabel = (index: number) =>
+    `Q${quarters[index].quarter} · ${QUARTER_SPANS[quarters[index].quarter - 1]} ${quarters[index].year}`;
+
+  // "This quarter" is the one today falls in, which is only the last card when
+  // the twelve-month window happens to start on a quarter boundary.
+  const asOf = new Date(data.as_of);
+  const quarterOfToday = (() => {
+    const index = quarters.findIndex(
+      (quarter) => quarter.year === asOf.getFullYear() && quarter.quarter === Math.floor(asOf.getMonth() / 3) + 1
+    );
+    return index === -1 ? quarters.length - 1 : index;
+  })();
 
   const quarterIncome = (index: number) =>
     quarterByIndex[index].reduce((sum, month) => sum + month.income, 0);
   const quarterExpense = (index: number) =>
     quarterByIndex[index].reduce((sum, month) => sum + month.expense, 0);
-  const quarterGifts = (index: number) =>
-    quarterByIndex[index].reduce((sum, month) => sum + month.gifts, 0);
   const hasQuarterly = quarterByIndex.some((quarter) => quarter.some((month) => month.income > 0 || month.expense > 0));
 
   return (
@@ -430,15 +443,13 @@ export function DashboardAnalytics() {
           <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Giving in vs spending out, by quarter
         </h3>
         <p className="mt-1 text-[11px] text-[#617068]">
-          Four quarters across the window the treasurer chose on the left.
+          The quarters of the year, oldest first, over the twelve months the API reports.
         </p>
         <div className="mt-4 gap-4 sm:gap-6">
           {quarterByIndex.map((quarter, index) => {
             const income = quarterIncome(index);
             const expense = quarterExpense(index);
-            const gifts = quarterGifts(index);
             const net = income - expense;
-            const share = income > 0 ? (gifts / income) * 100 : 0;
 
             return (
               <div key={index} className={`rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-4 ${index > 0 ? "sm:mt-4" : ""}`}>
@@ -474,11 +485,9 @@ export function DashboardAnalytics() {
                     </p>
                   )}
                 </div>
-                {income > 0 && (
-                  <p className="mt-2 text-[11px] text-[#617068]">
-                    {share.toFixed(0)}% of the {fmtAmount(income)} came in as collections or anonymous gifts.
-                  </p>
-                )}
+                {/* The window-wide "collections & anonymous" figure is on the
+                    headline tiles; a per-quarter share of it would need
+                    per-month collections, which the API does not report. */}
               </div>
             );
           })}
@@ -593,8 +602,8 @@ export function DashboardAnalytics() {
               { label: "Givers", value: String(data.giving.givers.givers) },
               { label: "Average gift", value: fmtAmount(data.giving.givers.average) },
               { label: "Largest gift", value: fmtAmount(data.giving.givers.largest) },
-              { label: "This quarter", value: fmtAmount(quarterIncome(0)) },
-              { label: "Next quarter", value: fmtAmount(quarterIncome(1)) },
+              { label: "This quarter", value: fmtAmount(quarterIncome(quarterOfToday)) },
+              { label: "Last quarter", value: fmtAmount(quarterIncome(Math.max(0, quarterOfToday - 1))) },
             ].map((row) => (
               <div key={row.label}>
                 <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{row.label}</dt>

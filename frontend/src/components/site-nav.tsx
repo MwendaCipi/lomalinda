@@ -247,10 +247,16 @@ export function SiteNav() {
       : []),
   ];
 
-  // Mobile bottom tab navigation items
+  // Mobile bottom tab navigation items.
+  //
+  // These point at the same *app* destinations the desktop bar uses, not at the
+  // public website's hubs: the Giving tab has always opened /support, while
+  // Fellowship and Requests used to open /share and /requests — marketing pages
+  // a signed-in member had no reason to see, and a different place from where
+  // the same label took them on a laptop.
   const mobileBottomNavItems = [
     {
-      href: "/share",
+      href: userState.isLoggedIn ? "/announcements" : "/share",
       label: "Fellowship",
       icon: Users,
       active: pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements"),
@@ -262,7 +268,7 @@ export function SiteNav() {
       active: pathname.startsWith("/materials"),
     },
     {
-      href: "/requests",
+      href: userState.isLoggedIn ? "/community/prayer" : "/requests",
       label: "Requests",
       icon: HandHeart,
       active: pathname.startsWith("/requests") || pathname.startsWith("/community") || pathname.startsWith("/enroll") || pathname.startsWith("/partnerships"),

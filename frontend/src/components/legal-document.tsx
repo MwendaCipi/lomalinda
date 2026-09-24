@@ -15,7 +15,17 @@ type LegalField = "privacy_policy" | "terms_of_use";
  * document the church has written replaces it once it arrives. An empty field
  * or a failed request both keep the built-in wording — a legal page must never
  * turn into an error.
+ *
+ * A stored document is ordinary text the church typed into church settings:
+ * blank lines separate paragraphs. Its section titles — a short line of its
+ * own, with no closing punctuation — are set as headings, so the wording the
+ * church adopted keeps the shape it had when the page carried it in code.
  */
+
+/** A stored paragraph that reads as a section title rather than a sentence. */
+function looksLikeHeading(paragraph: string): boolean {
+  return !paragraph.includes("\n") && paragraph.length <= 60 && !/[.:;!?]$/.test(paragraph);
+}
 export function LegalDocument({ field, children }: { field: LegalField; children: ReactNode }) {
   const [churchText, setChurchText] = useState<string | null>(null);
 
@@ -39,11 +49,21 @@ export function LegalDocument({ field, children }: { field: LegalField; children
   if (churchText) {
     return (
       <div className="space-y-4 text-sm leading-7 text-[#617068]">
-        {churchText.split(/\n{2,}/).map((paragraph, index) => (
-          <p key={index} className="whitespace-pre-line">
-            {paragraph}
-          </p>
-        ))}
+        {churchText.split(/\n{2,}/).map((paragraph, index) => {
+          const text = paragraph.trim();
+          if (looksLikeHeading(text)) {
+            return (
+              <h2 key={index} className="pt-2 text-xl font-semibold text-[#26352f]">
+                {text}
+              </h2>
+            );
+          }
+          return (
+            <p key={index} className="whitespace-pre-line">
+              {text}
+            </p>
+          );
+        })}
       </div>
     );
   }

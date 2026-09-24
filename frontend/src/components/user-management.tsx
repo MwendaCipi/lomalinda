@@ -16,6 +16,21 @@ import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/**
+ * Column widths, declared once and applied to both the header and the cells.
+ *
+ * Left to itself the browser handed the surplus width to whichever column sat
+ * next to the widest content, so Role and Type drifted apart by a hand's width
+ * depending on how long a name or a phone number happened to be. Pinning the
+ * columns keeps the same grid for every roster.
+ */
+const COL_INDEX = "w-8";
+const COL_NAME = "w-[17rem]";
+const COL_CONTACT = "w-[12rem]";
+const COL_ROLE = "w-[11rem]";
+const COL_TYPE = "w-[7.5rem]";
+const COL_SEX = "w-[4.5rem]";
+
 export type MemberUser = {
   id: number;
   username: string;
@@ -1810,12 +1825,12 @@ export function UserManagement() {
           rowKey={(m) => m.id}
           hidden={invitationFilter === "pending"}
           headers={[
-            { label: "#", className: "w-8" },
-            { label: "Name" },
-            { label: "Contact" },
-            { label: "Role" },
-            { label: "Type" },
-            { label: "Sex" },
+            { label: "#", className: COL_INDEX },
+            { label: "Name", className: COL_NAME },
+            { label: "Contact", className: COL_CONTACT },
+            { label: "Role", className: COL_ROLE },
+            { label: "Type", className: COL_TYPE },
+            { label: "Sex", className: COL_SEX },
             { label: "Actions", className: "text-right" },
           ]}
           loadingLabel="Loading members..."
@@ -1823,8 +1838,8 @@ export function UserManagement() {
           cardsEmpty="No members found."
           renderRow={(m, idx) => (
                   <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""}`}>
-                    <td className="py-3 text-[#617068] w-8">{idx + 1}</td>
-                    <td className="py-3 font-semibold text-[#26352f]">
+                    <td className={`py-3 text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
+                    <td className={`py-3 font-semibold text-[#26352f] ${COL_NAME}`}>
                       {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}
                       {pendingChangeIds.includes(m.id) && (
                         <span
@@ -1835,25 +1850,27 @@ export function UserManagement() {
                         </span>
                       )}
                     </td>
-                    <td className="py-3 text-[#617068]">
+                    <td className={`py-3 text-[#617068] ${COL_CONTACT}`}>
                       {m.phone_number || m.email || "—"}
                     </td>
-                    <td className="py-3">
+                    <td className={`py-3 ${COL_ROLE}`}>
                       <RolesCombobox
                         selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                         onChange={(newRoles) => handleQuickRolesChange(m.id, newRoles)}
                         disabled={updatingRoleId === m.id || m.account_type === "friend"}
                         lockedRoles={heldSystemRoles(m.roles, m.role)}
+                        fill
                       />
                     </td>
-                    <td className="py-3">
+                    <td className={`py-3 ${COL_TYPE}`}>
                       <AccountTypeCombobox
                         value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
                         onChange={(nextType) => handleQuickTypeChange(m, nextType)}
                         disabled={updatingTypeId === m.id}
+                        fill
                       />
                     </td>
-                    <td className="py-3 text-[#617068]">{m.gender || "—"}</td>
+                    <td className={`py-3 text-[#617068] ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className="py-3 text-right">
                       <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
                         <button
@@ -1964,30 +1981,30 @@ export function UserManagement() {
         <p className="hidden text-[11px] text-[#617068] sm:block">
           {invitationFilter === "pending" ? `${pendingInvitations.length} pending invitation${pendingInvitations.length === 1 ? "" : "s"}` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
         </p>
-        {/* On desktop the three actions read as one row of equal-width
-            buttons with their full names; phones keep the compact labels
-            they have room for. */}
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto sm:gap-2">
+        {/* Large screens get one row of three equal-width buttons under their
+            full names; below that the same actions stay a three-column grid of
+            compact labels, which is all a phone has room for. */}
+        <div className="grid grid-cols-3 gap-2 lg:flex lg:w-auto lg:gap-2">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
-            className="rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+            className="rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c] lg:w-44"
           >
-            <span className="sm:hidden">✉️ Invite</span>
-            <span className="hidden sm:inline">Invite via Email</span>
+            <span className="lg:hidden">✉️ Invite</span>
+            <span className="hidden lg:inline">Invite via Email</span>
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            className="rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] lg:w-44"
           >
-            <span className="sm:hidden">+ Add</span>
-            <span className="hidden sm:inline">Add Manually</span>
+            <span className="lg:hidden">+ Add</span>
+            <span className="hidden lg:inline">Add Manually</span>
           </button>
           <button
             onClick={handlePrintMemberList}
-            className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+            className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] lg:w-44"
           >
-            <span className="sm:hidden">🖨️ Print</span>
-            <span className="hidden sm:inline">Print Users List</span>
+            <span className="lg:hidden">🖨️ Print</span>
+            <span className="hidden lg:inline">Print Users List</span>
           </button>
         </div>
       </div>

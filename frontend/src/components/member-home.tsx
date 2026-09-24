@@ -246,34 +246,38 @@ export function MemberHome() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="dashboard-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
       {/* Hero — a greeting, who you are, and the church's line of encouragement.
           Money lives in the panels below: this card is where a member is greeted,
           not where their giving is totalled. */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
         {/* The greeting is meant to read as one line on a phone as well as on a
             wide screen, so the size follows the viewport between the two ends
-            instead of switching at a breakpoint and wrapping in between. */}
-        <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
-          {greeting}, {firstName}.
-        </h1>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          {roles.map((r) => (
-            <span
-              key={r}
-              className={`rounded-full px-3 py-1 text-[11px] font-bold capitalize ${
-                r === "member" ? "bg-white/10 text-white/80" : "bg-[#f1c89e] text-[#26352f]"
-              }`}
-            >
-              {roleLabel(r)}
-            </span>
-          ))}
-          {encouragementLine && (
-            <p className="mt-0 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:mt-0 sm:text-base sm:ml-3">
-              {encouragementLine}
-            </p>
-          )}
+            instead of switching at a breakpoint and wrapping in between.
+            On a wide screen the member's roles ride that same line, pushed to
+            the panel's right edge; on a phone they drop underneath it. */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+          <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
+            {greeting}, {firstName}.
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">
+            {roles.map((r) => (
+              <span
+                key={r}
+                className={`rounded-full px-3 py-1 text-[11px] font-bold capitalize ${
+                  r === "member" ? "bg-white/10 text-white/80" : "bg-[#f1c89e] text-[#26352f]"
+                }`}
+              >
+                {roleLabel(r)}
+              </span>
+            ))}
+          </div>
         </div>
+        {encouragementLine && (
+          <p className="mt-3 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
+            {encouragementLine}
+          </p>
+        )}
       </section>
 
       {loading ? (

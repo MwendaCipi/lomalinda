@@ -23,6 +23,17 @@ body {
   }
 }
 
+/* The dashboard is a plain scrolling page, the way the public site is: its
+   greeting, analytics and announcements run longer than a viewport, and an
+   officer reads them by scrolling. The lock above would freeze it on desktop,
+   so the dashboard opts out and the document scrolls — which is what phones
+   already did. */
+html:has(.dashboard-page),
+body:has(.dashboard-page) {
+  overflow: auto;
+  height: auto;
+}
+
 /* The giving page is app-like at every width: heading and the footer actions
    stay pinned while the givings list scrolls inside the card, so the document
    itself never scrolls here. */

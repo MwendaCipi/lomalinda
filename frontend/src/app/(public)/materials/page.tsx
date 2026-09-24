@@ -127,7 +127,11 @@ function MaterialsContent() {
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
-      <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
+      {/* A signed-in member arrives here from the Materials tab and wants the
+          study areas, not the website's introduction to them: on a phone the
+          cards are the first thing on the screen. The intro returns from lg up,
+          beside the shell's sidebar, where it has room and reads as a heading. */}
+      <section className={signedIn ? "hidden px-5 py-5 sm:px-8 lg:block lg:px-10" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">
             Study &amp; worship resources

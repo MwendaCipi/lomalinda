@@ -97,10 +97,12 @@ interface AccountTypeComboboxProps {
   value: AccountTypeOption["value"];
   onChange: (value: AccountTypeOption["value"]) => void;
   disabled?: boolean;
+  /** Stretch to the width of the cell — see RolesCombobox. */
+  fill?: boolean;
 }
 
 /** Single-choice twin of RolesCombobox, for the Type column. */
-export function AccountTypeCombobox({ value, onChange, disabled = false }: AccountTypeComboboxProps) {
+export function AccountTypeCombobox({ value, onChange, disabled = false, fill = false }: AccountTypeComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,7 +128,7 @@ export function AccountTypeCombobox({ value, onChange, disabled = false }: Accou
   const current = ACCOUNT_TYPE_OPTIONS.find((option) => option.value === value) || ACCOUNT_TYPE_OPTIONS[0];
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className={`relative ${fill ? "block w-full" : "inline-block"}`} ref={containerRef}>
       <button
         type="button"
         disabled={disabled}
@@ -141,7 +143,7 @@ export function AccountTypeCombobox({ value, onChange, disabled = false }: Accou
           })
         }
         title={current.help}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <span>{current.label}</span>
         <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -188,9 +190,15 @@ interface RolesComboboxProps {
   lockedRoles?: string[];
   /** Roles hidden from this picker when they are account types rather than permissions. */
   hiddenRoles?: string[];
+  /**
+   * Stretch to the width of the cell instead of hugging its label. The users
+   * table pairs this picker with the account-type one in adjacent columns, and
+   * a trigger that hugged short labels left a void between the two.
+   */
+  fill?: boolean;
 }
 
-export function RolesCombobox({ selected, onChange, disabled = false, align = "left", lockedRoles = [], hiddenRoles = [] }: RolesComboboxProps) {
+export function RolesCombobox({ selected, onChange, disabled = false, align = "left", lockedRoles = [], hiddenRoles = [], fill = false }: RolesComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -229,7 +237,7 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
   };
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className={`relative ${fill ? "block w-full" : "inline-block"}`} ref={containerRef}>
       <button
         type="button"
         disabled={disabled}
@@ -244,7 +252,7 @@ export function RolesCombobox({ selected, onChange, disabled = false, align = "l
             return !o;
           })
         }
-        className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
         title={selected.map(roleLabel).join(", ")}
       >
         <span className="max-w-[10rem] truncate">{selected.length ? formatRoles(selected) : "Select access"}</span>
