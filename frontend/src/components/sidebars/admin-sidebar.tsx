@@ -179,7 +179,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Crown className="h-4 w-4 shrink-0" />
-                    <span>Church Leaders</span>
+                    <span>Church Leaders & Roles</span>
                   </div>
                   {currentTab === "leaders" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </button>
@@ -194,7 +194,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Crown className="h-4 w-4 shrink-0" />
-                    <span>Church Leaders</span>
+                    <span>Church Leaders & Roles</span>
                   </div>
                   {currentTab === "leaders" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </Link>

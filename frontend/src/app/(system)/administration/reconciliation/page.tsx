@@ -386,12 +386,12 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden pb-16 md:pb-0">
+    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden contributions-ledger-page">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <AdminSidebar />
         
         {/* SINGLE CARD TOUCHING MARGINS (ZERO MARGIN/PADDING) */}
-        <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden pb-12 md:pb-0">
+        <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-[#dfdbd1] overflow-hidden">
             
             {/* Header Controls (Flex-shrink-0) */}

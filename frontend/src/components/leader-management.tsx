@@ -188,7 +188,7 @@ export function LeaderManagement() {
     <section className="flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10 pb-6 sm:pb-4 lg:pb-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">Church Leaders & Role Assignment</h2>
+          <h2 className="text-2xl font-bold text-[#26352f]">Church Leaders & Roles</h2>
           <p className="mt-1 text-xs text-[#617068]">
             Set, change, or unset leadership roles for church members to grant administrative rights.
           </p>

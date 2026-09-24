@@ -128,6 +128,19 @@ html:has(.administration-workspace) .app-shell {
   height: calc(100dvh - 4rem);
 }
 
+/* The contributions ledger is its own pinned workspace (not an
+   administration-workspace tab), so the shell's generic pb-24 reserve would
+   leave a visible gap between its sticky totals panel and the tab bar. Trim
+   the reserve to exactly the bar plus the device inset, like the giving page,
+   so the bottom buttons touch the navigation. */
+@media (max-width: 767px) {
+  html:has(.contributions-ledger-page) .app-shell {
+    height: calc(100vh - 4rem);
+    height: calc(100dvh - 4rem);
+    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Phones: these workspaces are app-like at every width, so the document is
    locked here too — the page itself never scrolls, the record lists and card
    areas inside scroll. (The lock above is desktop-only; without this the
