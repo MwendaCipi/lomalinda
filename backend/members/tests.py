@@ -3590,11 +3590,11 @@ class ProfileChangeApprovalTests(APITestCase):
 
 
 class RoleRegisterAndAssistantTests(APITestCase):
-    """One leader per role, assistants only under a leader, and no Finance Team.
+    """Shared roles, the assistant distinction, and no Finance Team.
 
-    The church is organised one leader per department: the picker refuses to put
-    a second person in a role that is taken, and an assistant can only be named
-    once the leader exists. The elder roles take no assistant at all.
+    Roles may be held by several people at once. What stays: an assistant flag
+    rides only on a role the member holds and only where the role takes one
+    (the elder roles take none).
     """
 
     def setUp(self):
@@ -3634,7 +3634,7 @@ class RoleRegisterAndAssistantTests(APITestCase):
         ):
             self.assertIn(code, register, f'{code} is missing from the role list')
         self.assertNotIn('finance', register)
-        self.assertEqual(register['men_ministry']['label'], 'APM Leader')
+        self.assertEqual(register['men_ministry']['label'], 'AMM Leader')
         self.assertEqual(register['women_ministry']['label'], 'AWM Leader')
         self.assertEqual(register['elder']['label'], 'Elder')
 
@@ -3643,32 +3643,29 @@ class RoleRegisterAndAssistantTests(APITestCase):
         for code in ('elder', 'first_elder', 'second_elder', 'third_elder'):
             self.assertFalse(register[code]['assistant'], f'{code} should not take an assistant')
 
-    def test_two_people_cannot_lead_the_same_role(self):
+    def test_two_people_can_hold_the_same_role(self):
+        """Roles are shared — a second holder needs no permission from the first."""
         self.assertEqual(self._set(self.first, ['first_elder']).status_code, status.HTTP_200_OK)
 
         response = self._set(self.second, ['first_elder'])
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn(self.first.username, response.data['detail'])
-        self.assertEqual(MemberProfile.objects.get(user=self.second).get_roles(), ['member'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(MemberProfile.objects.get(user=self.second).get_roles(), ['first_elder'])
+        register = self._register()['first_elder']
+        # The register still names a first holder for display.
+        self.assertEqual(register['leader']['id'], self.first.id)
+        self.assertEqual(register['assistants'], [])
 
-    def test_the_role_can_be_handed_over_once_the_holder_is_removed(self):
-        self._set(self.first, ['first_elder'])
-        self.assertEqual(self._set(self.first, ['member']).status_code, status.HTTP_200_OK)
-
-        self.assertEqual(self._set(self.second, ['first_elder']).status_code, status.HTTP_200_OK)
-        self.assertEqual(self._register()['first_elder']['leader']['id'], self.second.id)
-
-    def test_an_assistant_may_be_named_before_the_leader(self):
-        """An assistant takes the work whether or not the leader is appointed yet."""
+    def test_an_assistant_may_be_named_without_any_leader(self):
+        """An assistant takes the work whether or not anyone else holds the role."""
         response = self._set(self.second, ['pm_leader'], assistants=['pm_leader'])
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile = MemberProfile.objects.get(user=self.second)
         self.assertEqual(profile.get_roles(), ['pm_leader'])
         self.assertEqual(profile.get_assistant_roles(), ['pm_leader'])
-        # The role still reads as leaderless in the register.
-        self.assertIsNone(self._register()['pm_leader']['leader'])
+        # A sole assistant-holder is the role's first holder for display.
+        self.assertEqual(self._register()['pm_leader']['leader']['id'], self.second.id)
 
     def test_an_assistant_is_recorded_beside_the_leader(self):
         self._set(self.first, ['pm_leader'])

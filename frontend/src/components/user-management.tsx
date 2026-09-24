@@ -1945,34 +1945,21 @@ export function UserManagement() {
                       </h3>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
                     </div>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold capitalize shrink-0 ${
-                        m.is_disfellowshipped
-                          ? "bg-red-100 text-red-700"
-                          : m.account_type === "friend"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-[#eef2ed] text-[#3d5148]"
-                      }`}
-                    >
-                      {m.is_disfellowshipped
-                        ? "Ex-member"
-                        : m.account_type === "friend"
-                        ? "Friend"
-                        : (m.role || "member").replaceAll("_", " ")}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-[#617068]">Type</p>
+                    {/* The type combobox sits where the role badge used to be,
+                        and the Actions menu takes the row that held Type — one
+                        row fewer on a phone. */}
                     <AccountTypeCombobox
                       value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
                       onChange={(nextType) => handleQuickTypeChange(m, nextType)}
                       disabled={updatingTypeId === m.id}
                     />
                   </div>
-                  {m.gender && <p className="text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>}
-                  {/* The card's actions live in one menu, like the table row —
-                      nothing shows until it is asked for. */}
-                  <div className="flex justify-end border-t border-[#dfdbd1]/60 pt-2">
+                  <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1]/60 pt-2">
+                    {m.gender ? (
+                      <p className="min-w-0 flex-1 truncate text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>
+                    ) : <span className="flex-1" />}
+                    {/* The card's actions live in one menu, anchored to this
+                        button — nothing shows until it is asked for. */}
                     <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
                       <button
                         onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}

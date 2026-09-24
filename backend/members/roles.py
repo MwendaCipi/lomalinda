@@ -11,12 +11,11 @@ and may only be granted or revoked by a superuser (see
 
 Two rules come from how the church is actually organised:
 
-* A department has **one leader**. Every non-system role below is held by at
-  most one person at a time; to put someone else in the role, the existing
-  holder has to be taken out of it first.
-* A leader may have an **assistant** — a second person who shares the role's
-  work. An assistant may be named whether or not the role has its leader yet,
-  and the elder roles carry no assistants at all.
+* Roles are **shared** — a department may carry several holders at once, so
+  there is no one-leader constraint. What stays is the assistant distinction:
+  a holder may be marked as an assistant on any role that takes one (elder
+  roles take none), and a member can never be both a role's plain holder and
+  its assistant at the same time.
 """
 
 ADMIN_ROLE = 'admin'
@@ -37,8 +36,10 @@ ROLE_DEFINITIONS = (
     ('pm_leader', 'PM Leader', None, False, True),
     # `men_ministry` / `women_ministry` keep their long-standing codes: every
     # permission check in the app names them, and a code is not what anyone
-    # reads — the labels below are.
-    ('men_ministry', 'APM Leader', 'Adventist Men Ministries', False, True),
+    # reads — the labels below are. AMM = Adventist Men Ministries; APM
+    # (Possibility Ministries) is a different office with its own code below
+    # the PM (Personal Ministries) leader.
+    ('men_ministry', 'AMM Leader', 'Adventist Men Ministries', False, True),
     ('women_ministry', 'AWM Leader', 'Adventist Women Ministries', False, True),
     ('youth_leader', 'Youth Leader', None, False, True),
     ('chaplaincy', 'Chaplaincy Leader', 'Chaplaincy', False, True),
@@ -63,14 +64,8 @@ ROLE_LABELS = {code: label for code, label, _g, _s, _a in ROLE_DEFINITIONS}
 #: Church role code -> default Django group (kept in step with migration 0009 / seed_defaults)
 ROLE_GROUP_MAP = {code: group for code, _label, group, _s, _a in ROLE_DEFINITIONS if group}
 SYSTEM_ROLE_CODES = tuple(code for code, _l, _g, system, _a in ROLE_DEFINITIONS if system)
-#: Roles that may be held by a second person alongside the leader.
+#: Roles that may additionally be held *as an assistant*.
 ASSISTANT_ROLE_CODES = tuple(code for code, _l, _g, _s, assistant in ROLE_DEFINITIONS if assistant)
-#: Roles the church has exactly one of. The default role and the system role
-#: are excluded: everyone is a member, and administrators are not a department.
-EXCLUSIVE_ROLE_CODES = tuple(
-    code for code, _l, _g, system, _a in ROLE_DEFINITIONS
-    if not system and code != DEFAULT_ROLE
-)
 
 
 def is_system_role(code):
@@ -133,46 +128,16 @@ def user_display_name(user):
     return full or user.username
 
 
-def role_leader(code, exclude_user=None):
-    """The member who *leads* ``code``, or ``None`` if nobody does.
-
-    An assistant shares the role but is not its leader, so assistants are
-    skipped: the leader is the holder the office would be told to contact.
-    """
-    from .models import MemberProfile
-
-    exclude_id = getattr(exclude_user, 'id', None)
-    for profile in MemberProfile.objects.select_related('user').order_by('id'):
-        if exclude_id is not None and profile.user_id == exclude_id:
-            continue
-        if code in profile.get_roles() and code not in profile.get_assistant_roles():
-            return profile.user
-    return None
-
-
 def assignment_error(target_user, codes, assistants=()):
     """Return ``(field, message)`` when this assignment breaks a church rule.
 
     ``codes`` is the full role set the member would hold and ``assistants`` the
-    subset of it they would hold as an assistant. The two rules are the ones in
-    the module docstring: one leader per role, and an assistant only on a role
-    that takes one.
+    subset of it they would hold as an assistant. Roles are shared freely; the
+    rules left are that an assistant flag needs the role and the role must
+    take one, and a holder can't also be the role's assistant.
     """
     codes = list(codes)
     assistants = list(assistants)
-
-    for code in codes:
-        # An assistant is the one deliberate exception to one-leader-per-role:
-        # they hold the role *because* they share it with its leader.
-        if code not in EXCLUSIVE_ROLE_CODES or code in assistants:
-            continue
-        leader = role_leader(code, exclude_user=target_user)
-        if leader:
-            return (
-                'roles',
-                f"{role_label(code)} is already held by {user_display_name(leader)}. "
-                "Remove them from the role first.",
-            )
 
     for code in assistants:
         if code not in codes:
@@ -191,11 +156,9 @@ def assignment_error(target_user, codes, assistants=()):
 def role_register():
     """Every role with who holds it, for the role pickers.
 
-    ``leader`` is the member leading the role (assistants excluded) and
-    ``assistants`` the members sharing it, so the pickers can tell a taken role
-    from a free one and offer the assistant box where the role takes one. A
-    role staffed by an assistant alone has no leader yet — it reads as free
-    until the church names one.
+    ``leader`` is kept for the pickers' display — the first holder of the role
+    in join order, assistant or not — and ``assistants`` the holders marked as
+    assistants. With roles shared freely, ``leader`` no longer gates anything.
     """
     from .models import MemberProfile
 
@@ -206,10 +169,16 @@ def role_register():
         held = profile.get_roles()
         shared = profile.get_assistant_roles()
         for code in held:
+            if code == DEFAULT_ROLE:
+                # Member is the everyone-state, not an office: tallying it
+                # would crown the first-ever member its "holder" and make the
+                # pickers read the plain role as taken.
+                continue
             if code in shared:
                 assistants.setdefault(code, []).append({'id': profile.user_id, 'name': name})
-            else:
-                leaders.setdefault(code, {'id': profile.user_id, 'name': name})
+            # Display leader: the first holder in join order, assistant or not —
+            # a role staffed by an assistant alone still names somebody.
+            leaders.setdefault(code, {'id': profile.user_id, 'name': name})
 
     register = []
     for code, label, group, system, assistant in ROLE_DEFINITIONS:
@@ -219,7 +188,6 @@ def role_register():
             'group': group or '',
             'system': system,
             'assistant': assistant,
-            'exclusive': code in EXCLUSIVE_ROLE_CODES,
             'leader': leaders.get(code),
             'assistants': assistants.get(code, []),
         })

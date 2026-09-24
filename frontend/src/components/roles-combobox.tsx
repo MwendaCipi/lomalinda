@@ -17,10 +17,9 @@ export type RoleOption = {
  * The hard-coded church roles. This is the single frontend source of truth and
  * mirrors ROLE_DEFINITIONS in backend/members/roles.py.
  *
- * The church has **one leader per role**: every role below belongs to a single
- * person, and the picker refuses to hand a taken role to someone else until its
- * leader is taken out of it. A leader may take an **assistant** who shares the
- * role's work — except the elder roles, which the church keeps single-handed.
+ * Roles are **shared** — any number of members may hold the same role, Member
+ * included. A holder may additionally be marked as an **assistant** where the
+ * role takes one (the elder roles take none).
  */
 export const ROLE_OPTIONS: RoleOption[] = [
   { value: "member", label: "Member" },
@@ -33,7 +32,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "head_deaconess", label: "Head Deaconess", group: "Church Leaders", assistant: true },
   { value: "treasurer", label: "Treasurer", group: "Treasury", assistant: true },
   { value: "pm_leader", label: "PM Leader", assistant: true },
-  { value: "men_ministry", label: "APM Leader", group: "Adventist Men Ministries", assistant: true },
+  { value: "men_ministry", label: "AMM Leader", group: "Adventist Men Ministries", assistant: true },
   { value: "women_ministry", label: "AWM Leader", group: "Adventist Women Ministries", assistant: true },
   { value: "youth_leader", label: "Youth Leader", assistant: true },
   { value: "chaplaincy", label: "Chaplaincy Leader", group: "Chaplaincy", assistant: true },
@@ -328,23 +327,17 @@ export function RolesCombobox({
 
   const toggle = (value: string) => {
     if (lockedRoles.includes(value)) return; // system role, cannot be dropped
-    const option = ROLE_OPTIONS.find((r) => r.value === value);
-    const leader = register[value]?.leader || null;
-    const ledByOther = Boolean(leader && leader.id !== memberId);
     let next: string[];
     let nextAssistants = [...assistants];
     if (selected.includes(value)) {
       next = selected.filter((r) => r !== value);
-      if (next.length === 0) next = ["member"]; // always keep at least one role
+      if (next.length === 0) next = ["member"]; // stored default: no leadership role
       nextAssistants = nextAssistants.filter((code) => code !== value);
     } else if (value === "member") {
-      next = ["member"]; // selecting Member clears leadership roles
+      next = ["member"]; // stored default: the plain Member role
       nextAssistants = [];
     } else {
       next = [...selected.filter((r) => r !== "member"), value];
-      // Joining a role somebody else leads can only be as their assistant,
-      // so ticking it ticks the assistant box with it (backend requires it).
-      if (ledByOther && option?.assistant) nextAssistants.push(value);
     }
     // keep canonical order
     const ordered = ROLE_OPTIONS.map((r) => r.value).filter((v) => next.includes(v));
@@ -395,8 +388,8 @@ export function RolesCombobox({
             align === "right" ? "right-0" : "left-0"
           }`}
         >
-          {/* One leader per role, so the second column is the assistant's —
-              shown only where the caller can record one (not for invitations). */}
+          {/* Roles are shared; the second column marks assistants where the
+              role takes one. */}
           <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#f0ece3] bg-white px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#617068]">
             <span className="flex-1">Role</span>
             {showAssistants && <span className="w-16 shrink-0 text-center">Assistant</span>}
@@ -405,25 +398,17 @@ export function RolesCombobox({
             const checked = selected.includes(r.value);
             const locked = checked && lockedRoles.includes(r.value);
             const row = register[r.value];
-            const leader = row?.leader || null;
-            const ledByOther = Boolean(leader && leader.id !== memberId);
-            // A role another member already leads can still be *joined* — but
-            // only as that leader's assistant. Where the role takes no
-            // assistant (the elder seats) it cannot be joined at all until the
-            // leader is taken out of it.
-            const blocked = !checked && ledByOther && !r.assistant;
+            const holderCount = row ? (row.leader ? 1 : 0) + (row.assistants?.length || 0) : 0;
+            // Shared roles: other holders are context, never a block.
+            const heldElsewhere = holderCount > 0 && !(holderCount === 1 && row.leader?.id === memberId);
             // The assistant box is available wherever the role takes one,
             // whether or not the role has its leader yet.
             const canAssist = Boolean(r.assistant) && checked && !locked;
             const roleTitle = locked
               ? SYSTEM_ROLE_LOCKED_HELP
-              : ledByOther && leader
-                ? r.assistant
-                  ? `${leader.name} leads ${r.label}. Ticking this joins as their assistant.`
-                  : `${r.label} is held by ${leader.name}. Remove them from the role first.`
-                : r.group
-                  ? `Group: ${r.group}`
-                  : undefined;
+              : r.group
+                ? `Group: ${r.group}`
+                : undefined;
             const assistantTitle = !r.assistant
               ? `${r.label} does not take an assistant.`
               : !checked
@@ -439,13 +424,13 @@ export function RolesCombobox({
                   type="button"
                   role="option"
                   aria-selected={checked}
-                  aria-disabled={locked || blocked}
-                  disabled={locked || blocked}
+                  aria-disabled={locked}
+                  disabled={locked}
                   title={roleTitle}
                   onClick={() => toggle(r.value)}
                   className={`flex flex-1 items-center gap-2.5 px-3 py-1.5 text-left text-xs transition ${
                     checked ? "font-semibold text-[#26352f]" : "text-[#3d5148]"
-                  } ${locked || blocked ? "cursor-not-allowed opacity-60" : ""}`}
+                  } ${locked ? "cursor-not-allowed opacity-60" : ""}`}
                 >
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
@@ -466,8 +451,10 @@ export function RolesCombobox({
                       </span>
                     )}
                     {locked && <span className="text-[10px]">🔒</span>}
-                    {ledByOther && leader && (
-                      <span className="text-[10px] font-normal text-[#617068]">· {leader.name}</span>
+                    {heldElsewhere && (
+                      <span className="text-[10px] font-normal text-[#617068]">
+                        · {holderCount} holder{holderCount === 1 ? "" : "s"}
+                      </span>
                     )}
                   </span>
                 </button>
