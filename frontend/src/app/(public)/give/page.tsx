@@ -707,35 +707,39 @@ function GivePageContent() {
                     </button>
 
                     {showAccountPicker && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-[#dfdbd1] bg-white p-2 shadow-xl">
-                        <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
-                          Tick every account you are giving to
-                        </p>
-                        {purposes.map((item) => {
-                          const checked = selectedAccounts.includes(item.label);
-                          return (
-                            <label
-                              key={`${item.id}-${item.label}`}
-                              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleAccount(item.label)}
-                                className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
-                              />
-                              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                            </label>
-                          );
-                        })}
-                        <div className="mt-1 flex justify-end border-t border-[#dfdbd1] px-1 pt-2">
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-[#dfdbd1] bg-white p-2 shadow-xl">
+                        {/* Header stays fixed while the account rows scroll under
+                            it, with the count on the left and Done on the right. */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[#dfdbd1] bg-white px-2 py-1.5">
+                          <p className="min-w-0 flex-1 truncate pr-2 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                            Select the account(s) to give to
+                          </p>
                           <button
                             type="button"
                             onClick={() => setShowAccountPicker(false)}
-                            className="rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                            className="shrink-0 rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
                           >
                             Done
                           </button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {purposes.map((item) => {
+                            const checked = selectedAccounts.includes(item.label);
+                            return (
+                              <label
+                                key={`${item.id}-${item.label}`}
+                                className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAccount(item.label)}
+                                  className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
+                                />
+                                <span className="min-w-0 flex-1 truncate pr-1">{item.label}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

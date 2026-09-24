@@ -310,47 +310,37 @@ export function DashboardAnalytics() {
   const net = data.giving.window_total - data.expenditure.window_total;
   const insights = buildInsights(data);
 
-  // The four quarters of the year, taken from the calendar rather than counted
-  // out in 90-day steps: months are bucketed by the quarter they actually fall
-  // in, so a division is Q1 Jan–Mar, and no month can land in two quarters —
-  // the old arithmetic made July–September one quarter and September–December
-  // the next, counting September twice. A twelve-month series that straddles
-  // New Year is still ordered oldest-first.
+  // The four quarters of the calendar year — January to March is always the
+  // first quarter, whatever today's date. The monthly series the API returns
+  // reaches back twelve months, so months from last year carry last year's
+  // money; those are balances carried forward, not this year's giving, and
+  // they are left out. A quarter that has not started yet simply has nothing
+  // recorded.
   const QUARTER_SPANS = ["Jan–Mar", "Apr–Jun", "Jul–Sep", "Oct–Dec"];
-  const quarters = (() => {
-    const buckets = new Map<number, { year: number; quarter: number; months: MonthPoint[] }>();
-    data.monthly.forEach((month) => {
+  const asOf = new Date(data.as_of);
+  const quarters = QUARTER_SPANS.map((span, index) => {
+    const year = asOf.getFullYear();
+    const months = data.monthly.filter((month) => {
       const start = new Date(month.month_start);
-      const year = start.getFullYear();
-      const quarter = Math.floor(start.getMonth() / 3) + 1;
-      const key = year * 10 + quarter;
-      const bucket = buckets.get(key) ?? { year, quarter, months: [] };
-      bucket.months.push(month);
-      buckets.set(key, bucket);
+      return start.getFullYear() === year && Math.floor(start.getMonth() / 3) === index;
     });
-    return [...buckets.values()]
-      .sort((a, b) => a.year - b.year || a.quarter - b.quarter)
-      .slice(-4);
-  })();
+    return { quarter: index + 1, span, year, months };
+  });
   const quarterByIndex = quarters.map((quarter) => quarter.months);
   const quarterLabel = (index: number) =>
-    `Q${quarters[index].quarter} · ${QUARTER_SPANS[quarters[index].quarter - 1]} ${quarters[index].year}`;
+    `Q${quarters[index].quarter} · ${quarters[index].span} ${quarters[index].year}`;
 
-  // "This quarter" is the one today falls in, which is only the last card when
-  // the twelve-month window happens to start on a quarter boundary.
-  const asOf = new Date(data.as_of);
-  const quarterOfToday = (() => {
-    const index = quarters.findIndex(
-      (quarter) => quarter.year === asOf.getFullYear() && quarter.quarter === Math.floor(asOf.getMonth() / 3) + 1
-    );
-    return index === -1 ? quarters.length - 1 : index;
-  })();
+  // "This quarter" is the one today falls in.
+  const quarterOfToday = Math.floor(asOf.getMonth() / 3);
 
   const quarterIncome = (index: number) =>
     quarterByIndex[index].reduce((sum, month) => sum + month.income, 0);
   const quarterExpense = (index: number) =>
     quarterByIndex[index].reduce((sum, month) => sum + month.expense, 0);
   const hasQuarterly = quarterByIndex.some((quarter) => quarter.some((month) => month.income > 0 || month.expense > 0));
+  // "Last quarter" is the one before this quarter — undefined only before Q1
+  // has a predecessor, which the calendar cannot produce inside the year.
+  const lastQuarterIndex = Math.max(0, quarterOfToday - 1);
 
   return (
     <section
@@ -603,7 +593,7 @@ export function DashboardAnalytics() {
               { label: "Average gift", value: fmtAmount(data.giving.givers.average) },
               { label: "Largest gift", value: fmtAmount(data.giving.givers.largest) },
               { label: "This quarter", value: fmtAmount(quarterIncome(quarterOfToday)) },
-              { label: "Last quarter", value: fmtAmount(quarterIncome(Math.max(0, quarterOfToday - 1))) },
+              { label: "Last quarter", value: fmtAmount(quarterIncome(lastQuarterIndex)) },
             ].map((row) => (
               <div key={row.label}>
                 <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{row.label}</dt>
