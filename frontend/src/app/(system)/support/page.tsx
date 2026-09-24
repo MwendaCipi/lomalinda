@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { stewardshipLinks } from "@/config/site-sections";
 
@@ -34,31 +35,26 @@ export default function SupportHubPage() {
             </div>
 
             {/* Mobile Cards View (hidden on desktop) — the same sections as the sidebar above.
-                The two money sections lead because that is what members open first. */}
-            <div className="mt-6 grid gap-4 sm:gap-5 md:grid-cols-2 lg:hidden">
+                The two money sections lead because that is what members open first.
+                Compact anatomy on purpose: the emoji-tile-left card used by the
+                fellowship and materials hubs, not a tall poster card. */}
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:hidden">
               {stewardshipLinks.map((section) => {
                 const Icon = section.icon;
                 return (
                   <Link
                     key={section.href}
                     href={section.href}
-                    className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-5 sm:p-6 transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-sm"
+                    className="group flex items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                   >
-                    <div>
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7f4ee] group-hover:bg-[#f1c89e]/20">
-                        <Icon className="h-6 w-6 text-[#b36b3c]" />
-                      </div>
-                      <h2 className="mt-3 text-xl font-semibold text-[#26352f] group-hover:text-[#b36b3c]">
-                        {section.label}
-                      </h2>
-                      <p className="mt-1.5 text-xs sm:text-sm leading-5 text-[#617068]">
-                        {section.description}
-                      </p>
-                    </div>
-                    <div className="mt-4 flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#b36b3c]">
-                      <span>Open category</span>
-                      <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
-                    </div>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#617068] transition group-hover:bg-[#b36b3c]/15 group-hover:text-[#b36b3c]">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-[#26352f]">{section.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{section.description}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" />
                   </Link>
                 );
               })}

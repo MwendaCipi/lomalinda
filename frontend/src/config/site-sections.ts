@@ -191,6 +191,13 @@ export const stewardshipLinks: SectionLink[] = [
     icon: CreditCard,
   },
   {
+    key: "in-kind",
+    href: "/support/in-kind",
+    label: "In-Kind Giving",
+    description: "Offer goods, equipment, services or time instead of money.",
+    icon: Gift,
+  },
+  {
     key: "budget",
     href: "/support/budget",
     label: "Church Budget",
