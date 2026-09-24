@@ -256,10 +256,10 @@ export function SiteNav() {
   // still links its own hubs from the marketing header.
   const mobileBottomNavItems = [
     {
-      href: "/announcements",
+      href: "/fellowship",
       label: "Fellowship",
       icon: Users,
-      active: pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements"),
+      active: pathname.startsWith("/fellowship") || pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements") || pathname.startsWith("/services"),
     },
     {
       href: "/support",

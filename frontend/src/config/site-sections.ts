@@ -98,7 +98,7 @@ export const newsAndEventsLinks: SectionLink[] = [
   },
   {
     key: "services",
-    href: "/share/services",
+    href: "/services",
     label: "Order of Service",
     description: "The Sabbath programme and order of service.",
     icon: BookOpen,
@@ -255,7 +255,7 @@ export const fellowshipLinks: SectionLink[] = [
   },
   {
     key: "services",
-    href: "/share/services",
+    href: "/services",
     label: "Live Services",
     description: "Join worship online, or catch up on a service you missed.",
     icon: Camera,

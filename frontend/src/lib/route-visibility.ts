@@ -7,6 +7,8 @@ const SYSTEM_SECTIONS = new Set([
   "financial",
   "community",
   "announcements",
+  "fellowship",
+  "services",
 ]);
 
 export function isSystemRoute(pathname: string | null | undefined): boolean {

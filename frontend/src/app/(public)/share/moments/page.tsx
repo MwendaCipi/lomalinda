@@ -3,5 +3,5 @@
 import { redirect } from "next/navigation";
 
 export default function MomentsRedirectPage() {
-  redirect("/share/services");
+  redirect("/services");
 }

@@ -6,7 +6,7 @@ import { Megaphone, Camera, Sparkles, Lightbulb, ChevronRight } from "lucide-rea
 
 const fellowshipLinks = [
   { href: "/announcements", label: "Announcements", icon: Megaphone },
-  { href: "/share/services", label: "Live Services", icon: Camera },
+  { href: "/services", label: "Live Services", icon: Camera },
   { href: "/spiritual/testimonies", label: "Testimonies", icon: Sparkles },
   { href: "/support/ideas", label: "Ideas & Suggestions", icon: Lightbulb },
 ];

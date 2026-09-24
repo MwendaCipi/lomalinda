@@ -99,20 +99,20 @@ export default function AnnouncementsPage() {
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
             <div className="max-w-3xl">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Announcements</h1>
-              <p className="hidden sm:block mt-3 text-base text-[#617068]">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+              <p className="hidden sm:block mt-2 text-base text-[#617068]">
                 Church announcements and fund drives in one feed — search by keyword or date.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#dfdbd1] bg-white px-4 py-3 shadow-sm lg:grid-cols-4">
               <label className="text-sm font-semibold text-[#26352f]">
                 From
                 <input
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
                 />
               </label>
 
@@ -122,7 +122,7 @@ export default function AnnouncementsPage() {
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
                 />
               </label>
 
@@ -132,7 +132,7 @@ export default function AnnouncementsPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search announcements..."
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
                 />
               </label>
             </div>
