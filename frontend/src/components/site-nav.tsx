@@ -49,7 +49,7 @@ interface AnnouncementItem {
   created_at?: string;
 }
 
-export function SiteNav() {
+export function SiteNav({ navigationLocked = false }: { navigationLocked?: boolean } = {}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -320,7 +320,7 @@ export function SiteNav() {
         </Link>
 
         {/* Center: Desktop Navigation Menu */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-1.5" aria-label="Main navigation">
+        <nav hidden={navigationLocked} className="hidden md:flex items-center gap-1 lg:gap-1.5" aria-label="Main navigation">
           {desktopNavItems.map((item) => (
             <Link
               key={item.href}
@@ -337,7 +337,7 @@ export function SiteNav() {
         </nav>
 
         {/* Right: Accessibility, Notifications & User Account Controls */}
-        <div ref={controlsRef} className="flex items-center gap-2 sm:gap-3 relative shrink-0">
+        <div ref={controlsRef} hidden={navigationLocked} className="flex items-center gap-2 sm:gap-3 relative shrink-0">
 
           {/* Accessibility Settings & Options Menu */}
           <AccessibilityMenu />
@@ -626,6 +626,7 @@ export function SiteNav() {
 
       {/* Mobile Bottom Tab Navigation Menu (Fixed at bottom on md:hidden) */}
       <nav
+        hidden={navigationLocked}
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 pb-safe flex justify-around items-center shadow-lg text-white"
         aria-label="Mobile Bottom Navigation"
       >

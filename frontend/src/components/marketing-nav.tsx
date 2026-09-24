@@ -22,6 +22,10 @@ const marketingLinks = [
  * holding a token — everywhere else a member must keep the app chrome.
  */
 const signInPrefixes = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
+// The forced profile update is a modal, not a page to wander from: while it is
+// up the member gets the bare header only — no links, no account menu, and on
+// a phone no bottom tab bar to escape through or hide the submit button.
+const gatedPrefixes = ["/complete-profile"];
 
 /**
  * Header for the public website (the marketing pages).
@@ -51,6 +55,9 @@ export function MarketingNav() {
   // stranded the member on the marketing site with no way back. Inverting the
   // test means a new public page cannot reintroduce that.
   if (signedIn && !signInPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    if (gatedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+      return <SiteNav navigationLocked />;
+    }
     return <SiteNav />;
   }
 
