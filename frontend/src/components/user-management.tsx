@@ -26,9 +26,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * columns keeps the same grid for every roster.
  */
 const COL_INDEX = "w-8";
-const COL_NAME = "w-[19rem]";
-const COL_CONTACT = "w-[10rem]";
-const COL_ROLE = "w-[12rem]";
+const COL_NAME = "w-[14rem]";
+const COL_CONTACT = "w-[12rem]";
+const COL_ROLE = "w-[13rem]";
 const COL_TYPE = "w-[9rem]";
 const COL_SEX = "w-[4rem]";
 
@@ -1803,9 +1803,9 @@ export function UserManagement() {
                   <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
                     <td className={`py-3 text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
                     <td className={`py-3 font-semibold text-[#26352f] ${COL_NAME}`}>
-                      <div className="flex items-baseline gap-2">
-                        <span className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</span>
-                        <span className="shrink-0 text-[11px] font-normal text-[#8b9790]">@{m.username}</span>
+                      <div className="min-w-0">
+                        <div className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</div>
+                        <div className="truncate text-[11px] font-normal text-[#8b9790]">@{m.username}</div>
                       </div>
                       {m.is_active === false && (
                         <span
