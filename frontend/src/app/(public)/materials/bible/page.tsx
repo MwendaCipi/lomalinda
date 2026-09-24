@@ -41,8 +41,6 @@ export default function BiblePage() {
           <div className="mt-8 flex flex-wrap gap-4 border-t border-[#dfdbd1] pt-6">
             <a
               href={fellowshipResources.bible}
-              target="_blank"
-              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b36b3c]"
             >
               <span>Launch Online Bible Search</span>

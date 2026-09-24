@@ -72,12 +72,43 @@ html:has(.authenticated-giving-page) .authenticated-public-shell {
   height: calc(100dvh - 4rem);
 }
 /* On phones the tab bar is the only thing below these panels, so the shell
-   reserves exactly its 57px: a pinned footer bar touches the navigation
-   instead of floating above it. (Desktop keeps pb-0 — there is no bar.) */
+   reserves exactly its height plus the device gesture-bar inset (the bar
+   itself grows by the same env() — see SiteNav). Every app-shell page keeps a
+   small gap above the bar; the pinned giving/admin panels touch it instead of
+   floating high. (Desktop keeps pb-0 — there is no bar.) */
 @media (max-width: 767px) {
+  /* On document-scrolling pages the shell must lay out in normal flow: its
+     flex column (with a flex-basis-0 content child) hides the content height
+     from the shell, so nothing after it can extend the document and the tab
+     bar covered the last card. Block layout stacks content and the trailing
+     spacer in order. Only the signed-in public shells (give, materials,
+     requests, about) are converted — the pinned workspaces (giving, admin)
+     keep the flex height chain their inner scrollers depend on. */
+  html:not(:has(.authenticated-giving-page)) .authenticated-public-shell.app-shell.pb-24 {
+    display: block;
+    padding-bottom: 0;
+  }
+  /* The tab-bar reserve as a trailing in-flow spacer: bar height + the device
+     gesture-bar inset + a small gap, so the last card always clears the bar. */
+  .authenticated-public-shell.app-shell.pb-24::after {
+    content: "";
+    display: block;
+    height: calc(3.5625rem + env(safe-area-inset-bottom, 0px) + 0.625rem);
+  }
   html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24,
   html:has(.administration-workspace) .app-shell {
-    padding-bottom: 3.5625rem;
+    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
+  }
+  html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24::after {
+    content: none;
+  }
+}
+
+/* The hub pages' marketing section cards keep a smaller bottom margin on a
+   signed-in phone, so the gap above the tab bar stays small. */
+@media (max-width: 767px) {
+  .authenticated-public-shell .public-section-nav {
+    padding-bottom: 1.25rem;
   }
 }
 html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {

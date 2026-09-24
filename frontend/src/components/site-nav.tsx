@@ -629,7 +629,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       {/* Mobile Bottom Tab Navigation Menu (Fixed at bottom on md:hidden) */}
       <nav
         hidden={navigationLocked}
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 pb-safe flex justify-around items-center shadow-lg text-white"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 flex justify-around items-center shadow-lg text-white pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
         aria-label="Mobile Bottom Navigation"
       >
         {mobileBottomNavItems.map((item) => {

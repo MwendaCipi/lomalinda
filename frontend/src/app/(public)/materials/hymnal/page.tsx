@@ -51,8 +51,6 @@ export default function HymnalPage() {
             <a
               key={item.id}
               href={item.href}
-              target="_blank"
-              rel="noreferrer"
               className="group flex flex-col justify-between rounded-[2rem] border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md"
             >
               <div>

@@ -9,6 +9,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Let the tab bar extend into the gesture bar and pad with env(safe-area-inset-bottom)
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {

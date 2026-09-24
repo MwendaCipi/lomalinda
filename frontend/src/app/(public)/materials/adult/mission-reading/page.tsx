@@ -6,7 +6,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export default function AdultMissionReadingPage() {
   useEffect(() => {
-    window.location.replace(`${API_URL}/api/members/mission-reading/adult/`);
+    // Push (not replace) the reading onto the history stack so the phone's
+    // Back gesture returns here instead of closing the app.
+    window.location.href = `${API_URL}/api/members/mission-reading/adult/`;
   }, []);
 
   return (

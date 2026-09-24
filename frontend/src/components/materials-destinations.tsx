@@ -92,7 +92,11 @@ export function MaterialsDestinationCards({ activeKey }: { activeKey?: string })
         );
 
         return dest.isExternal ? (
-          <a key={dest.key} href={dest.href} target="_blank" rel="noreferrer" className={cls}>
+          // Same-tab on purpose: in the installed PWA a new tab has no history
+          // to go back to, so the reader's Back gesture closed the app. The
+          // backend redirect does not add a history entry, so Back lands on
+          // the hub.
+          <a key={dest.key} href={dest.href} className={cls}>
             {inner}
           </a>
         ) : (
@@ -144,7 +148,7 @@ export function MaterialsSidebar() {
               isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#f7f4ee]"
             }`;
             return dest.isExternal ? (
-              <a key={dest.key} href={dest.href} target="_blank" rel="noreferrer" className={cls} title="Opens in a new tab">
+              <a key={dest.key} href={dest.href} className={cls}>
                 {row}
               </a>
             ) : (
