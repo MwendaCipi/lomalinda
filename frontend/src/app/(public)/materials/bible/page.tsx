@@ -1,9 +1,45 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen, Feather, type LucideIcon } from "lucide-react";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { materialSectionLinks } from "@/config/site-sections";
 import { fellowshipResources } from "@/config/fellowship-resources";
+
+/**
+ * The reference shelf: Scripture and the Spirit of Prophecy, two cards because
+ * they are two readers. Both open in the same tab — inside the installed PWA a
+ * new tab has no history, so the reader's Back gesture would close the app.
+ */
+const referenceShelf: {
+  id: string;
+  icon: LucideIcon;
+  badge: string;
+  title: string;
+  description: string;
+  href: string;
+  button: string;
+}[] = [
+  {
+    id: "bible",
+    icon: BookOpen,
+    badge: "Scripture & Word",
+    title: "Read & Search the Holy Bible",
+    description:
+      "Search books, chapters, parallel translations, and study references for daily personal devotions, family altar, and Sabbath School lesson preparation.",
+    href: fellowshipResources.bible,
+    button: "Launch Online Bible Search",
+  },
+  {
+    id: "egw",
+    icon: Feather,
+    badge: "Spirit of Prophecy",
+    title: "Explore the E.G. White Writings",
+    description:
+      "The complete published writings of Ellen G. White — books, articles, letters and manuscripts, searchable by topic, scripture reference or phrase.",
+    href: fellowshipResources.egw,
+    button: "Open EGW Writings",
+  },
+];
 
 export default function BiblePage() {
   return (
@@ -17,47 +53,62 @@ export default function BiblePage() {
             <ArrowLeft className="h-4 w-4" />
             <span>Back to all materials</span>
           </Link>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Holy Bible Study</h1>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Bible &amp; EGW Writings</h1>
           <p className="mt-3 max-w-2xl text-base leading-8 text-[#617068]">
-            Read, search, and study Holy Scriptures across books, chapters, and translations.
+            Read, search, and study Holy Scriptures and the published Spirit of Prophecy writings.
           </p>
         </div>
       </section>
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
-        <div className="mx-auto max-w-4xl rounded-[2rem] border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-10">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-4xl" aria-hidden="true">📜</span>
-            <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
-              Scripture &amp; Word
-            </span>
-          </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Read &amp; Search the Holy Bible</h2>
-          <p className="mt-3 text-sm leading-7 text-[#617068]">
-            Search books, chapters, parallel translations, and study references for daily personal devotions, family
-            altar, and Sabbath School lesson preparation.
-          </p>
+        <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
+          {referenceShelf.map((item) => {
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.id}
+                href={item.href}
+                className="group flex flex-col justify-between rounded-[2rem] border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#26352f]"
+                      aria-hidden="true"
+                    >
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <span className="rounded-full bg-[#b36b3c]/10 px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                      {item.badge}
+                    </span>
+                  </div>
+                  <h2 className="mt-4 text-2xl font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c]">
+                    {item.title}
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#617068]">{item.description}</p>
+                </div>
 
-          <div className="mt-8 flex flex-wrap gap-4 border-t border-[#dfdbd1] pt-6">
-            <a
-              href={fellowshipResources.bible}
-              className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b36b3c]"
-            >
-              <span>Launch Online Bible Search</span>
-              <span>&rarr;</span>
-            </a>
-          </div>
+                <div className="mt-8 border-t border-[#dfdbd1] pt-6">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-6 py-3 text-sm font-semibold text-white transition group-hover:bg-[#b36b3c]">
+                    <span>{item.button}</span>
+                    <span>&rarr;</span>
+                  </span>
+                </div>
+              </a>
+            );
+          })}
         </div>
       </section>
 
-      {/* The old Study Materials sidebar, now part of the page body. */}
+      {/* The old Study Materials sidebar, now part of the page body. On phones
+          the destination cards are the map, so this long tail is desktop-only. */}
       <PublicSectionNav
         eyebrow="Study materials"
         title="More study areas"
         description="Lessons, mission readings, hymns and the Spirit of Prophecy."
         links={materialSectionLinks}
         activeKey="bible-egw"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="hidden border-t border-[#dfdbd1] bg-white/60 lg:block"
       />
     </main>
   );

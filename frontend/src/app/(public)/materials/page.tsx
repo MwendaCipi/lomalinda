@@ -9,11 +9,11 @@ import { fellowshipLinks } from "@/config/site-sections";
 /**
  * The Materials hub.
  *
- * There is no "choose a study area" step: the page is the five destination
- * cards — Adult Lesson, Adult Mission Reading, Children Lessons, Children
- * Mission Reading and Bible & EGW — the same list the PC sidebar mirrors. The
- * marketing intro below returns only for signed-out visitors, where the page
- * doubles as the public website's study-materials page.
+ * There is no "choose a study area" step: the page is the destination cards —
+ * Adult Lesson, YA Lesson, Adult Mission Reading, Children Lessons, Children
+ * Mission Reading, Bible & EGW and Hymnals — the same list the PC sidebar
+ * mirrors. The marketing intro below returns only for signed-out visitors, where
+ * the page doubles as the public website's study-materials page.
  */
 export default function MaterialsPage() {
   const [signedIn, setSignedIn] = useState(false);
@@ -30,12 +30,12 @@ export default function MaterialsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
-            Sabbath School lessons, mission readings, Scripture and the Spirit of Prophecy — open one to begin.
+            Sabbath School lessons, mission readings, Scripture, hymns and the Spirit of Prophecy — open one to begin.
           </p>
         </div>
       </section>
 
-      {/* The five destinations, on mobile and desktop alike. */}
+      {/* The destinations, on mobile and desktop alike. */}
       <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 py-8 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-4xl"}>
           <MaterialsDestinationCards />

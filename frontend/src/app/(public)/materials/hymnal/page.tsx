@@ -1,11 +1,19 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Music, Music2, type LucideIcon } from "lucide-react";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { materialSectionLinks } from "@/config/site-sections";
 import { fellowshipResources } from "@/config/fellowship-resources";
 
-const hymnals = [
+const hymnals: {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  button: string;
+  badge: string;
+  icon: LucideIcon;
+}[] = [
   {
     id: "hymnal",
     title: "Seventh-day Adventist Hymnal",
@@ -13,7 +21,7 @@ const hymnals = [
     href: fellowshipResources.hymnal,
     button: "Open English SDA Hymnal",
     badge: "English Hymns",
-    icon: "🎵",
+    icon: Music,
   },
   {
     id: "nzk",
@@ -22,7 +30,7 @@ const hymnals = [
     href: fellowshipResources.nzk,
     button: "Open Nyimbo za Kristo",
     badge: "Swahili Hymns",
-    icon: "🎶",
+    icon: Music2,
   },
 ];
 
@@ -47,7 +55,9 @@ export default function HymnalPage() {
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
         <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
-          {hymnals.map((item) => (
+          {hymnals.map((item) => {
+            const Icon = item.icon;
+            return (
             <a
               key={item.id}
               href={item.href}
@@ -55,7 +65,12 @@ export default function HymnalPage() {
             >
               <div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-3xl" aria-hidden="true">{item.icon}</span>
+                  <span
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#26352f]"
+                    aria-hidden="true"
+                  >
+                    <Icon className="h-6 w-6" />
+                  </span>
                   <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">
                     {item.badge}
                   </span>
@@ -73,18 +88,20 @@ export default function HymnalPage() {
                 </span>
               </div>
             </a>
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      {/* The old Study Materials sidebar, now part of the page body. */}
+      {/* The old Study Materials sidebar, now part of the page body. On phones
+          the destination cards are the map, so this long tail is desktop-only. */}
       <PublicSectionNav
         eyebrow="Study materials"
         title="More study areas"
         description="Lessons, mission readings, Scripture and the Spirit of Prophecy."
         links={materialSectionLinks}
         activeKey="hymnals"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="hidden border-t border-[#dfdbd1] bg-white/60 lg:block"
       />
     </main>
   );

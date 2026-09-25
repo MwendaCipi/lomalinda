@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Shapes } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -80,8 +80,11 @@ export default function ChildrenLessonsPage() {
                 onClick={() => openDivision(d.key)}
                 className="group flex items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">
-                  🎨
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#26352f]"
+                  aria-hidden="true"
+                >
+                  <Shapes className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
