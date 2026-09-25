@@ -4195,3 +4195,42 @@ class AnnouncementGreetingTests(APITestCase):
         body = next(message.body for message in mail.outbox if message.to[0] == 'esther@example.com')
         self.assertIn('Harvest Sabbath', body)
         self.assertIn('Bring your offering.', body)
+
+
+class ExistingMemberEnrollmentTests(APITestCase):
+    """The member path asks for a name, a phone and an email — nothing else.
+
+    On the create-account form, choosing *a church member* means the person is
+    already on a church roll and is asking to be added here, so the form no
+    longer asks how they are joining, where they live or which church they came
+    from. This pins the API side of that: those three may arrive empty for a
+    membership transfer, and a friend's request still needs their church.
+    """
+
+    def _post(self, **overrides):
+        payload = {
+            'name': 'Cyprian Mwenda',
+            'email': 'existing.member@example.com',
+            'phone_number': '0712345678',
+            'joining_mode': 'membership_transfer',
+            'residence': '',
+            'current_church': '',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/auth/enrollment-request/', payload, format='json')
+
+    def test_a_member_request_needs_no_residence_or_previous_church(self):
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        request_row = EnrollmentRequest.objects.get(email='existing.member@example.com')
+        self.assertEqual(request_row.joining_mode, 'membership_transfer')
+        self.assertEqual(request_row.current_church, '')
+        self.assertEqual(request_row.residence, '')
+
+    def test_a_friend_request_is_still_asked_for_their_church(self):
+        response = self._post(email='friend.no.church@example.com', joining_mode='friend')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('current_church', response.data)

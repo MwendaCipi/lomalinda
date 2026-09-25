@@ -67,6 +67,19 @@ export function EnrollmentForm({
 
   const accountType: "member" | "friend" | "sabbath_school" = joiningMode === "friend" ? "friend" : joiningMode === "sabbath_school" ? "sabbath_school" : "member";
 
+  /**
+   * "A church member" is somebody already on a church roll who is asking to be
+   * added to this one. How they are joining, where they live and which church
+   * they came from are questions that only make sense for someone arriving from
+   * outside, so the member path asks none of them: the request itself is the
+   * answer. The enrolment desk on the Requests page still asks all three, where
+   * the office is recording a transfer rather than granting a request.
+   */
+  const isExistingMember = showAccountTypeChoice && joiningMode === "membership_transfer";
+  const asksCurrentChurch =
+    !isExistingMember &&
+    (joiningMode === "membership_transfer" || joiningMode === "friend" || joiningMode === "sabbath_school");
+
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -143,7 +156,7 @@ export function EnrollmentForm({
     }
 
     if (transferDirection === "transfer_in") {
-      if ((joiningMode === "friend" || joiningMode === "sabbath_school" || joiningMode === "membership_transfer") && !form.current_church.trim()) {
+      if (asksCurrentChurch && !form.current_church.trim()) {
         showAlert("Missing information", "Please specify the name of your current/previous church.", "warning");
         return;
       }
@@ -255,7 +268,7 @@ export function EnrollmentForm({
             >
               <span className="block text-sm font-semibold text-[#26352f]">A church member</span>
               <span className="mt-1 block text-xs text-[#617068]">
-                Join by baptism or transfer, and get full member access.
+                You are already a member — ask to be added to the church register.
               </span>
             </button>
             <button
@@ -373,32 +386,20 @@ export function EnrollmentForm({
               </label>
             )}
 
-            {showAccountTypeChoice && accountType === "member" && (
+            {/* Existing members: no mode, no residence, no previous church. */}
+            {!isExistingMember && (
               <label className="block text-sm font-medium sm:col-span-2">
-                How are you joining?
-                <select
-                  value={joiningMode}
-                  onChange={(event) => setJoiningMode(event.target.value as JoiningMode)}
+                Residence
+                <input
+                  value={form.residence}
+                  onChange={(event) => update("residence", event.target.value)}
                   className={inputClass}
-                >
-                  <option value="baptism">Baptism</option>
-                  <option value="membership_transfer">Membership Transfer</option>
-                  <option value="sabbath_school">Sabbath School</option>
-                </select>
+                  placeholder="Estate, street or town (optional)"
+                />
               </label>
             )}
 
-            <label className="block text-sm font-medium sm:col-span-2">
-              Residence
-              <input
-                value={form.residence}
-                onChange={(event) => update("residence", event.target.value)}
-                className={inputClass}
-                placeholder="Estate, street or town (optional)"
-              />
-            </label>
-
-            {(joiningMode === "membership_transfer" || joiningMode === "friend" || joiningMode === "sabbath_school") && (
+            {asksCurrentChurch && (
               <label className="block text-sm font-medium sm:col-span-2">
                 Current / Previous Church Name
                 <input
