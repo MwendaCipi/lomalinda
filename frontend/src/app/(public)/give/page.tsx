@@ -770,7 +770,9 @@ function GivePageContent() {
                         {/* The instruction and the way out sit at the foot of
                             the list, where the eye lands after ticking. */}
                         <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] bg-white px-2.5 py-1.5">
-                          <p className="min-w-0 flex-1 truncate pr-2 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                          {/* The phrase wraps rather than ellipsizing: on a phone
+                              the Done button leaves it just short of one line. */}
+                          <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-[#b36b3c]">
                             Select the account(s) to give to
                           </p>
                           <button
