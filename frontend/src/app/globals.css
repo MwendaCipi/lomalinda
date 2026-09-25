@@ -177,29 +177,38 @@ html:has(.administration-workspace) .app-shell {
 /* Phones: these workspaces are app-like at every width, so the document is
    locked here too — the page itself never scrolls, the record lists and card
    areas inside scroll. (The lock above is desktop-only; without this the
-   browser could scroll the whole panel on a small viewport.) */
+   browser could scroll the whole panel on a small viewport.)
+
+   Every page that owns its scrolling marks its <main> with `pinned-workspace`
+   — the administration workspace and the contributions ledger both do — so
+   these rules are keyed on that marker and not on one page's class. The ledger
+   was written against the workspace's rule instead, and it showed: its <main>
+   kept the utility `min-h-screen` below the app shell's own tab-bar reserve,
+   so the panel was 100vh tall inside a box that ends at the bar and every
+   sticky footer inside it pinned to the wrong bottom. Its Print/Add Receipt
+   buttons sat underneath the tab bar, unreachable. */
 @media (max-width: 767px) {
-  html:has(.administration-workspace),
-  body:has(.administration-workspace) {
+  html:has(.pinned-workspace),
+  body:has(.pinned-workspace) {
     overflow: hidden;
     height: 100%;
   }
 
-  html:has(.administration-workspace) .administration-workspace {
+  html:has(.pinned-workspace) .pinned-workspace {
     overflow: hidden;
     min-height: 0;
     height: 100%;
   }
 }
-html:has(.administration-workspace) .app-shell > * {
+html:has(.pinned-workspace) .app-shell > * {
   min-height: 0;
 }
-html:has(.administration-workspace) .app-shell > :last-child {
+html:has(.pinned-workspace) .app-shell > :last-child {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
-html:has(.administration-workspace) .app-shell > :last-child > * {
+html:has(.pinned-workspace) .app-shell > :last-child > * {
   flex: 1;
   min-height: 0;
 }

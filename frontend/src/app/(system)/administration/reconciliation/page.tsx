@@ -394,10 +394,12 @@ export default function ReconciliationPage() {
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-[#dfdbd1] overflow-hidden">
             
-            {/* Header Controls (Flex-shrink-0) — no page heading; the view
-                switcher names the mode already. */}
+            {/* Header Controls (Flex-shrink-0) — the view's name sits beside the
+                controls on a wide screen and above them on a phone. */}
             <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <div className="hidden lg:flex items-center gap-3" />
+              <h1 className="w-full sm:w-auto text-center sm:text-left text-sm font-semibold sm:text-base text-[#26352f]">
+                {viewMode === "all_givings" ? "Individual Givings" : "Contributions Ledger"}
+              </h1>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
                 {/* View Mode Switcher occupying full width */}
@@ -687,7 +689,7 @@ export default function ReconciliationPage() {
                           </div>
 
                           {/* Sticky Footer for Dedicated Purpose View */}
-                          <div className="shrink-0 sticky bottom-[58px] md:bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
+                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
                               <div className="flex items-center gap-4 text-xs sm:text-sm">
                                 <span className="text-xs text-[#617068]">
@@ -819,8 +821,8 @@ export default function ReconciliationPage() {
                       </table>
                     </div>
 
-                    {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons */}
-                    <div className="shrink-0 sticky bottom-[58px] md:bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
+                    {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons — flush on the tab bar. */}
+                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
                       <table className="w-full text-left text-sm">
                         <tfoot>
                           <tr>
@@ -1086,8 +1088,8 @@ export default function ReconciliationPage() {
                           )}
                         </div>
 
-                        {/* Fixed Child Table Footer */}
-                        <div className="shrink-0 sticky bottom-[58px] md:bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] px-4 py-2.5 font-semibold text-xs text-[#26352f] flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
+                        {/* Fixed Child Table Footer — sits flush on the tab bar. */}
+                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] px-4 py-2.5 font-semibold text-xs text-[#26352f] flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
                           <span className="text-[#617068]">
                             Total Rows Available: <strong className="text-[#26352f]">{listToDisplay.length}</strong> • <span className="font-bold text-[#b36b3c]">KES {money(displayTotal)}</span>
                           </span>
