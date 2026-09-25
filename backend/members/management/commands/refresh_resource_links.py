@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from members.models import ExternalResourceLink
-from members.views import current_adult_lesson_url, current_adult_pdf_url, first_children_lesson_url, first_mission_story_url
+from members.views import current_adult_lesson_url, current_adult_pdf_url, current_ya_lesson_url, first_children_lesson_url, first_mission_story_url
 
 
 class Command(BaseCommand):
@@ -15,6 +15,7 @@ class Command(BaseCommand):
             'adult_pdf_teachers': lambda: current_adult_pdf_url('teachers'),
             'mission_adults': lambda: first_mission_story_url('adults'),
             'mission_children': lambda: first_mission_story_url('children'),
+            'ya_lesson': current_ya_lesson_url,
         }
         for division in ('beginner', 'kindergarten', 'primary', 'junior', 'teens'):
             for audience in ('students', 'teachers'):

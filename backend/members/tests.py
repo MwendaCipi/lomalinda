@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from .views import CHILDREN_LESSON_SOURCES, _WeeklyLessonParser, first_children_lesson_url, send_invitation_email, GivingAccountsView
+from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_invitation_email, GivingAccountsView
 
 
 class WeeklyLessonParserTests(TestCase):
@@ -48,7 +48,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3880,3 +3880,125 @@ class SabbathSchoolAccountTypeTests(APITestCase):
         listed = {row['username']: row for row in self.client.get('/api/members/users/').data}
 
         self.assertEqual(listed['ss.person']['account_type'], 'sabbath_school')
+
+
+class YaLessonResolverTests(TestCase):
+    """The Young Adult lesson is the InVerse series.
+
+    Inverse serves each quarter from a JavaScript app that reads the Adventech
+    content API, so this week's lesson page is resolved from that API rather
+    than scraped out of the HTML shell. These tests pin the resolution rules to
+    the shape that API actually returns.
+    """
+
+    QUARTERLIES = [
+        {
+            'id': '2026-03',
+            'quarterly_group': {'name': 'Standard Adult'},
+            'start_date': '27/06/2026',
+            'end_date': '25/09/2026',
+        },
+        {
+            'id': '2026-03-cq',
+            'quarterly_group': {'name': 'InVerse'},
+            'start_date': '28/06/2026',
+            'end_date': '26/09/2026',
+        },
+        {
+            'id': '2026-04-cq',
+            'quarterly_group': {'name': 'InVerse'},
+            'start_date': '27/09/2026',
+            'end_date': '26/12/2026',
+        },
+    ]
+
+    LESSONS = [
+        {'id': '12', 'start_date': '13/09/2026', 'end_date': '19/09/2026'},
+        {'id': '13', 'start_date': '20/09/2026', 'end_date': '26/09/2026'},
+    ]
+
+    def _respond_with(self, mock_get, *payloads):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.side_effect = list(payloads)
+
+    @patch('members.views.requests.get')
+    def test_resolves_the_lesson_page_for_the_week_containing_today(self, mock_get):
+        self._respond_with(mock_get, self.QUARTERLIES, {'quarterly': {'id': '2026-03-cq'}, 'lessons': self.LESSONS})
+
+        with patch('members.views.timezone.localdate', return_value=date(2026, 9, 25)):
+            resolved = current_ya_lesson_url()
+
+        self.assertEqual(resolved, 'https://inverse.sspmadventist.org/en/2026-03-cq/13')
+
+    @patch('members.views.requests.get')
+    def test_picks_the_inverse_quarterly_not_the_adult_one_sharing_the_language(self, mock_get):
+        """Both series sit in one list; only the InVerse quarterlies are the YA lesson."""
+        self._respond_with(mock_get, self.QUARTERLIES, {'quarterly': {'id': '2026-03-cq'}, 'lessons': self.LESSONS})
+
+        with patch('members.views.timezone.localdate', return_value=date(2026, 9, 25)):
+            resolved = current_ya_lesson_url()
+
+        self.assertEqual(mock_get.call_args_list[1][0][0], 'https://sabbath-school.adventech.io/api/v2/en/quarterlies/2026-03-cq/index.json')
+        self.assertIn('/2026-03-cq/13', resolved)
+
+    @patch('members.views.requests.get')
+    def test_serves_the_quarterly_page_when_no_lesson_has_started_yet(self, mock_get):
+        self._respond_with(mock_get, self.QUARTERLIES, {'quarterly': {'id': '2026-04-cq'}, 'lessons': []})
+
+        with patch('members.views.timezone.localdate', return_value=date(2026, 9, 27)):
+            resolved = current_ya_lesson_url()
+
+        self.assertEqual(resolved, 'https://inverse.sspmadventist.org/en/2026-04-cq')
+
+    @patch('members.views.requests.get')
+    def test_falls_back_to_the_study_page_when_no_quarterly_covers_today(self, mock_get):
+        self._respond_with(mock_get, self.QUARTERLIES)
+
+        with patch('members.views.timezone.localdate', return_value=date(2026, 6, 1)):
+            resolved = current_ya_lesson_url()
+
+        self.assertEqual(resolved, YA_LESSON_URL)
+        self.assertEqual(mock_get.call_count, 1)
+
+
+class YaLessonWeeklyCacheTests(APITestCase):
+    """The resolved lesson page is stored for its week, then resolved again.
+
+    A flat N-day cache would outlive the lesson week it was resolved in and keep
+    sending readers to the previous week's lesson, so the stored page is reused
+    only inside the Sunday-to-Saturday week it belongs to.
+    """
+
+    url = '/api/members/lesson-reading/ya/'
+
+    def _store(self, url, resolved_at):
+        ExternalResourceLink.objects.create(key='ya_lesson', url=url, resolved_at=resolved_at)
+
+    def test_sends_readers_to_the_lesson_stored_for_this_week(self):
+        self._store('https://inverse.sspmadventist.org/en/2026-03-cq/13', timezone.now())
+
+        with patch('members.views.current_ya_lesson_url') as resolver:
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], 'https://inverse.sspmadventist.org/en/2026-03-cq/13')
+        resolver.assert_not_called()
+
+    def test_resolves_again_once_the_lesson_week_has_moved_on(self):
+        self._store('https://inverse.sspmadventist.org/en/2026-03-cq/12', timezone.now() - timedelta(days=8))
+
+        with patch('members.views.current_ya_lesson_url', return_value='https://inverse.sspmadventist.org/en/2026-03-cq/13'):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response['Location'], 'https://inverse.sspmadventist.org/en/2026-03-cq/13')
+        self.assertEqual(
+            ExternalResourceLink.objects.get(key='ya_lesson').url,
+            'https://inverse.sspmadventist.org/en/2026-03-cq/13',
+        )
+
+    def test_falls_back_to_the_study_page_when_the_content_api_cannot_be_reached(self):
+        with patch('members.views.current_ya_lesson_url', side_effect=Exception('content API unavailable')):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response['Location'], YA_LESSON_URL)

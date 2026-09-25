@@ -434,8 +434,16 @@ MISSION_READING_SOURCES = {
 SSNET_SOURCE = 'https://ssnet.org/'
 SSNET_WEEKLY_LESSON_URL = 'https://ssnet.org/lessons/current.html'
 ADULT_LESSON_SOURCE = SSNET_SOURCE
-# The Young Adult (YA) lesson, published on the inverse Sabbath School site.
+# The Young Adult (YA) lesson is the InVerse series, published by SSPM. Its reader
+# is a JavaScript app fed by the Adventech Sabbath School content API, so the page
+# for any given week has to be resolved from that API rather than scraped out of
+# the HTML shell the site serves.
 YA_LESSON_URL = 'https://inverse.sspmadventist.org/study'
+YA_LESSON_SITE = 'https://inverse.sspmadventist.org'
+YA_LESSON_QUARTERLIES_URL = 'https://sabbath-school.adventech.io/api/v2/en/quarterlies/index.json'
+YA_LESSON_QUARTERLY_URL = 'https://sabbath-school.adventech.io/api/v2/en/quarterlies/{quarter}/index.json'
+YA_LESSON_GROUP = 'InVerse'
+YA_LESSON_DATE_FORMAT = '%d/%m/%Y'
 CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
     'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
@@ -627,8 +635,71 @@ def save_resource_url(key, url):
     return url
 
 
+def lesson_week_start(day):
+    """The Sunday that opens the lesson week containing ``day``.
+
+    Sabbath School lessons run Sunday to Saturday, so the week is anchored on
+    Sunday rather than Python's Monday.
+    """
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
+def cached_weekly_resource_url(key):
+    """A stored link that is only good for the lesson week it was resolved in.
+
+    The flat N-day cache the other materials links use can outlive the week it
+    was resolved in, which would keep serving last week's lesson for days, so a
+    weekly link is reused only while today still falls in the same
+    Sunday-to-Saturday week as the resolution.
+    """
+    link = ExternalResourceLink.objects.filter(key=key).first()
+    if not link:
+        return None
+    resolved_on = timezone.localtime(link.resolved_at).date()
+    return link.url if lesson_week_start(resolved_on) == lesson_week_start(timezone.localdate()) else None
+
+
+def _get_json(url):
+    response = _get_with_retries(url)
+    response.raise_for_status()
+    return response.json()
+
+
+def _covers_day(period, day):
+    """True if a quarterly or lesson entry's date range holds ``day``."""
+    try:
+        start = datetime.strptime(period['start_date'], YA_LESSON_DATE_FORMAT).date()
+        end = datetime.strptime(period['end_date'], YA_LESSON_DATE_FORMAT).date()
+    except (KeyError, TypeError, ValueError):
+        return False
+    return start <= day <= end
+
+
 def current_adult_lesson_url():
     return SSNET_WEEKLY_LESSON_URL
+
+
+def current_ya_lesson_url():
+    """The InVerse (Young Adult) page for this week's lesson.
+
+    The quarterly list carries the InVerse quarterlies with their date ranges,
+    and each of a quarterly's lessons is one week, so the lesson covering today
+    is the page to send readers to. The quarterly page is the fallback for the
+    rare day a quarterly is live but no lesson has started yet; the generic
+    study page covers everything else.
+    """
+    today = timezone.localdate()
+    quarterlies = _get_json(YA_LESSON_QUARTERLIES_URL)
+    quarterly = next((
+        item for item in quarterlies
+        if (item.get('quarterly_group') or {}).get('name') == YA_LESSON_GROUP and _covers_day(item, today)
+    ), None)
+    if not quarterly:
+        return YA_LESSON_URL
+    lessons = _get_json(YA_LESSON_QUARTERLY_URL.format(quarter=quarterly['id'])).get('lessons') or []
+    lesson = next((item for item in lessons if _covers_day(item, today)), None)
+    quarterly_page = f'{YA_LESSON_SITE}/en/{quarterly["id"]}'
+    return f'{quarterly_page}/{lesson["id"]}' if lesson else quarterly_page
 
 
 def current_adult_pdf_url(kind):
@@ -1428,18 +1499,24 @@ class AdultLessonRedirectView(APIView):
 
 
 class YaLessonRedirectView(APIView):
-    """The Young Adult (YA) lesson on the inverse Sabbath School site.
+    """The Young Adult (YA) lesson page for the current week.
 
-    Inverse publishes one study page whose current quarter is always live, so
-    unlike the adult lesson there is nothing to scrape — the redirect is the
-    site itself.
+    Inverse publishes a whole quarter behind one study page, so this week's
+    lesson is resolved from the content API once a week and the stored page is
+    reused for the rest of that lesson week.
     """
 
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request):
-        return HttpResponseRedirect(YA_LESSON_URL)
+        destination = cached_weekly_resource_url('ya_lesson')
+        if not destination:
+            try:
+                destination = save_resource_url('ya_lesson', current_ya_lesson_url())
+            except Exception:
+                destination = YA_LESSON_URL
+        return HttpResponseRedirect(destination or YA_LESSON_URL)
 
 
 class AdultLessonPdfRedirectView(APIView):
