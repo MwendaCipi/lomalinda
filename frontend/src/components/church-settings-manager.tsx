@@ -37,6 +37,16 @@ export function ChurchSettingsManager() {
   // Filled by the API so the tokens listed here are exactly the ones the
   // backend substitutes — help text cannot drift from behaviour.
   const [invitationPlaceholders, setInvitationPlaceholders] = useState<{ token: string; description: string }[]>([]);
+  const [requestPlaceholders, setRequestPlaceholders] = useState<{ token: string; description: string }[]>([]);
+  const [approvalPlaceholders, setApprovalPlaceholders] = useState<{ token: string; description: string }[]>([]);
+  // The two letters a request causes: the one the elders get, and the one the
+  // member gets when their join request is approved.
+  const [requestNotificationMessage, setRequestNotificationMessage] = useState(
+    "{greeting}, {user_name} has submitted a {request}. Log in to respond to it: {link}"
+  );
+  const [membershipApprovalMessage, setMembershipApprovalMessage] = useState(
+    "Dear {name},\n\nYour request to join {church} has been approved. You can now sign in at {link} to take part in the life of the church.\n\nGod bless you."
+  );
   // The line the dashboard greeting ends with. Short by design; the API caps it
   // at the same length this input does.
   const [encouragementLine, setEncouragementLine] = useState("Jesus is coming again.");
@@ -80,6 +90,18 @@ export function ChurchSettingsManager() {
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
           if (Array.isArray(data.invitation_placeholders)) {
             setInvitationPlaceholders(data.invitation_placeholders);
+          }
+          if (Array.isArray(data.request_placeholders)) {
+            setRequestPlaceholders(data.request_placeholders);
+          }
+          if (Array.isArray(data.approval_placeholders)) {
+            setApprovalPlaceholders(data.approval_placeholders);
+          }
+          if (data.default_request_notification_message) {
+            setRequestNotificationMessage(data.default_request_notification_message);
+          }
+          if (data.default_membership_approval_message) {
+            setMembershipApprovalMessage(data.default_membership_approval_message);
           }
           if (typeof data.dashboard_encouragement_line === "string") {
             setEncouragementLine(data.dashboard_encouragement_line);
@@ -141,6 +163,8 @@ export function ChurchSettingsManager() {
         default_receipt_message: defaultReceiptMessage,
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
+        default_request_notification_message: requestNotificationMessage,
+        default_membership_approval_message: membershipApprovalMessage,
         dashboard_encouragement_line: encouragementLine.trim(),
         role_rights: roleRights.by_role,
         bank_name: bankName,
@@ -474,6 +498,68 @@ export function ChurchSettingsManager() {
                 className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Request Notices & Membership Approval Box */}
+        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
+          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
+            <span>🙏</span> Request Notices &amp; Membership Approval
+          </h3>
+          <p className="mt-1 text-xs text-[#617068]">
+            What the elders and administrators receive the moment someone submits a join, prayer,
+            visitation, dedication, welfare or membership transfer request — and what a person
+            receives once their join request has been approved.
+          </p>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-[#26352f]">
+              Request Notification Message (to the elders and administrators)
+            </label>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+              {requestPlaceholders.map((placeholder) => (
+                <li key={placeholder.token}>
+                  <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                    {placeholder.token}
+                  </code>{" "}
+                  {placeholder.description}
+                </li>
+              ))}
+            </ul>
+            <textarea
+              rows={3}
+              value={requestNotificationMessage}
+              onChange={(e) => setRequestNotificationMessage(e.target.value)}
+              placeholder="e.g. {greeting}, {user_name} has submitted a {request}. Log in to respond to it: {link}"
+              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+            />
+            <p className="mt-1 text-[11px] text-[#617068]">
+              One letter each to the church&apos;s administrators and elders, at the address on their
+              own account. Nobody else is told about a request.
+            </p>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-[#26352f]">
+              Membership Approval Message (to the member)
+            </label>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+              {approvalPlaceholders.map((placeholder) => (
+                <li key={placeholder.token}>
+                  <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                    {placeholder.token}
+                  </code>{" "}
+                  {placeholder.description}
+                </li>
+              ))}
+            </ul>
+            <textarea
+              rows={4}
+              value={membershipApprovalMessage}
+              onChange={(e) => setMembershipApprovalMessage(e.target.value)}
+              placeholder="Sent when a join request is approved..."
+              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+            />
           </div>
         </div>
 

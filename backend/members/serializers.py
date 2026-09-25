@@ -15,6 +15,7 @@ from .models import (
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
 )
 from .meetings import PLACEHOLDERS as MEETING_PLACEHOLDERS
+from .requests import APPROVAL_PLACEHOLDERS, REQUEST_PLACEHOLDERS
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
 from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_role_codes
 from .validators import (
@@ -713,9 +714,19 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
     # Read-only: the settings screen prints this list beside the templates so the
     # wording offered to the church can never drift from what rendering supports.
     invitation_placeholders = serializers.SerializerMethodField()
+    # The same courtesy for the request notices: the tokens the settings screen
+    # lists are the ones members/requests.py actually substitutes.
+    request_placeholders = serializers.SerializerMethodField()
+    approval_placeholders = serializers.SerializerMethodField()
 
     def get_invitation_placeholders(self, obj):
         return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in MEETING_PLACEHOLDERS]
+
+    def get_request_placeholders(self, obj):
+        return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in REQUEST_PLACEHOLDERS]
+
+    def get_approval_placeholders(self, obj):
+        return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in APPROVAL_PLACEHOLDERS]
 
     role_rights = serializers.SerializerMethodField()
 
@@ -761,6 +772,10 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'clarion_call_subtext', 'default_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
+            'default_request_notification_message',
+            'default_membership_approval_message',
+            'request_placeholders',
+            'approval_placeholders',
             'dashboard_encouragement_line',
             'privacy_policy',
             'terms_of_use',
@@ -777,8 +792,15 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 
 
 class MembershipTransferRequestSerializer(serializers.ModelSerializer):
+    """A transfer request, in or out.
+
+    The public transfer form used to carry a privacy checkbox, and the field
+    was declared here and never listed in ``Meta.fields`` after the checkbox
+    was removed — which made every request against this endpoint fail with a
+    serializer assertion rather than save the transfer.
+    """
+
     reason = serializers.CharField(required=False, allow_blank=True, default='')
-    privacy_accepted = serializers.BooleanField(write_only=True, required=False)
     remain_friend = serializers.BooleanField(required=False, allow_null=True)
 
     class Meta:
@@ -804,11 +826,6 @@ class MembershipTransferRequestSerializer(serializers.ModelSerializer):
 
     def validate_other_church(self, value):
         return validate_text_min_length(value, 2, 'Church name')
-
-    def validate_privacy_accepted(self, value):
-        if value is False:
-            raise serializers.ValidationError('You must agree to the Privacy Policy.')
-        return value
 
 
 class MembershipRemovalRequestSerializer(serializers.ModelSerializer):

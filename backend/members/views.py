@@ -40,6 +40,7 @@ from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_pu
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
+from .requests import notify_request_safely, send_membership_approval_email
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -250,6 +251,26 @@ def send_invitation_email(invitation):
         f"Warm regards,\n{church_name}"
     )
     send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [invitation.email], fail_silently=False)
+
+
+def roster_queryset():
+    """The church's roster — the one list behind Users and the printed roll.
+
+    A superuser is the owner of the installation, not a member: it holds no
+    church office (and may hold no member profile at all), so listing it put an
+    account nobody can pastor among the congregation. Django's
+    ``is_staff``/``is_superuser`` flags are only ever set for those system
+    accounts — a church office is a role code, not a staff flag.
+
+    Somebody who registered through the public join form is a *request*, not a
+    member: their account is created inactive and sits in the Requests desk
+    until a leader answers it. Listing them asked the office to manage people it
+    has not accepted. They join this roster the moment their request is
+    approved, and nowhere before it.
+    """
+    return User.objects.filter(is_superuser=False).exclude(
+        enrollment_requests__status__in=('verification_pending', 'pending', 'rejected')
+    )
 
 
 def can_manage_invitations(user):
@@ -898,6 +919,17 @@ class EnrollmentCompleteView(APIView):
         enrollment.terms_accepted_at = timezone.now()
         enrollment.terms_of_use_version = CURRENT_TERMS_OF_USE_VERSION
         enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at', 'privacy_policy_version', 'terms_accepted_at', 'terms_of_use_version'])
+        if not user.is_active:
+            # The request only becomes something to answer now: the person has
+            # verified their address and chosen their account, so the office is
+            # told about a request it can act on rather than an unverified form.
+            notify_request_safely(
+                'join',
+                enrollment.pk,
+                submitted_by=f'{enrollment.first_name} {enrollment.last_name}'.strip() or enrollment.email,
+                church_name=current_church_name(),
+                submitted_at=enrollment.created_at,
+            )
         return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
 
 
@@ -957,6 +989,10 @@ class EnrollmentDecisionView(APIView):
                 title='Join Request Approved' if decision == 'approved' else 'Join Request Not Approved',
                 message=message,
             )
+            if decision == 'approved':
+                # The in-app notice only reaches someone who signs in; the email
+                # is what tells them the door is open in the first place.
+                send_membership_approval_email(user, church_name=current_church_name())
         return Response(EnrollmentAdminSerializer(enrollment).data, status=status.HTTP_200_OK)
 
 
@@ -2824,7 +2860,14 @@ class SupportSubmissionView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         member = self.request.user if self.request.user and self.request.user.is_authenticated else None
-        serializer.save(member=member)
+        instance = serializer.save(member=member)
+        notify_request_safely(
+            'welfare',
+            instance.pk,
+            submitted_by='Someone anonymous' if instance.anonymous else (instance.name or 'A church member'),
+            church_name=current_church_name(),
+            submitted_at=instance.created_at,
+        )
 
 
 class InitiateContributionView(APIView):
@@ -3294,6 +3337,18 @@ class PrayerRequestView(generics.ListCreateAPIView):
                 return PrayerRequest.objects.all().order_by('-created_at')
         return PrayerRequest.objects.none()
 
+    def perform_create(self, serializer):
+        # An anonymous request keeps its author's name out of the notice too:
+        # the desk is told a request exists, not who wrote it.
+        instance = serializer.save()
+        notify_request_safely(
+            'prayer',
+            instance.pk,
+            submitted_by='Someone anonymous' if instance.anonymous else (instance.name or 'A church member'),
+            church_name=current_church_name(),
+            submitted_at=instance.created_at,
+        )
+
 
 class ChildDedicationRequestView(generics.ListCreateAPIView):
     serializer_class = ChildDedicationRequestSerializer
@@ -3306,6 +3361,19 @@ class ChildDedicationRequestView(generics.ListCreateAPIView):
             if profile and profile.has_role('admin', 'clerk', 'elder', 'children_ministry'):
                 return ChildDedicationRequest.objects.all().order_by('-id')
         return ChildDedicationRequest.objects.none()
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        # The parent asks, so the parent is named; the child is what the desk
+        # reads first in the list itself.
+        parent = (instance.father_name or instance.mother_name or '').strip()
+        notify_request_safely(
+            'dedication',
+            instance.pk,
+            submitted_by=parent or f"the family of {instance.child_name}",
+            church_name=current_church_name(),
+            submitted_at=instance.created_at,
+        )
 
 
 def get_client_ip(request):
@@ -3868,6 +3936,16 @@ class MembershipTransferRequestView(generics.ListCreateAPIView):
     def get_queryset(self):
         return MembershipTransferRequest.objects.all()
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        notify_request_safely(
+            'transfer',
+            instance.pk,
+            submitted_by=instance.member_name or 'A church member',
+            church_name=current_church_name(),
+            submitted_at=instance.created_at,
+        )
+
 
 class MembershipTransferRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [AllowAny]
@@ -4179,21 +4257,23 @@ class VisitationRequestView(generics.ListCreateAPIView):
                 return VisitationRequest.objects.all().order_by('-id')
         return VisitationRequest.objects.none()
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        notify_request_safely(
+            'visitation',
+            instance.pk,
+            submitted_by=instance.requester_name or 'A church member',
+            church_name=current_church_name(),
+            submitted_at=instance.created_at,
+        )
+
 
 class UserManagementView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserDetailSerializer
 
     def get_queryset(self):
-        """The church's roster — never the deployment's system accounts.
-
-        A superuser is the owner of the installation, not a member: it holds no
-        church office (and may hold no member profile at all), so listing it here
-        put an account nobody can pastor among the congregation. Django's
-        ``is_staff``/``is_superuser`` flags are only ever set for those system
-        accounts — a church office is a role code, not a staff flag.
-        """
-        return User.objects.filter(is_superuser=False).order_by('-date_joined')
+        return roster_queryset().order_by('-date_joined')
 
     def create(self, request, *args, **kwargs):
         profile = getattr(request.user, 'member_profile', None)
@@ -4565,9 +4645,9 @@ class MemberListPDFView(APIView):
             church_name = "SDA Church"
 
         # The printed roster is the same list as the Users screen: system
-        # accounts stay out of it here too.
+        # accounts and unanswered join requests stay out of it here too.
         users = (
-            User.objects.filter(is_superuser=False)
+            roster_queryset()
             .select_related('member_profile')
             .order_by('first_name', 'last_name')
         )

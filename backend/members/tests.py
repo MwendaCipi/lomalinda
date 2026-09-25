@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from urllib.parse import unquote
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -1864,6 +1865,242 @@ class JoinRequestApprovalTests(APITestCase):
             {'status': 'maybe'}, format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class RequestNotificationTests(APITestCase):
+    """A request from the public reaches the elders' and administrator's inboxes.
+
+    Every desk that takes a request ends the same way — somebody has to answer
+    it — so each submission must say who asked and link straight to that request
+    on the requests desk, and nothing about it may break the member's request.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('notify.admin', 'notify.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.elder = User.objects.create_user('notify.elder', 'notify.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='first_elder', roles='first_elder')
+        # An account nobody should hear about a request: not an elder, not an
+        # administrator, and not the person who asked.
+        self.plain = User.objects.create_user('notify.plain', 'notify.plain@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+        from django.core import mail
+        mail.outbox.clear()
+
+    def _recipients(self):
+        from django.core import mail
+        return sorted(address for message in mail.outbox for address in message.to)
+
+    def test_a_prayer_request_emails_the_elders_and_the_administrator(self):
+        from django.core import mail
+
+        response = self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'Please pray for my mother, who is unwell.',
+            'name': 'Grace Wanjiku',
+            'email': 'grace@example.com',
+            'phone_number': '0712345678',
+            'anonymous': False,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self._recipients(), ['notify.admin@example.com', 'notify.elder@example.com'])
+
+        body = mail.outbox[0].body
+        self.assertIn('Grace Wanjiku', body)
+        self.assertIn('prayer request', body)
+        # The link must open the requests desk with this one request in view,
+        # which means it survives being carried through the sign-in page.
+        self.assertIn(f'request=prayer-{response.data["id"]}', unquote(body))
+        self.assertIn('/administration', unquote(body))
+        self.assertNotIn('notify.plain@example.com', body)
+
+    def test_an_anonymous_prayer_request_does_not_name_its_author(self):
+        from django.core import mail
+
+        self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'A private burden I would rather not attach my name to.',
+            'name': 'Should Not Appear',
+            'anonymous': True,
+        }, format='json')
+
+        self.assertTrue(mail.outbox)
+        self.assertIn('Someone anonymous', mail.outbox[0].body)
+        self.assertNotIn('Should Not Appear', mail.outbox[0].body)
+
+    def test_the_sentence_is_the_churchs_own_when_they_wrote_one(self):
+        from django.core import mail
+
+        church = ChurchSettings.objects.first() or ChurchSettings.objects.create()
+        church.default_request_notification_message = 'A word, elder: {user_name} asks a {request}. Open {link}'
+        church.save(update_fields=['default_request_notification_message'])
+        self.addCleanup(
+            lambda: ChurchSettings.objects.filter(pk=church.pk).update(
+                default_request_notification_message=ChurchSettings._meta.get_field(
+                    'default_request_notification_message'
+                ).default
+            )
+        )
+
+        self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'Please remember the youth camp in your prayers.',
+            'name': 'Peter Mwangi',
+            # The model treats a request as anonymous unless told otherwise; the
+            # public form always sends the flag, so a named request names itself.
+            'anonymous': False,
+        }, format='json')
+
+        body = mail.outbox[0].body
+        self.assertIn('A word, elder: Peter Mwangi asks a prayer request.', body)
+        self.assertNotIn('has submitted', body)
+
+    def test_every_desk_tells_the_elders(self):
+        """Visitation, dedication, welfare and transfer requests are all requests."""
+        from django.core import mail
+
+        submitted = (
+            ('/api/members/visitations/', {
+                'requester_name': 'Mary Achieng', 'phone_number': '0722000111',
+                'visitation_type': 'sick', 'preferred_date': date.today().isoformat(),
+            }),
+            ('/api/members/child-dedications/', {
+                'child_name': 'Baby Zuri', 'child_dob': '2024-01-15', 'father_name': 'John Kamau',
+                'mother_name': 'Alice Wairimu', 'phone_number': '0733000222',
+            }),
+            ('/api/members/support-submissions/', {
+                'submission_type': 'moral_support', 'content': 'We would value a visit from the welfare team.',
+                'name': 'Eunice Nyambura',
+            }),
+            ('/api/members/transfers/', {
+                'member_name': 'Samuel Otieno', 'transfer_type': 'outgoing', 'other_church': 'SDA Nyeri',
+                'phone_number': '0744000333',
+            }),
+        )
+        for url, payload in submitted:
+            response = self.client.post(url, payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, f'{url}: {response.data}')
+
+        # One letter per request per recipient: two recipients, four desks.
+        self.assertEqual(
+            self._recipients(),
+            sorted(['notify.admin@example.com', 'notify.elder@example.com'] * len(submitted)),
+        )
+        bodies = ' '.join(message.body for message in mail.outbox)
+        for who in ('Mary Achieng', 'John Kamau', 'Eunice Nyambura', 'Samuel Otieno'):
+            self.assertIn(who, bodies)
+        for label in ('visitation request', 'child dedication request', 'welfare request', 'membership transfer request'):
+            self.assertIn(label, bodies)
+
+    def test_an_unapproved_join_request_stays_out_of_the_users_roster(self):
+        self.client.force_authenticate(self.admin)
+        applicant = User.objects.create_user('friend.grace', 'friend.grace@example.com', 'MemberPass#2026')
+        applicant.is_active = False
+        applicant.save(update_fields=['is_active'])
+        MemberProfile.objects.create(user=applicant, role='member', roles='member')
+        enrollment = EnrollmentRequest.objects.create(
+            email='friend.grace@example.com', first_name='Grace', last_name='Kioni',
+            joining_mode='friend', current_church='SDA Kabarak', user=applicant,
+            status='pending', expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+        listed = {row['username'] for row in self.client.get('/api/members/users/').data}
+        self.assertIn('notify.elder', listed)
+        self.assertNotIn('friend.grace', listed)
+        # The request itself is exactly where the office looks for it.
+        requests = self.client.get('/api/members/enrollment-requests/').data
+        self.assertEqual([row['email'] for row in requests], ['friend.grace@example.com'])
+
+        self.client.post(
+            f'/api/members/enrollment-requests/{enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+        listed = {row['username'] for row in self.client.get('/api/members/users/').data}
+        self.assertIn('friend.grace', listed)
+
+    def test_a_rejected_join_request_never_becomes_a_member(self):
+        self.client.force_authenticate(self.admin)
+        applicant = User.objects.create_user('friend.ken', 'friend.ken@example.com', 'MemberPass#2026')
+        applicant.is_active = False
+        applicant.save(update_fields=['is_active'])
+        MemberProfile.objects.create(user=applicant, role='member', roles='member')
+        enrollment = EnrollmentRequest.objects.create(
+            email='friend.ken@example.com', first_name='Ken', last_name='Otieno',
+            joining_mode='friend', current_church='SDA Kabarak', user=applicant,
+            status='pending', expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+        self.client.post(
+            f'/api/members/enrollment-requests/{enrollment.pk}/decision/',
+            {'status': 'rejected'}, format='json',
+        )
+
+        listed = {row['username'] for row in self.client.get('/api/members/users/').data}
+        self.assertNotIn('friend.ken', listed)
+
+
+class MembershipApprovalEmailTests(APITestCase):
+    """Approval is announced by email, not only by a bell nobody is logged in to."""
+
+    def setUp(self):
+        from django.core import mail
+        mail.outbox.clear()
+
+        self.elder = User.objects.create_user('approve.elder', 'approve.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.applicant = User.objects.create_user('friend.waiting', 'friend.waiting@example.com', 'MemberPass#2026')
+        self.applicant.first_name, self.applicant.last_name = 'Joy', 'Kariuki'
+        self.applicant.is_active = False
+        self.applicant.save()
+        MemberProfile.objects.create(user=self.applicant, role='member', roles='member')
+        self.enrollment = EnrollmentRequest.objects.create(
+            email='friend.waiting@example.com', first_name='Joy', last_name='Kariuki',
+            joining_mode='friend', current_church='SDA Kabarak', user=self.applicant,
+            status='pending', expires_at=timezone.now() + timedelta(hours=48),
+        )
+        self.client.force_authenticate(self.elder)
+
+    def test_approval_emails_the_member_and_rejection_does_not(self):
+        from django.core import mail
+
+        self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+
+        addresses = [message.to[0] for message in mail.outbox]
+        self.assertEqual(addresses, ['friend.waiting@example.com'])
+        body = mail.outbox[0].body
+        self.assertIn('Joy', body)
+        self.assertIn('has been approved', body)
+        self.assertIn('/login', body)
+
+        mail.outbox.clear()
+        self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'rejected'}, format='json',
+        )
+        self.assertEqual([message.to[0] for message in mail.outbox], [])
+
+    def test_the_approval_letter_is_the_churchs_own_when_they_wrote_one(self):
+        from django.core import mail
+
+        church = ChurchSettings.objects.first() or ChurchSettings.objects.create()
+        church.default_membership_approval_message = 'Welcome {name}! {church} has let you in. Sign in: {link}'
+        church.save(update_fields=['default_membership_approval_message'])
+        self.addCleanup(
+            lambda: ChurchSettings.objects.filter(pk=church.pk).update(
+                default_membership_approval_message=ChurchSettings._meta.get_field(
+                    'default_membership_approval_message'
+                ).default
+            )
+        )
+
+        self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+
+        self.assertIn('Welcome Joy!', mail.outbox[0].body)
 
 
 class AnnouncementBroadcastTests(APITestCase):

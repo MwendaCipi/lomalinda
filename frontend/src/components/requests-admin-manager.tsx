@@ -172,9 +172,11 @@ function formatDate(value?: string): string {
 
 interface RequestsAdminManagerProps {
   initialTab?: KindFilter | "transfers";
+  /** ``<kind>-<id>``, as the email about a request links to it. */
+  focusRequest?: string | null;
 }
 
-export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManagerProps) {
+export function RequestsAdminManager({ initialTab = "all", focusRequest = null }: RequestsAdminManagerProps) {
   const [activeTab, setActiveTab] = useState<KindFilter>(initialTab === "transfers" ? "transfer" : initialTab);
   // The review-state filter. Pending leads by default — the desk exists to
   // answer people — while the desks filter itself starts at all.
@@ -188,6 +190,10 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
   const [isElder, setIsElder] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // The one request a notification email pointed at, so the desk can show it
+  // rather than leaving an elder to hunt through every desk for it.
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const focusApplied = useRef<string | null>(null);
 
   // The one search box, matched against names, contacts and summaries.
   const [search, setSearch] = useState("");
@@ -429,6 +435,21 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
     );
   }, [joinRequests, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
 
+  // A link from a request notification arrives as ?request=<kind>-<id>. The
+  // filters are moved to that row once the ledgers have loaded, and only once,
+  // so the reader can then change them freely.
+  useEffect(() => {
+    if (!focusRequest || loading) return;
+    if (focusApplied.current === focusRequest) return;
+    const row = rows.find((item) => item.key === focusRequest);
+    if (!row) return;
+    focusApplied.current = focusRequest;
+    setHighlightKey(focusRequest);
+    setActiveTab(row.kind);
+    setStatusFilter("all");
+    setSearch("");
+  }, [focusRequest, loading, rows]);
+
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
@@ -444,7 +465,15 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
         KIND_META[row.kind].label.toLowerCase().includes(query)
       );
     });
-  }, [rows, activeTab, search]);
+  }, [rows, activeTab, search, statusFilter]);
+
+  // Scrolling waits for the row to exist: the filters the link set change what
+  // is rendered, so the element only appears on the following pass.
+  useEffect(() => {
+    if (!highlightKey) return;
+    const element = document.querySelector(`[data-request-row="${highlightKey}"]`);
+    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlightKey, filteredRows]);
 
   const kindCount = (kind: KindFilter) => (kind === "all" ? rows.length : rows.filter((r) => r.kind === kind).length);
 
@@ -676,7 +705,15 @@ export function RequestsAdminManager({ initialTab = "all" }: RequestsAdminManage
                 </thead>
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.key} className="border-b border-[#dfdbd1]/60 align-top last:border-0 hover:bg-[#faf9f5]">
+                    <tr
+                      key={row.key}
+                      data-request-row={row.key}
+                      className={`border-b border-[#dfdbd1]/60 align-top last:border-0 ${
+                        highlightKey === row.key
+                          ? "bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
+                          : "hover:bg-[#faf9f5]"
+                      }`}
+                    >
                       <td className="max-w-[220px] px-4 py-3">
                         <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
                         <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>

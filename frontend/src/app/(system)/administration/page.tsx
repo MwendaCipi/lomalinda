@@ -12,6 +12,7 @@ import { UserManagement } from "@/components/user-management";
 import { LeaderManagement } from "@/components/leader-management";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
+import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
 import { ExpenditureManager } from "@/components/expenditure-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
@@ -85,6 +86,12 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
 function AdministrationContent() {
   const searchParams = useSearchParams();
   const searchTab = searchParams.get("tab");
+  // The unanswered-request count, shared with the sidebar so the phone card
+  // and the desktop rail can never disagree about the number.
+  const pendingRequests = usePendingRequestCounts();
+  // The request-notification emails land here: ?request=<kind>-<id> opens the
+  // desk on that one request instead of every piece of unfinished business.
+  const searchRequest = searchParams.get("request");
 
   const [status, setStatus] = useState<"loading" | "authorized" | "denied">("loading");
   const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null>(null);
@@ -364,7 +371,19 @@ function AdministrationContent() {
                     >
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🙏</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Received Requests</span>
+                          <span className="flex items-center gap-2">
+                            <span className="block text-sm font-bold text-[#26352f]">Received Requests</span>
+                            {/* The phone hub is where a leader lands, so the count of
+                                unanswered requests travels with the card. */}
+                            {pendingRequests.total > 0 && (
+                              <span
+                                title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
+                                className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                              >
+                                {pendingRequests.total}
+                              </span>
+                            )}
+                          </span>
                           <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Review join, prayer, visitation, dedication, and support requests.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
@@ -449,7 +468,10 @@ function AdministrationContent() {
                 owns its own scrolling: toolbar pinned, table scrolls. */}
             {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin) && (
               <div className="h-full min-h-0">
-                <RequestsAdminManager initialTab={activeTab === "transfers" ? "transfers" : "all"} />
+                <RequestsAdminManager
+                  initialTab={activeTab === "transfers" ? "transfers" : "all"}
+                  focusRequest={searchRequest}
+                />
               </div>
             )}
 

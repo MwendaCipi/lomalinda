@@ -800,6 +800,23 @@ class ChurchSettings(models.Model):
         ),
         blank=True
     )
+    # What the elders and administrators are told when someone asks the church
+    # for something. Placeholders are filled per recipient; see members/requests.py
+    # for the full list and the East-Africa greeting.
+    default_request_notification_message = models.TextField(
+        default='{greeting}, {user_name} has submitted a {request}. Log in to respond to it: {link}',
+        blank=True
+    )
+    # The letter a member gets once their join request is approved.
+    default_membership_approval_message = models.TextField(
+        default=(
+            'Dear {name},\n\n'
+            'Your request to join {church} has been approved. You can now sign in at {link} '
+            'to take part in the life of the church.\n\n'
+            'God bless you.'
+        ),
+        blank=True
+    )
     # Per-role rights, as edited on the Church Roles Configuration screen:
     # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
     # defaults in members.roles.DEFAULT_ROLE_RIGHTS.
