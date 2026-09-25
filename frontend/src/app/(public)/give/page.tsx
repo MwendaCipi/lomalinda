@@ -712,8 +712,21 @@ function GivePageContent() {
                 )}
               </div>
 
-              {/* 2. Giving Accounts & Method of Giving */}
+              {/* 2. Method of Giving & Giving Accounts — how the money moves
+                  is asked for first, then which accounts it goes to. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block self-start text-sm font-medium text-[#26352f]">
+                  Method of Giving
+                  <select
+                    value={methodOfGiving}
+                    onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
+                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                  >
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="bank_transfer">Bank-to-Bank</option>
+                  </select>
+                </label>
+
                 <div className="block self-start text-sm font-medium text-[#26352f]">
                   <span>Giving accounts</span>
                   <div className="relative mt-2">
@@ -731,22 +744,11 @@ function GivePageContent() {
                     </button>
 
                     {showAccountPicker && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-[#dfdbd1] bg-white p-2 shadow-xl">
-                        {/* Header stays fixed while the account rows scroll under
-                            it, with the count on the left and Done on the right. */}
-                        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[#dfdbd1] bg-white px-2 py-1.5">
-                          <p className="min-w-0 flex-1 truncate pr-2 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
-                            Select the account(s) to give to
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setShowAccountPicker(false)}
-                            className="shrink-0 rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
-                          >
-                            Done
-                          </button>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto">
+                      /* Opens upward: the fields that follow (amounts, M-Pesa
+                         details, the submit button) sit under this row and the
+                         list used to cover them. */
+                      <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-xl">
+                        <div className="max-h-56 overflow-y-auto p-2">
                           {purposes.map((item) => {
                             const checked = selectedAccounts.includes(item.label);
                             return (
@@ -765,22 +767,24 @@ function GivePageContent() {
                             );
                           })}
                         </div>
+                        {/* The instruction and the way out sit at the foot of
+                            the list, where the eye lands after ticking. */}
+                        <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] bg-white px-2.5 py-1.5">
+                          <p className="min-w-0 flex-1 truncate pr-2 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                            Select the account(s) to give to
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowAccountPicker(false)}
+                            className="shrink-0 rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                          >
+                            Done
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
-
-                <label className="block self-start text-sm font-medium text-[#26352f]">
-                  Method of Giving
-                  <select
-                    value={methodOfGiving}
-                    onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                  >
-                    <option value="mpesa">M-Pesa</option>
-                    <option value="bank_transfer">Bank-to-Bank</option>
-                  </select>
-                </label>
               </div>
 
               {/* 3. One amount per chosen account — the account and its amount
