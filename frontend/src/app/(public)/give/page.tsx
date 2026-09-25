@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { Check, SlidersHorizontal } from "lucide-react";
+import { Check, SlidersHorizontal, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -251,6 +251,22 @@ function GivePageContent() {
     );
   };
 
+  /**
+   * Phones: lift the focused field clear of the software keyboard.
+   *
+   * The keyboard overlays the page rather than resizing it on a phone, so a
+   * field near the foot of the modal ends up underneath it — you type blind.
+   * The browser's own scroll happens while the keyboard is still animating, so
+   * this waits for it to settle and then centres the field in the modal.
+   */
+  function liftAboveKeyboard(event: React.FocusEvent<HTMLInputElement>) {
+    const field = event.currentTarget;
+    if (window.innerWidth >= 640) return;
+    window.setTimeout(() => {
+      field.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 350);
+  }
+
   const allocationTotal = selectedAccounts.reduce(
     (sum, account) => sum + (Number(accountAmounts[account]) || 0),
     0
@@ -270,8 +286,6 @@ function GivePageContent() {
     bank_branch: "Meru",
     bank_swift_code: "KCBKNEN",
   });
-  // The M-Pesa paying-in detail, as set in church settings; hidden when unset.
-  const [churchMpesaPaybill, setChurchMpesaPaybill] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/church-settings/`)
@@ -285,7 +299,6 @@ function GivePageContent() {
             bank_branch: data.bank_branch || "Nairobi West",
             bank_swift_code: data.bank_swift_code || "KCBKNEN",
           });
-          setChurchMpesaPaybill(data.mpesa_paybill_number || "");
         }
       })
       .catch(() => {});
@@ -835,6 +848,17 @@ function GivePageContent() {
                         }
                         className="w-24 shrink-0 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-[#b36b3c] sm:w-32"
                       />
+                      {/* One tap takes the account off the gift, so a change of
+                          mind does not mean opening the picker again. */}
+                      <button
+                        type="button"
+                        onClick={() => toggleAccount(account)}
+                        aria-label={`Remove ${account}`}
+                        title={`Remove ${account}`}
+                        className="shrink-0 rounded-full p-1 text-[#8a948d] transition hover:bg-[#f2efe8] hover:text-[#96552c]"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
                   <div className="flex items-center justify-between px-1 pt-1 text-sm">
@@ -847,27 +871,6 @@ function GivePageContent() {
               {/* 4. Method-Specific Fields & Details */}
               {methodOfGiving === "mpesa" && (
                 <div className="grid grid-cols-1 gap-4">
-                  {/* The church's own M-Pesa paying-in number, when the office
-                      has set it — for members paying by Pay Bill from their own
-                      phone rather than through the STK prompt. The account
-                      number is what they are giving for, so it is explained
-                      rather than configured: the church has one number. */}
-                  {churchMpesaPaybill && (
-                    <div className="rounded-2xl border border-[#dfdbd1] bg-[#f4f7f2] p-4 text-xs space-y-2">
-                      <p className="font-bold text-[#26352f] text-sm flex items-center gap-2">
-                        <span>📱</span> Church M-Pesa Details
-                      </p>
-                      <div className="space-y-1.5 text-[#3d5148] pt-1">
-                        <div>
-                          <span className="font-semibold text-[#26352f]">Pay Bill:</span> {churchMpesaPaybill}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-[#26352f]">Account:</span> type what you are giving for — the
-                          account you picked above, such as Tithe or Combined Offering.
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <label className="block text-sm font-medium text-[#26352f]">
                     Phone number
                     <input
@@ -879,6 +882,7 @@ function GivePageContent() {
                       required
                       placeholder="e.g. 0712345678"
                       value={phoneNumber}
+                      onFocus={liftAboveKeyboard}
                       onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
                       className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
                     />
