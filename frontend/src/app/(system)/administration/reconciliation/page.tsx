@@ -386,7 +386,7 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden contributions-ledger-page">
+    <main className="contributions-ledger-page pinned-workspace min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <AdminSidebar />
         

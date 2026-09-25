@@ -112,23 +112,27 @@ html:has(.authenticated-giving-page) .authenticated-public-shell {
      chain to natural height and let the main's own bottom padding — bar +
      device inset + a small gap — be the reserve.
 
-     Pinned workspaces keep the chain: the member space and the ledger carry
-     an always-on (unprefixed) overflow-y-auto scroller that needs a bounded
-     height, so :has() excludes them. The scan skips anything inside the
+     Pinned workspaces keep the chain. A page that owns its scrolling marks
+     its <main> with `pinned-workspace` (the administration workspace and the
+     contributions ledger), and the whole rule below skips those: the admin
+     workspace's mobile card grid has no always-on inner scroller, so the
+     sniffing guard used to let this rule release its chain — which left the
+     grid taller than the shell and clipped, with the tab bar stopping anyone
+     from scrolling to the last cards. The scan also skips anything inside the
      page's <aside> sidebars, whose own scroll containers are always plain
      overflow-y-auto (sidebars are hidden on phones, so they can't justify
      a desktop-style height chain there). */
-  .app-shell:not(.authenticated-public-shell) {
+  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) {
     height: auto;
     padding-bottom: 0;
   }
-  .app-shell:not(.authenticated-public-shell) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) {
+  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) {
     flex: 0 0 auto;
     min-height: 0;
     height: auto;
     padding-bottom: calc(4.1875rem + env(safe-area-inset-bottom, 0px));
   }
-  .app-shell:not(.authenticated-public-shell) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) > div {
+  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) > div {
     height: auto;
   }
 }
