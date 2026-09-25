@@ -15,6 +15,54 @@ interface ApprovedTestimony {
   created_at: string;
 }
 
+/**
+ * What a member sees while no testimony is on the board.
+ *
+ * There used to be a single line of grey text here — "No testimonies have been
+ * published yet" — which named the absence without offering a way out of it.
+ * The empty board is the moment to invite the first testimony, so both ways to
+ * give one sit right here: ask for a slot during fellowship, or share it now.
+ */
+function EmptyTestimonies({
+  searching,
+  onRequest,
+  onShare,
+}: {
+  searching: boolean;
+  onRequest: () => void;
+  onShare: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white px-6 py-10 text-center shadow-sm sm:py-12">
+      <span aria-hidden="true" className="text-4xl">✨</span>
+      <h2 className="mt-3 text-base font-bold text-[#26352f] sm:text-lg">
+        {searching ? "No testimonies match your search" : "No testimonies yet"}
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#617068]">
+        {searching
+          ? "Try a different name or word, or clear the search to read every testimony on the board."
+          : "Be the first to tell the church family what God has done. Share it here now, or ask for a slot during fellowship."}
+      </p>
+      <div className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={onRequest}
+          className="rounded-full bg-[#b36b3c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+        >
+          Request
+        </button>
+        <button
+          type="button"
+          onClick={onShare}
+          className="rounded-full bg-[#5f8067] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4d6d55]"
+        >
+          Share Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TestimoniesPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"online" | "fellowship" | null>(null);
@@ -107,6 +155,17 @@ export default function TestimoniesPage() {
     }
   }
 
+  function startSharing() {
+    setMode("online");
+    setMessage("");
+  }
+
+  function startRequest() {
+    setMode("fellowship");
+    setRequestModalOpen(true);
+    setMessage("");
+  }
+
   if (mode === "online") {
     return (
       <main className="min-h-screen bg-[#f7f4ee] px-6 pb-8 pt-6 text-[#26352f] sm:py-10">
@@ -173,43 +232,51 @@ export default function TestimoniesPage() {
             </label>
           </div>
           <div className="mt-4">
-            {/* PC Desktop Table View (visible on md and up) */}
-            <div className="hidden md:block overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
-              <div className="overflow-x-auto custom-table-scrollbar">
-                <table className="w-full min-w-[42rem] text-left text-sm">
-                  <thead className="bg-[#f7f4ee] text-xs uppercase tracking-wide text-[#617068]"><tr><th className="px-5 py-3 font-semibold">Name</th><th className="px-5 py-3 font-semibold">Testimony</th><th className="px-5 py-3 font-semibold">Date</th></tr></thead>
-                  <tbody className="divide-y divide-[#dfdbd1]">
-                    {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-[#617068]">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</td></tr>)}
-                    {filteredTestimonies.length === 0 && <tr><td colSpan={3} className="px-5 py-8 text-center text-sm text-[#617068]">{approvedTestimonies.length ? "No testimonies match your search." : "No testimonies have been published yet."}</td></tr>}
-                  </tbody>
-                </table>
+            {filteredTestimonies.length === 0 ? (
+              <EmptyTestimonies
+                searching={approvedTestimonies.length > 0}
+                onRequest={startRequest}
+                onShare={startSharing}
+              />
+            ) : (
+              <>
+              {/* PC Desktop Table View (visible on md and up) */}
+              <div className="hidden md:block overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
+                <div className="overflow-x-auto custom-table-scrollbar">
+                  <table className="w-full min-w-[42rem] text-left text-sm">
+                    <thead className="bg-[#f7f4ee] text-xs uppercase tracking-wide text-[#617068]"><tr><th className="px-5 py-3 font-semibold">Name</th><th className="px-5 py-3 font-semibold">Testimony</th><th className="px-5 py-3 font-semibold">Date</th></tr></thead>
+                    <tbody className="divide-y divide-[#dfdbd1]">
+                      {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-[#617068]">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
 
-            {/* Mobile Testimonies Cards View (visible on mobile only) */}
-            <div className="grid gap-4 md:hidden">
-              {filteredTestimonies.map((item) => (
-                <div key={item.id} className="rounded-2xl bg-white p-5 border border-[#dfdbd1] shadow-sm space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-sm text-[#26352f]">{item.name || "Church Member"}</h3>
-                    <span className="text-[11px] text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</span>
+              {/* Mobile Testimonies Cards View (visible on mobile only) */}
+              <div className="grid gap-4 md:hidden">
+                {filteredTestimonies.map((item) => (
+                  <div key={item.id} className="rounded-2xl bg-white p-5 border border-[#dfdbd1] shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-sm text-[#26352f]">{item.name || "Church Member"}</h3>
+                      <span className="text-[11px] text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs leading-relaxed text-[#617068]">{item.testimony_text}</p>
                   </div>
-                  <p className="text-xs leading-relaxed text-[#617068]">{item.testimony_text}</p>
-                </div>
-              ))}
-              {filteredTestimonies.length === 0 && (
-                <div className="rounded-2xl bg-white p-6 text-center text-xs text-[#617068] border border-[#dfdbd1]">
-                  {approvedTestimonies.length ? "No testimonies match your search." : "No testimonies have been published yet."}
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+              </>
+            )}
           </div>
         </section>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => { setMode("online"); setMessage(""); }} className="rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55]">Share testimony</button>
-          <button type="button" onClick={() => { setMode("fellowship"); setRequestModalOpen(true); setMessage(""); }} className="rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white transition hover:bg-[#96552e]">Request</button>
-        </div>
+        {/* With nothing on the board the pair lives inside the empty panel, so
+            it is not printed twice in a row. */}
+        {filteredTestimonies.length > 0 && (
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button type="button" onClick={startRequest} className="rounded-full bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]">Request</button>
+            <button type="button" onClick={startSharing} className="rounded-full bg-[#5f8067] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4d6d55]">Share Now</button>
+          </div>
+        )}
 
         {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#26352f]/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
           <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
