@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { showAlert } from "@/lib/alerts";
@@ -42,6 +41,9 @@ function GiveInKindPageContent() {
   const [records, setRecords] = useState<InKindRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [message, setMessage] = useState("");
+  // The giving form lives in a modal, opened by Give Now — the page itself is
+  // the record of what has been given, mirroring the money-giving page.
+  const [showGiveModal, setShowGiveModal] = useState(false);
 
   // ── In-Kind Report filters ──────────────────────────────────
   const PAGE_SIZE = 50;
@@ -117,6 +119,11 @@ function GiveInKindPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromDate, toDate, purposeFilter, reportSearch]);
 
+  // Opening the form never wears the previous attempt's message.
+  useEffect(() => {
+    if (showGiveModal) setMessage("");
+  }, [showGiveModal]);
+
   const totalPages = Math.max(1, Math.ceil(serverCount / PAGE_SIZE));
 
   const goToPage = (target: number) => {
@@ -148,7 +155,8 @@ function GiveInKindPageContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setMessage("Thank you! Your in-kind giving has been recorded.");
+        setShowGiveModal(false);
+        showAlert("Gift Recorded", "Thank you! Your in-kind giving has been recorded.", "success");
         setItems("");
         setNotes("");
         setPage(1);
@@ -261,126 +269,67 @@ function GiveInKindPageContent() {
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Giving</p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">In-Kind Giving</h1>
               <p className="mt-2 text-sm text-[#617068]">
-                Donate goods, produce, or materials instead of money. Each gift is recorded for the church
-                stewardship team. These gifts are tracked separately from monetary reports.
+                Donate goods, produce, or materials instead of money.
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">
-                  Items donated <span className="text-[#617068]">({itemCount} item{itemCount === 1 ? "" : "s"})</span> *
-                </label>
-                <textarea
-                  required
-                  rows={5}
-                  value={items}
-                  onChange={(e) => setItems(e.target.value)}
-                  placeholder={"One item per row, e.g.\n2 bags of maize flour\n1 carton of cooking oil\n50 exercise books"}
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm focus:border-[#b36b3c] focus:outline-none"
-                />
-                <p className="mt-1 text-[11px] text-[#617068]">Write each item on its own line.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Account</label>
-                  <select
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  >
-                    {IN_KIND_PURPOSES.map((p) => (
-                      <option key={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Your name</label>
-                  <input
-                    type="text"
-                    value={donorName}
-                    onChange={(e) => setDonorName(e.target.value)}
-                    placeholder="Leave blank to give anonymously"
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Notes (optional)</label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Anything the stewardship team should know"
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                />
-              </div>
-
-              {message && (
-                <p className={`rounded-xl p-3 text-xs font-semibold ${message.includes("Thank you") ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>
-                  {message}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting || itemCount === 0}
-                className="w-full rounded-xl bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-60"
-              >
-                {submitting ? "Recording…" : "Record In-Kind Gift"}
-              </button>
-            </form>
-
-            {/* ── In-Kind Report (signed-in users) ── */}
+            {/* ── My In-Kind Givings: the page is the record, like My Givings on
+                the money-giving page. The form is a modal away. ── */}
             {signedIn && (
               <section className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dfdbd1] px-5 py-4">
                   <div>
-                    <h2 className="text-base font-bold text-[#26352f]">In-Kind Report</h2>
+                    <h2 className="text-base font-bold text-[#26352f]">My In-Kind Givings</h2>
                     <p className="mt-0.5 text-[11px] text-[#617068]">
                       {loadingRecords
                         ? "Loading records…"
                         : `${serverCount} gift${serverCount === 1 ? "" : "s"} · ${serverTotalItems} item${serverTotalItems === 1 ? "" : "s"}`}
                     </p>
                   </div>
-                  <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-                    <input
-                      type="date"
-                      value={fromDate}
-                      max={toDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      title="From date"
-                      className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                    />
-                    <span className="text-xs text-[#617068]">→</span>
-                    <input
-                      type="date"
-                      value={toDate}
-                      min={fromDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      title="To date"
-                      className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                    />
-                    <select
-                      value={purposeFilter}
-                      onChange={(e) => setPurposeFilter(e.target.value)}
-                      className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-                    >
-                      <option value="all">All purposes</option>
-                      {reportPurposes.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Search..."
-                      value={reportSearch}
-                      onChange={(e) => setReportSearch(e.target.value)}
-                      className="min-w-[120px] flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGiveModal(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+                  >
+                    Give Now
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#dfdbd1] px-5 py-3">
+                  <input
+                    type="date"
+                    value={fromDate}
+                    max={toDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    title="From date"
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  />
+                  <span className="text-xs text-[#617068]">→</span>
+                  <input
+                    type="date"
+                    value={toDate}
+                    min={fromDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    title="To date"
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  />
+                  <select
+                    value={purposeFilter}
+                    onChange={(e) => setPurposeFilter(e.target.value)}
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+                  >
+                    <option value="all">All purposes</option>
+                    {reportPurposes.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={reportSearch}
+                    onChange={(e) => setReportSearch(e.target.value)}
+                    className="min-w-[120px] flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  />
                 </div>
 
                 <div className="max-h-[70vh] overflow-y-auto overscroll-contain custom-table-scrollbar px-5 py-3">
@@ -404,7 +353,7 @@ function GiveInKindPageContent() {
                           <tr>
                             <td colSpan={6} className="py-8 text-center">
                               <p className="text-xs font-semibold text-[#26352f]">No in-kind gifts in this period</p>
-                              <p className="mt-1 text-[11px] text-[#617068]">Adjust the dates above or record a gift using the form.</p>
+                              <p className="mt-1 text-[11px] text-[#617068]">Adjust the dates above or tap Give Now.</p>
                             </td>
                           </tr>
                         ) : (
@@ -424,11 +373,14 @@ function GiveInKindPageContent() {
                   </div>
 
                   {/* Mobile cards scroll inside the same container as the desktop table */}
-                  <div className="grid gap-3">
+                  <div className="grid gap-3 md:hidden">
                     {loadingRecords ? (
                       <div className="py-8 text-center text-xs text-[#617068]">Loading records…</div>
                     ) : records.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-[#617068]">No in-kind gifts in this period.</div>
+                      <div className="py-8 text-center">
+                        <p className="text-xs font-semibold text-[#26352f]">No in-kind gifts in this period</p>
+                        <p className="mt-1 text-[11px] text-[#617068]">Adjust the dates above or tap Give Now.</p>
+                      </div>
                     ) : (
                       records.map((r) => (
                         <div key={r.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
@@ -491,13 +443,103 @@ function GiveInKindPageContent() {
                 </div>
               </section>
             )}
-
-            <p className="text-center text-xs text-[#617068]">
-              Prefer to give money? <Link href="/give/" className="font-semibold text-[#b36b3c] hover:underline">Give tithes &amp; offerings</Link>.
-            </p>
           </div>
         </div>
       </div>
+
+      {/* ── Give Now modal (in-kind) ── */}
+      {showGiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="in-kind-modal-title"
+            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+          >
+            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+              <div>
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">In-Kind Giving</p>
+                <h3 id="in-kind-modal-title" className="text-lg font-bold text-[#26352f]">Give Now</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGiveModal(false)}
+                disabled={submitting}
+                className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+              {message && (
+                <p className="rounded-xl p-3 text-xs font-semibold bg-red-50 text-red-700">
+                  {message}
+                </p>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-[#26352f]">
+                  Items donated <span className="text-[#617068]">({itemCount} item{itemCount === 1 ? "" : "s"})</span> *
+                </label>
+                <textarea
+                  required
+                  rows={5}
+                  value={items}
+                  onChange={(e) => setItems(e.target.value)}
+                  placeholder={"One item per row, e.g.\n2 bags of maize flour\n1 carton of cooking oil\n50 exercise books"}
+                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm focus:border-[#b36b3c] focus:outline-none"
+                />
+                <p className="mt-1 text-[11px] text-[#617068]">Write each item on its own line.</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Account</label>
+                  <select
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  >
+                    {IN_KIND_PURPOSES.map((p) => (
+                      <option key={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#26352f]">Your name</label>
+                  <input
+                    type="text"
+                    value={donorName}
+                    onChange={(e) => setDonorName(e.target.value)}
+                    placeholder="Leave blank to give anonymously"
+                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#26352f]">Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Anything the stewardship team should know"
+                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || itemCount === 0}
+                className="w-full rounded-xl bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-60"
+              >
+                {submitting ? "Recording…" : "Record In-Kind Gift"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

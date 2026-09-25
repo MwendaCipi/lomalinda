@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HandHeart, Search } from "lucide-react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
+import { GiveNowModal } from "@/components/give-now-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -22,8 +22,8 @@ type TreasuryAccount = {
 const money = (n: number) =>
   `KES ${Number(n || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
-/** The giving form a member reaches to support one account directly. */
-const supportHref = (accountName: string) => `/give?purpose=${encodeURIComponent(accountName)}`;
+/** The account a Support button names, preselected in the in-page modal. */
+const supportAccount = (accountName: string) => accountName;
 
 // Card accent per treasury account type — the accounts themselves come live
 // from admin › Treasury Accounts, nothing about them is hardcoded here.
@@ -39,6 +39,9 @@ export default function LiveReportsPage() {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // "Support this account" opens the give-now modal right here, so cancelling
+  // lands the member back on the live reports page — never mid-navigation.
+  const [supportAccountName, setSupportAccountName] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   async function loadData() {
@@ -136,13 +139,14 @@ export default function LiveReportsPage() {
                       {account.account_number && (
                         <p className="mt-1 font-mono text-xs text-[#617068]">A/C {account.account_number}</p>
                       )}
-                      <Link
-                        href={supportHref(account.description || account.name)}
-                        className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#faf7f2]"
+                      <button
+                        type="button"
+                        onClick={() => setSupportAccountName(supportAccount(account.description || account.name))}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#faf7f2]"
                       >
                         <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
                         Support this account
-                      </Link>
+                      </button>
                     </div>
                   ))
                 )}
@@ -151,6 +155,14 @@ export default function LiveReportsPage() {
           </div>
         </div>
       </div>
+
+      {/* Supporting an account happens here: the modal preselects the account
+          and cancelling returns to this page. */}
+      <GiveNowModal
+        open={supportAccountName !== null}
+        onClose={() => setSupportAccountName(null)}
+        presetAccount={supportAccountName ?? undefined}
+      />
     </main>
   );
 }
