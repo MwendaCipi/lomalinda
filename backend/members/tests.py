@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import StringIO
 from unittest.mock import patch
 from urllib.parse import unquote
 
@@ -507,6 +508,80 @@ class MpesaC2BAPITests(APITestCase):
         contribution = Contribution.objects.get(mpesa_receipt_number='XYZ98765')
         self.assertEqual(contribution.status, 'completed')
         self.assertEqual(contribution.donor_name, 'Samuel Oti Otieno')
+
+
+class RegisterMpesaC2BUrlsCommandTests(TestCase):
+    def _run(self, *args, **options):
+        from django.core.management import call_command
+
+        out, err = StringIO(), StringIO()
+        call_command('register_mpesa_c2b_urls', *args, stdout=out, stderr=err, **options)
+        return out.getvalue(), err.getvalue()
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_registers_urls_from_environment(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {'ResponseDescription': 'Accept the service request'}
+
+        with patch.dict('os.environ', {
+            'MPESA_CONSUMER_KEY': 'key',
+            'MPESA_CONSUMER_SECRET': 'secret',
+            'MPESA_SHORTCODE': '600000',
+            'MPESA_C2B_VALIDATION_URL': 'https://example.com/api/members/payments/mpesa/c2b/validation/',
+            'MPESA_C2B_CONFIRMATION_URL': 'https://example.com/api/members/payments/mpesa/c2b/confirmation/',
+        }):
+            out, _ = self._run()
+
+        self.assertIn('C2B URLs registered with Safaricom.', out)
+        body = mock_post.call_args.kwargs['json']
+        self.assertEqual(body['ShortCode'], '600000')
+        self.assertEqual(body['ResponseType'], 'Completed')
+        self.assertEqual(body['ValidationURL'], 'https://example.com/api/members/payments/mpesa/c2b/validation/')
+        self.assertEqual(body['ConfirmationURL'], 'https://example.com/api/members/payments/mpesa/c2b/confirmation/')
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_explicit_urls_override_environment(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {}
+
+        with patch.dict('os.environ', {
+            'MPESA_CONSUMER_KEY': 'key',
+            'MPESA_CONSUMER_SECRET': 'secret',
+            'MPESA_SHORTCODE': '600000',
+            'MPESA_C2B_VALIDATION_URL': 'https://stale.example.com/validation/',
+            'MPESA_C2B_CONFIRMATION_URL': 'https://stale.example.com/confirmation/',
+        }):
+            self._run(
+                '--validation-url', 'https://fresh.example.com/validation/',
+                '--confirmation-url', 'https://fresh.example.com/confirmation/',
+            )
+
+        body = mock_post.call_args.kwargs['json']
+        self.assertEqual(body['ValidationURL'], 'https://fresh.example.com/validation/')
+        self.assertEqual(body['ConfirmationURL'], 'https://fresh.example.com/confirmation/')
+
+    def test_missing_configuration_stops_with_error(self):
+        from django.core.management import CommandError
+
+        with patch.dict('os.environ', {
+            'MPESA_CONSUMER_KEY': 'key',
+            'MPESA_CONSUMER_SECRET': 'secret',
+            'MPESA_SHORTCODE': '600000',
+            'MPESA_C2B_VALIDATION_URL': '',
+            'MPESA_C2B_CONFIRMATION_URL': '',
+        }):
+            with self.assertRaises(CommandError):
+                self._run()
 
 
 class MpesaRefundAPITests(APITestCase):
@@ -1647,7 +1722,7 @@ class AnnouncementPermissionTests(APITestCase):
         elder = self._profile('elder.member', 'member, elder')
         self.client.force_authenticate(elder)
         response = self.client.post('/api/members/announcements/', {
-            'title': 'Board meeting', 'text': 'Sunday at 10am.', 'visibility': 'members',
+            'title': 'Board meeting', 'text': 'Sunday at 10am.', 'visibility': 'members_only',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1656,7 +1731,7 @@ class AnnouncementPermissionTests(APITestCase):
         clerk = self._profile('clerk.poster', 'clerk')
         self.client.force_authenticate(clerk)
         ok = self.client.post('/api/members/announcements/', {
-            'title': 'Choir practice', 'text': 'Friday 4pm.', 'visibility': 'members',
+            'title': 'Choir practice', 'text': 'Friday 4pm.', 'visibility': 'members_only',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
@@ -1664,7 +1739,7 @@ class AnnouncementPermissionTests(APITestCase):
         member = self._profile('plain.member', 'member')
         self.client.force_authenticate(member)
         denied = self.client.post('/api/members/announcements/', {
-            'title': 'Not mine', 'text': 'Should be refused.', 'visibility': 'members',
+            'title': 'Not mine', 'text': 'Should be refused.', 'visibility': 'members_only',
         }, format='json')
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -1672,7 +1747,7 @@ class AnnouncementPermissionTests(APITestCase):
         from .models import Announcement
 
         elder = self._profile('elder.deleter', 'member, elder')
-        announcement = Announcement.objects.create(title='Temp', text='To be deleted', visibility='members')
+        announcement = Announcement.objects.create(title='Temp', text='To be deleted', visibility='members_only')
         self.client.force_authenticate(elder)
         response = self.client.delete(f'/api/members/announcements/{announcement.pk}/')
         self.assertIn(response.status_code, (status.HTTP_204_NO_CONTENT, status.HTTP_200_OK))
@@ -1755,7 +1830,7 @@ class AnnouncementPublishingTests(APITestCase):
 
     def test_site_channel_announcement_is_published(self):
         response = self.client.post('/api/members/announcements/', {
-            'title': 'Work day', 'text': 'Sunday after service.', 'visibility': 'members',
+            'title': 'Work day', 'text': 'Sunday after service.', 'visibility': 'members_only',
             'sharing_option': 'site,email',
             **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
@@ -1764,7 +1839,7 @@ class AnnouncementPublishingTests(APITestCase):
 
     def test_email_only_announcement_stays_off_the_site(self):
         response = self.client.post('/api/members/announcements/', {
-            'title': 'Members only mail', 'text': 'Sent by email.', 'visibility': 'members',
+            'title': 'Members only mail', 'text': 'Sent by email.', 'visibility': 'members_only',
             'sharing_option': 'email',
             **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
@@ -1775,7 +1850,7 @@ class AnnouncementPublishingTests(APITestCase):
         from .models import Announcement
 
         announcement = Announcement.objects.create(
-            title='Old notice', text='Body', visibility='members', published=False,
+            title='Old notice', text='Body', visibility='members_only', published=False,
             starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
         )
         response = self.client.patch(f'/api/members/announcements/{announcement.pk}/', {
@@ -2145,7 +2220,7 @@ class AnnouncementBroadcastTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Potluck Sabbath',
             'text': 'Bring a dish to share after divine service.',
-            'visibility': 'public',
+            'visibility': 'public_website',
             'sharing_option': 'email',
             'attachment': flyer,
             **ANNOUNCEMENT_WINDOW,
@@ -2162,7 +2237,7 @@ class AnnouncementBroadcastTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Too long',
             'text': 'x' * 501,
-            'visibility': 'public',
+            'visibility': 'public_website',
             'sharing_option': 'site',
             **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
@@ -2171,7 +2246,7 @@ class AnnouncementBroadcastTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Just right',
             'text': 'x' * 500,
-            'visibility': 'public',
+            'visibility': 'public_website',
             'sharing_option': 'site',
             **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
@@ -2194,7 +2269,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
         self.stranger = User.objects.create_user('ann.stranger', 'ann.stranger@example.com', 'ChurchPass#2026')
         MemberProfile.objects.create(user=self.stranger, role='member', roles='member')
         self.draft = Announcement.objects.create(
-            title='Draft notice', text='Not ready yet.', visibility='members', published=False,
+            title='Draft notice', text='Not ready yet.', visibility='members_only', published=False,
             starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
         )
 
@@ -2204,7 +2279,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'From the owner',
             'text': 'Posted as staff.',
-            'visibility': 'public',
+            'visibility': 'public_website',
             'sharing_option': 'site',
             **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
@@ -2215,7 +2290,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Sneaky',
             'text': 'Should not land.',
-            'visibility': 'public',
+            'visibility': 'public_website',
             'sharing_option': 'site',
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -2247,7 +2322,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
         from .models import Announcement
 
         post = Announcement.objects.create(
-            title='Live post', text='Still here after the attempt.', visibility='public', published=True,
+            title='Live post', text='Still here after the attempt.', visibility='public_website', published=True,
         )
         self.client.force_authenticate(self.stranger)
         response = self.client.delete(f'/api/members/announcements/{post.pk}/')
@@ -2531,15 +2606,13 @@ class AnnouncementEventDatesAPITests(APITestCase):
 
     def _announcement(self, title, **dates):
         from .models import Announcement
-        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members', **dates)
+        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members_only', **dates)
 
     def test_listing_prioritises_the_event_closest_in_time(self):
         today = timezone.localdate()
         self._announcement('General notice')
         self._announcement('Happening now', event_date_from=today - timedelta(days=1), event_date_to=today + timedelta(days=1))
-        self._announcement('Yesterday social', event_date_from=today - timedelta(days=1), event_date_to=today - timedelta(days=1))
         self._announcement('Next week program', event_date_from=today + timedelta(days=7), event_date_to=today + timedelta(days=7))
-        self._announcement('Last month trip', event_date_from=today - timedelta(days=30), event_date_to=today - timedelta(days=30))
         self._announcement('Far camp', event_date_from=today + timedelta(days=100), event_date_to=today + timedelta(days=102))
 
         response = self.client.get('/api/members/announcements/')
@@ -2547,14 +2620,42 @@ class AnnouncementEventDatesAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             [row['title'] for row in response.data],
-            ['Happening now', 'Yesterday social', 'Next week program', 'Last month trip', 'Far camp', 'General notice'],
+            ['Happening now', 'Next week program', 'Far camp', 'General notice'],
         )
+
+    def test_an_event_whose_last_day_has_passed_leaves_the_feed(self):
+        """The event's own end retires the post; nobody comes back to delete it."""
+        today = timezone.localdate()
+        self._announcement('Ended yesterday', event_date_from=today - timedelta(days=2), event_date_to=today - timedelta(days=1))
+        self._announcement('Ends today', event_date_from=today - timedelta(days=1), event_date_to=today)
+        self._announcement('No event, legacy window', expires_at=today + timedelta(days=5))
+        self._announcement('No event, no window')
+
+        response = self.client.get('/api/members/announcements/')
+
+        titles = [row['title'] for row in response.data]
+        self.assertIn('Ends today', titles)
+        self.assertIn('No event, legacy window', titles)
+        self.assertIn('No event, no window', titles)
+        self.assertNotIn('Ended yesterday', titles)
+
+    def test_the_event_start_date_sets_the_position_not_the_posting_date(self):
+        """A post created earlier but about a sooner event leads the feed."""
+        today = timezone.localdate()
+        # Created first, but its event starts later.
+        first = self._announcement('Later event', event_date_from=today + timedelta(days=30), event_date_to=today + timedelta(days=30))
+        self._announcement('Sooner event', event_date_from=today + timedelta(days=2), event_date_to=today + timedelta(days=2))
+
+        response = self.client.get('/api/members/announcements/')
+
+        titles = [row['title'] for row in response.data]
+        self.assertLess(titles.index('Sooner event'), titles.index('Later event'))
 
     def test_event_dates_and_link_round_trip(self):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Town hall',
             'text': 'Join us for the town hall.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             'sharing_option': 'site',
             'href': 'https://meet.example.com/town-hall',
             'event_date_from': '2026-10-01',
@@ -2571,7 +2672,7 @@ class AnnouncementEventDatesAPITests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Backwards',
             'text': 'Dates the wrong way round.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             'sharing_option': 'site',
             'event_date_from': '2026-10-05',
             'event_date_to': '2026-10-01',
@@ -3818,7 +3919,7 @@ class FundDriveAnnouncementsTests(APITestCase):
         response = self.client.post(self.URL, {
             'title': 'Camp Drive',
             'text': 'Help our young people reach camp.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             'campaign': campaign.id,
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
@@ -3835,7 +3936,7 @@ class FundDriveAnnouncementsTests(APITestCase):
         response = self.client.post(self.URL, {
             'title': 'Choir practice moves',
             'text': 'Practice now meets on Thursday.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
@@ -3850,7 +3951,7 @@ class FundDriveAnnouncementsTests(APITestCase):
         response = self.client.post(self.URL, {
             'title': 'Roof Fund',
             'text': 'The roof fund drive continues.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             'campaign': campaign.id,
         }, format='json')
 
@@ -4166,7 +4267,7 @@ class AnnouncementRightsTests(APITestCase):
         clerk = self._profile('rights.clerk', 'clerk')
         self.client.force_authenticate(clerk)
         ok = self.client.post('/api/members/announcements/', {
-            'title': 'Allowed', 'text': 'Default rights allow this.', 'visibility': 'members',
+            'title': 'Allowed', 'text': 'Default rights allow this.', 'visibility': 'members_only',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
@@ -4176,7 +4277,7 @@ class AnnouncementRightsTests(APITestCase):
         settings_row.save()
 
         denied = self.client.post('/api/members/announcements/', {
-            'title': 'Refused', 'text': 'The right was withdrawn.', 'visibility': 'members',
+            'title': 'Refused', 'text': 'The right was withdrawn.', 'visibility': 'members_only',
         }, format='json')
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -4188,7 +4289,7 @@ class AnnouncementRightsTests(APITestCase):
 
         self.client.force_authenticate(treasurer)
         ok = self.client.post('/api/members/announcements/', {
-            'title': 'Granted', 'text': 'The church granted this right.', 'visibility': 'members',
+            'title': 'Granted', 'text': 'The church granted this right.', 'visibility': 'members_only',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
@@ -4605,12 +4706,11 @@ class YaLessonWeeklyCacheTests(APITestCase):
 
 
 class AnnouncementDisplayWindowTests(APITestCase):
-    """A post lives for the window it is published with, and no longer.
+    """The event the announcement is about is its clock.
 
-    Readers used to pick a From/To range to see what had been posted, which
-    meant every announcement was shown forever if nobody came back to retire it.
-    The window belongs to the announcement now: it appears on its start date,
-    stays off the feed until then, and removes itself on its end date.
+    Posts used to demand a display window; now the event dates order the feed
+    and retire the post, so the window is only a legacy fallback for rows that
+    never had an event — honored where set, never demanded.
     """
 
     def setUp(self):
@@ -4621,23 +4721,24 @@ class AnnouncementDisplayWindowTests(APITestCase):
 
     def _post(self, title, **dates):
         return self.client.post('/api/members/announcements/', {
-            'title': title, 'text': f'{title} body', 'visibility': 'members', 'sharing_option': 'site', **dates,
+            'title': title, 'text': f'{title} body', 'visibility': 'members_only', 'sharing_option': 'site', **dates,
         }, format='json')
 
     def _fixture(self, title, **dates):
-        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members', **dates)
+        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members_only', **dates)
 
     def _feed(self, query=''):
         return [row['title'] for row in self.client.get(f'/api/members/announcements/{query}').data]
 
-    def test_posting_without_a_window_is_refused(self):
+    def test_posting_without_a_window_is_accepted(self):
+        """The event dates are the clock; an undated post simply stays until removed."""
         response = self.client.post('/api/members/announcements/', {
-            'title': 'Undated', 'text': 'No window.', 'visibility': 'members', 'sharing_option': 'site',
+            'title': 'Undated', 'text': 'No window.', 'visibility': 'members_only', 'sharing_option': 'site',
         }, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('starts_at', response.data)
-        self.assertIn('expires_at', response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIsNone(response.data['starts_at'])
+        self.assertIsNone(response.data['expires_at'])
 
     def test_posting_with_a_window_round_trips(self):
         response = self._post('Harvest', starts_at=str(self.today), expires_at=str(self.today + timedelta(days=7)))
@@ -4645,28 +4746,13 @@ class AnnouncementDisplayWindowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(str(response.data['starts_at']), str(self.today))
 
-    def test_a_window_that_ends_before_it_starts_is_refused(self):
-        response = self._post(
-            'Backwards window',
-            starts_at=str(self.today),
-            expires_at=str(self.today - timedelta(days=1)),
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_editing_a_legacy_post_has_to_supply_the_missing_window(self):
-        """Rows posted before the rule keep showing until they are given one."""
+    def test_editing_a_legacy_post_no_longer_demands_a_window(self):
+        """Rows posted before the event clock edit freely; their window stands."""
         legacy = self._fixture('Legacy notice')
 
-        refused = self.client.patch(
+        accepted = self.client.patch(
             f'/api/members/announcements/{legacy.pk}/', {'title': 'Legacy notice, edited'}, format='json',
         )
-        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
-
-        accepted = self.client.patch(f'/api/members/announcements/{legacy.pk}/', {
-            'title': 'Legacy notice, edited',
-            'starts_at': str(self.today),
-            'expires_at': str(self.today + timedelta(days=30)),
-        }, format='json')
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
         legacy.refresh_from_db()
         self.assertEqual(legacy.title, 'Legacy notice, edited')
@@ -4729,7 +4815,7 @@ class AnnouncementGreetingTests(APITestCase):
         return self.client.post('/api/members/announcements/', {
             'title': 'Harvest Sabbath',
             'text': 'Bring your offering.',
-            'visibility': 'members',
+            'visibility': 'members_only',
             'sharing_option': 'email',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
@@ -4971,19 +5057,78 @@ class GoogleSignInTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
-    def test_the_enrollment_form_still_verifies_through_the_shared_check(self):
-        """Enrollment hands in a Google credential too, and must not regress."""
-        with patch('members.views.verify_google_credential', return_value={'sub': 'google-sub-4', 'email': 'joiner@example.com'}):
-            response = self.client.post('/api/members/auth/enrollment/oauth-verify/', {
-                'credential': 'signed-id-token',
-                'email': 'joiner@example.com',
-                'first_name': 'New',
-                'last_name': 'Joiner',
-                'phone_number': '0712345678',
-                'joining_mode': 'baptism',
-                'privacy_accepted': True,
-                'terms_accepted': True,
-            }, format='json')
+    def test_the_enrollment_google_door_is_closed(self):
+        """The join form verifies by email alone; its old Google endpoint is gone."""
+        response = self.client.post('/api/members/auth/enrollment/oauth-verify/', {
+            'credential': 'signed-id-token',
+            'email': 'joiner@example.com',
+            'joining_mode': 'baptism',
+        }, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertTrue(EnrollmentRequest.objects.filter(email='joiner@example.com').exists())
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(EnrollmentRequest.objects.filter(email='joiner@example.com').exists())
+
+
+class AnnouncementAudienceTests(APITestCase):
+    """"Post to" addresses a post to ministries; the audience narrows the send."""
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('aud.clerk', 'aud.clerk@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        self.client.force_authenticate(self.clerk)
+        self.today = timezone.localdate()
+
+    def _post(self, **overrides):
+        payload = {
+            'title': 'Youth camp meeting',
+            'text': 'Planning meeting for the youth camp.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': (self.today + timedelta(days=3)).isoformat(),
+            'audience': ['youth_leader'],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/announcements/', payload, format='json')
+
+    def test_a_post_carries_its_audience(self):
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['audience'], ['youth_leader'])
+
+    def test_an_unknown_ministry_is_refused(self):
+        response = self._post(audience=['not_a_ministry'])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_duplicate_ministries_collapse(self):
+        response = self._post(audience=['youth_leader', 'youth_leader'])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['audience'], ['youth_leader'])
+
+    def test_an_empty_audience_addresses_everyone(self):
+        response = self._post(audience=[])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['audience'], [])
+
+    def test_audience_email_goes_only_to_the_ministry_holders(self):
+        from django.core import mail
+
+        leader = User.objects.create_user('aud.leader', 'youth.leader@example.com', 'ChurchPass#2026', first_name='Youth')
+        MemberProfile.objects.create(user=leader, role='youth_leader', roles='youth_leader')
+        other = User.objects.create_user('aud.other', 'other.member@example.com', 'ChurchPass#2026', first_name='Other')
+        MemberProfile.objects.create(user=other, role='member', roles='member')
+
+        self._post(sharing_option='email')
+
+        addresses = sorted(message.to[0] for message in mail.outbox)
+        self.assertEqual(addresses, ['youth.leader@example.com'])
+
+    def test_an_empty_audience_emails_the_whole_congregation(self):
+        from django.core import mail
+
+        member = User.objects.create_user('aud.everyone', 'everyone@example.com', 'ChurchPass#2026', first_name='All')
+        MemberProfile.objects.create(user=member, role='member', roles='member')
+
+        self._post(sharing_option='email', audience=[])
+
+        addresses = [message.to[0] for message in mail.outbox]
+        self.assertIn('everyone@example.com', addresses)

@@ -35,6 +35,7 @@ type FeedItem = {
   attachment_name?: string | null;
   attachment_size?: number | null;
   visibility: string;
+  audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup?: boolean;
   expires_at?: string | null;
@@ -45,6 +46,13 @@ type FeedItem = {
 /** The drive's own giving link, opened straight into the giving modal. */
 function driveGiveHref(drive: FundDrive) {
   return `/give?purpose=${encodeURIComponent(drive.title || drive.name)}`;
+}
+
+/** The audience-facing words for where a post travels. */
+function visibilityLabel(value: string): string {
+  if (value === "public_website") return "Public website";
+  if (value === "members_only") return "Members only";
+  return value === "all" ? "Everyone" : value;
 }
 
 export default function AnnouncementsPage() {
@@ -88,17 +96,15 @@ export default function AnnouncementsPage() {
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
             </div>
 
-            <div className="rounded-2xl border border-[#dfdbd1] bg-white px-4 py-3 shadow-sm">
-              <label className="text-sm font-semibold text-[#26352f]">
-                Search
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search announcements..."
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-            </div>
+            <label className="block max-w-md text-sm font-semibold text-[#26352f]">
+              Search
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search announcements..."
+                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
+              />
+            </label>
 
             {loading ? <p className="text-sm text-[#617068]">Loading announcements…</p> : items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-10 text-center text-[#617068]">No announcements found.</div>
@@ -119,7 +125,7 @@ export default function AnnouncementsPage() {
                             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
                           )}
                           <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
-                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148] capitalize">{item.visibility}</span>
+                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">{visibilityLabel(item.visibility)}{item.audience?.length ? ` · ${item.audience.length} ministr${item.audience.length === 1 ? "y" : "ies"}` : ""}</span>
                           {eventLabel(item) && (
                             <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</span>
                           )}

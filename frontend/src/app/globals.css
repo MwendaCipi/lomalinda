@@ -165,9 +165,11 @@ html:has(.administration-workspace) .app-shell {
    administration-workspace tab), so the shell's generic pb-24 reserve would
    leave a visible gap between its sticky totals panel and the tab bar. Trim
    the reserve to exactly the bar plus the device inset, like the giving page,
-   so the bottom buttons touch the navigation. */
+   so the bottom buttons touch the navigation. The announcements manager gets
+   the same treatment: its Add Announcement bar is the page's footer. */
 @media (max-width: 767px) {
-  html:has(.contributions-ledger-page) .app-shell {
+  html:has(.contributions-ledger-page) .app-shell,
+  html:has(.announcements-manager-page) .app-shell {
     height: calc(100vh - 4rem);
     height: calc(100dvh - 4rem);
     padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));

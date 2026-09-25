@@ -303,7 +303,12 @@ class Invitation(models.Model):
 
 
 class Announcement(models.Model):
-    VISIBILITY_CHOICES = [('members', 'Members'), ('public', 'Public'), ('all', 'All')]
+    # Where a post is seen. ``public_website`` shows it to visitors on the
+    # church's public site; ``members_only`` keeps it behind the sign-in. The
+    # ministry codes name the departments a post is addressed to, so a
+    # department sees the posts addressed to it plus every members-only or
+    # public post — an audience is an addressing, not a hiding.
+    VISIBILITY_CHOICES = [('members_only', 'Members only'), ('public_website', 'Public website'), ('all', 'Everyone')]
     ACTION_CHOICES = [
         ('none', 'None'),
         ('tithe', 'Tithe'),
@@ -319,7 +324,12 @@ class Announcement(models.Model):
     text = models.TextField()
     detail = models.TextField(blank=True)
     href = models.CharField(max_length=255, blank=True)
-    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
+    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='members_only')
+    # The departments the post addresses, as role codes: ``["youth_leader",
+    # "choir_director"]``. Empty means the whole congregation. The vocabulary
+    # is the church roles themselves — the offices the church already has —
+    # so no second list of departments can drift out of step.
+    audience = models.JSONField(default=list, blank=True, help_text="Ministry role codes this post addresses; empty means the whole congregation")
     action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, default='none')
     attachment = models.FileField(upload_to='announcement-attachments/', blank=True, null=True)
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
@@ -336,11 +346,11 @@ class Announcement(models.Model):
         help_text='Set when this announcement is the public face of a fund drive.',
     )
     published = models.BooleanField(default=True)
-    # Every announcement carries the window it is displayed for, so nothing has
-    # to be retired by hand: it appears on starts_at and drops off the feed on
-    # its own once expires_at passes.
-    starts_at = models.DateField(null=True, blank=True, help_text="Date from which the announcement starts being displayed")
-    expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
+    # The event the announcement is about is its clock: the post is ordered in
+    # the feed by how soon its event starts and comes down the day after the
+    # event's last date. There is no separate display window to remember.
+    starts_at = models.DateField(null=True, blank=True, help_text="Legacy display start; the event date drives ordering and dismissal now")
+    expires_at = models.DateField(null=True, blank=True, help_text="Legacy display end; the event date drives ordering and dismissal now")
     event_date_from = models.DateField(null=True, blank=True, help_text="First day of the event this announcement is about")
     event_date_to = models.DateField(null=True, blank=True, help_text="Last day of that event; same as from, or blank, for a single day")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -350,6 +360,20 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def dismissal_date(self):
+        """The last day the feed serves this post.
+
+        The event the announcement is about decides when it comes down: the
+        day after the event's last date. A legacy display window still stands
+        in for posts that never had an event — and whichever retirement is
+        sooner wins, so an old post never outlives a window somebody set.
+        A post with neither clock shows until it is removed.
+        """
+        event_end = self.event_date_to or self.event_date_from
+        windows = [d for d in (event_end, self.expires_at) if d is not None]
+        return min(windows) if windows else None
 
 
 class AnnouncementResponse(models.Model):

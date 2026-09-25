@@ -44,7 +44,7 @@ export function AnnouncementBanner({ compact = false }: { compact?: boolean }) {
     <section aria-label="Announcements" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} className={compact ? "border-t border-white/10 bg-[#31483e] px-6 py-2 text-white lg:px-8" : "border-b border-[#dfdbd1] bg-[#eef2ed] px-6 py-2 text-[#26352f] lg:px-8"}>
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className={compact ? "text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f1c89e]" : "text-xs font-semibold uppercase tracking-[0.18em] text-[#b36b3c]"}>Announcement{announcement.visibility === "members" ? " · Members" : ""}</p>
+          <p className={compact ? "text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f1c89e]" : "text-xs font-semibold uppercase tracking-[0.18em] text-[#b36b3c]"}>Announcement{announcement.visibility === "members_only" ? " · Members" : ""}</p>
           <p className={compact ? "truncate text-sm text-white/90" : "mt-1 text-sm leading-6 text-[#617068]"}><span className="font-semibold text-inherit">{announcement.title}: </span>{announcement.text}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">

@@ -6,6 +6,52 @@ import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { RecordList } from "./record-list";
 
+/**
+ * The "Post to" vocabulary: the church's ministries plus the two reach
+ * channels. Ministry codes are the office role codes themselves — one source
+ * of truth with the roles register — so no second department list can drift.
+ */
+const POST_TO_OPTIONS: { value: string; label: string; group: string }[] = [
+  { value: "public_website", label: "Public website", group: "Reach" },
+  { value: "members_only", label: "Members only", group: "Reach" },
+  { value: "pm_leader", label: "PM Leader (Personal Ministries)", group: "Ministries" },
+  { value: "apm_leader", label: "APM Leader (Possibility Ministries)", group: "Ministries" },
+  { value: "men_ministry", label: "AMM Leader (Adventist Men)", group: "Ministries" },
+  { value: "women_ministry", label: "AWM Leader (Adventist Women)", group: "Ministries" },
+  { value: "youth_leader", label: "Youth Leader (Adventist Youth)", group: "Ministries" },
+  { value: "ambassadors_leader", label: "Ambassadors Leader", group: "Ministries" },
+  { value: "pathfinders_leader", label: "Pathfinders Leader", group: "Ministries" },
+  { value: "adventurers_leader", label: "Adventurers Leader", group: "Ministries" },
+  { value: "children_ministry", label: "Children Leader", group: "Ministries" },
+  { value: "health_leader", label: "Health Leader", group: "Ministries" },
+  { value: "education_leader", label: "Education Leader", group: "Ministries" },
+  { value: "family_life", label: "Family Life Leader", group: "Ministries" },
+  { value: "chaplaincy", label: "Chaplaincy Leader", group: "Ministries" },
+  { value: "publishing_head", label: "Publishing Head", group: "Ministries" },
+  { value: "welfare_leader", label: "Welfare Leader", group: "Ministries" },
+  { value: "interest_coordinator", label: "Interest Coordinator", group: "Ministries" },
+  { value: "development", label: "Development", group: "Ministries" },
+  { value: "choir_director", label: "Choir Director", group: "Ministries" },
+  { value: "head_deacon", label: "Head Deacon", group: "Ministries" },
+  { value: "head_deaconess", label: "Head Deaconess", group: "Ministries" },
+  { value: "treasurer", label: "Treasurer", group: "Ministries" },
+  { value: "clerk", label: "Church Clerk", group: "Ministries" },
+];
+
+const REACH_LABELS: Record<string, string> = {
+  public_website: "Public website",
+  members_only: "Members only",
+  all: "Everyone",
+};
+
+/** The manager's view-model of where a post travels. */
+function parsePostTo(visibility?: string, audience?: string[]): { reach: string; ministries: string[] } {
+  return {
+    reach: REACH_LABELS[visibility ?? ""] ? (visibility as string) : "members_only",
+    ministries: Array.isArray(audience) ? audience : [],
+  };
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /** Keep in sync with validate_text in backend/members/serializers.py. */
@@ -22,6 +68,7 @@ type Announcement = {
   attachment_name?: string | null;
   attachment_size?: number | null;
   visibility: string;
+  audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   sharing_option?: string;
   action_prompt?: string;
@@ -81,12 +128,12 @@ export function AnnouncementManager() {
     title: "",
     text: "",
     // Church announcements default to the congregation, not the wider web.
-    visibility: "members",
+    visibility: "members_only",
+    audience: [] as string[],
     action_type: "none",
-    sharing_option: "site",
-    action_prompt: "",
-    starts_at: "",
-    expires_at: "",
+    // Site and email are the ordinary pair: the post shows on the site and
+    // lands in inboxes. SMS is added for the occasions it is wanted.
+    sharing_option: "site,email",
     href: "",
     event_date_from: "",
     event_date_to: "",
@@ -96,11 +143,23 @@ export function AnnouncementManager() {
   const [submitting, setSubmitting] = useState(false);
   const [showSharingDropdown, setShowSharingDropdown] = useState(false);
   const sharingDropdownRef = useRef<HTMLDivElement>(null);
+  const [showPostToDropdown, setShowPostToDropdown] = useState(false);
+  const postToDropdownRef = useRef<HTMLDivElement>(null);
+
+  /** What the closed "Post to" combo reads, e.g. "Members only + 3 ministries". */
+  const postToLabel = (() => {
+    const reach = REACH_LABELS[form.visibility] ?? "Members only";
+    const count = form.audience.length;
+    return count === 0 ? reach : `${reach} + ${count} ${count === 1 ? "ministry" : "ministries"}`;
+  })();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (sharingDropdownRef.current && !sharingDropdownRef.current.contains(e.target as Node)) {
         setShowSharingDropdown(false);
+      }
+      if (postToDropdownRef.current && !postToDropdownRef.current.contains(e.target as Node)) {
+        setShowPostToDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -160,15 +219,14 @@ export function AnnouncementManager() {
     setEditingId(item.id);
     setMessage("");
     setAttachment(null);
+    const postTo = parsePostTo(item.visibility, item.audience);
     setForm({
       title: item.title,
       text: item.text,
-      visibility: item.visibility || "members",
+      visibility: postTo.reach,
+      audience: postTo.ministries,
       action_type: item.action_type ?? "none",
-      sharing_option: item.sharing_option || "site",
-      action_prompt: item.action_prompt ?? "",
-      starts_at: item.starts_at ?? "",
-      expires_at: item.expires_at ?? "",
+      sharing_option: item.sharing_option || "site,email",
       href: item.href ?? "",
       event_date_from: item.event_date_from ?? "",
       event_date_to: item.event_date_to ?? "",
@@ -180,12 +238,10 @@ export function AnnouncementManager() {
     setForm({
       title: "",
       text: "",
-      visibility: "members",
+      visibility: "members_only",
+      audience: [],
       action_type: "none",
-      sharing_option: "site",
-      action_prompt: "",
-      starts_at: "",
-      expires_at: "",
+      sharing_option: "site,email",
       href: "",
       event_date_from: "",
       event_date_to: "",
@@ -210,18 +266,10 @@ export function AnnouncementManager() {
       showAlert("Announcement Too Long", err, "error");
       return;
     }
-    // The API insists on the display window; say which end is missing here
-    // rather than posting and reading a field error back.
-    if (!form.starts_at || !form.expires_at) {
-      const err = "Set the date the announcement starts showing, and the date it stops showing. It retires itself on that date.";
+    if (!form.event_date_from) {
+      const err = "Set the event date — when it begins. The post leads the feed as the day approaches and comes down after the event ends.";
       setMessage(err);
-      showAlert("Display Window Missing", err, "error");
-      return;
-    }
-    if (form.expires_at < form.starts_at) {
-      const err = "An announcement cannot stop showing before it starts.";
-      setMessage(err);
-      showAlert("Check the Display Window", err, "error");
+      showAlert("Event Date Missing", err, "error");
       return;
     }
     setSubmitting(true);
@@ -229,11 +277,17 @@ export function AnnouncementManager() {
     try {
       const payload = new FormData();
       Object.entries(form).forEach(([key, value]) => {
+        // The audience is a list of codes, not one string.
+        if (key === "audience") {
+          (value as string[]).forEach((code) => payload.append("audience", code));
+          return;
+        }
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side).
         const optional = key === "href" || key === "event_date_from" || key === "event_date_to";
         if (optional && !value) return;
-        payload.append(key, value);
+        // The list-valued audience returned above; everything left is a string.
+        payload.append(key, String(value));
       });
       if (attachment) payload.append("attachment", attachment);
       const response = await fetch(
@@ -263,7 +317,7 @@ export function AnnouncementManager() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
+    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
       {/* Top Header */}
       <div className="shrink-0 border-b border-[#dfdbd1] pb-6">
         <div>
@@ -440,18 +494,67 @@ export function AnnouncementManager() {
                 />
               </label>
 
-              <label className="block text-xs font-semibold text-[#26352f]">
-                Visibility
-                <select
-                  value={form.visibility}
-                  onChange={(e) => setForm({ ...form, visibility: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                >
-                  <option value="public">Public</option>
-                  <option value="members">Members</option>
-                  <option value="all">All</option>
-                </select>
-              </label>
+              {/* Post to: the reach channels and the ministries this post
+                  addresses, one combo with checkboxes. */}
+              <div className="block text-xs font-semibold text-[#26352f]">
+                <span>Post to *</span>
+                <div className="relative mt-1" ref={postToDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPostToDropdown((prev) => !prev)}
+                    aria-expanded={showPostToDropdown}
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-left text-xs outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                  >
+                    <span className="min-w-0 truncate text-[#26352f]">{postToLabel}</span>
+                    <svg className="h-4 w-4 shrink-0 text-[#617068]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {showPostToDropdown && (
+                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg">
+                      {["Reach", "Ministries"].map((group) => (
+                        <div key={group}>
+                          <p className="px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">{group}</p>
+                          {POST_TO_OPTIONS.filter((option) => option.group === group).map((option) => {
+                            const selected = option.group === "Reach"
+                              ? form.visibility === option.value
+                              : form.audience.includes(option.value);
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                  if (option.group === "Reach") {
+                                    setForm({ ...form, visibility: option.value });
+                                  } else {
+                                    setForm({
+                                      ...form,
+                                      audience: selected
+                                        ? form.audience.filter((code) => code !== option.value)
+                                        : [...form.audience, option.value],
+                                    });
+                                  }
+                                }}
+                                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-[#26352f] transition hover:bg-[#f7f4ee]"
+                              >
+                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-[#b36b3c] bg-[#b36b3c]" : "border-[#c9c5bb] bg-white"}`}>
+                                  {selected && (
+                                    <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                  )}
+                                </span>
+                                <span className="min-w-0 truncate">{option.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                      <div className="border-t border-[#dfdbd1] px-2 pb-1 pt-2">
+                        <p className="text-[10px] leading-snug text-[#617068]">
+                          Pick the reach, then any ministries to address. Empty ministry list means the whole congregation.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
                 Link (optional)
@@ -531,13 +634,19 @@ export function AnnouncementManager() {
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
-                Event date — from
+                Event date — from *
                 <input
                   type="date"
+                  required
                   value={form.event_date_from}
                   onChange={(e) => setForm({ ...form, event_date_from: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
+                <span className="mt-1 block text-[10px] font-normal text-[#617068]">
+                  The event's start decides the post's place in the feed — the
+                  sooner it begins, the higher it sits. It comes down on its own
+                  after the event ends.
+                </span>
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
@@ -552,47 +661,11 @@ export function AnnouncementManager() {
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
-                Display from *
-                <input
-                  type="date"
-                  required
-                  value={form.starts_at}
-                  onChange={(e) => setForm({ ...form, starts_at: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-[#26352f]">
-                Display until *
-                <input
-                  type="date"
-                  required
-                  min={form.starts_at || undefined}
-                  value={form.expires_at}
-                  onChange={(e) => setForm({ ...form, expires_at: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                />
-                <span className="mt-1 block text-[10px] font-normal text-[#617068]">
-                  It comes down on its own after this date.
-                </span>
-              </label>
-
-              <label className="block text-xs font-semibold text-[#26352f]">
                 Attachment (optional)
                 <input
                   type="file"
                   onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 text-xs text-[#26352f] outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f] focus:border-[#b36b3c]"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
-                Custom Action Prompt / Instructions (optional)
-                <input
-                  value={form.action_prompt}
-                  onChange={(e) => setForm({ ...form, action_prompt: e.target.value })}
-                  placeholder="e.g. 'Enter your contribution amount' or 'Share your feedback'"
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
               </label>
 

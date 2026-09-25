@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.dateparse import parse_date
 from datetime import date, datetime, timedelta
+import logging
 import uuid
 import re
 import json
@@ -24,6 +25,9 @@ from decimal import Decimal
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin
 import requests
+
+logger = logging.getLogger(__name__)
+
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import permissions
@@ -310,7 +314,10 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
             send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
             email_sent = True
         except Exception:
-            pass
+            # A receipt that never went out must not read as sent — and the
+            # treasurer must be able to learn why from the server log rather
+            # than from a silent “Pending” badge.
+            logger.exception('Receipt email to %s failed to send.', email)
 
     if phone:
         sms_api_url = getattr(settings, 'SMS_API_URL', '')
@@ -326,7 +333,7 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
                 response.raise_for_status()
                 sms_sent = True
             except Exception:
-                pass
+                logger.exception('Receipt SMS to %s failed to send.', phone)
 
     sent = email_sent or sms_sent
     if sent:
@@ -830,53 +837,6 @@ class EnrollmentRequestView(generics.CreateAPIView):
             'message': 'A verification link has been sent to your email. Please check your inbox (and spam folder) to complete your account setup.',
             'token': str(enrollment.token)
         }, status=status.HTTP_200_OK)
-
-
-class EnrollmentOAuthVerifyView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def post(self, request):
-        credential = str(request.data.get('credential') or '').strip()
-        if not credential:
-            return Response({'detail': 'Complete Google verification to continue.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            claims = verify_google_credential(credential)
-        except GoogleCredentialError as error:
-            if error.unavailable:
-                return Response({'detail': 'Google verification has not been configured yet.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            return Response({'detail': 'Google verification could not be completed.'}, status=status.HTTP_400_BAD_REQUEST)
-        email = claims['email']
-        if email != str(request.data.get('email', '')).lower().strip():
-            return Response({'detail': 'The verified Google email must match the email entered above.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not request.data.get('privacy_accepted') or not request.data.get('terms_accepted'):
-            return Response({'detail': 'Accept the Privacy Policy and Terms of Use to continue.'}, status=status.HTTP_400_BAD_REQUEST)
-        joining_mode = str(request.data.get('joining_mode', 'baptism'))
-        if joining_mode not in dict(EnrollmentRequest.JOINING_MODE_CHOICES):
-            return Response({'joining_mode': 'Choose a valid joining mode.'}, status=status.HTTP_400_BAD_REQUEST)
-        current_church = str(request.data.get('current_church', '')).strip()
-        if joining_mode == 'friend' and not current_church:
-            return Response({'current_church': 'Enter your current church.'}, status=status.HTTP_400_BAD_REQUEST)
-        if joining_mode == 'sabbath_school' and not current_church:
-            return Response({'current_church': 'Enter your current church.'}, status=status.HTTP_400_BAD_REQUEST)
-        enrollment, _ = EnrollmentRequest.objects.update_or_create(
-            email=email,
-            defaults={
-                'first_name': str(request.data.get('first_name', '')).strip(),
-                'last_name': str(request.data.get('last_name', '')).strip(),
-                'phone_number': str(request.data.get('phone_number', '')).strip(),
-                'joining_mode': joining_mode,
-                'current_church': current_church,
-                'privacy_accepted_at': timezone.now(),
-                'privacy_policy_version': CURRENT_PRIVACY_POLICY_VERSION,
-                'terms_accepted_at': timezone.now(),
-                'terms_of_use_version': CURRENT_TERMS_OF_USE_VERSION,
-                'token': uuid.uuid4(),
-                'status': 'verification_pending',
-                'expires_at': timezone.now() + timedelta(hours=1),
-            },
-        )
-        return Response({'token': enrollment.token}, status=status.HTTP_200_OK)
 
 
 class EnrollmentVerifyView(APIView):
@@ -1446,9 +1406,22 @@ def send_announcement_emails(announcement):
 
     sent = 0
     seen = set()
+    # An audience addresses the email to the ministry offices named: a post to
+    # the choir goes to the choir's holders, not the whole congregation. Empty
+    # audience keeps the broadcast to everyone.
+    recipients = User.objects.filter(is_active=True).exclude(email='')
+    audience_codes = list(getattr(announcement, 'audience', None) or [])
+    if audience_codes:
+        # The audience addresses the email to the ministry offices named: a
+        # post to the choir goes to the choir's holders, not the congregation.
+        holder_ids = set()
+        for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+            if set(profile.get_roles()) & set(audience_codes):
+                holder_ids.add(profile.user_id)
+        recipients = User.objects.filter(id__in=holder_ids, is_active=True).exclude(email='')
     try:
         for first_name, last_name, username, email in (
-            User.objects.filter(is_active=True).exclude(email='').values_list('first_name', 'last_name', 'username', 'email')
+            recipients.values_list('first_name', 'last_name', 'username', 'email')
         ):
             address = (email or '').strip()
             if not address or address.lower() in seen:
@@ -1510,48 +1483,59 @@ class AnnouncementView(generics.ListCreateAPIView):
         else:
             queryset = Announcement.objects.filter(published=True)
 
-        # The display window decides what the congregation sees: an announcement
-        # appears on its start date and retires itself on its end date, so both
-        # bounds are applied here rather than left to whoever posted it. The
-        # management screen opts out of each bound to see what is scheduled and
-        # what has lapsed.
+        # The event the announcement is about is its clock: a post comes down
+        # the day after its event's last date (an undated post falls back to a
+        # legacy display window if one was ever set — the window fields are
+        # retired from the form). The management screen opts out to see what
+        # has lapsed.
         if self.request.query_params.get('include_expired') != 'true':
-            queryset = queryset.filter(Q(expires_at__isnull=True) | Q(expires_at__gte=today))
+            dated_alive = (
+                # A finished event range is gone; a single-day event that is
+                # today or ahead is still alive.
+                Q(event_date_to__isnull=False, event_date_to__gte=today)
+                | Q(event_date_to__isnull=True, event_date_from__isnull=False, event_date_from__gte=today)
+            )
+            undated_alive = (
+                Q(event_date_from__isnull=True, event_date_to__isnull=True)
+                & (Q(expires_at__isnull=True) | Q(expires_at__gte=today))
+            )
+            queryset = queryset.filter(dated_alive | undated_alive)
         if self.request.query_params.get('include_scheduled') != 'true':
+            # An event dated in the future is not hidden — it leads the feed —
+            # but a legacy start date still holds older posts back.
             queryset = queryset.filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(text__icontains=search) | Q(detail__icontains=search))
         if self.request.user.is_authenticated:
             return queryset
-        return queryset.filter(visibility__in=['public', 'all'])
+        return queryset.filter(visibility__in=['public_website', 'all'])
 
     def list(self, request, *args, **kwargs):
-        """Announcements about events lead, nearest event first.
+        """The event's start date is the announcement's position.
 
-        An announcement carrying an event window sorts by how close that
-        window sits to today (0 while it is running), so the fellowship and
-        communications feeds surface what is happening next instead of only
-        what was posted most recently. Announcements without an event keep
-        their posting order (newest first) at the end.
+        The starting date of the event determines where a post sits in the
+        feed: the soonest-starting event leads, and a running event (today
+        inside its range) leads those. Announcements without an event keep
+        their posting order (newest first) behind the dated ones.
         """
         queryset = list(self.filter_queryset(self.get_queryset()))
         today = timezone.localdate()
 
-        def distance(announcement):
-            start = announcement.event_date_from or announcement.event_date_to
-            end = announcement.event_date_to or announcement.event_date_from
-            if start is None:
+        def urgency(announcement):
+            if announcement.event_date_from is None:
                 return None
+            start = announcement.event_date_from
+            end = announcement.event_date_to or announcement.event_date_from
             if start <= today <= end:
-                return 0
-            return (start - today).days if today < start else (today - end).days
+                return 0  # running: today is the day
+            return (start - today).days  # days until it begins
 
         queryset.sort(key=lambda a: a.created_at, reverse=True)
-        dated = [a for a in queryset if distance(a) is not None]
+        dated = [a for a in queryset if urgency(a) is not None]
         # Stable sort: ties inside one distance band keep newest posting first.
-        dated.sort(key=distance)
-        undated = [a for a in queryset if distance(a) is None]
+        dated.sort(key=urgency)
+        undated = [a for a in queryset if urgency(a) is None]
         return Response(self.get_serializer(dated + undated, many=True).data)
 
     def perform_create(self, serializer):
@@ -1579,8 +1563,19 @@ class AnnouncementView(generics.ListCreateAPIView):
         if send_sms:
             try:
                 from django.contrib.auth.models import User
-                for u in User.objects.filter(is_active=True):
+                # Same audience rule as the email: a post addressed to a
+                # ministry notifies its holders, otherwise the congregation.
+                sms_recipients = User.objects.filter(is_active=True)
+                audience_codes = list(announcement.audience or [])
+                if audience_codes:
+                    holder_ids = set()
+                    for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+                        if set(profile.get_roles()) & set(audience_codes):
+                            holder_ids.add(profile.user_id)
+                    sms_recipients = sms_recipients.filter(id__in=holder_ids)
+                for u in sms_recipients:
                     ChurchNotification.objects.create(
+                        user=u,
                         title=f"SMS Announcement: {announcement.title}",
                         message=announcement.text or announcement.title,
                     )
@@ -3751,7 +3746,7 @@ def broadcast_campaign_message(campaign, custom_message=None):
         title=f"Campaign: {campaign.title or campaign.name}",
         text=msg_text,
         detail=campaign.description or f"Campaign period: {campaign.start_date} to {campaign.end_date or 'Ongoing'}. Goal: KES {campaign.target_amount:,.2f}",
-        visibility='members',
+        visibility='members_only',
         action_type='camp_goal',
         is_popup=True,
         action_prompt=f"Give towards {campaign.account_name or campaign.name}",

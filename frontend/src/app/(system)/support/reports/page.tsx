@@ -111,10 +111,10 @@ export default function LiveReportsPage() {
                   className="w-full rounded-xl border border-[#c9c5bb] bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-[#b36b3c] sm:w-64"
                 />
               </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-3 sm:mt-4 grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="animate-pulse rounded-2xl border border-[#dfdbd1] bg-white p-6 h-32" />
+                    <div key={i} className="animate-pulse rounded-2xl border border-[#dfdbd1] bg-white p-4 sm:p-5 h-24 sm:h-28" />
                   ))
                 ) : accounts.length === 0 ? (
                   <div className="col-span-full rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-8 text-center text-sm text-[#617068]">
@@ -126,7 +126,7 @@ export default function LiveReportsPage() {
                   </div>
                 ) : (
                   visibleAccounts.map((account) => (
-                    <div key={account.id} className="flex flex-col rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm">
+                    <div key={account.id} className="flex flex-col rounded-2xl border border-[#dfdbd1] bg-white p-4 sm:p-5 shadow-sm">
                       <div className="flex items-center justify-between">
                         <span
                           className="block h-2 w-2 rounded-full"
@@ -134,15 +134,20 @@ export default function LiveReportsPage() {
                         />
                         <span className="text-xs font-semibold text-[#617068]">{account.account_type_display}</span>
                       </div>
-                      <p className="mt-3 text-sm font-semibold text-[#617068]">{account.name}</p>
-                      <p className="mt-1 text-2xl font-bold text-[#26352f]">{money(Number(account.balance || 0))}</p>
+                      {/* Members read the description (e.g. "Adventist Men"),
+                          never the 12-character M-Pesa name ("AdventMEn").
+                          One clamped line keeps every card the same height. */}
+                      <p className="mt-2 text-sm font-semibold text-[#617068] truncate">
+                        {account.description || account.name}
+                      </p>
+                      <p className="mt-1 text-xl sm:text-2xl font-bold text-[#26352f]">{money(Number(account.balance || 0))}</p>
                       {account.account_number && (
-                        <p className="mt-1 font-mono text-xs text-[#617068]">A/C {account.account_number}</p>
+                        <p className="mt-1 font-mono text-xs text-[#617068] truncate">A/C {account.account_number}</p>
                       )}
                       <button
                         type="button"
                         onClick={() => setSupportAccountName(supportAccount(account.description || account.name))}
-                        className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#faf7f2]"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#faf7f2]"
                       >
                         <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
                         Support this account

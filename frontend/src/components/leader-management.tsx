@@ -185,10 +185,10 @@ export function LeaderManagement() {
   };
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10 pb-6 sm:pb-4 lg:pb-4">
+    <section className="flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10 pb-3 sm:pb-3 lg:pb-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">Church Leaders & Roles</h2>
+          <h2 className="text-2xl font-bold text-[#26352f]">Church Leaders</h2>
           <p className="mt-1 text-xs text-[#617068]">
             Set, change, or unset leadership roles for church members to grant administrative rights.
           </p>
@@ -293,8 +293,9 @@ export function LeaderManagement() {
             )}
       />
 
-      {/* Actions: Print & Add Leader */}
-      <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+      {/* Actions: Print & Add Leader — pulled tight against the list above
+          (-mt-2) so the buttons sit close to the records without a dead band */}
+      <div className="-mt-2 flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-2">
         <button
           onClick={handlePrint}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#dfdbd1] bg-white px-4 py-2.5 text-xs font-semibold text-[#26352f] shadow-sm hover:bg-[#f7f4ee] transition-colors"

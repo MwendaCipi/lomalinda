@@ -238,8 +238,9 @@ function AdministrationContent() {
         {/* MAIN WORKSPACE CONTENT */}
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
           <div className="w-full h-full flex flex-col bg-white border-l border-[#dfdbd1] overflow-hidden">
-            {/* Mobile Back Button (Visible only on Mobile when viewing sub-tab) */}
-            {activeTab !== "overview" && activeTab !== "users" && (
+            {/* Mobile Back Button (Visible only on Mobile when viewing sub-tab;
+                the leaders view opts out — its full-height table owns the screen) */}
+            {activeTab !== "overview" && activeTab !== "users" && activeTab !== "leaders" && (
               <div className="flex shrink-0 items-center justify-between border-b border-[#dfdbd1] bg-white p-4 lg:hidden">
                 <button
                   onClick={() => {
@@ -291,7 +292,7 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👑</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Church Leaders & Roles</span>
+                          <span className="block text-sm font-bold text-[#26352f]">Church Leaders</span>
                           <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Set, update, or unset leadership roles for church members.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />

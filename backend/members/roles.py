@@ -86,6 +86,47 @@ def role_allows_assistant(code):
     return code in ASSISTANT_ROLE_CODES
 
 
+# -- Announcement audiences ---------------------------------------------
+#
+# "Post to" addresses an announcement to parts of the church. The departments
+# are the ministry offices themselves — the same roles the church already
+# holds — so no second list of departments can drift out of step with reality.
+# The two non-ministry channels decide how far beyond the sign-in the post
+# travels.
+MINISTRY_AUDIENCE_OPTIONS = (
+    ('pm_leader', 'PM Leader (Personal Ministries)'),
+    ('apm_leader', 'APM Leader (Possibility Ministries)'),
+    ('men_ministry', 'AMM Leader (Adventist Men)'),
+    ('women_ministry', 'AWM Leader (Adventist Women)'),
+    ('youth_leader', 'Youth Leader (Adventist Youth)'),
+    ('ambassadors_leader', 'Ambassadors Leader'),
+    ('pathfinders_leader', 'Pathfinders Leader'),
+    ('adventurers_leader', 'Adventurers Leader'),
+    ('children_ministry', 'Children Leader'),
+    ('health_leader', 'Health Leader'),
+    ('education_leader', 'Education Leader'),
+    ('family_life', 'Family Life Leader'),
+    ('chaplaincy', 'Chaplaincy Leader'),
+    ('publishing_head', 'Publishing Head'),
+    ('welfare_leader', 'Welfare Leader'),
+    ('interest_coordinator', 'Interest Coordinator'),
+    ('development', 'Development'),
+    ('choir_director', 'Choir Director'),
+    ('head_deacon', 'Head Deacon'),
+    ('head_deaconess', 'Head Deaconess'),
+    ('treasurer', 'Treasurer'),
+    ('clerk', 'Church Clerk'),
+)
+
+MINISTRY_AUDIENCE_CODES = tuple(code for code, _label in MINISTRY_AUDIENCE_OPTIONS)
+
+
+def unknown_audience_codes(codes):
+    """Codes outside the audience vocabulary — refused at the API."""
+    allowed = set(MINISTRY_AUDIENCE_CODES)
+    return [code for code in (codes or []) if code not in allowed]
+
+
 # -- Per-role rights ---------------------------------------------------
 #
 # Every role carries its own bundle of rights — what a holder may do in the

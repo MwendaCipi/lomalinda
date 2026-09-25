@@ -17,7 +17,7 @@ from .models import (
 from .meetings import PLACEHOLDERS as MEETING_PLACEHOLDERS
 from .requests import APPROVAL_PLACEHOLDERS, REQUEST_PLACEHOLDERS
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
-from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_role_codes
+from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_audience_codes, unknown_role_codes
 from .validators import (
     validate_future_or_today_date, validate_national_id,
     validate_past_or_today_date, validate_phone_number,
@@ -374,34 +374,27 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Announcement text must be 500 characters or fewer.')
         return value
 
+    def validate_audience(self, value):
+        codes = value or []
+        unknown = unknown_audience_codes(codes)
+        if unknown:
+            raise serializers.ValidationError(
+                f'Unknown ministry: {unknown_audience_codes(codes)[0].replace("_", " ")}.'
+            )
+        # Duplicates would double-count an addressing; a list of codes is a set.
+        return list(dict.fromkeys(codes))
+
     def validate(self, attrs):
         instance = self.instance
         start = attrs.get('event_date_from', instance.event_date_from if instance else None)
         end = attrs.get('event_date_to', instance.event_date_to if instance else None)
         if start and end and end < start:
             raise serializers.ValidationError('The event cannot end before it starts.')
-
-        # A new announcement must state the window it is displayed for, so the
-        # feed can retire it without anyone remembering to come back and delete
-        # it. Edits are held to the same rule, which is what makes the window
-        # universal rather than a property only fresh posts have.
-        display_from = attrs.get('starts_at', instance.starts_at if instance else None)
-        display_until = attrs.get('expires_at', instance.expires_at if instance else None)
-        missing = [
-            name for name, value in (('starts_at', display_from), ('expires_at', display_until)) if not value
-        ]
-        if missing:
-            raise serializers.ValidationError({
-                name: 'Enter the date the announcement is displayed from, and the date it stops showing.'
-                for name in missing
-            })
-        if display_until < display_from:
-            raise serializers.ValidationError('An announcement cannot stop showing before it starts.')
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

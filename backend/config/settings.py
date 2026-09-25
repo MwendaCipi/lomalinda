@@ -134,6 +134,10 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
+# A stuck SMTP conversation must not pin a gunicorn worker until the timeout
+# kills it — the request dies as a 502 and the treasurer reads a 502 instead of
+# an honest answer. Ten seconds is enough for any healthy server.
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 # The name members see in their inbox, so it must match the church's own name —
 # spelled without the comma ('SDA Loma Linda Meru'), because a bare comma inside
 # a From display name is an address-list separator. Email subjects drop the

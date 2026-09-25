@@ -1,8 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { GOOGLE_CLIENT_ID, googleAccountsId, type GoogleCredentialResponse } from "@/lib/google-identity";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -70,55 +69,10 @@ export function EnrollmentForm({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  // Fetch Google's script while the form is being filled in, so "Verify with
-  // Google" answers at once instead of after a download.
-  useEffect(() => {
-    void googleAccountsId();
-  }, []);
-
-  async function startGoogleVerification() {
-    if (!GOOGLE_CLIENT_ID) {
-      showAlert("Verification unavailable", "Google OAuth has not been configured yet.", "error");
-      return;
-    }
-    const accountsId = await googleAccountsId();
-    if (!accountsId) {
-      showAlert("Verification unavailable", "Google verification is still loading. Please try again.", "error");
-      return;
-    }
-    accountsId.initialize({ client_id: GOOGLE_CLIENT_ID, callback: completeGoogleVerification });
-    accountsId.prompt();
-  }
-
-  async function completeGoogleVerification(response: GoogleCredentialResponse) {
-    const { first_name, last_name } = parseFullName(form.name);
-    setLoading(true);
+  /** Start over: empty fields and no stale message; the consent choice stays. */
+  function clearForm() {
+    setForm(emptyForm);
     setMessage("");
-    try {
-      const result = await fetch(`${API_URL}/api/members/auth/enrollment/oauth-verify/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          name: form.name.trim(),
-          first_name,
-          last_name,
-          joining_mode: joiningMode,
-          privacy_accepted: termsAccepted,
-          terms_accepted: termsAccepted,
-          credential: response.credential,
-        }),
-      });
-      const data = await result.json();
-      if (!result.ok) throw new Error(Object.values(data).flat().join(" ") || "Google verification failed.");
-      window.location.href = `/enroll/confirm?token=${encodeURIComponent(data.token)}`;
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "Google verification failed.";
-      setMessage(text);
-      showAlert("Verification error", text, "error");
-    } finally {
-      setLoading(false);
-    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -388,17 +342,17 @@ export function EnrollmentForm({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#26352f] bg-white px-5 font-semibold text-[#26352f] transition hover:bg-[#eae6de] disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
           >
-            {loading ? "Submitting..." : "Submit (Verify via Email)"}
+            {loading ? "Sending..." : "Verify with Email"}
           </button>
           <button
             type="button"
-            onClick={startGoogleVerification}
+            onClick={clearForm}
             disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#26352f] bg-white px-5 font-semibold text-[#26352f] transition hover:bg-[#eae6de] disabled:opacity-60"
           >
-            {loading ? "Verifying..." : "Verify with Google"}
+            Clear form
           </button>
         </div>
       ) : (
