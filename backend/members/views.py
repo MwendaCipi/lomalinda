@@ -31,8 +31,12 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from tenants.models import GoogleIdentity
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from config.authentication import sign_in_payload
+
+from .google_auth import GoogleCredentialError, verify_google_credential
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -792,20 +796,16 @@ class EnrollmentOAuthVerifyView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        credential = str(request.data.get('credential', '')).strip()
-        client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
-        if not client_id:
-            return Response({'detail': 'Google verification has not been configured yet.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        credential = str(request.data.get('credential') or '').strip()
         if not credential:
             return Response({'detail': 'Complete Google verification to continue.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            verification = requests.get('https://oauth2.googleapis.com/tokeninfo', params={'id_token': credential}, timeout=10)
-            data = verification.json()
-        except (requests.RequestException, ValueError):
+            claims = verify_google_credential(credential)
+        except GoogleCredentialError as error:
+            if error.unavailable:
+                return Response({'detail': 'Google verification has not been configured yet.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response({'detail': 'Google verification could not be completed.'}, status=status.HTTP_400_BAD_REQUEST)
-        if verification.status_code != 200 or data.get('aud') != client_id or data.get('email_verified') != 'true':
-            return Response({'detail': 'Google verification could not be completed.'}, status=status.HTTP_400_BAD_REQUEST)
-        email = str(data.get('email', '')).lower().strip()
+        email = claims['email']
         if email != str(request.data.get('email', '')).lower().strip():
             return Response({'detail': 'The verified Google email must match the email entered above.'}, status=status.HTTP_400_BAD_REQUEST)
         if not request.data.get('privacy_accepted') or not request.data.get('terms_accepted'):
@@ -1201,6 +1201,74 @@ class InvitationAcceptView(APIView):
             'message': 'Your account is ready. You can now sign in with your username and password.',
             'username': user.username,
         }, status=status.HTTP_201_CREATED)
+
+
+class GoogleLoginView(APIView):
+    """Public: sign in with a Google account instead of a password.
+
+    Only accounts that already exist can come in this way. An unknown Google
+    address is never handed a new account — membership is granted by the church,
+    not by whoever holds a Gmail address — and an account still awaiting
+    leadership approval is refused, exactly as the password endpoint refuses it.
+    Nothing in the request is believed about who the member is: the address comes
+    from the signed token, never from the request body.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    # The credential is verified before anything else, but this endpoint signs an
+    # unauthenticated caller in, so it carries the same small hourly budget as
+    # the other public, token-minting endpoints.
+    throttle_classes = [PublicTokenThrottle]
+    throttle_scope = 'google_signin'
+
+    def post(self, request):
+        try:
+            claims = verify_google_credential(str(request.data.get('credential') or '').strip())
+        except GoogleCredentialError as error:
+            return Response(
+                {'detail': str(error)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE if error.unavailable else status.HTTP_400_BAD_REQUEST,
+            )
+
+        identity = GoogleIdentity.objects.select_related('user').filter(sub=claims['sub']).first()
+        if identity is None:
+            user = self._account_for_email(claims['email'])
+            if user is None:
+                return Response(
+                    {'detail': 'No church account uses that Google address. Create an account first, or sign in with your username and password.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # First sign-in from this Google account: record the link so later
+            # sign-ins key on the Google subject id alone, which survives the
+            # member renaming their Gmail address. A request racing this one may
+            # insert the same link first; the row that lands is the one that counts.
+            identity, _ = GoogleIdentity.objects.get_or_create(
+                sub=claims['sub'],
+                defaults={'user': user, 'email': claims['email']},
+            )
+        user = identity.user
+        if str(identity.email).lower() != claims['email']:
+            identity.email = claims['email']
+            identity.save(update_fields=['email'])
+        if not user.is_active:
+            return Response(
+                {'detail': 'Your account is still waiting for approval. Please contact the church office.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(sign_in_payload(user))
+
+    @staticmethod
+    def _account_for_email(email):
+        """The one church account carrying this Google address, or None.
+
+        The address is not unique in the database (Django's default user model
+        does not enforce it), so an address shared by two accounts is refused
+        rather than guessed at: signing in the wrong member would be worse than
+        asking them to use their password.
+        """
+        matches = list(User.objects.filter(email__iexact=email).order_by('pk')[:2])
+        return matches[0] if len(matches) == 1 else None
 
 
 class ChangePasswordView(APIView):
@@ -2823,14 +2891,21 @@ class InitiateContributionView(APIView):
         referral_token = request.data.get('referral_token') if isinstance(request.data, dict) else None
         if referral_token:
             context['referral_token'] = str(referral_token)
+        # Safaricom shows one account reference per push, so a gift split across
+        # accounts is named by how many it feeds ("2ACCOUNTS", "3ACCOUNTS")
+        # rather than by whichever account happened to be ticked first — the
+        # first name would describe a fifth of the money. A single-account gift
+        # still shows that account's own short name. Both go through
+        # account_reference_for_purpose(), which uppercases and strips spaces.
+        allocation_accounts = [row.get('account', row['purpose']) for row in allocations]
+        prompt_reference = (
+            allocation_accounts[0] if len(allocation_accounts) == 1 else f"{len(allocation_accounts)}accounts"
+        )
         try:
             result = initiate_stk_push_for_context(
                 phone_number=phone_number,
                 amount=data['amount'],
-                # The prompt's account reference is the first gift's short
-                # account name (Safaricom shows one reference per push even
-                # when the gift is split across accounts).
-                purpose=data['allocations'][0].get('account', data['purpose']),
+                purpose=prompt_reference,
                 context_token=pack_callback_context(context),
             )
         except MpesaConfigurationError as error:

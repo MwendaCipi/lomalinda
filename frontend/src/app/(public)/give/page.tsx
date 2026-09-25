@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { Check, SlidersHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -87,6 +87,7 @@ function GivePageContent() {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(normalizedPurpose ? [normalizedPurpose] : []);
   const [accountAmounts, setAccountAmounts] = useState<Record<string, string>>({});
   const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const accountPickerRef = useRef<HTMLDivElement | null>(null);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
   const [purposes, setPurposes] = useState<GivingAccountOption[]>([]);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -215,6 +216,34 @@ function GivePageContent() {
       setShowGiveModal(true);
     }
   }, [rawPurposeParam]);
+
+  /**
+   * The account list behaves like a dropdown: tapping anywhere outside it — the
+   * rest of the form, the amount rows it opens over, the backdrop — closes it,
+   * and so does Escape. The trigger is inside the ref, so its own tap still
+   * toggles rather than closing and instantly reopening.
+   */
+  useEffect(() => {
+    if (!showAccountPicker) return;
+    const closeOnOutsideTap = (event: PointerEvent) => {
+      if (!accountPickerRef.current?.contains(event.target as Node)) setShowAccountPicker(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowAccountPicker(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideTap);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideTap);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showAccountPicker]);
+
+  // Opening the form never wears the previous attempt's message: a success is
+  // announced by its toast alone, and a stale error is not the new form's news.
+  useEffect(() => {
+    if (showGiveModal) setMessage("");
+  }, [showGiveModal]);
 
   const toggleAccount = (account: string) => {
     setSelectedAccounts((current) =>
@@ -403,7 +432,8 @@ function GivePageContent() {
         const promptMessage = data.message ?? "M-Pesa prompt sent. Enter your PIN on your phone to complete the payment.";
         setShowGiveModal(false);
         setLoading(false);
-        setMessage(promptMessage);
+        // The toast carries it; printing the same sentence into the form as well
+        // left it waiting at the top of the next visit to the modal.
         showAlert("M-Pesa prompt sent", promptMessage, "info", {
           toast: true,
           position: "top-end",
@@ -413,7 +443,6 @@ function GivePageContent() {
         loadMyGivings();
       } else {
         const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
-        setMessage(successMsg);
         showAlert("Contribution Received", successMsg, "success");
         setShowGiveModal(false);
         loadMyGivings();
@@ -729,7 +758,7 @@ function GivePageContent() {
 
                 <div className="block self-start text-sm font-medium text-[#26352f]">
                   <span>Giving accounts</span>
-                  <div className="relative mt-2">
+                  <div className="relative mt-2" ref={accountPickerRef}>
                     <button
                       type="button"
                       onClick={() => setShowAccountPicker((open) => !open)}
