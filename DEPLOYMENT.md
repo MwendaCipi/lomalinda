@@ -39,7 +39,7 @@ After deploying, run migrations — including the new `tenants/0003_googleidenti
 
 1. In the Google Cloud Console, create an **OAuth client ID** of type *Web application*.
 2. Add the site origin to **Authorized JavaScript origins** for each environment: `https://www.example.com` and `http://localhost:3000`. Leave **Authorized redirect URIs** empty — Google Identity Services returns the token to the page in the browser, so there is no redirect back to the API.
-3. Set `GOOGLE_OAUTH_CLIENT_ID` on the VPS and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` on the Worker to that client ID, then redeploy both.
+3. Set `GOOGLE_OAUTH_CLIENT_ID` to that client ID — in the API's `.env` on the VPS, where `deploy.sh` also hands it to the frontend build, so it is the one place to set it there; a Worker build gets `NEXT_PUBLIC_GOOGLE_CLIENT_ID` directly — then redeploy.
 
 Members sign in with Google only if the address Google verifies matches exactly one church account, so accounts are still created by invitation or enrollment, never by signing in. Failed Google attempts are rate limited per address (`GOOGLE_SIGNIN_THROTTLE_RATE`, default `60/hour`) and the attempt is logged by the API with no credential in it.
 

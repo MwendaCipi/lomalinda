@@ -4,7 +4,7 @@ import { EnrollmentForm } from "@/components/enrollment-form";
 export const metadata = {
   title: "Create your account — SDA Loma Linda",
   description:
-    "Create your SDA Loma Linda account as a church member or as a friend of the church, and get access to announcements, giving and events.",
+    "Create your SDA Loma Linda account as a church member, a friend of the church, a baptism candidate or a Sabbath School attendee, and get access to announcements, giving and events.",
 };
 
 export default function CreateAccountPage() {
@@ -15,8 +15,8 @@ export default function CreateAccountPage() {
           <span className="text-xs font-bold uppercase tracking-widest text-[#b36b3c]">Join the church family</span>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Create your account</h1>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
-            Choose whether you are joining as a church member or as a friend of the church, then fill in your details.
-            We will email you a link to verify your address and finish setting up your account.
+            Tell us how you are joining — baptism, membership, as a friend of the church, or as a Sabbath School attendee —
+            then fill in your details. We will email you a link to verify your address and finish setting up your account.
           </p>
         </header>
 
