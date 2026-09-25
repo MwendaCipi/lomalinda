@@ -9,6 +9,10 @@ import { Fragment, type ReactNode } from "react";
  * rendered every record twice. This component owns that pair: the breakpoint
  * classes, the row iteration with shared keys, and the four state cells.
  * Callers keep their own column headers, row cells, and card markup.
+ *
+ * A list that is cards at every width (the announcement board) sets
+ * `cardsOnly` and skips the table columns rather than keeping a dead set of
+ * row cells around to satisfy the props.
  */
 
 export type RecordListHeader = { label: ReactNode; className?: string };
@@ -18,9 +22,12 @@ type RecordListProps<T> = {
   loading: boolean;
   /** Key for a record, shared by its table row and its card. */
   rowKey: (row: T, index: number) => string | number;
-  headers: RecordListHeader[];
+  /** Columns for the desktop table; omitted by cards-only lists. */
+  headers?: RecordListHeader[];
   /** The `<tr>` (cells only decided by you) for the desktop table. */
-  renderRow: (row: T, index: number) => ReactNode;
+  renderRow?: (row: T, index: number) => ReactNode;
+  /** Cards at every width, for a list that is cards even on desktop. */
+  cardsOnly?: boolean;
   /** The card element for the phone layout. */
   renderCard: (row: T, index: number) => ReactNode;
   loadingLabel: string;
@@ -57,6 +64,7 @@ export function RecordList<T>({
   loadingLabel,
   tableEmpty,
   cardsEmpty,
+  cardsOnly = false,
   hidden = false,
   tableWrapperClassName = "",
   tableClassName = "w-full text-left text-xs",
@@ -69,17 +77,19 @@ export function RecordList<T>({
   tableEmptyClassName,
   cardsStateClassName = stateClassName,
 }: RecordListProps<T>) {
-  const span = headers.length;
+  const span = headers?.length ?? 1;
   const emptyTable = tableEmpty ?? cardsEmpty;
   const emptyCards = cardsEmpty ?? tableEmpty;
+  const showTable = !cardsOnly && Boolean(renderRow);
 
   return (
     <>
+      {showTable && (
       <div className={`${tableWrapperClassName} ${hidden ? "hidden" : "hidden md:block"}`.trim()}>
         <table className={tableClassName}>
           <thead className={headClassName}>
             <tr className={headRowClassName}>
-              {headers.map((header, index) => (
+              {(headers ?? []).map((header, index) => (
                 <th
                   key={index}
                   className={[headCellClassName, header.className].filter(Boolean).join(" ")}
@@ -104,13 +114,14 @@ export function RecordList<T>({
               </tr>
             ) : (
               rows.map((row, index) => (
-                <Fragment key={rowKey(row, index)}>{renderRow(row, index)}</Fragment>
+                <Fragment key={rowKey(row, index)}>{renderRow?.(row, index)}</Fragment>
               ))
             )}
           </tbody>
         </table>
       </div>
-      <div className={hidden ? "hidden" : `${cardsClassName} md:hidden`.trim()}>
+      )}
+      <div className={hidden ? "hidden" : cardsOnly ? cardsClassName : `${cardsClassName} md:hidden`.trim()}>
         {loading ? (
           <div className={cardsStateClassName}>{loadingLabel}</div>
         ) : rows.length === 0 ? (

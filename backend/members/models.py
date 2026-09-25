@@ -270,6 +270,10 @@ class Announcement(models.Model):
         help_text='Set when this announcement is the public face of a fund drive.',
     )
     published = models.BooleanField(default=True)
+    # Every announcement carries the window it is displayed for, so nothing has
+    # to be retired by hand: it appears on starts_at and drops off the feed on
+    # its own once expires_at passes.
+    starts_at = models.DateField(null=True, blank=True, help_text="Date from which the announcement starts being displayed")
     expires_at = models.DateField(null=True, blank=True, help_text="Date up to which the announcement will be displayed")
     event_date_from = models.DateField(null=True, blank=True, help_text="First day of the event this announcement is about")
     event_date_to = models.DateField(null=True, blank=True, help_text="Last day of that event; same as from, or blank, for a single day")

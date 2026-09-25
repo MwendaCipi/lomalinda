@@ -25,15 +25,57 @@ type Announcement = {
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   sharing_option?: string;
   action_prompt?: string;
+  starts_at?: string | null;
   expires_at?: string | null;
   created_at: string;
   published?: boolean;
 };
 
+/** A date-only string from the API, rendered without shifting a day. */
+function dayLabel(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** The office's words for where this post sits in its display window. */
+function windowLabel(item: Announcement): string {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  if (item.starts_at && item.starts_at > today) return `Starts ${dayLabel(item.starts_at)}`;
+  if (item.expires_at && item.expires_at < today) return `Ended ${dayLabel(item.expires_at)}`;
+  if (!item.expires_at) return "Shows until removed";
+  return `Shows until ${dayLabel(item.expires_at)}`;
+}
+
+/** DRF reports field errors as `{field: [message]}`; surface the first one. */
+function firstErrorMessage(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  if (typeof record.detail === "string") return record.detail;
+  for (const value of Object.values(record)) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  }
+  return null;
+}
+
+function channelsLabel(sharing?: string): string {
+  if (!sharing) return "—";
+  return sharing
+    .split(",")
+    .map((part) => {
+      const value = part.trim().toLowerCase();
+      return value === "site" ? "Site" : value === "sms" ? "SMS" : value === "email" ? "Email" : value === "all" ? "Site, Email, SMS" : part.trim();
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
 export function AnnouncementManager() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // The id being edited; null while composing a new announcement.
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -43,6 +85,7 @@ export function AnnouncementManager() {
     action_type: "none",
     sharing_option: "site",
     action_prompt: "",
+    starts_at: "",
     expires_at: "",
     href: "",
     event_date_from: "",
@@ -67,7 +110,7 @@ export function AnnouncementManager() {
   function fetchAnnouncements() {
     setLoadingList(true);
     const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/?include_expired=true&include_unpublished=true`, {
+    fetch(`${API_URL}/api/members/announcements/?include_expired=true&include_unpublished=true&include_scheduled=true`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((res) => (res.ok ? res.json() : []))
@@ -82,7 +125,18 @@ export function AnnouncementManager() {
   }, []);
 
   async function handleDelete(id: number, title: string) {
-    if (!confirm(`Are you sure you want to delete the announcement "${title}"?`)) return;
+    const answer = await showAlert(
+      "Delete this announcement?",
+      `"${title}" will be taken down for everyone. This cannot be undone.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Delete",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#b91c1c",
+      },
+    );
+    if (!answer.isConfirmed) return;
     try {
       const response = await fetch(`${API_URL}/api/members/announcements/${id}/`, {
         method: "DELETE",
@@ -102,6 +156,26 @@ export function AnnouncementManager() {
     }
   }
 
+  function handleEdit(item: Announcement) {
+    setEditingId(item.id);
+    setMessage("");
+    setAttachment(null);
+    setForm({
+      title: item.title,
+      text: item.text,
+      visibility: item.visibility || "members",
+      action_type: item.action_type ?? "none",
+      sharing_option: item.sharing_option || "site",
+      action_prompt: item.action_prompt ?? "",
+      starts_at: item.starts_at ?? "",
+      expires_at: item.expires_at ?? "",
+      href: item.href ?? "",
+      event_date_from: item.event_date_from ?? "",
+      event_date_to: item.event_date_to ?? "",
+    });
+    setShowCreateModal(true);
+  }
+
   function resetAndCloseModal() {
     setForm({
       title: "",
@@ -110,11 +184,13 @@ export function AnnouncementManager() {
       action_type: "none",
       sharing_option: "site",
       action_prompt: "",
+      starts_at: "",
       expires_at: "",
       href: "",
       event_date_from: "",
       event_date_to: "",
     });
+    setEditingId(null);
     setAttachment(null);
     setMessage("");
     setShowCreateModal(false);
@@ -134,6 +210,20 @@ export function AnnouncementManager() {
       showAlert("Announcement Too Long", err, "error");
       return;
     }
+    // The API insists on the display window; say which end is missing here
+    // rather than posting and reading a field error back.
+    if (!form.starts_at || !form.expires_at) {
+      const err = "Set the date the announcement starts showing, and the date it stops showing. It retires itself on that date.";
+      setMessage(err);
+      showAlert("Display Window Missing", err, "error");
+      return;
+    }
+    if (form.expires_at < form.starts_at) {
+      const err = "An announcement cannot stop showing before it starts.";
+      setMessage(err);
+      showAlert("Check the Display Window", err, "error");
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     try {
@@ -141,27 +231,30 @@ export function AnnouncementManager() {
       Object.entries(form).forEach(([key, value]) => {
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side).
-        const optional = key === "expires_at" || key === "href" || key === "event_date_from" || key === "event_date_to";
+        const optional = key === "href" || key === "event_date_from" || key === "event_date_to";
         if (optional && !value) return;
         payload.append(key, value);
       });
       if (attachment) payload.append("attachment", attachment);
-      const response = await fetch(`${API_URL}/api/members/announcements/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+      const response = await fetch(
+        editingId ? `${API_URL}/api/members/announcements/${editingId}/` : `${API_URL}/api/members/announcements/`,
+        {
+          method: editingId ? "PATCH" : "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: payload,
         },
-        body: payload,
-      });
+      );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail ?? "Unable to post announcement.");
+      if (!response.ok) throw new Error(firstErrorMessage(data) ?? "Unable to save the announcement.");
 
-      const successText = "Announcement posted successfully.";
-      showAlert("Announcement Posted", successText, "success");
+      const successText = editingId ? "Announcement updated." : "Announcement posted successfully.";
+      showAlert(editingId ? "Announcement Updated" : "Announcement Posted", successText, "success");
       resetAndCloseModal();
       fetchAnnouncements();
     } catch (error) {
-      const errorText = error instanceof Error ? error.message : "Unable to post announcement.";
+      const errorText = error instanceof Error ? error.message : "Unable to save the announcement.";
       setMessage(errorText);
       showAlert("Post Error", errorText, "error");
     } finally {
@@ -185,37 +278,16 @@ export function AnnouncementManager() {
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
+        {/* The announcement board is cards at every width — a bulletin reads as
+            a bulletin, not as a ledger row. */}
         <RecordList
           rows={announcements}
           loading={loadingList}
           rowKey={(item) => item.id}
-          tableWrapperClassName="min-h-0 flex-1 overflow-auto custom-table-scrollbar"
-          tableClassName="w-full text-left text-sm"
-          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
-          headRowClassName=""
-          headCellClassName=""
-          headers={[
-            { label: "#", className: "w-12 px-4 py-3 text-left" },
-            { label: "Title", className: "px-4 py-3" },
-            { label: "Announcement", className: "px-4 py-3" },
-            { label: "Visibility", className: "px-4 py-3" },
-            { label: "Channels", className: "px-4 py-3" },
-            { label: "Action", className: "px-4 py-3" },
-            { label: "Posted", className: "px-4 py-3" },
-            { label: "Display Until", className: "px-4 py-3" },
-            { label: "Actions", className: "px-4 py-3 text-center" },
-          ]}
+          cardsOnly
           loadingLabel="Loading announcements..."
-          stateClassName="px-4 py-12 text-center text-[#617068]"
-          tableEmptyClassName="px-4 py-12 text-center"
-          tableEmpty={
-            <>
-              <p className="text-sm font-semibold text-[#26352f]">No announcements available.</p>
-              <p className="mt-1 text-xs text-[#617068]">Click &quot;Add Announcement&quot; below to post your first announcement.</p>
-            </>
-          }
-          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
+          cardsStateClassName="col-span-full py-12 text-center text-sm text-[#617068]"
           cardsEmpty={
             <>
               <span className="text-4xl">📢</span>
@@ -223,138 +295,75 @@ export function AnnouncementManager() {
               <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
             </>
           }
-          cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain divide-y divide-[#eeeae2]"
           renderCard={(item) => (
-              <article key={item.id} className="space-y-2.5 bg-[#faf7f2] p-4 text-xs">
-                <div className="flex items-start justify-between gap-2">
-                  <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
+            <article
+              key={item.id}
+              className="flex flex-col gap-2.5 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-xs shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(item)}
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+                    title="Edit Announcement"
+                    aria-label="Edit Announcement"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(item.id, item.title)}
-                    className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
                     title="Delete Announcement"
                     aria-label="Delete Announcement"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
-                <AnnouncementAttachment
-                  attachment={item.attachment}
-                  name={item.attachment_name}
-                  size={item.attachment_size}
-                  compact
-                  className="mt-1"
-                />
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[#617068]">
-                    {new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
+              </div>
+              <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
+              <AnnouncementAttachment
+                attachment={item.attachment}
+                name={item.attachment_name}
+                size={item.attachment_size}
+                compact
+                className="mt-1"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148] capitalize">
+                  {item.visibility}
+                </span>
+                <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
+                  Via {channelsLabel(item.sharing_option)}
+                </span>
+                {item.action_type && item.action_type !== "none" && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
+                    {item.action_type.replaceAll("_", " ")}
                   </span>
-                  <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148] capitalize">
-                    {item.visibility}
-                  </span>
-                  {item.sharing_option && (
-                    <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
-                      Via {item.sharing_option.split(",").map((s) => {
-                        const v = s.trim().toLowerCase();
-                        return v === "site" ? "Site" : v === "sms" ? "SMS" : v === "email" ? "Email" : v === "all" ? "Site, Email, SMS" : s.trim();
-                      }).join(", ")}
-                    </span>
-                  )}
-                  {item.action_type && item.action_type !== "none" && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
-                      {item.action_type.replaceAll("_", " ")}
-                    </span>
-                  )}
-                </div>
-                {eventLabel(item) && (
-                  <p className="border-t border-[#eeeae2] pt-2 text-[10px] font-semibold text-[#b36b3c]">
-                    Event: {eventLabel(item)}
-                  </p>
                 )}
-                {item.href && (
-                  <p className="text-[10px]">
-                    <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
-                      Open link ↗
-                    </a>
-                  </p>
-                )}
-                {item.expires_at && (
-                  <p className="border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
-                    Display until: {new Date(`${item.expires_at}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
-                  </p>
-                )}
-              </article>
-            )}
-          renderRow={(item, idx) => (
-                  <tr key={item.id} className="align-top hover:bg-[#faf7f2]">
-                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
-                    <td className="min-w-[160px] px-4 py-3.5 font-bold text-[#26352f]">{item.title}</td>
-                    <td className="max-w-[360px] px-4 py-3.5 text-xs leading-relaxed text-[#415047]">
-                      {item.text}
-                      <AnnouncementAttachment
-                        attachment={item.attachment}
-                        name={item.attachment_name}
-                        size={item.attachment_size}
-                        compact
-                        className="mt-2"
-                      />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5">
-                      <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#3d5148] capitalize">
-                        {item.visibility}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-xs text-[#617068]">
-                      {item.sharing_option
-                        ? item.sharing_option.split(",").map((s) => {
-                            const v = s.trim().toLowerCase();
-                            return v === "site" ? "Site" : v === "sms" ? "SMS" : v === "email" ? "Email" : v === "all" ? "Site, Email, SMS" : s.trim();
-                          }).join(", ")
-                        : "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5">
-                      {item.action_type && item.action_type !== "none" ? (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 capitalize">
-                          {item.action_type.replaceAll("_", " ")}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[#617068]">None</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-xs text-[#617068]">
-                      {new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-xs text-[#617068]">
-                      {item.expires_at
-                        ? new Date(`${item.expires_at}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })
-                        : "—"}
-                      {eventLabel(item) && (
-                        <span className="mt-0.5 block text-[11px] font-semibold text-[#b36b3c]">Event {eventLabel(item)}</span>
-                      )}
-                      {item.href && (
-                        <a href={item.href} target="_blank" rel="noopener noreferrer" className="mt-0.5 block text-[11px] font-semibold text-[#b36b3c] underline underline-offset-2">
-                          Open link ↗
-                        </a>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(item.id, item.title)}
-                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                        title="Delete Announcement"
-                        aria-label="Delete Announcement"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                )}
+              </div>
+              {eventLabel(item) && (
+                <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
+              )}
+              {item.href && (
+                <p className="text-[10px]">
+                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
+                    Open link ↗
+                  </a>
+                </p>
+              )}
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
+                <span>Posted {dayLabel(item.created_at.slice(0, 10))}</span>
+                <span className="font-semibold text-[#3d5148]">{windowLabel(item)}</span>
+              </div>
+            </article>
+          )}
           />
 
         {/* Sticky Footer */}
@@ -399,10 +408,12 @@ export function AnnouncementManager() {
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
               <div>
                 <h2 id="create-announcement-title" className="text-xl font-bold text-[#26352f]">
-                  Post New Announcement
+                  {editingId ? "Edit Announcement" : "Post New Announcement"}
                 </h2>
                 <p className="mt-1 text-xs text-[#617068]">
-                  Fill in announcement details, select target audience and sharing channels.
+                  {editingId
+                    ? "Change the wording, audience, channels or how long it shows for."
+                    : "Fill in announcement details, select target audience and sharing channels."}
                 </p>
               </div>
               <button
@@ -541,13 +552,29 @@ export function AnnouncementManager() {
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
-                Display until (end date)
+                Display from *
                 <input
                   type="date"
+                  required
+                  value={form.starts_at}
+                  onChange={(e) => setForm({ ...form, starts_at: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-[#26352f]">
+                Display until *
+                <input
+                  type="date"
+                  required
+                  min={form.starts_at || undefined}
                   value={form.expires_at}
                   onChange={(e) => setForm({ ...form, expires_at: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 />
+                <span className="mt-1 block text-[10px] font-normal text-[#617068]">
+                  It comes down on its own after this date.
+                </span>
               </label>
 
               <label className="block text-xs font-semibold text-[#26352f]">
@@ -609,7 +636,7 @@ export function AnnouncementManager() {
                   disabled={submitting}
                   className="rounded-full bg-[#5f8067] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
                 >
-                  {submitting ? "Posting..." : "Post Announcement"}
+                  {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
                 </button>
               </div>
             </form>

@@ -7,17 +7,6 @@ import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { eventLabel } from "@/lib/announcement-dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-function getQuarterStartDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const qMonth = Math.floor(now.getMonth() / 3) * 3;
-  const mStr = String(qMonth + 1).padStart(2, "0");
-  return `${year}-${mStr}-01`;
-}
-
-function getTodayDate() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
-}
 
 type FundDrive = {
   id: number;
@@ -61,16 +50,15 @@ function driveGiveHref(drive: FundDrive) {
 export default function AnnouncementsPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [search, setSearch] = useState("");
-  const [startDate, setStartDate] = useState(getQuarterStartDate);
-  const [endDate, setEndDate] = useState(getTodayDate);
   const [loading, setLoading] = useState(true);
 
-  const loadFeed = useCallback((filters = { search, startDate, endDate }) => {
+  // The feed is what is live right now, nearest event first. Each announcement
+  // carries the window it is displayed for, so there is no From/To to pick and
+  // nothing that has finished its run is served.
+  const loadFeed = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ include_expired: "true" });
-    if (filters.search.trim()) params.set("search", filters.search.trim());
-    if (filters.startDate) params.set("start_date", filters.startDate);
-    if (filters.endDate) params.set("end_date", filters.endDate);
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
     const token = localStorage.getItem("access_token");
     fetch(`${API_URL}/api/members/announcements/?${params.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -79,18 +67,16 @@ export default function AnnouncementsPage() {
       .then((data: FeedItem[]) => setAnnouncements(Array.isArray(data) ? data : []))
       .catch(() => setAnnouncements([]))
       .finally(() => setLoading(false));
-  }, [endDate, search, startDate]);
+  }, [search]);
 
   // Drives are announced through the same feed; keep the state name the rest
   // of the page already reads.
   const setAnnouncements = (rows: FeedItem[]) => setItems(rows);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      loadFeed({ search, startDate, endDate });
-    }, 200);
+    const timer = window.setTimeout(loadFeed, 200);
     return () => window.clearTimeout(timer);
-  }, [search, startDate, endDate, loadFeed]);
+  }, [loadFeed]);
 
   return (
     <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
@@ -102,28 +88,8 @@ export default function AnnouncementsPage() {
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#dfdbd1] bg-white px-4 py-3 shadow-sm lg:grid-cols-4">
+            <div className="rounded-2xl border border-[#dfdbd1] bg-white px-4 py-3 shadow-sm">
               <label className="text-sm font-semibold text-[#26352f]">
-                From
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-
-              <label className="text-sm font-semibold text-[#26352f]">
-                To
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-
-              <label className="col-span-2 text-sm font-semibold text-[#26352f] lg:col-span-2">
                 Search
                 <input
                   value={search}

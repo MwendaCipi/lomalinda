@@ -375,11 +375,28 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         end = attrs.get('event_date_to', instance.event_date_to if instance else None)
         if start and end and end < start:
             raise serializers.ValidationError('The event cannot end before it starts.')
+
+        # A new announcement must state the window it is displayed for, so the
+        # feed can retire it without anyone remembering to come back and delete
+        # it. Edits are held to the same rule, which is what makes the window
+        # universal rather than a property only fresh posts have.
+        display_from = attrs.get('starts_at', instance.starts_at if instance else None)
+        display_until = attrs.get('expires_at', instance.expires_at if instance else None)
+        missing = [
+            name for name, value in (('starts_at', display_from), ('expires_at', display_until)) if not value
+        ]
+        if missing:
+            raise serializers.ValidationError({
+                name: 'Enter the date the announcement is displayed from, and the date it stops showing.'
+                for name in missing
+            })
+        if display_until < display_from:
+            raise serializers.ValidationError('An announcement cannot stop showing before it starts.')
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

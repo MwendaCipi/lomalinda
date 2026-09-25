@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urljoin
 import requests
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import permissions
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
@@ -1270,11 +1271,89 @@ def can_manage_announcements(user):
     return user_has_right(user, 'announcements')
 
 
+def send_announcement_emails(announcement):
+    """Deliver an announcement to each member's own inbox, greeted by name.
+
+    One message per recipient rather than one message with the whole
+    congregation in its ``To`` header: every member is addressed the way a
+    receipt addresses them ("Dear {name},") and no member sees anyone else's
+    address. The sends share one SMTP connection so a large congregation stays
+    a quick job rather than a connection per member.
+    """
+    from django.contrib.auth.models import User
+    from django.core.mail import EmailMessage, get_connection
+
+    church_name = current_church_name()
+    subject = f"Church Announcement: {announcement.title}"
+    attachment_bytes = None
+    attachment_name = None
+    if announcement.attachment:
+        try:
+            with announcement.attachment.open('rb') as fh:
+                attachment_bytes = fh.read()
+            attachment_name = announcement.attachment.name.rsplit('/', 1)[-1]
+        except Exception:
+            attachment_bytes = None
+
+    connection = get_connection()
+    try:
+        connection.open()
+    except Exception:
+        connection = None
+
+    sent = 0
+    seen = set()
+    try:
+        for first_name, last_name, username, email in (
+            User.objects.filter(is_active=True).exclude(email='').values_list('first_name', 'last_name', 'username', 'email')
+        ):
+            address = (email or '').strip()
+            if not address or address.lower() in seen:
+                continue
+            seen.add(address.lower())
+            # Same convention as a receipt: the member's own name, or a plain
+            # 'friend' when the account carries none.
+            name = ' '.join(part for part in (first_name, last_name) if part).strip() or 'friend'
+            body = f"Dear {name},\n\n{announcement.title}\n\n{announcement.text}"
+            if announcement.detail:
+                body += f"\n\n{announcement.detail}"
+            body += f"\n\n{church_name}"
+            message = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, [address], connection=connection)
+            if attachment_bytes:
+                # The flyer or document rides along with the email; the SMS
+                # channel stays text-only by design.
+                message.attach(attachment_name, attachment_bytes)
+            try:
+                message.send(fail_silently=False)
+                sent += 1
+            except Exception:
+                continue
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+    return sent
+
+
+class CanManageAnnouncements(permissions.BasePermission):
+    """Posting is a leadership right, decided before the body is validated.
+
+    The check used to sit in ``perform_create``, which runs after the serializer:
+    a member without the right was told their announcement dates were missing
+    rather than that posting was never theirs to do.
+    """
+
+    def has_permission(self, request, view):
+        return can_manage_announcements(request.user)
+
+
 class AnnouncementView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
 
     def get_permissions(self):
-        return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
+        return [IsAuthenticated(), CanManageAnnouncements()] if self.request.method == 'POST' else [AllowAny()]
 
     def get_queryset(self):
         from django.db.models import Q
@@ -1288,17 +1367,18 @@ class AnnouncementView(generics.ListCreateAPIView):
         else:
             queryset = Announcement.objects.filter(published=True)
 
+        # The display window decides what the congregation sees: an announcement
+        # appears on its start date and retires itself on its end date, so both
+        # bounds are applied here rather than left to whoever posted it. The
+        # management screen opts out of each bound to see what is scheduled and
+        # what has lapsed.
         if self.request.query_params.get('include_expired') != 'true':
             queryset = queryset.filter(Q(expires_at__isnull=True) | Q(expires_at__gte=today))
+        if self.request.query_params.get('include_scheduled') != 'true':
+            queryset = queryset.filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(text__icontains=search) | Q(detail__icontains=search))
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        if start_date:
-            queryset = queryset.filter(created_at__date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(created_at__date__lte=end_date)
         if self.request.user.is_authenticated:
             return queryset
         return queryset.filter(visibility__in=['public', 'all'])
@@ -1332,9 +1412,7 @@ class AnnouncementView(generics.ListCreateAPIView):
         return Response(self.get_serializer(dated + undated, many=True).data)
 
     def perform_create(self, serializer):
-        if not can_manage_announcements(self.request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church administrators, clerks or elders can post announcements.')
+        # Leadership was already established by CanManageAnnouncements.
         announcement = serializer.save()
 
         # Handle Site / SMS / Email broadcast
@@ -1351,29 +1429,7 @@ class AnnouncementView(generics.ListCreateAPIView):
 
         if send_email:
             try:
-                from django.contrib.auth.models import User
-                from django.conf import settings
-                from django.core.mail import EmailMessage
-                recipient_emails = list(
-                    User.objects.filter(is_active=True)
-                    .exclude(email='')
-                    .values_list('email', flat=True)
-                    .distinct()
-                )
-                if recipient_emails:
-                    church_name = current_church_name()
-                    subject = f"Church Announcement: {announcement.title}"
-                    body = f"Hello Church Member,\n\n{announcement.title}\n\n{announcement.text}\n\n{announcement.detail}\n\n{church_name}"
-                    message = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, recipient_emails)
-                    if announcement.attachment:
-                        # The flyer or document rides along with the email;
-                        # the SMS channel stays text-only by design.
-                        try:
-                            with announcement.attachment.open('rb') as fh:
-                                message.attach(announcement.attachment.name.rsplit('/', 1)[-1], fh.read())
-                        except Exception:
-                            pass
-                    message.send(fail_silently=True)
+                send_announcement_emails(announcement)
             except Exception:
                 pass
 
@@ -3486,6 +3542,9 @@ def broadcast_campaign_message(campaign, custom_message=None):
         is_popup=True,
         action_prompt=f"Give towards {campaign.account_name or campaign.name}",
         published=True,
+        # The drive's own dates are the announcement's display window, so it
+        # retires itself when the drive closes.
+        starts_at=timezone.localdate(),
         expires_at=campaign.end_date,
     )
 

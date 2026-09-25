@@ -4,6 +4,10 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
+# Announcements must state the window they are displayed for; posting tests
+# state one that comfortably brackets today.
+ANNOUNCEMENT_WINDOW = {'starts_at': '2020-01-01', 'expires_at': '2099-12-31'}
+
 from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_invitation_email, GivingAccountsView
 
 
@@ -1533,6 +1537,7 @@ class AnnouncementPermissionTests(APITestCase):
         self.client.force_authenticate(elder)
         response = self.client.post('/api/members/announcements/', {
             'title': 'Board meeting', 'text': 'Sunday at 10am.', 'visibility': 'members',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -1541,6 +1546,7 @@ class AnnouncementPermissionTests(APITestCase):
         self.client.force_authenticate(clerk)
         ok = self.client.post('/api/members/announcements/', {
             'title': 'Choir practice', 'text': 'Friday 4pm.', 'visibility': 'members',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
 
@@ -1640,6 +1646,7 @@ class AnnouncementPublishingTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Work day', 'text': 'Sunday after service.', 'visibility': 'members',
             'sharing_option': 'site,email',
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data['published'])
@@ -1648,6 +1655,7 @@ class AnnouncementPublishingTests(APITestCase):
         response = self.client.post('/api/members/announcements/', {
             'title': 'Members only mail', 'text': 'Sent by email.', 'visibility': 'members',
             'sharing_option': 'email',
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertFalse(response.data['published'])
@@ -1655,7 +1663,10 @@ class AnnouncementPublishingTests(APITestCase):
     def test_editing_channels_updates_publishing(self):
         from .models import Announcement
 
-        announcement = Announcement.objects.create(title='Old notice', text='Body', visibility='members', published=False)
+        announcement = Announcement.objects.create(
+            title='Old notice', text='Body', visibility='members', published=False,
+            starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
+        )
         response = self.client.patch(f'/api/members/announcements/{announcement.pk}/', {
             'sharing_option': 'site',
         }, format='json')
@@ -1764,6 +1775,7 @@ class AnnouncementBroadcastTests(APITestCase):
             'visibility': 'public',
             'sharing_option': 'email',
             'attachment': flyer,
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(mail.outbox), 1)
@@ -1779,6 +1791,7 @@ class AnnouncementBroadcastTests(APITestCase):
             'text': 'x' * 501,
             'visibility': 'public',
             'sharing_option': 'site',
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -1787,6 +1800,7 @@ class AnnouncementBroadcastTests(APITestCase):
             'text': 'x' * 500,
             'visibility': 'public',
             'sharing_option': 'site',
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -1808,6 +1822,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
         MemberProfile.objects.create(user=self.stranger, role='member', roles='member')
         self.draft = Announcement.objects.create(
             title='Draft notice', text='Not ready yet.', visibility='members', published=False,
+            starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
         )
 
     def test_superuser_with_member_role_can_post(self):
@@ -1818,6 +1833,7 @@ class AnnouncementManagementPermissionTests(APITestCase):
             'text': 'Posted as staff.',
             'visibility': 'public',
             'sharing_option': 'site',
+            **ANNOUNCEMENT_WINDOW,
         }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -2170,6 +2186,7 @@ class AnnouncementEventDatesAPITests(APITestCase):
             'href': 'https://meet.example.com/town-hall',
             'event_date_from': '2026-10-01',
             'event_date_to': '2026-10-02',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -2185,6 +2202,7 @@ class AnnouncementEventDatesAPITests(APITestCase):
             'sharing_option': 'site',
             'event_date_from': '2026-10-05',
             'event_date_to': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -3429,6 +3447,7 @@ class FundDriveAnnouncementsTests(APITestCase):
             'text': 'Help our young people reach camp.',
             'visibility': 'members',
             'campaign': campaign.id,
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -3444,6 +3463,7 @@ class FundDriveAnnouncementsTests(APITestCase):
             'title': 'Choir practice moves',
             'text': 'Practice now meets on Thursday.',
             'visibility': 'members',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -3774,6 +3794,7 @@ class AnnouncementRightsTests(APITestCase):
         self.client.force_authenticate(clerk)
         ok = self.client.post('/api/members/announcements/', {
             'title': 'Allowed', 'text': 'Default rights allow this.', 'visibility': 'members',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
 
@@ -3795,6 +3816,7 @@ class AnnouncementRightsTests(APITestCase):
         self.client.force_authenticate(treasurer)
         ok = self.client.post('/api/members/announcements/', {
             'title': 'Granted', 'text': 'The church granted this right.', 'visibility': 'members',
+            **ANNOUNCEMENT_WINDOW,
         }, format='json')
         self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
 
@@ -4002,3 +4024,174 @@ class YaLessonWeeklyCacheTests(APITestCase):
             response = self.client.get(self.url)
 
         self.assertEqual(response['Location'], YA_LESSON_URL)
+
+
+class AnnouncementDisplayWindowTests(APITestCase):
+    """A post lives for the window it is published with, and no longer.
+
+    Readers used to pick a From/To range to see what had been posted, which
+    meant every announcement was shown forever if nobody came back to retire it.
+    The window belongs to the announcement now: it appears on its start date,
+    stays off the feed until then, and removes itself on its end date.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('window.admin', 'window.admin@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.client.force_authenticate(self.admin)
+        self.today = timezone.localdate()
+
+    def _post(self, title, **dates):
+        return self.client.post('/api/members/announcements/', {
+            'title': title, 'text': f'{title} body', 'visibility': 'members', 'sharing_option': 'site', **dates,
+        }, format='json')
+
+    def _fixture(self, title, **dates):
+        return Announcement.objects.create(title=title, text=f'{title} body', visibility='members', **dates)
+
+    def _feed(self, query=''):
+        return [row['title'] for row in self.client.get(f'/api/members/announcements/{query}').data]
+
+    def test_posting_without_a_window_is_refused(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Undated', 'text': 'No window.', 'visibility': 'members', 'sharing_option': 'site',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('starts_at', response.data)
+        self.assertIn('expires_at', response.data)
+
+    def test_posting_with_a_window_round_trips(self):
+        response = self._post('Harvest', starts_at=str(self.today), expires_at=str(self.today + timedelta(days=7)))
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(str(response.data['starts_at']), str(self.today))
+
+    def test_a_window_that_ends_before_it_starts_is_refused(self):
+        response = self._post(
+            'Backwards window',
+            starts_at=str(self.today),
+            expires_at=str(self.today - timedelta(days=1)),
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_editing_a_legacy_post_has_to_supply_the_missing_window(self):
+        """Rows posted before the rule keep showing until they are given one."""
+        legacy = self._fixture('Legacy notice')
+
+        refused = self.client.patch(
+            f'/api/members/announcements/{legacy.pk}/', {'title': 'Legacy notice, edited'}, format='json',
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+        accepted = self.client.patch(f'/api/members/announcements/{legacy.pk}/', {
+            'title': 'Legacy notice, edited',
+            'starts_at': str(self.today),
+            'expires_at': str(self.today + timedelta(days=30)),
+        }, format='json')
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.title, 'Legacy notice, edited')
+
+    def test_the_feed_shows_only_what_is_inside_its_window(self):
+        self._fixture('Running now', starts_at=self.today - timedelta(days=1), expires_at=self.today + timedelta(days=1))
+        self._fixture('Starts next week', starts_at=self.today + timedelta(days=7), expires_at=self.today + timedelta(days=14))
+        self._fixture('Lapsed', starts_at=self.today - timedelta(days=14), expires_at=self.today - timedelta(days=7))
+
+        self.assertEqual(self._feed(), ['Running now'])
+
+    def test_the_management_screen_still_sees_scheduled_and_lapsed_posts(self):
+        self._fixture('Starts next week', starts_at=self.today + timedelta(days=7), expires_at=self.today + timedelta(days=14))
+        self._fixture('Lapsed', starts_at=self.today - timedelta(days=14), expires_at=self.today - timedelta(days=7))
+
+        self.assertEqual(
+            sorted(self._feed('?include_expired=true&include_scheduled=true')),
+            ['Lapsed', 'Starts next week'],
+        )
+
+    def test_a_posting_date_range_no_longer_narrows_the_feed(self):
+        """The reader's From/To filter is gone; each post's window decides instead."""
+        self._fixture('Running now', starts_at=self.today - timedelta(days=1), expires_at=self.today + timedelta(days=1))
+
+        self.assertEqual(self._feed('?start_date=2000-01-01&end_date=2000-01-02'), ['Running now'])
+
+    def test_editing_moves_the_window(self):
+        announcement = self._fixture('Move me', starts_at=self.today, expires_at=self.today + timedelta(days=1))
+
+        response = self.client.patch(
+            f'/api/members/announcements/{announcement.pk}/',
+            {'expires_at': str(self.today + timedelta(days=30))},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertEqual(announcement.expires_at, self.today + timedelta(days=30))
+
+
+class AnnouncementGreetingTests(APITestCase):
+    """Announcement email is personal mail, greeted the way a receipt is.
+
+    The channel used to send one message with the whole congregation in its To
+    header and open "Hello Church Member", which both exposed every address to
+    every recipient and addressed nobody. Each member now gets their own copy.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('greet.elder', 'greet.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.client.force_authenticate(self.elder)
+
+    def _member(self, username, first, last, email):
+        user = User.objects.create_user(username, email, 'ChurchPass#2026', first_name=first, last_name=last)
+        MemberProfile.objects.create(user=user, role='member', roles='member')
+        return user
+
+    def _announce(self):
+        return self.client.post('/api/members/announcements/', {
+            'title': 'Harvest Sabbath',
+            'text': 'Bring your offering.',
+            'visibility': 'members',
+            'sharing_option': 'email',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+    def test_each_member_gets_their_own_greeting(self):
+        from django.core import mail
+
+        self._member('greet.manason', 'Manason', 'Amoko', 'manason@example.com')
+        self._member('greet.judith', 'Judith', 'Ndirangu', 'judith@example.com')
+
+        response = self._announce()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # The poster plus the two members: one message each, nobody shared.
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(
+            sorted(message.to[0] for message in mail.outbox),
+            ['greet.elder@example.com', 'judith@example.com', 'manason@example.com'],
+        )
+        by_address = {message.to[0]: message.body for message in mail.outbox}
+        self.assertTrue(by_address['manason@example.com'].startswith('Dear Manason Amoko,'))
+        self.assertTrue(by_address['judith@example.com'].startswith('Dear Judith Ndirangu,'))
+
+    def test_a_member_with_no_name_is_greeted_as_friend(self):
+        from django.core import mail
+
+        self._member('greet.noname', '', '', 'noname@example.com')
+
+        self._announce()
+
+        body = next(message.body for message in mail.outbox if message.to[0] == 'noname@example.com')
+        self.assertTrue(body.startswith('Dear friend,'), body)
+
+    def test_the_announcement_text_rides_in_every_copy(self):
+        from django.core import mail
+
+        self._member('greet.reader', 'Esther', 'Wanjiku', 'esther@example.com')
+
+        self._announce()
+
+        body = next(message.body for message in mail.outbox if message.to[0] == 'esther@example.com')
+        self.assertIn('Harvest Sabbath', body)
+        self.assertIn('Bring your offering.', body)
