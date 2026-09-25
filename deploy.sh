@@ -50,10 +50,23 @@ cd "$PROJECT_DIR"
 echo "⬇️ Pulling latest code..."
 git pull origin main
 
+# New imports arrive with the code (google-auth, for Google sign-in), and a
+# missing one stops gunicorn from booting at all - so dependencies are installed
+# before anything is restarted. Idempotent: an unchanged requirements.txt is a
+# no-op.
+echo "📦 Installing backend dependencies..."
+backend/venv/bin/pip install -q -r backend/requirements.txt
+
 echo "🐍 Executing database schema migrations..."
 backend/venv/bin/python backend/manage.py migrate_schemas
 
 echo "🏗️ Building Next.js production web app..."
+# NEXT_PUBLIC_* values are baked into the bundle at build time. The Google client
+# ID lives in the backend .env - the single place it is configured on this box -
+# and is handed to the build here; when it is not set, Google sign-in is simply
+# left off the login page.
+NEXT_PUBLIC_GOOGLE_CLIENT_ID="$(grep -E '^GOOGLE_OAUTH_CLIENT_ID=' backend/.env | tail -1 | cut -d= -f2- || true)"
+export NEXT_PUBLIC_GOOGLE_CLIENT_ID
 (cd frontend && npm run build)
 
 echo "🔄 Restarting ${SERVICE} systemd service..."

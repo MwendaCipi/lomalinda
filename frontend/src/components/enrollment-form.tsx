@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { GOOGLE_CLIENT_ID, googleAccountsId, type GoogleCredentialResponse } from "@/lib/google-identity";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -9,19 +10,6 @@ export type TransferDirection = "transfer_in" | "transfer_out";
 export type JoiningMode = "baptism" | "membership_transfer" | "friend" | "sabbath_school";
 
 const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]";
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
 
 function parseFullName(fullName: string): { first_name: string; last_name: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -45,7 +33,7 @@ const emptyForm = {
 type EnrollmentFormProps = {
   /** Requests page: let the visitor pick transfer in / transfer out. Sign-up hides it. */
   allowTransferOut?: boolean;
-  /** Sign-up: ask Member or Friend up front, so account creation needs one click less. */
+  /** Sign-up: lead with the joining choice, which decides which fields follow. */
   showAccountTypeChoice?: boolean;
   initialJoiningMode?: JoiningMode;
   /** Called after a successful submission so the host page can refresh its list. */
@@ -65,8 +53,6 @@ export function EnrollmentForm({
   const [loading, setLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  const accountType: "member" | "friend" | "sabbath_school" = joiningMode === "friend" ? "friend" : joiningMode === "sabbath_school" ? "sabbath_school" : "member";
-
   /**
    * "A church member" is somebody already on a church roll who is asking to be
    * added to this one. How they are joining, where they live and which church
@@ -84,31 +70,27 @@ export function EnrollmentForm({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  // Fetch Google's script while the form is being filled in, so "Verify with
+  // Google" answers at once instead of after a download.
   useEffect(() => {
-    if (document.querySelector("script[data-google-identity]") || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return;
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.dataset.googleIdentity = "true";
-    document.head.appendChild(script);
+    void googleAccountsId();
   }, []);
 
-  function startGoogleVerification() {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) {
+  async function startGoogleVerification() {
+    if (!GOOGLE_CLIENT_ID) {
       showAlert("Verification unavailable", "Google OAuth has not been configured yet.", "error");
       return;
     }
-    if (!window.google) {
+    const accountsId = await googleAccountsId();
+    if (!accountsId) {
       showAlert("Verification unavailable", "Google verification is still loading. Please try again.", "error");
       return;
     }
-    window.google.accounts.id.initialize({ client_id: clientId, callback: completeGoogleVerification });
-    window.google.accounts.id.prompt();
+    accountsId.initialize({ client_id: GOOGLE_CLIENT_ID, callback: completeGoogleVerification });
+    accountsId.prompt();
   }
 
-  async function completeGoogleVerification(response: { credential: string }) {
+  async function completeGoogleVerification(response: GoogleCredentialResponse) {
     const { first_name, last_name } = parseFullName(form.name);
     setLoading(true);
     setMessage("");
@@ -249,68 +231,6 @@ export function EnrollmentForm({
         <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
       </label>
 
-      {showAccountTypeChoice && (
-        <div>
-          <span className="block text-sm font-semibold text-[#26352f]">I am joining as</span>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => {
-                setJoiningMode("membership_transfer");
-                setMessage("");
-              }}
-              aria-pressed={accountType === "member"}
-              className={`rounded-2xl border p-4 text-left transition ${
-                accountType === "member"
-                  ? "border-[#b36b3c] bg-[#fdf6f0] ring-1 ring-[#b36b3c]"
-                  : "border-[#dfdbd1] bg-white hover:border-[#c9c5bb]"
-              }`}
-            >
-              <span className="block text-sm font-semibold text-[#26352f]">A church member</span>
-              <span className="mt-1 block text-xs text-[#617068]">
-                You are already a member — ask to be added to the church register.
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setJoiningMode("friend");
-                setMessage("");
-              }}
-              aria-pressed={accountType === "friend"}
-              className={`rounded-2xl border p-4 text-left transition ${
-                accountType === "friend"
-                  ? "border-[#b36b3c] bg-[#fdf6f0] ring-1 ring-[#b36b3c]"
-                  : "border-[#dfdbd1] bg-white hover:border-[#c9c5bb]"
-              }`}
-            >
-              <span className="block text-sm font-semibold text-[#26352f]">A friend of the church</span>
-              <span className="mt-1 block text-xs text-[#617068]">
-                Stay connected with announcements, giving and events.
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setJoiningMode("sabbath_school");
-                setMessage("");
-              }}
-              aria-pressed={accountType === "sabbath_school"}
-              className={`rounded-2xl border p-4 text-left transition ${
-                accountType === "sabbath_school"
-                  ? "border-[#b36b3c] bg-[#fdf6f0] ring-1 ring-[#b36b3c]"
-                  : "border-[#dfdbd1] bg-white hover:border-[#c9c5bb]"
-              }`}
-            >
-              <span className="block text-sm font-semibold text-[#26352f]">A Sabbath School attendee</span>
-              <span className="mt-1 block text-xs text-[#617068]">
-                Attend Sabbath School while considering baptism.
-              </span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {allowTransferOut && (
         <div>
           <label className="block text-sm font-semibold text-[#26352f]">Transfer Direction / Request Type</label>
@@ -328,8 +248,45 @@ export function EnrollmentForm({
         </div>
       )}
 
+      {/* Two fields to a row on anything wider than a phone. The joining choice
+          leads, beside the name: it decides which fields follow below. */}
       <div className="grid gap-4 sm:grid-cols-2 pt-2">
-        <label className="block text-sm font-medium sm:col-span-2">
+        {showAccountTypeChoice && (
+          <label className="block text-sm font-medium">
+            I am joining as
+            <select
+              value={joiningMode}
+              onChange={(event) => {
+                setJoiningMode(event.target.value as JoiningMode);
+                setMessage("");
+              }}
+              className={inputClass}
+            >
+              <option value="baptism">Baptism / New member</option>
+              <option value="membership_transfer">A church member</option>
+              <option value="friend">A friend of the church</option>
+              <option value="sabbath_school">A Sabbath School attendee</option>
+            </select>
+          </label>
+        )}
+
+        {!showAccountTypeChoice && transferDirection === "transfer_in" && (
+          <label className="block text-sm font-medium">
+            Mode of Joining
+            <select
+              value={joiningMode}
+              onChange={(event) => setJoiningMode(event.target.value as JoiningMode)}
+              className={inputClass}
+            >
+              <option value="baptism">Baptism</option>
+              <option value="membership_transfer">Membership Transfer</option>
+              <option value="friend">Friend of SDA Loma Linda</option>
+              <option value="sabbath_school">Sabbath School</option>
+            </select>
+          </label>
+        )}
+
+        <label className="block text-sm font-medium">
           Full Name
           <input
             required
@@ -370,25 +327,9 @@ export function EnrollmentForm({
 
         {transferDirection === "transfer_in" && (
           <>
-            {!showAccountTypeChoice && (
-              <label className="block text-sm font-medium sm:col-span-2">
-                Mode of Joining
-                <select
-                  value={joiningMode}
-                  onChange={(event) => setJoiningMode(event.target.value as JoiningMode)}
-                  className={inputClass}
-                >
-                  <option value="baptism">Baptism</option>
-                  <option value="membership_transfer">Membership Transfer</option>
-                  <option value="friend">Friend of SDA Loma Linda</option>
-                  <option value="sabbath_school">Sabbath School</option>
-                </select>
-              </label>
-            )}
-
             {/* Existing members: no mode, no residence, no previous church. */}
             {!isExistingMember && (
-              <label className="block text-sm font-medium sm:col-span-2">
+              <label className="block text-sm font-medium">
                 Residence
                 <input
                   value={form.residence}
@@ -400,7 +341,7 @@ export function EnrollmentForm({
             )}
 
             {asksCurrentChurch && (
-              <label className="block text-sm font-medium sm:col-span-2">
+              <label className="block text-sm font-medium">
                 Current / Previous Church Name
                 <input
                   required

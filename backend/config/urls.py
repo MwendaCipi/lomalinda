@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from members.views import GoogleLoginView
 from .authentication import ChurchTokenObtainPairSerializer
 from django.http import JsonResponse
 
@@ -31,6 +32,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/members/', include('members.urls')),
     path('api/auth/token/', TokenObtainPairView.as_view(serializer_class=ChurchTokenObtainPairSerializer), name='token_obtain_pair'),
+    # Signing in with a Google account: same JWT pair, same onboarding flags as
+    # the username/password endpoint above.
+    path('api/auth/google/', GoogleLoginView.as_view(), name='google_login'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
 
