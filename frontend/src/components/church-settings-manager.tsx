@@ -52,9 +52,6 @@ export function ChurchSettingsManager() {
   const [bankSwiftCode, setBankSwiftCode] = useState("KCBKNEN");
   const [bankPaybillNumber, setBankPaybillNumber] = useState("522522");
   const [mpesaPaybillNumber, setMpesaPaybillNumber] = useState("");
-  const [mpesaAccountNumber, setMpesaAccountNumber] = useState("");
-  const [mpesaAccountName, setMpesaAccountName] = useState("");
-  const [mpesaPhoneNumber, setMpesaPhoneNumber] = useState("");
   const [invitationLinkLifetimeDays, setInvitationLinkLifetimeDays] = useState(7);
   // The church's own legal documents; empty means the built-in wording on the
   // public pages, so a church that never touches these loses nothing.
@@ -103,9 +100,6 @@ export function ChurchSettingsManager() {
           if (data.bank_swift_code) setBankSwiftCode(data.bank_swift_code);
           if (data.bank_paybill_number) setBankPaybillNumber(data.bank_paybill_number);
           if (data.mpesa_paybill_number) setMpesaPaybillNumber(data.mpesa_paybill_number);
-          if (data.mpesa_account_number) setMpesaAccountNumber(data.mpesa_account_number);
-          if (data.mpesa_account_name) setMpesaAccountName(data.mpesa_account_name);
-          if (data.mpesa_phone_number) setMpesaPhoneNumber(data.mpesa_phone_number);
           if (data.invitation_link_lifetime_days) setInvitationLinkLifetimeDays(data.invitation_link_lifetime_days);
           if (typeof data.privacy_policy === "string") setPrivacyPolicy(data.privacy_policy);
           if (typeof data.terms_of_use === "string") setTermsOfUse(data.terms_of_use);
@@ -156,9 +150,6 @@ export function ChurchSettingsManager() {
         bank_swift_code: bankSwiftCode,
         bank_paybill_number: bankPaybillNumber,
         mpesa_paybill_number: mpesaPaybillNumber,
-        mpesa_account_number: mpesaAccountNumber,
-        mpesa_account_name: mpesaAccountName,
-        mpesa_phone_number: mpesaPhoneNumber,
         invitation_link_lifetime_days: invitationLinkLifetimeDays,
         privacy_policy: privacyPolicy,
         terms_of_use: termsOfUse,
@@ -349,50 +340,23 @@ export function ChurchSettingsManager() {
             <span>📱</span> Church M-Pesa Payment Details
           </h3>
           <p className="mt-1 text-xs text-[#617068]">
-            Pay Bill or Send Money details shown to members giving from their phone. Leave a field blank to hide it from the giving page.
+            The one number members pay into. On the giving page they are told to type what they are giving for as the
+            M-Pesa account number — the account they picked on the form, such as Tithe or Combined Offering.
           </p>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Pay Bill Number</label>
-              <input
-                type="text"
-                value={mpesaPaybillNumber}
-                onChange={(e) => setMpesaPaybillNumber(e.target.value)}
-                placeholder="e.g. 522522"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Account Number</label>
-              <input
-                type="text"
-                value={mpesaAccountNumber}
-                onChange={(e) => setMpesaAccountNumber(e.target.value)}
-                placeholder="e.g. TITHE — what givers type in the prompt"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Account Name</label>
-              <input
-                type="text"
-                value={mpesaAccountName}
-                onChange={(e) => setMpesaAccountName(e.target.value)}
-                placeholder="e.g. SDA Loma Linda Church"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Send Money Number</label>
-              <input
-                type="tel"
-                value={mpesaPhoneNumber}
-                onChange={(e) => setMpesaPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="e.g. 0712345678 (optional)"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
-              />
-            </div>
+          <div className="mt-4 max-w-sm">
+            <label className="block text-xs font-semibold text-[#26352f]">Pay Bill Number</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={mpesaPaybillNumber}
+              onChange={(e) => setMpesaPaybillNumber(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              placeholder="e.g. 522522"
+              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
+            />
+            <p className="mt-2 text-xs text-[#617068]">
+              Leave it blank and the giving page shows no M-Pesa details at all.
+            </p>
           </div>
         </div>
 

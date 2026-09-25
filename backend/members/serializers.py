@@ -765,7 +765,10 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'invitation_link_lifetime_days',
             'bank_name', 'bank_account_name', 'bank_account_number',
             'bank_branch', 'bank_swift_code', 'bank_paybill_number',
-            'mpesa_paybill_number', 'mpesa_account_number', 'mpesa_account_name', 'mpesa_phone_number'
+            # One M-Pesa detail: the number members pay into. What a giver types
+            # as the account number is the account they are giving for, so the
+            # church has nothing else to configure here.
+            'mpesa_paybill_number',
         )
 
 
