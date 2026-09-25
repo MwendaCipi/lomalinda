@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Users,
+  Home,
   BookOpen,
   CircleDollarSign,
   Church,
@@ -240,7 +241,8 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       : []),
   ];
 
-  // Mobile bottom tab navigation items.
+  // Mobile bottom tab navigation items, in the order a member moves through the
+  // app on a phone: home, the fellowship hub, study materials, then giving.
   //
   // These point at the same *app* destinations the desktop bar uses, not at the
   // public website's hubs: the Giving tab has always opened /support, while
@@ -250,22 +252,30 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   // still links its own hubs from the marketing header.
   const mobileBottomNavItems = [
     {
+      // Same destination as the header logo: a signed-in member lands on their
+      // dashboard, everyone else on the public home page.
+      href: userState.isLoggedIn ? "/dashboard" : "/",
+      label: "Home",
+      icon: Home,
+      active: pathname === "/" || pathname.startsWith("/dashboard"),
+    },
+    {
       href: "/fellowship",
       label: "Fellowship",
       icon: Users,
       active: pathname.startsWith("/fellowship") || pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements") || pathname.startsWith("/services"),
     },
     {
-      href: "/support",
-      label: "Giving",
-      icon: CircleDollarSign,
-      active: pathname.startsWith("/support") || pathname.startsWith("/give"),
-    },
-    {
       href: "/materials",
       label: "Materials",
       icon: BookOpen,
       active: pathname.startsWith("/materials"),
+    },
+    {
+      href: "/support",
+      label: "Giving",
+      icon: CircleDollarSign,
+      active: pathname.startsWith("/support") || pathname.startsWith("/give"),
     },
     // About moved into the user menu; the office reaches its console from the
     // tab bar instead.
