@@ -41,6 +41,7 @@ from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callba
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .requests import notify_request_safely, send_membership_approval_email
+from .treasury import credit_account, credit_contribution_lines
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -2004,6 +2005,17 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
             if not cash.donor_name.strip():
                 cash.donor_name = 'Anonymous Giver'
                 cash.save(update_fields=['donor_name'])
+        # Money keyed in at the desk is money in the treasury: the account the
+        # receipt names is credited now, so the treasurer never has to enter
+        # the same figure twice. Anonymous rows credit their account too — the
+        # giver is unknown, the money is not.
+        credit_account(
+            purpose=cash.purpose,
+            amount=cash.amount,
+            description=f"Contribution — {cash.get_payment_method_display()} ({cash.purpose})",
+            reference=cash.receipt_number or f'CASH-{cash.id}',
+            created_by=self.request.user,
+        )
 
 
 class ContributionReconciliationView(APIView):
@@ -2922,6 +2934,12 @@ class InitiateContributionView(APIView):
                 contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
                 send_contribution_receipt(contribution)
             created.append(contribution)
+        # Cash, cheque and bank gifts recorded here are received money: their
+        # accounts move now. (M-Pesa waits for Safaricom's callback, which
+        # credits through the same door.)
+        for contribution in created:
+            if contribution.status == 'completed':
+                credit_contribution_lines(contribution)
 
         method_display = method.replace('_', ' ').title()
         return Response({
@@ -3070,6 +3088,9 @@ class MpesaCallbackView(APIView):
                 )
                 self._link_giver(contribution, context)
                 send_contribution_receipt(contribution)
+            # The money is in; the account it names moves too. One credit per
+            # payment, split the way the giver split it.
+            credit_contribution_lines(contribution)
         else:
             # The prompt was cancelled, timed out or otherwise failed — no
             # money moved, but keep a terminal record so the attempt is
@@ -3155,6 +3176,7 @@ class MpesaC2BConfirmationView(APIView):
         # a C2B paybill payment is always a single line, so only unsplit rows can
         # be the payment this confirmation is about.
         contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id, payment_group__isnull=True).first()
+        was_new_record = contribution is None
         if not contribution:
             contribution = Contribution(
                 payment_method='mpesa',
@@ -3183,6 +3205,11 @@ class MpesaC2BConfirmationView(APIView):
 
         contribution.save()
         send_contribution_receipt(contribution)
+        # The paybill money is in; the account it names moves too. A repeated
+        # confirmation finds the saved row first and never reaches a second
+        # credit, because the credit only follows a fresh completion.
+        if was_new_record:
+            credit_contribution_lines(contribution)
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
@@ -3321,6 +3348,7 @@ class PaystackWebhookView(APIView):
         if not contribution:
             return Response({'received': True})
         expected_amount = int(Decimal(contribution.amount) * 100)
+        already_completed = contribution.status == 'completed'
         if event_type == 'charge.success' and payment.get('status') and payment.get('amount') == expected_amount and payment.get('currency') == contribution.currency:
             contribution.status = 'completed'
             contribution.paid_at = timezone.now()
@@ -3328,6 +3356,11 @@ class PaystackWebhookView(APIView):
             contribution.status = 'failed'
         contribution.save(update_fields=['status', 'paid_at'])
         send_contribution_receipt(contribution)
+        # Card money joins the account it names the moment it is confirmed —
+        # but only once: a webhook re-delivery meets an already-completed row
+        # and stops at the receipt.
+        if contribution.status == 'completed' and not already_completed:
+            credit_contribution_lines(contribution)
         return Response({'received': True})
 
 

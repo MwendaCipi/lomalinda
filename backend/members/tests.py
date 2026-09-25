@@ -55,7 +55,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
 from .google_auth import GoogleCredentialError, verify_google_credential
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement
 from tenants.models import GoogleIdentity
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
@@ -4239,6 +4239,211 @@ class FundDriveTotalTests(APITestCase):
 
         response = self.client.get(f'/api/members/campaigns/{drive.id}/')
         self.assertEqual(response.data['total_raised'], 500.0)
+
+
+class TreasuryAutoCreditTests(APITestCase):
+    """Received money moves the treasury account it names — by itself.
+
+    Every channel money arrives through ends at the same door: the account
+    is credited and its transaction row written when the gift is recorded,
+    so the treasurer never re-enters the same figure in a second screen.
+    """
+
+    def setUp(self):
+        self.tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', balance=Decimal('1000.00'))
+        self.combined = TreasuryAccount.objects.create(name='CombinedOff', description='Combined Offering', balance=Decimal('500.00'))
+        from django.core import mail
+        mail.outbox.clear()
+
+    def tearDown(self):
+        from django.core import mail
+        mail.outbox.clear()
+
+    # -- M-Pesa STK callback ----------------------------------------------
+
+    def _callback(self, context, result_code=0, checkout_id='ws_CO_auto'):
+        payload = {
+            'Body': {
+                'stkCallback': {
+                    'CheckoutRequestID': checkout_id,
+                    'ResultCode': result_code,
+                }
+            }
+        }
+        if result_code == 0:
+            payload['Body']['stkCallback']['CallbackMetadata'] = {
+                'Item': [
+                    {'Name': 'Amount', 'Value': 100.00},
+                    {'Name': 'MpesaReceiptNumber', 'Value': 'SAA9QKAUTO'},
+                    {'Name': 'PhoneNumber', 'Value': 254712345678},
+                    {'Name': 'FirstName', 'Value': 'Ada'},
+                ]
+            }
+        token = pack_callback_context(context)
+        return self.client.post(f'/api/members/payments/mpesa/callback/?ctx={token}', payload, format='json')
+
+    def test_stk_callback_credits_the_named_account(self):
+        self._callback({'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'})
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        tx = TreasuryAccountTransaction.objects.get()
+        self.assertEqual(tx.transaction_type, 'credit')
+        self.assertEqual(tx.amount, Decimal('100.00'))
+        self.assertEqual(tx.account, self.tithe)
+        self.assertEqual(tx.reference, 'SAA9QKAUTO')
+
+    def test_stk_callback_matches_the_description_wording(self):
+        # The form reads descriptions; the gift names 'Combined Offering' —
+        # the account whose description says so is the one credited.
+        self._callback({'amount': '100.00', 'purpose': 'Combined Offering', 'phone_number': '254712345678'})
+        self.combined.refresh_from_db()
+        self.assertEqual(self.combined.balance, Decimal('600.00'))
+
+    def test_stk_callback_splits_the_credit_across_accounts(self):
+        self._callback({
+            'amount': '300.00',
+            'purpose': 'Tithe',
+            'phone_number': '254712345678',
+            'allocations': [
+                {'purpose': 'Tithe', 'account': 'Tithe', 'amount': '200.00'},
+                {'purpose': 'Combined Offering', 'account': 'CombinedOff', 'amount': '100.00'},
+            ],
+        })
+        self.tithe.refresh_from_db()
+        self.combined.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1200.00'))
+        self.assertEqual(self.combined.balance, Decimal('600.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 2)
+
+    def test_failed_prompt_credits_nothing(self):
+        self._callback({'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}, result_code=1032)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1000.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 0)
+
+    def test_repeated_callback_credits_once(self):
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        self._callback(context)
+        self._callback(context)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
+
+    def test_unknown_account_does_not_break_the_gift(self):
+        self._callback({'amount': '100.00', 'purpose': 'Mistyped Fund', 'phone_number': '254712345678'})
+        self.assertEqual(Contribution.objects.filter(status='completed').count(), 1)
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 0)
+
+    # -- C2B paybill confirmation -----------------------------------------
+
+    def test_c2b_confirmation_credits_the_account(self):
+        response = self.client.post('/api/members/payments/mpesa/c2b/confirmation/', {
+            'TransID': 'C2BAUTO01', 'TransAmount': '2500.00', 'BillRefNumber': 'Tithe',
+            'MSISDN': '254712345678', 'FirstName': 'Grace',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('3500.00'))
+
+    def test_repeated_c2b_confirmation_credits_once(self):
+        payload = {
+            'TransID': 'C2BAUTO02', 'TransAmount': '2500.00', 'BillRefNumber': 'Tithe',
+            'MSISDN': '254712345678', 'FirstName': 'Grace',
+        }
+        self.client.post('/api/members/payments/mpesa/c2b/confirmation/', payload, format='json')
+        self.client.post('/api/members/payments/mpesa/c2b/confirmation/', payload, format='json')
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('3500.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
+
+    # -- Paystack webhook --------------------------------------------------
+
+    def test_paystack_success_credits_the_account(self):
+        contribution = Contribution.objects.create(
+            amount=Decimal('150.00'), purpose='Tithe', payment_method='mpesa',
+            status='pending', paystack_reference='PS-AUTO-1', currency='KES',
+        )
+        event = {
+            'type': 'charge.success',
+            'data': {
+                'status': 'success', 'amount': 15000, 'currency': 'KES',
+                'reference': 'PS-AUTO-1', 'metadata': {'contribution_id': str(contribution.id)},
+            },
+        }
+        with patch('members.views.verify_webhook_signature', return_value=True), \
+             patch('members.views.parse_webhook', return_value=event):
+            response = self.client.post(
+                '/api/members/payments/paystack/webhook/',
+                data=b'{}', content_type='application/json', HTTP_X_PAYSTACK_SIGNATURE='x',
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1150.00'))
+
+    # -- Manual receipts (add-receipt modal) --------------------------------
+
+    def test_manual_receipt_credits_the_account(self):
+        treasurer = User.objects.create_user('auto.treasurer', 'auto.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=treasurer, role='treasurer')
+        self.client.force_authenticate(treasurer)
+        response = self.client.post('/api/members/treasury/cash-contributions/', {
+            'received_on': timezone.localdate().isoformat(),
+            'amount': '400.00',
+            'purpose': 'Tithe',
+            'donor_name': 'Desk Giver',
+            'giver_email': 'desk@example.com',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1400.00'))
+        tx = TreasuryAccountTransaction.objects.get()
+        self.assertEqual(tx.created_by, treasurer)
+        self.assertTrue(tx.reference.startswith('REC-'))
+
+    def test_manual_receipt_matches_description_wording_too(self):
+        treasurer = User.objects.create_user('auto.treasurer2', 'auto.treasurer2@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=treasurer, role='treasurer')
+        self.client.force_authenticate(treasurer)
+        response = self.client.post('/api/members/treasury/cash-contributions/', {
+            'received_on': timezone.localdate().isoformat(),
+            'amount': '60.00',
+            'purpose': 'Combined Offering',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.combined.refresh_from_db()
+        self.assertEqual(self.combined.balance, Decimal('560.00'))
+
+    # -- Receipts ride along with the credit --------------------------------
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_stk_callback_sends_the_receipt_itself(self):
+        from django.core import mail
+        self._callback({
+            'amount': '100.00', 'purpose': 'Tithe',
+            'phone_number': '254712345678',
+            'donor_name': 'Ada Auto',
+            'donor_email': 'ada.auto@example.com',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['ada.auto@example.com'])
+        contribution = Contribution.objects.get(checkout_request_id='ws_CO_auto')
+        self.assertIsNotNone(contribution.receipt_sent_at)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_manual_receipt_sends_the_receipt_itself(self):
+        from django.core import mail
+        treasurer = User.objects.create_user('auto.treasurer3', 'auto.treasurer3@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=treasurer, role='treasurer')
+        self.client.force_authenticate(treasurer)
+        self.client.post('/api/members/treasury/cash-contributions/', {
+            'received_on': timezone.localdate().isoformat(),
+            'amount': '400.00',
+            'purpose': 'Tithe',
+            'donor_name': 'Desk Giver',
+            'giver_email': 'desk@example.com',
+        }, format='json')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['desk@example.com'])
 
 
 class SabbathSchoolAccountTypeTests(APITestCase):
