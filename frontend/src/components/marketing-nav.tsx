@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { SiteNav } from "./site-nav";
+import { normalizePath } from "@/lib/paths";
 
 const marketingLinks = [
   { href: "/", label: "Home" },
@@ -45,7 +46,7 @@ const gatedPrefixes = ["/complete-profile"];
  * "Sign in" button; signed-in members get a link to their system dashboard.
  */
 export function MarketingNav() {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname());
   const [menuOpen, setMenuOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
 

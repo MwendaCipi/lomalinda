@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { normalizePath } from "@/lib/paths";
 import { Heart, Calendar, Baby, Handshake, ChevronRight } from "lucide-react";
 
 // Prayer and visitation are one desk now — a single merged page holds both
@@ -14,7 +15,7 @@ const requestLinks = [
 ];
 
 export function RequestsSidebar() {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname());
 
   return (
     <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">

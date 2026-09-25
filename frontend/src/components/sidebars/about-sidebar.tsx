@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { normalizePath } from "@/lib/paths";
 import { Building2, Calendar, ShieldCheck, FileText, ChevronRight } from "lucide-react";
 
 const aboutLinks = [
@@ -12,7 +13,7 @@ const aboutLinks = [
 ];
 
 export function AboutSidebar() {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname());
 
   return (
     <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">

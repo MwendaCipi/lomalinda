@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { normalizePath } from "@/lib/paths";
 import { useEffect, useState } from "react";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import type { LucideIcon } from "lucide-react";
@@ -61,7 +62,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, permissions }: AdminSidebarProps) {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname());
   const searchParams = useSearchParams();
   const currentTab = activeTab || searchParams.get("tab") || "overview";
 
@@ -99,10 +100,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   const isFinance = permissions?.isFinance ?? hasAnyRole("treasurer", "admin");
   const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
 
-  const isReconPage = pathname === "/administration/reconciliation";
-  // Fund drives are their own page, so their item is highlighted by the URL
+  const isReconPage = pathname === "/administration/reconciliation";  // Fund drives are their own page, so their item is highlighted by the URL
   // rather than by the tab the main workspace is showing.
-  const isFundDrivesPage = pathname.replace(/\/$/, "") === "/administration/fund-drives";
+  const isFundDrivesPage = pathname === "/administration/fund-drives";
 
   // The Requests desk badge: everything leadership still owes an answer on.
   // Hidden while loading and when there is nothing pending, so a plain "0"

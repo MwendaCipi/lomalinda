@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { triggerPwaInstall } from "./pwa-register";
+import { normalizePath } from "@/lib/paths";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const staffRoles = [
@@ -50,7 +51,9 @@ interface AnnouncementItem {
 }
 
 export function SiteNav({ navigationLocked = false }: { navigationLocked?: boolean } = {}) {
-  const pathname = usePathname();
+  // Normalised once, here: the build's trailing slash makes every exact-path
+  // comparison below answer no if left as the hook returns it.
+  const pathname = normalizePath(usePathname());
   const router = useRouter();
 
   // On the two surfaces that are read by scrolling — the dashboard and the
