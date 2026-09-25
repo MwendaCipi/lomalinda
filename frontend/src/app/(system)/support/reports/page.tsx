@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { HandHeart } from "lucide-react";
+import { HandHeart, Search } from "lucide-react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -38,6 +38,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
 export default function LiveReportsPage() {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   async function loadData() {
@@ -63,6 +64,18 @@ export default function LiveReportsPage() {
 
   const liquidityTotal = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
 
+  // The search reads what members read: the account's description (the label
+  // the giving form shows) and its short name, plus the type. The total
+  // across accounts stays whole — it is the church's liquidity, not the
+  // filtered subset's.
+  const visibleAccounts = accounts.filter((account) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [account.description, account.name, account.account_type_display]
+      .filter((text): text is string => Boolean(text))
+      .some((text) => text.toLowerCase().includes(query));
+  });
+
   return (
     <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
@@ -82,6 +95,19 @@ export default function LiveReportsPage() {
               <p className="text-sm text-[#617068]">
                 Live balances of the church&apos;s treasury accounts. Support any account to give straight to it.
               </p>
+              {/* Search sits directly under the paragraph on a phone, beside
+                  the heading on a wide screen. */}
+              <div className="relative mt-3 sm:mt-0">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a948d]" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search accounts…"
+                  aria-label="Search treasury accounts"
+                  className="w-full rounded-xl border border-[#c9c5bb] bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-[#b36b3c] sm:w-64"
+                />
+              </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
@@ -91,8 +117,12 @@ export default function LiveReportsPage() {
                   <div className="col-span-full rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-8 text-center text-sm text-[#617068]">
                     No treasury accounts have been configured yet.
                   </div>
+                ) : visibleAccounts.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-8 text-center text-sm text-[#617068]">
+                    No account matches “{search.trim()}”.
+                  </div>
                 ) : (
-                  accounts.map((account) => (
+                  visibleAccounts.map((account) => (
                     <div key={account.id} className="flex flex-col rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm">
                       <div className="flex items-center justify-between">
                         <span
