@@ -72,13 +72,18 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     const onScroll = () => {
       const y = window.scrollY;
       const moved = y - lastY;
+      lastY = y;
+      // Near the top the bar is always shown, whatever the last movement was:
+      // this is what brings it back if the reader arrives here by a route the
+      // deltas below ignored.
+      if (y <= 64) {
+        setNavHidden(false);
+        return;
+      }
       // A few pixels of jitter (rubber-banding, a collapsing URL bar) is not a
       // scroll: without this the bar flickers while the page settles.
       if (Math.abs(moved) < 8) return;
-      lastY = y;
-      // Stay put at the very top: hiding there would leave the header alone
-      // with nothing to come back from.
-      setNavHidden(y > 64 ? moved > 0 : false);
+      setNavHidden(moved > 0);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
