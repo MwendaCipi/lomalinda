@@ -2081,6 +2081,32 @@ class MembershipApprovalEmailTests(APITestCase):
         )
         self.assertEqual([message.to[0] for message in mail.outbox], [])
 
+    def test_the_name_comes_from_the_join_form_when_the_account_has_none(self):
+        """An account with no name yet is still greeted by name.
+
+        Joiners often leave the office to fill their profile in, so the account
+        carries no first name at the moment it is approved. "Dear friend" to
+        somebody who typed their name into the form minutes earlier is the one
+        thing this letter must not do.
+        """
+        from django.core import mail
+
+        self.applicant.first_name = ''
+        self.applicant.last_name = ''
+        self.applicant.save(update_fields=['first_name', 'last_name'])
+        self.enrollment.first_name = 'Joy'
+        self.enrollment.last_name = 'Kariuki'
+        self.enrollment.save(update_fields=['first_name', 'last_name'])
+
+        self.client.post(
+            f'/api/members/enrollment-requests/{self.enrollment.pk}/decision/',
+            {'status': 'approved'}, format='json',
+        )
+
+        body = mail.outbox[0].body
+        self.assertIn('Dear Joy', body)
+        self.assertNotIn('Dear friend', body)
+
     def test_the_approval_letter_is_the_churchs_own_when_they_wrote_one(self):
         from django.core import mail
 

@@ -152,13 +152,19 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     return sent
 
 
-def send_membership_approval_email(user, *, church_name):
-    """Tell a member their join request was approved, so they can sign in."""
+def send_membership_approval_email(user, *, church_name, name=None):
+    """Tell a member their join request was approved, so they can sign in.
+
+    ``name`` is what the join form collected. The account itself may carry no
+    name yet — plenty of people register and let the office fill the profile in
+    — and greeting the person who typed their name a moment ago as "friend" is
+    the one thing this letter must not do.
+    """
     address = (getattr(user, 'email', '') or '').strip()
     if not address:
         return False
     context = {
-        'name': recipient_name(user),
+        'name': (name or '').strip() or recipient_name(user),
         'church': church_name,
         'link': f'{settings.FRONTEND_URL}/login',
     }

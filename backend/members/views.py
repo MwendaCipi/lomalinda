@@ -991,8 +991,14 @@ class EnrollmentDecisionView(APIView):
             )
             if decision == 'approved':
                 # The in-app notice only reaches someone who signs in; the email
-                # is what tells them the door is open in the first place.
-                send_membership_approval_email(user, church_name=current_church_name())
+                # is what tells them the door is open in the first place. The
+                # name comes from the join form, since the account may not have
+                # one yet.
+                send_membership_approval_email(
+                    user,
+                    church_name=current_church_name(),
+                    name=enrollment.first_name,
+                )
         return Response(EnrollmentAdminSerializer(enrollment).data, status=status.HTTP_200_OK)
 
 
