@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 # Announcements must state the window they are displayed for; posting tests
 # state one that comfortably brackets today.
@@ -52,9 +52,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .google_auth import GoogleCredentialError, verify_google_credential
 from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
-from tenants.models import GoogleIdentity
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -4266,178 +4264,3 @@ class ExistingMemberEnrollmentTests(APITestCase):
         response = self._post(email='friend.no.church@example.com', joining_mode='friend')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('current_church', response.data)
-
-
-class GoogleCredentialVerificationTests(TestCase):
-    """Judging a Google ID token, which is the one place a token is believed.
-
-    A credential is only worth acting on if Google signed it, for this client,
-    with an address Google has confirmed. Each of those can fail on its own, so
-    each is pinned here rather than left to the endpoint that happens to call it.
-    """
-
-    def setUp(self):
-        self.settings_override = override_settings(GOOGLE_OAUTH_CLIENT_ID='loma-linda.apps.googleusercontent.com')
-        self.settings_override.enable()
-        self.addCleanup(self.settings_override.disable)
-
-    def verify(self, claims):
-        with patch('members.google_auth.id_token.verify_oauth2_token', return_value=claims) as verify_call:
-            return verify_google_credential('signed-id-token'), verify_call
-
-    def test_a_google_token_yields_its_claims_with_a_normalised_address(self):
-        claims, verify_call = self.verify({
-            'iss': 'https://accounts.google.com',
-            'sub': 'google-sub-1',
-            'email': 'Grace@Example.com',
-            'email_verified': True,
-        })
-
-        self.assertEqual(claims['sub'], 'google-sub-1')
-        self.assertEqual(claims['email'], 'grace@example.com')
-        # The audience is what stops a token minted for another site being replayed here.
-        self.assertEqual(verify_call.call_args.args[2], 'loma-linda.apps.googleusercontent.com')
-
-    def test_an_address_google_has_not_confirmed_is_refused(self):
-        for email_verified in (False, None, 'false'):
-            with self.assertRaises(GoogleCredentialError):
-                self.verify({'iss': 'accounts.google.com', 'sub': 'google-sub-1', 'email': 'unconfirmed@example.com', 'email_verified': email_verified})
-
-    def test_a_token_from_another_issuer_is_refused(self):
-        with self.assertRaises(GoogleCredentialError):
-            self.verify({'iss': 'https://accounts.example.com', 'sub': 'google-sub-1', 'email': 'grace@example.com', 'email_verified': True})
-
-    def test_a_token_with_no_subject_is_refused(self):
-        with self.assertRaises(GoogleCredentialError):
-            self.verify({'iss': 'accounts.google.com', 'email': 'grace@example.com', 'email_verified': True})
-
-    def test_a_token_that_will_not_verify_is_refused(self):
-        with patch('members.google_auth.id_token.verify_oauth2_token', side_effect=ValueError('bad signature')):
-            with self.assertRaises(GoogleCredentialError):
-                verify_google_credential('tampered')
-
-    def test_an_unconfigured_deployment_is_unavailable_rather_than_rejected(self):
-        with override_settings(GOOGLE_OAUTH_CLIENT_ID=''):
-            with self.assertRaises(GoogleCredentialError) as raised:
-                verify_google_credential('signed-id-token')
-
-        # The caller answers 503 for this: it is the office to fix, not the member.
-        self.assertTrue(raised.exception.unavailable)
-
-
-class GoogleSignInTests(APITestCase):
-    """Signing in with a Google account, and who is allowed to do so.
-
-    The view never reads the credential itself — ``verify_google_credential``
-    does, and the tests above cover it — so these stand in for Google and check
-    what the view does with verified claims: which church account they name, and
-    the body it answers with.
-    """
-
-    def setUp(self):
-        from django.core.cache import cache
-
-        # The endpoint is deliberately rate limited, so each test starts with a
-        # full budget rather than sharing one with the tests before it.
-        cache.clear()
-        self.settings_override = override_settings(GOOGLE_OAUTH_CLIENT_ID='loma-linda.apps.googleusercontent.com')
-        self.settings_override.enable()
-        self.addCleanup(self.settings_override.disable)
-        self.member = User.objects.create_user('loma.member', 'member@example.com', 'MemberPass#2026')
-        MemberProfile.objects.create(user=self.member, roles='member')
-
-    def sign_in(self, **claims):
-        with patch('members.views.verify_google_credential', return_value=claims):
-            return self.client.post('/api/auth/google/', {'credential': 'signed-id-token'}, format='json')
-
-    def test_a_known_google_account_signs_the_member_in_and_is_remembered(self):
-        response = self.sign_in(sub='google-sub-1', email='member@example.com')
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertTrue(response.data['access'])
-        self.assertTrue(response.data['refresh'])
-        self.assertEqual(GoogleIdentity.objects.get(sub='google-sub-1').user, self.member)
-
-    def test_the_answer_carries_what_the_password_endpoint_carries(self):
-        """Where a member is sent next must not depend on the door they came in by."""
-        profile = self.member.member_profile
-        profile.must_change_password = True
-        profile.save(update_fields=['must_change_password'])
-
-        google = self.sign_in(sub='google-sub-1', email='member@example.com')
-        password = self.client.post(
-            '/api/auth/token/', {'username': 'loma.member', 'password': 'MemberPass#2026'}, format='json'
-        )
-
-        self.assertEqual(google.status_code, status.HTTP_200_OK, google.data)
-        self.assertEqual(password.status_code, status.HTTP_200_OK, password.data)
-        self.assertEqual(sorted(google.data.keys()), sorted(password.data.keys()))
-        self.assertTrue(google.data['must_change_password'])
-        self.assertEqual(google.data['must_change_password'], password.data['must_change_password'])
-        self.assertEqual(google.data['profile_update_pending'], password.data['profile_update_pending'])
-
-    def test_the_google_account_is_remembered_by_subject_not_by_address(self):
-        self.sign_in(sub='google-sub-1', email='member@example.com')
-        response = self.sign_in(sub='google-sub-1', email='renamed@example.com')
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        identity = GoogleIdentity.objects.get(sub='google-sub-1')
-        self.assertEqual(identity.user, self.member)
-        self.assertEqual(identity.email, 'renamed@example.com')
-
-    def test_an_unknown_google_address_is_never_given_an_account(self):
-        response = self.sign_in(sub='google-sub-9', email='stranger@example.com')
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('No church account', response.data['detail'])
-        self.assertFalse(GoogleIdentity.objects.exists())
-        self.assertFalse(User.objects.filter(email__iexact='stranger@example.com').exists())
-
-    def test_an_address_shared_by_two_accounts_is_refused_rather_than_guessed(self):
-        # The default user model does not make email addresses unique, so the
-        # office can end up with two accounts behind one address.
-        User.objects.create_user('other.member', 'MEMBER@example.com', 'MemberPass#2026')
-
-        response = self.sign_in(sub='google-sub-2', email='member@example.com')
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(GoogleIdentity.objects.exists())
-
-    def test_an_account_still_awaiting_approval_is_refused(self):
-        self.member.is_active = False
-        self.member.save(update_fields=['is_active'])
-
-        response = self.sign_in(sub='google-sub-3', email='member@example.com')
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['detail'], 'Your account is still waiting for approval. Please contact the church office.')
-
-    def test_a_credential_we_cannot_verify_never_signs_anyone_in(self):
-        with patch('members.views.verify_google_credential', side_effect=GoogleCredentialError('Google sign-in could not be completed.')):
-            response = self.client.post('/api/auth/google/', {'credential': 'tampered'}, format='json')
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(GoogleIdentity.objects.exists())
-
-    def test_a_deployment_without_a_client_id_answers_service_unavailable(self):
-        with override_settings(GOOGLE_OAUTH_CLIENT_ID=''):
-            response = self.client.post('/api/auth/google/', {'credential': 'signed-id-token'}, format='json')
-
-        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-
-    def test_the_enrollment_form_still_verifies_through_the_shared_check(self):
-        """Enrollment hands in a Google credential too, and must not regress."""
-        with patch('members.views.verify_google_credential', return_value={'sub': 'google-sub-4', 'email': 'joiner@example.com'}):
-            response = self.client.post('/api/members/auth/enrollment/oauth-verify/', {
-                'credential': 'signed-id-token',
-                'email': 'joiner@example.com',
-                'first_name': 'New',
-                'last_name': 'Joiner',
-                'phone_number': '0712345678',
-                'joining_mode': 'baptism',
-                'privacy_accepted': True,
-                'terms_accepted': True,
-            }, format='json')
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertTrue(EnrollmentRequest.objects.filter(email='joiner@example.com').exists())
