@@ -12,11 +12,9 @@ export default function CreateAccountPage() {
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
         <header>
-          <span className="text-xs font-bold uppercase tracking-widest text-[#b36b3c]">Join the church family</span>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Create your account</h1>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Create your account</h1>
           <p className="mt-2 text-sm leading-6 text-[#617068]">
-            Tell us how you are joining — baptism, membership, as a friend of the church, or as a Sabbath School attendee —
-            then fill in your details. We will email you a link to verify your address and finish setting up your account.
+            Create your account to become part of Loma Linda church management system. Fill in your details below.
           </p>
         </header>
 

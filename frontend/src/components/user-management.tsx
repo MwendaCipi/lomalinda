@@ -833,6 +833,13 @@ function calculateDobFromAge(ageStr: string): string {
   return `${birthYear}-01-01`;
 }
 
+/** The link and the code, for the office to pass on when the email failed. */
+function invitationCredentials(data: { invite_url?: string; invite_code?: string }): string {
+  return [data.invite_url, data.invite_code ? `Code: ${data.invite_code}` : ""]
+    .filter(Boolean)
+    .join("   ");
+}
+
 /** Invitation name with the email as the fallback when no name was captured. */
 function invitationName(invitation: InvitationRow): string {
   return [invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email;
@@ -942,6 +949,9 @@ export function UserManagement() {
   const [inviteFormData, setInviteFormData] = useState(inviteFormInitial);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [lastInviteLink, setLastInviteLink] = useState("");
+  // The code travels with the link: it is what the invitee types when their
+  // mail app will not open the link, so the office can read it out.
+  const [lastInviteCode, setLastInviteCode] = useState("");
 
   const friendFormInitial = {
     name: "",
@@ -1054,6 +1064,7 @@ export function UserManagement() {
     setInviteSubmitting(true);
     setMessage(null);
     setLastInviteLink("");
+    setLastInviteCode("");
     const token = localStorage.getItem("access_token");
     try {
       const res = await fetch(`${API_URL}/api/members/invitations/`, {
@@ -1071,14 +1082,15 @@ export function UserManagement() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Could not send the invitation.");
       setLastInviteLink(data.invite_url || "");
+      setLastInviteCode(data.invite_code || "");
       if (data.email_sent) {
         // The link itself is only a fallback for a failed email — success gets a clean popup.
         showAlert("Invitation sent", `Invitation emailed to ${data.email}.`, "success");
       } else {
         setMessage({
           type: "error",
-          text: data.detail || "Invitation created, but the email could not be sent. Share the link below instead.",
-          credentials: data.invite_url,
+          text: data.detail || "Invitation created, but the email could not be sent. Share the link and code below instead.",
+          credentials: invitationCredentials(data),
         });
       }
       setInviteFormData(inviteFormInitial);
@@ -1101,10 +1113,12 @@ export function UserManagement() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not update the invitation.");
       if (action === "resend") {
+        setLastInviteLink(data.invite_url || "");
+        setLastInviteCode(data.invite_code || "");
         setMessage({
           type: "success",
-          text: data.email_sent ? "Invitation email re-sent." : data.detail || "Email could not be sent. Share the link below instead.",
-          credentials: data.invite_url,
+          text: data.email_sent ? "Invitation email re-sent." : data.detail || "Email could not be sent. Share the link and code below instead.",
+          credentials: invitationCredentials(data),
         });
       } else {
         setMessage({ type: "success", text: data.detail || "Invitation withdrawn." });
@@ -2423,6 +2437,17 @@ export function UserManagement() {
                       <button type="button" onClick={() => navigator.clipboard?.writeText(lastInviteLink)}
                         className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
                         Copy link
+                      </button>
+                    </div>
+                  )}
+                  {lastInviteCode && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wider text-[#26352f] select-all">
+                        {lastInviteCode}
+                      </code>
+                      <button type="button" onClick={() => navigator.clipboard?.writeText(lastInviteCode)}
+                        className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
+                        Copy code
                       </button>
                     </div>
                   )}

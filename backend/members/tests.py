@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 # Announcements must state the window they are displayed for; posting tests
@@ -53,7 +54,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
 from .google_auth import GoogleCredentialError, verify_google_credential
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, Announcement
 from tenants.models import GoogleIdentity
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
@@ -899,6 +900,83 @@ class InvitationAPITests(APITestCase):
         # its hash: the link in the response must open the same invitation.
         raw_token = response.data['invite_url'].split('token=')[1]
         self.assertIn(raw_token, mock_send.call_args[0][1])
+
+    def test_the_email_carries_a_code_beside_the_link(self):
+        """The letter offers both ways in: the link, and a code under it."""
+        self.client.force_authenticate(user=self.admin_user)
+        with patch('members.views.send_mail') as mock_send:
+            response = self.client.post('/api/members/invitations/', {
+                'email': 'code@example.com',
+                'first_name': 'Code',
+                'last_name': 'Reader',
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        code = response.data['invite_code']
+        # Eight characters from an alphabet with no look-alikes, printed in
+        # two groups so it can be read down a phone line.
+        self.assertRegex(code, r'^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$')
+        body = mock_send.call_args[0][1]
+        self.assertIn(code, body)
+        self.assertIn('enter this invitation code', body)
+        self.assertIn('/accept-invite', body)
+
+    def test_a_typed_code_redeems_the_invitation_in_place_of_the_link(self):
+        cache.clear()
+        invitation = self._invitation(email='typed@example.com')
+        typed = format_invitation_code(invitation.raw_code)
+        self.assertTrue(typed)
+
+        lookup = self.client.get(f'/api/members/auth/invitation/verify/?code={typed}')
+        self.assertEqual(lookup.status_code, status.HTTP_200_OK)
+        self.assertEqual(lookup.data['email'], 'typed@example.com')
+
+        accepted = self.client.post('/api/members/auth/invitation/accept/', {
+            'code': typed,
+            'username': 'code.reader',
+            'password': 'SabbathRest#2026',
+            'confirm_password': 'SabbathRest#2026',
+            'privacy_accepted': True, 'terms_accepted': True,
+        }, format='json')
+        self.assertEqual(accepted.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(User.objects.filter(username='code.reader').exists())
+        self.assertEqual(Invitation.objects.get(pk=invitation.pk).status, 'accepted')
+
+    def test_a_mistyped_code_is_forgiven_but_a_wrong_one_is_not(self):
+        cache.clear()
+        invitation = self._invitation(email='sloppy@example.com')
+        typed = format_invitation_code(invitation.raw_code)
+
+        # Typed in lower case, without the separator, with stray spaces: all
+        # the ways a person transcribes a code off a screen.
+        forgiving = self.client.get(
+            f'/api/members/auth/invitation/verify/?code={typed.lower().replace("-", " ")}'
+        )
+        self.assertEqual(forgiving.status_code, status.HTTP_200_OK)
+
+        wrong = self.client.get('/api/members/auth/invitation/verify/?code=ZZZZ-ZZZZ')
+        self.assertEqual(wrong.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('not valid', wrong.data['detail'])
+
+    def test_resending_issues_a_fresh_code(self):
+        cache.clear()
+        self.client.force_authenticate(user=self.admin_user)
+        invitation = self._invitation(email='resend@example.com')
+        first_code = format_invitation_code(invitation.raw_code)
+
+        with patch('members.views.send_mail'):
+            response = self.client.post(f'/api/members/invitations/{invitation.pk}/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        second_code = response.data['invite_code']
+        self.assertNotEqual(first_code, second_code)
+
+        # The superseded code opens nothing; the fresh one opens the door.
+        cache.clear()
+        stale = self.client.get(f'/api/members/auth/invitation/verify/?code={first_code}')
+        self.assertEqual(stale.status_code, status.HTTP_400_BAD_REQUEST)
+        fresh = self.client.get(f'/api/members/auth/invitation/verify/?code={second_code}')
+        self.assertEqual(fresh.status_code, status.HTTP_200_OK)
 
     def test_a_plain_member_cannot_invite(self):
         self.client.force_authenticate(user=self.member_user)

@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 import uuid
 from datetime import datetime
 
@@ -21,6 +22,39 @@ def invitation_token_hash(raw_token):
     database — the raw value still travels in the emailed link, exactly as before.
     """
     return hashlib.sha256(f'{settings.SECRET_KEY}:invitation:{raw_token}'.encode()).hexdigest()
+
+
+# The letter shapes a person can read off a screen and type back without
+# mistaking one for another: no I/1, no O/0. Codes are eight characters long
+# (~1.1e12 of them), which is far too many to be worth guessing and still short
+# enough to read down a phone line.
+INVITATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+INVITATION_CODE_LENGTH = 8
+
+
+def normalize_invitation_code(raw_code):
+    """A typed code as it is compared: uppercase, with separators removed."""
+    return ''.join(char for char in (raw_code or '').upper() if char.isalnum())
+
+
+def invitation_code_hash(raw_code):
+    """The salted digest an invitation code is stored as.
+
+    Same reasoning as the link token: the code is short enough that the stored
+    value must not be reversible, so only this digest is persisted and the raw
+    code travels in the emailed invitation.
+    """
+    return hashlib.sha256(
+        f'{settings.SECRET_KEY}:invitation-code:{normalize_invitation_code(raw_code)}'.encode()
+    ).hexdigest()
+
+
+def format_invitation_code(raw_code):
+    """"ABCDEFGH" as it is printed in the email and typed back: "ABCD-EFGH"."""
+    code = normalize_invitation_code(raw_code)
+    if len(code) != INVITATION_CODE_LENGTH:
+        return code
+    return f'{code[:4]}-{code[4:]}'
 
 
 class MemberProfile(models.Model):
@@ -184,6 +218,7 @@ class Invitation(models.Model):
     account_type = models.CharField(max_length=20, choices=MemberProfile.ACCOUNT_TYPE_CHOICES, default='member')
     roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes the invited account will hold")
     token = models.CharField(max_length=64, unique=True, editable=False, help_text="SHA-256 hash of the invitation link token")
+    code = models.CharField(max_length=64, unique=True, editable=False, help_text="SHA-256 hash of the short invitation code emailed beside the link")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_invitations')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='invitations')
@@ -195,16 +230,20 @@ class Invitation(models.Model):
     class Meta:
         ordering = ['-created_at']
 
-    # The raw token only ever lives in memory: set_token() keeps it here so the
-    # response that created or resent the invitation can hand the real link to
-    # the inviter, while the database below stores only the hash.
+    # The raw token and code only ever live in memory: set_token()/set_code()
+    # keep them here so the response that created or resent the invitation can
+    # hand the real link and code to the inviter, while the database below
+    # stores only their hashes.
     raw_token = None
+    raw_code = None
 
     def save(self, *args, **kwargs):
-        # Every invitation must carry a usable token, even one created in the
-        # Django admin or the console before the form sets one explicitly.
+        # Every invitation must carry a usable token and code, even one created
+        # in the Django admin or the console before the form sets them.
         if not self.token:
             self.set_token()
+        if not self.code:
+            self.set_code()
         super().save(*args, **kwargs)
 
     def set_token(self, raw_token=None):
@@ -222,6 +261,33 @@ class Invitation(models.Model):
         if not raw_token:
             return None
         return cls.objects.filter(token=invitation_token_hash(raw_token)).first()
+
+    def set_code(self, raw_code=None):
+        """Hash a fresh invitation code (or a given one) and store it.
+
+        A code is what the invitee can read out and type when the emailed link
+        will not open, so it is stored the same way the link token is: only its
+        digest, never the value.
+        """
+        self.raw_code = str(raw_code or self._new_code())
+        self.code = invitation_code_hash(self.raw_code)
+        return self.raw_code
+
+    @staticmethod
+    def _new_code():
+        return ''.join(secrets.choice(INVITATION_CODE_ALPHABET) for _ in range(INVITATION_CODE_LENGTH))
+
+    @classmethod
+    def from_code(cls, raw_code):
+        """The invitation a typed code belongs to, or None (never guessed at)."""
+        if not normalize_invitation_code(raw_code):
+            return None
+        return cls.objects.filter(code=invitation_code_hash(raw_code)).first()
+
+    @classmethod
+    def from_token_or_code(cls, *, token=None, code=None):
+        """Resolve whichever of the two the invitee used — link first, then code."""
+        return cls.from_token(token) or cls.from_code(code)
 
     def role_codes(self):
         return [code.strip() for code in (self.roles or '').split(',') if code.strip()]

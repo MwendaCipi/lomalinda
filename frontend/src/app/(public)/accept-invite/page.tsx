@@ -26,7 +26,18 @@ function AcceptInviteContent() {
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token") ?? "";
+  const linkCode = params.get("code") ?? "";
   const formRef = useRef<HTMLFormElement>(null);
+
+  /**
+   * What identifies the invitation: the link's token, or the code the same
+   * email prints underneath it. Only one of the two is ever present.
+   */
+  const [credential, setCredential] = useState<{ token?: string; code?: string }>({});
+  /** No credential in the address, so the invitee types the emailed code. */
+  const [codeEntry, setCodeEntry] = useState(false);
+  const [codeValue, setCodeValue] = useState("");
+  const [codeError, setCodeError] = useState("");
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -45,26 +56,73 @@ function AcceptInviteContent() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  /**
+   * Accept whatever the verify endpoint sends back and remember which half of
+   * the invitation got us here. Returns false when the invitation is unusable,
+   * so the caller can report it in the right place.
+   */
+  async function verify(search: string, nextCredential: { token?: string; code?: string }) {
+    const response = await fetch(`${API_URL}/api/members/auth/invitation/verify/?${search}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "This invitation is not valid. Please ask the church office for a new one.");
+    }
+    setEmail(data.email ?? "");
+    setFirstName(data.first_name ?? "");
+    setLastName(data.last_name ?? "");
+    setPhoneNumber(data.phone_number ?? "");
+    setCredential(nextCredential);
+  }
+
   useEffect(() => {
-    if (!token) {
-      setLinkError("This invitation link is not valid. Please ask the church office for a new invitation.");
+    if (!token && !linkCode) {
+      // Nobody arrives from a link here without one: this is the code path.
+      setCodeEntry(true);
       setLoading(false);
       return;
     }
-    fetch(`${API_URL}/api/members/auth/invitation/verify/?token=${encodeURIComponent(token)}`)
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "This invitation link is not valid.");
-        setEmail(data.email ?? "");
-        setFirstName(data.first_name ?? "");
-        setLastName(data.last_name ?? "");
-        setPhoneNumber(data.phone_number ?? "");
+    let cancelled = false;
+    const search = token
+      ? `token=${encodeURIComponent(token)}`
+      : `code=${encodeURIComponent(linkCode)}`;
+    verify(search, token ? { token } : { code: linkCode })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinkError(error instanceof Error ? error.message : "This invitation is not valid.");
+        }
       })
-      .catch((error) =>
-        setLinkError(error instanceof Error ? error.message : "This invitation link is not valid.")
-      )
-      .finally(() => setLoading(false));
-  }, [token]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, linkCode]);
+
+  /** The typed path to the same invitation, for mail apps that hide the link. */
+  async function submitCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const clean = codeValue.trim();
+    if (!clean) {
+      setCodeError("Enter the invitation code from your email.");
+      return;
+    }
+    setCodeError("");
+    setSubmitting(true);
+    try {
+      await verify(`code=${encodeURIComponent(clean)}`, { code: clean });
+      setCodeEntry(false);
+    } catch (error) {
+      setCodeError(
+        error instanceof Error
+          ? error.message
+          : "That code does not match a live invitation. Check it and try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   /** Put the cursor on the first input that has something wrong with it. */
   function focusFirstError(errors: FieldErrors) {
@@ -115,7 +173,7 @@ function AcceptInviteContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          ...credential,
           first_name: cleanFirstName,
           last_name: cleanLastName,
           phone_number: cleanPhoneNumber,
@@ -166,7 +224,44 @@ function AcceptInviteContent() {
 
         {loading && !linkError && <p className="mt-6 text-sm text-[#617068]">Checking your invitation…</p>}
 
-        {!loading && !linkError && (
+        {!loading && codeEntry && (
+          <form onSubmit={submitCode} noValidate className="mt-6 space-y-4">
+            <p className="text-sm leading-6 text-[#617068]">
+              Your invitation email carries a link and the code below it. The link opens in some mail apps and not
+              others, so if it will not open, type the code here instead.
+            </p>
+            <label className="block text-sm font-medium">
+              Invitation code
+              <input
+                name="code"
+                required
+                autoComplete="one-time-code"
+                placeholder="ABCD-EFGH"
+                value={codeValue}
+                aria-invalid={Boolean(codeError)}
+                onChange={(event) => {
+                  setCodeValue(event.target.value);
+                  setCodeError("");
+                }}
+                className={fieldClass(Boolean(codeError))}
+              />
+            </label>
+            {codeError && (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                {codeError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60"
+            >
+              {submitting ? "Checking the code…" : "Continue"}
+            </button>
+          </form>
+        )}
+
+        {!loading && !linkError && !codeEntry && (
           <form ref={formRef} onSubmit={submit} noValidate className="mt-6 space-y-4">
             {generalError && (
               <p
@@ -312,7 +407,7 @@ function AcceptInviteContent() {
               Sign in
             </Link>
             .{" "}
-            {linkError && (
+            {(linkError || codeEntry) && (
               <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">
                 Or create your own account
               </Link>

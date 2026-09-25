@@ -260,7 +260,11 @@ class InvitationSerializer(serializers.ModelSerializer):
 
 
 class InvitationAcceptSerializer(serializers.Serializer):
-    token = serializers.UUIDField()
+    # An invitation is redeemed either by the link token or by the code the
+    # email prints under it, so neither is required on its own; the view
+    # refuses the request when they both come up empty.
+    token = serializers.UUIDField(required=False)
+    code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)

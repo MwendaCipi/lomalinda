@@ -34,7 +34,7 @@ from rest_framework.views import APIView
 from tenants.models import GoogleIdentity
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .google_auth import GoogleCredentialError, verify_google_credential
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
@@ -206,6 +206,16 @@ def invitation_url(invitation):
     return f"{settings.FRONTEND_URL}/accept-invite?token={invitation.raw_token}"
 
 
+def invitation_code_text(invitation):
+    """The typed invitation code, printed as 'ABCD-EFGH'.
+
+    Like the link token, the raw code lives only in the memory of the process
+    that generated it: the database keeps its hash. An invitation read back
+    from the database therefore has no code to show, and this returns ''.
+    """
+    return format_invitation_code(invitation.raw_code) if invitation.raw_code else ''
+
+
 def send_invitation_email(invitation):
     church_name = current_church_name()
     invitee = invitation.display_name() or 'there'
@@ -217,6 +227,10 @@ def send_invitation_email(invitation):
         f" with the following access: {role_labels(special_codes)}."
         if special_codes else '.'
     )
+    # The code goes in the letter beside the link: a mail app that refuses to
+    # open the link (or a link broken across two lines) must not leave the
+    # invitee with nothing to type.
+    code = invitation_code_text(invitation)
     subject = f'You are invited to {church_name_plain(church_name)}'
     body = (
         f"Hello {invitee},\n\n"
@@ -224,7 +238,13 @@ def send_invitation_email(invitation):
         f"{access_clause}\n\n"
         "Click the link below to choose your username and password:\n"
         f"{invitation_url(invitation)}\n\n"
-        f"This invitation link is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
+        + (
+            "If the link will not open, go to "
+            f"{settings.FRONTEND_URL}/accept-invite and enter this invitation code:\n"
+            f"{code}\n\n"
+            if code else ''
+        )
+        + f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
         "Once your account is ready you can sign in at "
         f"{settings.FRONTEND_URL}/login\n\n"
         f"Warm regards,\n{church_name}"
@@ -1013,6 +1033,7 @@ class InvitationListCreateView(generics.ListCreateAPIView):
         invitation.account_type = account_type
         invitation.roles = ', '.join(roles_param)
         invitation.set_token()
+        invitation.set_code()
         invitation.status = 'pending'
         invitation.invited_by = request.user
         invitation.expires_at = timezone.now() + invitation_link_lifetime()
@@ -1029,6 +1050,7 @@ class InvitationListCreateView(generics.ListCreateAPIView):
 
         payload = InvitationSerializer(invitation).data
         payload['invite_url'] = invitation_url(invitation)
+        payload['invite_code'] = invitation_code_text(invitation)
         payload['email_sent'] = email_sent
         if not email_sent:
             payload['detail'] = (
@@ -1068,6 +1090,7 @@ class InvitationDetailView(APIView):
         if invitation.status == 'accepted':
             return Response({'detail': 'That invitation has already been accepted.'}, status=status.HTTP_400_BAD_REQUEST)
         invitation.set_token()
+        invitation.set_code()
         invitation.status = 'pending'
         invitation.expires_at = timezone.now() + invitation_link_lifetime()
         invitation.save()
@@ -1081,6 +1104,7 @@ class InvitationDetailView(APIView):
             email_sent = False
         payload = InvitationSerializer(invitation).data
         payload['invite_url'] = invitation_url(invitation)
+        payload['invite_code'] = invitation_code_text(invitation)
         payload['email_sent'] = email_sent
         if not email_sent:
             payload['detail'] = 'The invitation is ready, but the email could not be sent. Share the link directly instead.'
@@ -1098,13 +1122,16 @@ class InvitationVerifyView(APIView):
     throttle_scope = 'invitation_public'
 
     def get(self, request):
-        invitation = Invitation.from_token(request.query_params.get('token'))
+        invitation = Invitation.from_token_or_code(
+            token=request.query_params.get('token'),
+            code=request.query_params.get('code'),
+        )
         if invitation is None or invitation.status == 'revoked':
-            return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'This invitation is not valid. Please ask the church office for a new one.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.status == 'accepted':
             return Response({'detail': 'This invitation has already been used. You can sign in with your account.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.expires_at <= timezone.now():
-            return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'This invitation has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
         # A plain member/friend invitation has no special access to announce,
         # so the accept-invite page stays quiet about access for it.
         special_codes = [code for code in invitation.role_codes() if code != DEFAULT_ROLE]
@@ -1132,13 +1159,19 @@ class InvitationAcceptView(APIView):
     def post(self, request):
         serializer = InvitationAcceptSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        invitation = Invitation.from_token(serializer.validated_data['token'])
+        # Link first, then the code beside it: either one identifies the same
+        # invitation, so an invitee whose mail app will not open the link still
+        # has a way in.
+        invitation = Invitation.from_token_or_code(
+            token=serializer.validated_data.get('token'),
+            code=serializer.validated_data.get('code'),
+        )
         if invitation is None or invitation.status == 'revoked':
-            return Response({'detail': 'This invitation link is not valid. Please ask the church office for a new invitation.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'This invitation is not valid. Please ask the church office for a new one.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.status == 'accepted':
             return Response({'detail': 'This invitation has already been used. You can sign in with your account.'}, status=status.HTTP_400_BAD_REQUEST)
         if invitation.expires_at <= timezone.now():
-            return Response({'detail': 'This invitation link has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'This invitation has expired. Please ask the church office to invite you again.'}, status=status.HTTP_400_BAD_REQUEST)
 
         first_name = serializer.validated_data.get('first_name', '').strip() or invitation.first_name.strip()
         last_name = serializer.validated_data.get('last_name', '').strip() or invitation.last_name.strip()

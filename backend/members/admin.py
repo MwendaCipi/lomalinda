@@ -271,13 +271,14 @@ class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
     readonly_fields = ('invitation_link', 'status', 'sent_at', 'accepted_at', 'expires_at', 'invited_by', 'user', 'created_at', 'roles_legend')
     actions = ['resend_invitations', 'revoke_invitations']
 
-    @admin.display(description='Invitation link (copy and share if email is unavailable)')
+    @admin.display(description='Invitation link and code (copy and share if the email is unavailable)')
     def invitation_link(self, obj):
         if not obj.pk:
             return 'The link appears here once the invitation is saved.'
-        # Tokens are stored hashed, so a saved invitation's raw link is gone
-        # for good; resend the invitation (action below) to issue a fresh one.
-        return 'Tokens are stored hashed, so the raw link is shown only right after the invitation is created. Use "Resend invitation emails" to issue a fresh one.'
+        # Tokens and codes are stored hashed, so a saved invitation's raw link
+        # is gone for good; resend the invitation (action below) to issue a
+        # fresh link and code.
+        return 'Tokens and codes are stored hashed, so the raw link and code are shown only right after the invitation is created. Use "Resend invitation emails" to issue a fresh pair.'
 
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None
@@ -307,9 +308,10 @@ class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
         sent = failed = 0
         for invitation in queryset.exclude(status='accepted'):
             invitation.set_token()
+            invitation.set_code()
             invitation.status = 'pending'
             invitation.expires_at = timezone.now() + invitation_link_lifetime()
-            invitation.save(update_fields=['token', 'status', 'expires_at'])
+            invitation.save(update_fields=['token', 'code', 'status', 'expires_at'])
             try:
                 send_invitation_email(invitation)
                 invitation.sent_at = timezone.now()
