@@ -84,7 +84,7 @@ function LoginContent() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-[#f7f4ee] px-6 pt-6 text-[#26352f] sm:items-center sm:py-8">
+    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back</h1>
         <p className="mt-2 text-sm text-[#617068]">Sign in to your SDA Loma Linda account.</p>

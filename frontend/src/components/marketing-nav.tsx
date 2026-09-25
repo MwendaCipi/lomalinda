@@ -16,12 +16,22 @@ const marketingLinks = [
 ];
 
 /**
- * The sign-in surfaces: what a visitor (or a signed-out member) sees first.
+ * The public website: what a visitor (or a signed-out member) sees first.
  *
- * These are the only public pages that keep the marketing header for someone
- * holding a token — everywhere else a member must keep the app chrome.
+ * The site home is on this list, so opening sdalomalinda.or.ke shows the
+ * church's own website — not the marketing page wearing the app's header and
+ * bottom tab bar. The header itself carries the way in (its button reads
+ * "Dashboard" for a signed-in member), so nothing is stranded here.
+ *
+ * Everywhere else on the public side a member keeps the app chrome; the
+ * sign-in surfaces are the exception because the app would be a detour on the
+ * way to signing in.
  */
-const signInPrefixes = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
+const publicWebsitePrefixes = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
+
+/** The site home, and the sign-in surfaces below it. */
+const isPublicWebsite = (path: string) =>
+  path === "/" || publicWebsitePrefixes.some((prefix) => path.startsWith(prefix));
 // The forced profile update is a modal, not a page to wander from: while it is
 // up the member gets the bare header only — no links, no account menu, and on
 // a phone no bottom tab bar to escape through or hide the submit button.
@@ -54,7 +64,7 @@ export function MarketingNav() {
   // Fellowship (/share) or Requests (/requests) tab dropped the tab bar and
   // stranded the member on the marketing site with no way back. Inverting the
   // test means a new public page cannot reintroduce that.
-  if (signedIn && !signInPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+  if (signedIn && !isPublicWebsite(pathname)) {
     if (gatedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
       return <SiteNav navigationLocked />;
     }

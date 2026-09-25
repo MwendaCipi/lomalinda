@@ -53,6 +53,34 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   const pathname = usePathname();
   const router = useRouter();
 
+  // On the two surfaces that are read by scrolling — the dashboard and the
+  // announcements feed — the tab bar steps out of the way on the way down and
+  // comes straight back on any upward movement, so a long read gets the whole
+  // screen without stranding anyone. Elsewhere the bar stays put.
+  const navHidesOnScroll = pathname === "/dashboard" || pathname.startsWith("/announcements");
+  const [navHidden, setNavHidden] = useState(false);
+
+  useEffect(() => {
+    if (!navHidesOnScroll) {
+      setNavHidden(false);
+      return;
+    }
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const moved = y - lastY;
+      // A few pixels of jitter (rubber-banding, a collapsing URL bar) is not a
+      // scroll: without this the bar flickers while the page settles.
+      if (Math.abs(moved) < 8) return;
+      lastY = y;
+      // Stay put at the very top: hiding there would leave the header alone
+      // with nothing to come back from.
+      setNavHidden(y > 64 ? moved > 0 : false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [navHidesOnScroll]);
+
   const [userState, setUserState] = useState<{
     isLoggedIn: boolean;
     role: string;
@@ -625,7 +653,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       {/* Mobile Bottom Tab Navigation Menu (Fixed at bottom on md:hidden) */}
       <nav
         hidden={navigationLocked}
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 flex justify-around items-center shadow-lg text-white pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
+        aria-hidden={navHidden}
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 flex justify-around items-center shadow-lg text-white pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
+          navHidden ? "translate-y-full pointer-events-none" : "translate-y-0"
+        }`}
         aria-label="Mobile Bottom Navigation"
       >
         {mobileBottomNavItems.map((item) => {

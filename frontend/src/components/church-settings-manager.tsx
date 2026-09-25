@@ -402,8 +402,9 @@ export function ChurchSettingsManager() {
             <span>🛡️</span> Church Roles Configuration
           </h3>
           <p className="mt-1 text-xs text-[#617068]">
-            Every role holder (assistants included) sits on the church board by default — board invitations go to them
-            automatically. Pick a role below to give or take away what its holders may do in the app.
+            Every role holder sits on the church board by default, so board invitations go to them automatically —
+            except assistants, who share the role's work but not its board seat. Pick a role below to give or take away
+            what its holders may do in the app.
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
