@@ -831,6 +831,17 @@ function GivePageContent() {
                       key={account}
                       className="flex items-center gap-2 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/60 px-3 py-2"
                     >
+                      {/* One tap takes the account off the gift — placed at
+                          the row's left so it never crowds the amount field. */}
+                      <button
+                        type="button"
+                        onClick={() => toggleAccount(account)}
+                        aria-label={`Remove ${account}`}
+                        title={`Remove ${account}`}
+                        className="shrink-0 rounded-full p-1 text-[#8a948d] transition hover:bg-[#f2efe8] hover:text-[#96552c]"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#26352f] sm:text-sm">
                         {account}
                       </span>
@@ -848,17 +859,6 @@ function GivePageContent() {
                         }
                         className="w-24 shrink-0 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-[#b36b3c] sm:w-32"
                       />
-                      {/* One tap takes the account off the gift, so a change of
-                          mind does not mean opening the picker again. */}
-                      <button
-                        type="button"
-                        onClick={() => toggleAccount(account)}
-                        aria-label={`Remove ${account}`}
-                        title={`Remove ${account}`}
-                        className="shrink-0 rounded-full p-1 text-[#8a948d] transition hover:bg-[#f2efe8] hover:text-[#96552c]"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
                     </div>
                   ))}
                   <div className="flex items-center justify-between px-1 pt-1 text-sm">
