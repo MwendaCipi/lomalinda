@@ -220,11 +220,14 @@ export function LeaderManagement() {
         loading={loading}
         rowKey={(m) => m.id}
         headers={[
-          { label: "#", className: "w-10" },
-          { label: "Member" },
-          { label: "Contact" },
-          { label: "Roles" },
+          { label: "#", className: "w-[6%]" },
+          { label: "Member", className: "w-[24%]" },
+          { label: "Contact", className: "w-[30%]" },
+          { label: "Roles", className: "w-[40%]" },
         ]}
+        // Fixed layout: the four columns keep the widths above instead of
+        // letting the Roles combo stretch the table to its longest label.
+        tableClassName="w-full text-left text-xs table-fixed"
         loadingLabel="Loading member leadership records..."
         tableEmpty="No members found matching your search."
         stateClassName="py-4 text-center text-[#617068]"
@@ -266,7 +269,7 @@ export function LeaderManagement() {
           )}
         renderRow={(m, idx) => (
                 <tr key={m.id} className="hover:bg-[#f7f4ee]">
-                  <td className="py-3.5 font-medium text-[#617068] w-10">
+                  <td className="py-3.5 font-medium text-[#617068]">
                     {idx + 1}
                   </td>
                   <td className="py-3.5 font-semibold text-[#26352f]">
@@ -277,7 +280,7 @@ export function LeaderManagement() {
                   <td className="py-3.5 text-[#617068]">
                     {m.phone_number || m.email || "—"}
                   </td>
-                  <td className="py-3.5">
+                  <td className="py-3.5 pr-2">
                     <RolesCombobox
                       selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                       onChange={(newRoles, newAssistants) => handleRolesChange(m.id, newRoles, newAssistants)}
@@ -287,6 +290,7 @@ export function LeaderManagement() {
                       assistants={m.assistant_roles || []}
                       showAssistants
                       align="right"
+                      fill
                     />
                   </td>
                 </tr>
