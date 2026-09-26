@@ -239,8 +239,10 @@ function AdministrationContent() {
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
           <div className="w-full h-full flex flex-col bg-white border-l border-[#dfdbd1] overflow-hidden">
             {/* Mobile Back Button (Visible only on Mobile when viewing sub-tab;
-                the leaders view opts out — its full-height table owns the screen) */}
-            {activeTab !== "overview" && activeTab !== "users" && activeTab !== "leaders" && (
+                the leaders view opts out — its full-height table owns the screen —
+                and so does the treasury accounts view, whose own footer bar
+                carries the actions mobile needs). */}
+            {activeTab !== "overview" && activeTab !== "users" && activeTab !== "leaders" && activeTab !== "accounts" && (
               <div className="flex shrink-0 items-center justify-between border-b border-[#dfdbd1] bg-white p-4 lg:hidden">
                 <button
                   onClick={() => {

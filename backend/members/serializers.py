@@ -358,6 +358,25 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             return None
         return obj.attachment.name.rsplit('/', 1)[-1]
 
+    support_account_display = serializers.SerializerMethodField()
+
+    def get_support_account_display(self, obj):
+        """The account label the feed's Give now button names.
+
+        The stored value is the label the officer picked in the form (the
+        description, falling back to the name); a treasury account may have
+        been renamed since, so the current description is preferred when one
+        matches by either spelling.
+ """
+        wanted = (obj.support_account or '').strip()
+        if not wanted:
+            return None
+        match = (TreasuryAccount.objects.filter(description=wanted).first()
+                 or TreasuryAccount.objects.filter(name=wanted).first())
+        if match:
+            return match.description or match.name
+        return wanted
+
     def get_attachment_size(self, obj):
         """File size in bytes for display (e.g. 'PDF \u00b7 1.4 MB'); None when the file is missing on disk."""
         if not obj.attachment:
@@ -394,7 +413,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'support_account', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'support_account', 'support_account_display', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 
@@ -762,7 +781,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude', 'midweek_vespers_link',
             'live_service_link', 'live_service_active', 'midweek_vespers_time',
             'friday_vespers_time', 'sabbath_time', 'clarion_call_heading',
-            'clarion_call_subtext', 'default_receipt_message', 'receipt_delivery_method',
+            'clarion_call_subtext', 'default_receipt_message', 'split_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
             'default_request_notification_message',

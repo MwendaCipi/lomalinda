@@ -38,7 +38,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -54,6 +54,7 @@ from .roles import (
     check_system_role_change,
     normalize_roles,
     parse_role_codes,
+    role_label,
     role_labels,
     role_register,
     sync_role_groups,
@@ -93,7 +94,7 @@ def generate_temporary_password(length=12):
     return ''.join(characters)
 
 
-def render_receipt_message(template, donor_name, amount_display, purpose):
+def render_receipt_message(template, donor_name, amount_display, purpose, extra=None):
     """Fill the configurable receipt message's placeholders.
 
     The template lives in Church Settings and is the message itself: it should
@@ -101,7 +102,8 @@ def render_receipt_message(template, donor_name, amount_display, purpose):
     use {name}, {amount} and {purpose} — or {account}, the app's user-facing
     word for a giving purpose. Both spellings are filled; anything left
     brace-wrapped (a typo, a future placeholder) is stripped rather than
-    shipped raw.
+    shipped raw. ``extra`` lets a caller add placeholders of its own (the
+    split receipt fills {distribution} with the account lines).
     """
     message = template or ''
     replacements = {
@@ -109,6 +111,7 @@ def render_receipt_message(template, donor_name, amount_display, purpose):
         'amount': amount_display,
         'account': purpose,
         'purpose': purpose,
+        **(extra or {}),
     }
     for key, value in replacements.items():
         message = message.replace(f'{{{key}}}', value).replace(f'{{{key})', value)
@@ -384,6 +387,64 @@ def send_contribution_receipt(contribution):
     if delivery['email_sent'] or delivery['sms_sent']:
         contribution.receipt_sent_at = timezone.now()
         contribution.save(update_fields=['receipt_sent_at'])
+
+
+def send_grouped_contribution_receipts(group):
+    """One receipt for a gift spread over several accounts.
+
+    A giver who ticked three accounts used to receive three letters, one per
+    ledger line, each thanking them for a part of their gift. The lines share
+    one payment — one M-Pesa prompt, one Safaricom receipt number, one
+    ``payment_group`` — so the receipt is one letter too: the configurable
+    split template carries the whole gift's amount with the account-by-account
+    distribution beneath it. The group is marked receipted together, so a
+    resend after a failure retells the whole gift, never a fragment.
+    """
+    lines = list(Contribution.objects.filter(payment_group=group).order_by('id'))
+    completed = [row for row in lines if row.status == 'completed']
+    if not completed or any(row.receipt_sent_at for row in completed):
+        return
+    if len(completed) == 1:
+        # A group of one is not a split gift — it keeps the ordinary receipt.
+        send_contribution_receipt(completed[0])
+        return
+
+    first = completed[0]
+    church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
+    donor_name = giver_display_name(
+        first.donor_name,
+        member=first.member,
+        email=first.donor_email,
+        phone=first.phone_number,
+    ) or 'friend'
+    amount_display = f"{first.currency} {sum(row.amount for row in completed):,.2f}"
+    distribution = '\n'.join(f"{row.purpose}: {row.currency} {row.amount:,.2f}" for row in completed)
+    receipt_message = render_receipt_message(
+        church_settings.split_receipt_message or church_settings.default_receipt_message,
+        donor_name,
+        amount_display,
+        first.purpose,
+        extra={'distribution': distribution},
+    )
+    date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
+    receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
+    account_list = ' / '.join(row.purpose for row in completed)
+    body = (
+        f"{receipt_message}\n\n"
+        f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
+        f"{receipt_email_signature()}"
+    )
+    email = first.donor_email or (first.member.email if first.member else '')
+    delivery = _deliver_receipt_message(
+        subject=f"Giving receipt — {account_list}",
+        body=body,
+        email=email,
+        phone=first.phone_number,
+        mark_sent=lambda: None,
+    )
+    if delivery['email_sent'] or delivery['sms_sent']:
+        Contribution.objects.filter(id__in=[row.id for row in completed]).update(receipt_sent_at=timezone.now())
+    return delivery
 
 
 def send_cash_receipt(cash, *, send_sms=True, send_email=True):
@@ -1477,6 +1538,26 @@ def announcement_audience_user_ids(audience_codes):
     return user_ids
 
 
+def announcement_recipients(announcement):
+    """The accounts a post addresses, exactly as its audience names them.
+
+    "All users" is the approved roster — roster_queryset(): every active
+    account except the installation superuser and the join requests nobody
+    has accepted yet. "Members only" keeps friend and sabbath-school accounts
+    off the list: they are welcome on the site, but they are not members, and
+    a members-only post is member correspondence. An audience still addresses
+    exactly the offices and groups it names, whichever account types hold
+    them — addressing wins over visibility there.
+    """
+    base = roster_queryset().filter(is_active=True)
+    audience_codes = list(getattr(announcement, 'audience', None) or [])
+    if audience_codes:
+        return base.filter(id__in=announcement_audience_user_ids(audience_codes))
+    if announcement.visibility == 'members_only':
+        return base.filter(member_profile__account_type='member')
+    return base
+
+
 def announcement_email_recipients(announcement, church_name):
     """Yield ``(address, body)`` pairs for an announcement's email audience.
 
@@ -1484,21 +1565,10 @@ def announcement_email_recipients(announcement, church_name):
     counted (for the failure log) without re-sending anything.
     """
     seen = set()
-    # An audience addresses the email to the ministry offices named: a post to
-    # the choir goes to the choir's holders, not the whole congregation. Empty
-    # audience keeps the broadcast to everyone.
-    #
-    # "Everyone" means the church's approved roster, not every row in the user
-    # table: a public join request creates an account that is a request until a
-    # leader accepts it, and nobody who has not been accepted should receive
-    # the church's mail. roster_queryset() is the one definition of that line.
-    recipients = roster_queryset().filter(is_active=True).exclude(email='')
-    audience_codes = list(getattr(announcement, 'audience', None) or [])
-    if audience_codes:
-        # The audience addresses the email to the offices and groups named: a
-        # post to the choir goes to the choir's holders, not the congregation.
-        holder_ids = announcement_audience_user_ids(audience_codes)
-        recipients = roster_queryset().filter(id__in=holder_ids, is_active=True).exclude(email='')
+    # The audience rule lives in announcement_recipients(): approved accounts
+    # only, member accounts only for a members-only post, the named offices
+    # and groups for an audience.
+    recipients = announcement_recipients(announcement).exclude(email='')
     for first_name, last_name, username, email in (
         recipients.values_list('first_name', 'last_name', 'username', 'email')
     ):
@@ -1644,16 +1714,11 @@ class AnnouncementView(generics.ListCreateAPIView):
 
         if send_sms:
             try:
-                from django.contrib.auth.models import User
-                # Same audience rule as the email: a post addressed to a
-                # ministry notifies its holders, otherwise the congregation.
-                # The same audience rule as the email: approved accounts only.
-                sms_recipients = roster_queryset().filter(is_active=True)
-                audience_codes = list(announcement.audience or [])
-                if audience_codes:
-                    holder_ids = announcement_audience_user_ids(audience_codes)
-                    sms_recipients = sms_recipients.filter(id__in=holder_ids)
-                for u in sms_recipients:
+                # The same accounts the email reaches — see
+                # announcement_recipients(): the approved roster for everyone,
+                # member accounts for a members-only post, the named
+                # offices and groups for an audience.
+                for u in announcement_recipients(announcement):
                     ChurchNotification.objects.create(
                         user=u,
                         title=f"SMS Announcement: {announcement.title}",
@@ -3064,8 +3129,14 @@ class InitiateContributionView(APIView):
                 contribution.mpesa_receipt_number = f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
                 contribution.paid_at = timezone.now()
                 contribution.save(update_fields=['status', 'mpesa_receipt_number', 'paid_at'])
-                send_contribution_receipt(contribution)
+                # A split gift's single letter goes out once the whole group
+                # exists, after this loop; a single-account gift is receipted
+                # here and now.
+                if not group:
+                    send_contribution_receipt(contribution)
             created.append(contribution)
+        if group and any(row.status == 'completed' for row in created):
+            send_grouped_contribution_receipts(group)
         # Cash, cheque and bank gifts recorded here are received money: their
         # accounts move now. (M-Pesa waits for Safaricom's callback, which
         # credits through the same door.)
@@ -3219,6 +3290,11 @@ class MpesaCallbackView(APIView):
                     paid_at=timezone.now(),
                 )
                 self._link_giver(contribution, context)
+            # One gift, one receipt: a split payment sends one letter listing
+            # its distribution; a single-account gift keeps its own letter.
+            if group:
+                send_grouped_contribution_receipts(group)
+            else:
                 send_contribution_receipt(contribution)
             # The money is in; the account it names moves too. One credit per
             # payment, split the way the giver split it.
@@ -4573,6 +4649,51 @@ class UserManagementView(generics.ListCreateAPIView):
             # without this the new account would exist but nobody could sign in.
             response_data['temporary_password'] = password
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class MemberProfileView(APIView):
+    """The church's full record of one member, for the office's See Profile view."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        viewer_profile = getattr(request.user, 'member_profile', None)
+        if not viewer_profile or not viewer_profile.has_role('admin', 'clerk', 'elder'):
+            return Response({'detail': 'Only church officers can view member profiles.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            target_user = User.objects.select_related('member_profile').get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(member_profile_payload(target_user))
+
+
+def member_profile_payload(user):
+    """Everything the See Profile view shows, in one read-only payload."""
+    profile = getattr(user, 'member_profile', None)
+    history = RoleHistory.objects.filter(member=user)
+    current = list(history.filter(ended_at__isnull=True))
+    past = list(history.filter(ended_at__isnull=False))
+    held_now = {row.role for row in current}
+
+    def row(row_):
+        return {
+            'role': row_.role,
+            'role_label': role_label(row_.role),
+            'started_at': row_.started_at,
+            'ended_at': row_.ended_at,
+        }
+
+    return {
+        **UserDetailSerializer(user).data,
+        'date_joined': user.date_joined,
+        'ministry_label': profile.get_ministry_display() if profile and profile.ministry else '',
+        'baptismal_status_label': profile.get_baptismal_status_display() if profile and profile.baptismal_status else '',
+        'current_roles': [row(r) for r in current],
+        'past_roles': [row(r) for r in past],
+        # The office's own assessment of whether the member currently holds
+        # each role they have ever served in, for the card's chip.
+        'ever_held_roles': sorted(held_now | {r.role for r in past}),
+    }
 
 
 class UserDetailUpdateView(APIView):

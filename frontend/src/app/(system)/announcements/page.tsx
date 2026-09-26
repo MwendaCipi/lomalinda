@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { GiveNowModal } from "@/components/give-now-modal";
 import { eventLabel } from "@/lib/announcement-dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -37,6 +38,8 @@ type FeedItem = {
   visibility: string;
   audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  support_account?: string | null;
+  support_account_display?: string | null;
   is_popup?: boolean;
   expires_at?: string | null;
   created_at: string;
@@ -50,6 +53,7 @@ function driveGiveHref(drive: FundDrive) {
 
 export default function AnnouncementsPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
+  const [supportAccount, setSupportAccount] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -163,6 +167,26 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
+                      {/* A support-account post asks for giving to one account;
+                          its Give now opens the giving form with that account
+                          already chosen — the drive cards' own action, for a
+                          plain account. */}
+                      {!isDrive && item.support_account_display && (
+                        <div className="mt-6 flex flex-wrap gap-3 border-t border-[#dfdbd1] pt-5">
+                          <button
+                            type="button"
+                            onClick={() => setSupportAccount(item.support_account_display ?? null)}
+                            className="rounded-full bg-[#3d7146] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#335e3a]"
+                          >
+                            Give now
+                          </button>
+                          <span className="self-center text-xs text-[#617068]">
+                            towards {item.support_account_display}
+                            {item.support_account && item.support_account !== item.support_account_display ? ` (${item.support_account})` : ""}
+                          </span>
+                        </div>
+                      )}
+
                       {isDrive && drive && (
                         <div className="mt-6 flex flex-wrap gap-3 border-t border-[#dfdbd1] pt-5">
                           <Link
@@ -189,6 +213,14 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       </div>
+
+      {/* The giving form, opened by a support-account post's Give now, with
+          that account already chosen. Closing returns to the feed. */}
+      <GiveNowModal
+        open={Boolean(supportAccount)}
+        onClose={() => setSupportAccount(null)}
+        presetAccount={supportAccount ?? undefined}
+      />
     </main>
   );
 }

@@ -17,6 +17,27 @@ type GivingAccountOption = {
   account_type_display: string;
 };
 
+/** Safaricom's prefixes on the Communications Authority number plan — the
+ * only lines an M-Pesa push can reach, so the account phone pre-fills the
+ * field only when it belongs to one. */
+const SAFARICOM_PREFIXES = ["070", "071", "072", "074", "079"];
+
+/** The member's stored phone as this field wants it (07XXXXXXXX), or "".
+ *
+ * Profiles carry the number in whatever shape it was collected (07…, 2547…,
+ * +2547…), and an Airtel/Telkom/Equitel line cannot receive an M-Pesa prompt
+ * — pre-filling one would only produce a failed push, so it stays empty.
+ */
+function safaricomPhoneOf(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  const local =
+    digits.length === 12 && digits.startsWith("254") ? `0${digits.slice(3)}`
+    : digits.length === 10 && digits.startsWith("0") ? digits
+    : digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1")) ? `0${digits}`
+    : "";
+  return local && SAFARICOM_PREFIXES.some((prefix) => local.startsWith(prefix)) ? local : "";
+}
+
 /** The fallback list, only reached if the accounts endpoint is unreachable. */
 const defaultPurposes = [
   "Tithe",
@@ -51,10 +72,12 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
   const [bankRefNumber, setBankRefNumber] = useState("");
   const [senderBankName, setSenderBankName] = useState("");
   const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
-  const [donorName, setDonorName] = useState("");
+  // Receipts are addressed from the signed-in member's account, so the form
+  // asks for neither name nor email — except when the account carries no email
+  // at all. That is the one thing the member alone can fix (the only way an
+  // email receipt can ever reach them), so it keeps a small optional field.
   const [donorEmail, setDonorEmail] = useState("");
-  // The address currently on the member's account, kept apart from what they
-  // have typed so the form can tell "the same" from "changed, and not saved yet".
+  // The address currently on the member's account.
   const [accountEmail, setAccountEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -83,10 +106,10 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         .then((res) => (res.ok ? res.json() : null))
         .then((me) => {
           if (!me) return;
-          const full = `${me.first_name || ""} ${me.last_name || ""}`.trim() || me.username || "";
-          setDonorName((current) => (current ? current : full));
           setAccountEmail(me.email || "");
-          setDonorEmail((current) => (current ? current : me.email || ""));
+          // The phone the M-Pesa prompt goes to: pre-filled from the account
+          // when it is a Safaricom number, left empty otherwise.
+          setPhoneNumber((current) => (current ? current : safaricomPhoneOf(me.phone_number || "")));
         })
         .catch(() => {});
     }
@@ -223,12 +246,13 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         }
       }
 
-      // The receipt is addressed from the account, so an address typed here IS
-      // a change to the account — saved before the gift is initiated, while the
-      // ledger row and the M-Pesa callback would still read the old one. A
-      // blank field deliberately clears it, leaving the phone as the receipt.
+      // The receipt is addressed from the account (the API ignores any address
+      // sent in the payload). The one edit this form makes is adding an email
+      // to an account that has none — the field only exists for that case — so
+      // it is saved before the gift is initiated and the callback's ledger row
+      // and receipt already carry it. It never clears an existing address.
       const typedEmail = donorEmail.trim();
-      if (signedIn && token && typedEmail.toLowerCase() !== accountEmail.trim().toLowerCase()) {
+      if (signedIn && token && !accountEmail.trim() && typedEmail) {
         const saveResponse = await fetch(`${API_URL}/api/members/me/`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -263,7 +287,6 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         purpose: allocations[0].purpose,
         phone_number: phoneNumber,
         item_description: descriptionPayload,
-        donor_email: donorEmail,
       };
 
       const response = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -346,45 +369,26 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             </div>
           )}
 
-          {/* 1. Who is giving — asked first, and prefilled for a signed-in
-              member. The email is the one on their account, because that is
-              where a receipt is addressed from; it stays editable so a
-              member without one can add it and still be receipted. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 1. Receipts — addressed from the account, not the form. A
+              signed-in member's receipt carries their account's name and
+              email, and the SMS receipt rides the phone they give with, so
+              the form asks for neither. Only a member whose account has no
+              email sees a field — the one thing they alone can fix. */}
+          {signedIn && !accountEmail.trim() && (
             <label className="block text-sm font-medium text-[#26352f]">
-              Your name
+              Email for receipts <span className="font-normal text-[#617068]">(optional)</span>
               <input
-                value={donorName}
-                onChange={(event) => setDonorName(event.target.value)}
-                placeholder="Full name"
+                type="email"
+                value={donorEmail}
+                onChange={(event) => setDonorEmail(event.target.value)}
+                placeholder="you@example.com"
                 className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
               />
+              <span className="mt-1 block text-[11px] font-normal text-[#617068]">
+                Saved to your account so a receipt can reach you by email. Leave it out and your receipt goes by SMS to the phone you give with.
+              </span>
             </label>
-
-            {signedIn ? (
-              <label className="block text-sm font-medium text-[#26352f]">
-                Email
-                <input
-                  type="email"
-                  value={donorEmail}
-                  onChange={(event) => setDonorEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                />
-                <span className="mt-1 block text-[11px] font-normal text-[#617068]">
-                  {!donorEmail.trim()
-                    ? "No email — receipts only go by SMS to the phone you give with. Type one here and we'll save it to your account."
-                    : donorEmail.trim().toLowerCase() === accountEmail.trim().toLowerCase()
-                      ? "This is the address on your account; your receipt goes here."
-                      : "We'll save this to your account so your receipt can reach you."}
-                </span>
-              </label>
-            ) : (
-              <div className="flex flex-col justify-end pb-1 text-[11px] font-normal leading-relaxed text-[#617068]">
-                Receipts are only emailed to the verified address on a member&apos;s account. Sign in and this field fills itself in.
-              </div>
-            )}
-          </div>
+          )}
 
           {/* 2. Method of Giving & Giving Accounts — how the money moves
               is asked for first, then which accounts it goes to. */}

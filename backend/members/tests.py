@@ -55,7 +55,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3490,6 +3490,55 @@ class SplitGivingTests(APITestCase):
         self.assertTrue(all(row.status == 'completed' for row in lines.values()))
         self.assertTrue(all(row.paid_at for row in lines.values()))
 
+    @patch('members.views._deliver_receipt_message')
+    def test_a_split_gift_receives_one_receipt_listing_its_distribution(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': True, 'sms_sent': False, 'sms_configured': True}
+        context = {
+            'amount': '3500.00',
+            'purpose': '3 accounts',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '2000.00'},
+                {'purpose': 'Local Church Budget', 'amount': '1000.00'},
+                {'purpose': 'Combined Offering', 'amount': '500.00'},
+            ],
+            'phone_number': '254712345678',
+        }
+        response = self._post_callback(context)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # One letter for the whole payment — not one per account.
+        self.assertEqual(mock_deliver.call_count, 1)
+        body = mock_deliver.call_args.kwargs['body']
+        self.assertIn('3,500.00', body)
+        self.assertIn('Tithe: KES 2,000.00', body)
+        self.assertIn('Local Church Budget: KES 1,000.00', body)
+        self.assertIn('Combined Offering: KES 500.00', body)
+        self.assertIn(' / ', mock_deliver.call_args.kwargs['subject'])
+        # Every line of the group counts as receipted together.
+        self.assertTrue(all(row.receipt_sent_at for row in Contribution.objects.all()))
+
+    @patch('members.views._deliver_receipt_message')
+    def test_a_split_group_already_receipted_is_never_receipted_twice(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': True, 'sms_sent': False, 'sms_configured': True}
+        context = {
+            'amount': '1500.00',
+            'purpose': '2 accounts',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '500.00'},
+                {'purpose': 'Building Fund', 'amount': '1000.00'},
+            ],
+            'phone_number': '254712345678',
+        }
+        self._post_callback(context)
+        self.assertEqual(mock_deliver.call_count, 1)
+
+        group = Contribution.objects.first().payment_group
+        from .views import send_grouped_contribution_receipts
+        send_grouped_contribution_receipts(group)
+
+        # A resend retells nothing: the group was marked receipted as one.
+        self.assertEqual(mock_deliver.call_count, 1)
+
     def test_a_split_prompt_that_fails_leaves_one_line_per_account(self):
         context = {
             'amount': '1500.00',
@@ -4966,6 +5015,43 @@ class AnnouncementAudienceTests(APITestCase):
         addresses = sorted(message.to[0] for message in mail.outbox)
         self.assertEqual(addresses, ['youth.leader@example.com'])
 
+    @patch('members.views._deliver_receipt_message')
+    def test_everyone_and_members_only_reach_the_right_accounts(self, mock_deliver):
+        """The audience rule the user named: all users = active accounts minus
+        the superuser; members only = member accounts, no friends, no other
+        account kinds."""
+        member = User.objects.create_user('aud.member', 'aud.member@example.com', 'ChurchPass#2026', first_name='Mia', last_name='Member')
+        MemberProfile.objects.create(user=member, role='member', roles='member', account_type='member')
+        friend = User.objects.create_user('aud.friend', 'aud.friend@example.com', 'ChurchPass#2026', first_name='Fay', last_name='Friend')
+        MemberProfile.objects.create(user=friend, role='member', roles='member', account_type='friend')
+        school = User.objects.create_user('aud.school', 'aud.school@example.com', 'ChurchPass#2026', first_name='Sam', last_name='School')
+        MemberProfile.objects.create(user=school, role='member', roles='member', account_type='sabbath_school')
+        superuser = User.objects.create_superuser('aud.super', 'aud.super@example.com', 'ChurchPass#2026')
+        from django.core import mail
+
+        self.client.post('/api/members/announcements/', {
+            'title': 'To everyone', 'text': 'All are invited.',
+            'visibility': 'all', 'sharing_option': 'email',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+        self.client.post('/api/members/announcements/', {
+            'title': 'Members matter', 'text': 'For members alone.',
+            'visibility': 'members_only', 'sharing_option': 'email',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        # All users: every active account but the superuser — friend and
+        # sabbath-school included, plus the clerk who posted (also a member).
+        everyone = {body.to[0] for body in mail.outbox if 'To everyone' in body.subject}
+        self.assertEqual(
+            everyone,
+            {'aud.clerk@example.com', 'aud.member@example.com', 'aud.friend@example.com', 'aud.school@example.com'},
+        )
+        # Members only: member accounts alone — no friend, no school, none of
+        # the superuser. The clerk holds a member account, so they are in.
+        members = {body.to[0] for body in mail.outbox if 'Members matter' in body.subject}
+        self.assertEqual(members, {'aud.clerk@example.com', 'aud.member@example.com'})
+
     def test_an_empty_audience_emails_the_whole_congregation(self):
         from django.core import mail
 
@@ -5477,3 +5563,77 @@ class AnnouncementReachesOnlyApprovedAccountsTests(APITestCase):
             ChurchNotification.objects.filter(user=requester).exists(),
             'an unapproved account should not receive the church SMS notice',
         )
+
+
+class RoleHistoryTests(APITestCase):
+    """See Profile shows the member's record, including roles served over time."""
+
+    def setUp(self):
+        self.elder = User.objects.create_user('hist.elder', 'hist.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.client.force_authenticate(self.elder)
+
+    def _member(self, username, roles='member'):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        profile = MemberProfile.objects.create(user=user)
+        profile.set_roles(roles)
+        return user
+
+    def test_gaining_a_role_opens_history(self):
+        member = self._member('hist.gainer')
+
+        self.client.patch(
+            f'/api/members/users/{member.id}/role/',
+            {'roles': 'member,treasurer'},
+            format='json',
+        )
+
+        self.assertTrue(
+            RoleHistory.objects.filter(member=member, role='treasurer', ended_at__isnull=True).exists(),
+            'a newly assigned role should open an open-ended history row',
+        )
+
+    def test_dropping_a_role_closes_its_history(self):
+        member = self._member('hist.loser', roles='member,clerk')
+
+        self.client.patch(
+            f'/api/members/users/{member.id}/role/',
+            {'roles': 'member'},
+            format='json',
+        )
+
+        row = RoleHistory.objects.get(member=member, role='clerk')
+        self.assertIsNotNone(row.ended_at, 'a dropped role should have its row closed')
+
+    def test_unchanged_roles_do_not_duplicate_history(self):
+        member = self._member('hist.stable', roles='member,elder')
+
+        self.client.patch(
+            f'/api/members/users/{member.id}/role/',
+            {'roles': 'member,elder'},
+            format='json',
+        )
+
+        self.assertEqual(RoleHistory.objects.filter(member=member, role='elder').count(), 1)
+
+    def test_profile_endpoint_shows_date_joined_and_role_history(self):
+        member = self._member('hist.viewer', roles='member,treasurer')
+        RoleHistory.objects.filter(member=member, role='treasurer').update(ended_at=timezone.now())
+
+        response = self.client.get(f'/api/members/users/{member.id}/profile/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['date_joined'], member.date_joined)
+        # 'member' is the default state, not a served role: it never gets a
+        # history row, so the view falls back to its "Member" placeholder.
+        self.assertEqual(response.data['current_roles'], [])
+        self.assertEqual([row['role'] for row in response.data['past_roles']], ['treasurer'])
+        self.assertEqual(response.data['past_roles'][0]['role_label'], 'Treasurer')
+
+    def test_members_cannot_open_someone_elses_profile(self):
+        member = self._member('hist.plain')
+        self.client.force_authenticate(member)
+
+        response = self.client.get(f'/api/members/users/{self.elder.id}/profile/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

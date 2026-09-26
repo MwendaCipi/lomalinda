@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from .roles import ROLE_CHOICES, normalize_roles
+from .roles import ROLE_CHOICES, normalize_roles, role_label
 
 CURRENT_PRIVACY_POLICY_VERSION = '2026-09-22'
 CURRENT_TERMS_OF_USE_VERSION = '2026-09-22'
@@ -148,20 +148,56 @@ class MemberProfile(models.Model):
         ``assistants`` is the subset of ``codes`` held as an assistant. Anything
         else is dropped: an assistant holds the role itself, so the flag cannot
         outlive the role.
+
+        Every gain and loss is written to ``RoleHistory``, so the record of who
+        served where survives role reshuffles. Nothing is written when the set
+        is unchanged.
         """
         role_codes = normalize_roles(codes)
         assistant_codes = [code for code in (assistants if assistants is not None else self.get_assistant_roles()) if code in role_codes]
+        previous_codes = set(self.get_roles())
         self.roles = ', '.join(role_codes)
         self.assistant_roles = ', '.join(assistant_codes)
         self.role = role_codes[0]
         if save:
             self.save(update_fields=['roles', 'assistant_roles', 'role'])
+            self._record_role_history(previous_codes)
         return role_codes
+
+    def _record_role_history(self, previous_codes):
+        """Close rows for dropped roles, open rows for newly gained ones."""
+        current_codes = set(self.get_roles())
+        now = timezone.now()
+        for dropped in previous_codes - current_codes:
+            RoleHistory.objects.filter(member=self.user, role=dropped, ended_at__isnull=True).update(ended_at=now)
+        for gained in current_codes - previous_codes:
+            RoleHistory.objects.get_or_create(member=self.user, role=gained, ended_at__isnull=True, defaults={'started_at': now})
 
     def has_role(self, *codes):
         """True if the member holds any of the given role codes."""
         member_roles = set(self.get_roles())
         return bool(member_roles.intersection(codes))
+
+
+class RoleHistory(models.Model):
+    """One continuous stretch a member held a role.
+
+    Written by ``set_roles``: a role kept across a save leaves its row alone, a
+    newly gained role opens a row with an open end, and a dropped role closes
+    its row's end. This is the app's memory of who served where and when.
+    """
+
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='role_history')
+    role = models.CharField(max_length=30, choices=ROLE_CHOICES)
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True, help_text="Blank while the member still holds the role")
+
+    class Meta:
+        ordering = ('-started_at',)
+        indexes = [models.Index(fields=['member', 'role'])]
+
+    def __str__(self):
+        return f"{self.member.get_username()} — {self.get_role_display()}"
 
     def __str__(self):
         return f"{self.user.get_username()} ({self.get_role_display()})"
@@ -809,6 +845,19 @@ class ChurchSettings(models.Model):
     clarion_call_subtext = models.TextField(default="Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
     RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]
     default_receipt_message = models.TextField(default="Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly", blank=True)
+    # One gift spread over several accounts earns one receipt, not one per
+    # account: this template renders it, with {distribution} carrying the
+    # "Account: amount" lines the gift was split into. See
+    # send_grouped_contribution_receipts in members/views.py.
+    split_receipt_message = models.TextField(
+        default=(
+            "Dear {name},\n\n"
+            "Your contribution of {amount} has been received and distributed accordingly as follows\n\n"
+            "{distribution}\n\n"
+            "Thank you, and may God bless you abundantly"
+        ),
+        blank=True,
+    )
     receipt_delivery_method = models.CharField(max_length=10, choices=RECEIPT_DELIVERY_CHOICES, default='email')
     # The wording members actually receive. Placeholders are filled per recipient;
     # see members/meetings.py for the full list and the EAT-aware greeting.

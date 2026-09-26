@@ -728,22 +728,19 @@ export function TreasuryAccountsManager() {
         />
       </div>
 
-      {/* ── Footer: one bar for both views, in the shape the other tables use ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-t border-[#dfdbd1] bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#617068]">
+      {/* ── Footer: one bar for both views, in the shape the other tables use ──
+          One row on every screen: the stats on the left, the Add Account
+          button on the right (the account count never earned the space it
+          took from a phone's footer). */}
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#dfdbd1] bg-white px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#617068]">
           {view === "accounts" ? (
-            <>
-              <span>
-                Showing <strong className="text-[#26352f]">{accounts.length}</strong> account
-                {accounts.length === 1 ? "" : "s"}
-              </span>
-              <span>
-                Total liquidity:{" "}
-                <strong className="text-[#b36b3c]">
-                  KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                </strong>
-              </span>
-            </>
+            <span>
+              Total liquidity:{" "}
+              <strong className="text-[#b36b3c]">
+                KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+              </strong>
+            </span>
           ) : (
             <>
               <span>
@@ -763,20 +760,18 @@ export function TreasuryAccountsManager() {
           )}
         </div>
         {view === "accounts" && (
-          <div className="flex items-center gap-2">
-            {/* An account is the one way to a drive: each row can be Promoted,
-                which opens the drive form with that account answering for it.
-                A separate "Add Fund Drive" button was a second, disconnected
-                path to the same thing. */}
-            <button
-              type="button"
-              onClick={() => setShowAddAccountModal(true)}
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Account</span>
-            </button>
-          </div>
+          /* An account is the one way to a drive: each row can be Promoted,
+              which opens the drive form with that account answering for it.
+              A separate "Add Fund Drive" button was a second, disconnected
+              path to the same thing. */
+          <button
+            type="button"
+            onClick={() => setShowAddAccountModal(true)}
+            className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Account</span>
+          </button>
         )}
       </div>
 

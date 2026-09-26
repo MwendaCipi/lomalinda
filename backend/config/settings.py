@@ -142,7 +142,11 @@ EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 # spelled without the comma ('SDA Loma Linda Meru'), because a bare comma inside
 # a From display name is an address-list separator. Email subjects drop the
 # comma for the same reason; bodies and signatures carry it (members/views.py).
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SDA Loma Linda Meru <noreply@sdalomalinda.or.ke>')
+# The fallback names the real, monitored mailbox rather than a discard address:
+# replies and "not spam" corrections from members are the strongest
+# deliverability signal a small sender has, and a nonexistent noreply@ would
+# bounce them. Production's .env sets the same value explicitly.
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SDA Loma Linda Meru <info@sdalomalinda.or.ke>')
 # Announcements reach the whole congregation in one posting — a volume mail
 # hosts read as a burst, and the kind of traffic that got the main mailbox
 # blocked by Zoho's "unusual sending activity" rule (SMTP 550 5.4.6). The

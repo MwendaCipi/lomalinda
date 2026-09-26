@@ -63,6 +63,36 @@ export type MemberUser = {
 type MemberFilter = "all" | "members" | "friends" | "ex_members";
 type InvitationFilter = "confirmed" | "pending";
 
+/** One served-in stretch of a role, from the member's role history. */
+type RoleHistoryRow = {
+  role: string;
+  role_label: string;
+  started_at: string;
+  ended_at: string | null;
+};
+
+/** The read-only payload behind See Profile: roster fields plus history. */
+type MemberProfileData = Partial<MemberUser> & {
+  date_joined?: string;
+  ministry_label?: string;
+  baptismal_status_label?: string;
+  current_roles?: RoleHistoryRow[];
+  past_roles?: RoleHistoryRow[];
+};
+
+const fmtDate = (value?: string | null) =>
+  value ? new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—";
+
+/** A label + value line of the profile grid; em-dash when nothing is on file. */
+function ProfileField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b9790]">{label}</p>
+      <p className="mt-0.5 text-xs text-[#26352f]">{value?.trim() ? value : "—"}</p>
+    </div>
+  );
+}
+
 export const AVAILABLE_GIFTS = [
   "Preaching",
   "Ushering",
@@ -939,6 +969,13 @@ export function UserManagement() {
   const [editGifts, setEditGifts] = useState<string[]>([]);
   const [editDisability, setEditDisability] = useState<string[]>([]);
 
+  // ── See Profile (read-only member record) ───────────────────────────────
+  // Opens instantly with the roster row, then the detailed payload (date
+  // joined, role history, ministry label…) arrives and replaces it.
+  const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
+  const [profileData, setProfileData] = useState<MemberProfileData | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
@@ -1392,6 +1429,32 @@ export function UserManagement() {
   // ── Actions dropdown state ────────────────────────────────────────────────
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  const openProfile = async (member: MemberUser) => {
+    setProfileMemberId(member.id);
+    setProfileData(member);
+    setProfileLoading(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/users/${member.id}/profile/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfileData(data);
+      } else {
+        showAlert("Profile unavailable", data.detail || "Could not load this member's profile.", "error");
+        setProfileMemberId(null);
+        setProfileData(null);
+      }
+    } catch {
+      showAlert("Profile unavailable", "Network error loading the profile.", "error");
+      setProfileMemberId(null);
+      setProfileData(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   // Transfer modal
   const [transferMember, setTransferMember] = useState<MemberUser | null>(null);
@@ -1866,10 +1929,10 @@ export function UserManagement() {
                         {openActionMenuId === m.id && (
                           <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                             <button
-                              onClick={() => { handleStartEdit(m); setOpenActionMenuId(null); }}
+                              onClick={() => { openProfile(m); setOpenActionMenuId(null); }}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                             >
-                              ✏️ Edit Profile
+                              👤 See Profile
                             </button>
                             <button
                               onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
@@ -2513,6 +2576,103 @@ export function UserManagement() {
         </div>
       )}
 
+      {/* ══ See Profile (read-only member record) ══ */}
+      {profileMemberId && profileData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="profile-title"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+              <div>
+                <h3 id="profile-title" className="text-xl font-bold text-[#26352f]">
+                  {profileData.first_name || profileData.last_name
+                    ? `${profileData.first_name || ""} ${profileData.last_name || ""}`.trim()
+                    : profileData.username}
+                </h3>
+                <p className="text-[11px] text-[#8b9790]">
+                  @{profileData.username}
+                  {profileData.date_joined ? ` · Joined ${fmtDate(profileData.date_joined)}` : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
+                className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] text-xl leading-none">✕</button>
+            </div>
+
+            {profileLoading && <p className="mt-3 text-[11px] text-[#617068]">Loading full record…</p>}
+
+            <div className="mt-4 space-y-5">
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Basic details</h4>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                  <ProfileField label="Email" value={profileData.email} />
+                  <ProfileField label="Phone" value={profileData.phone_number} />
+                  <ProfileField label="WhatsApp" value={profileData.whatsapp_number} />
+                  <ProfileField label="Sex" value={profileData.gender} />
+                  <ProfileField label="Date of birth" value={profileData.date_of_birth ? fmtDate(profileData.date_of_birth) : ""} />
+                  <ProfileField label="Residence" value={profileData.residence} />
+                  <ProfileField label="Profession" value={profileData.profession} />
+                  <ProfileField label="Type" value={profileData.account_type ? accountTypeLabel(profileData.account_type) : ""} />
+                  <ProfileField label="Ministry" value={profileData.ministry_label} />
+                  <ProfileField label="Baptismal status" value={profileData.baptismal_status_label || profileData.baptismal_status} />
+                  <ProfileField label="Disability / special needs" value={profileData.disability} />
+                </div>
+              </section>
+
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Gifts &amp; talents</h4>
+                <p className="mt-1 text-xs text-[#26352f]">{profileData.gifts?.trim() || "—"}</p>
+              </section>
+
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Current roles</h4>
+                {(profileData.current_roles && profileData.current_roles.length > 0) ? (
+                  <ul className="mt-2 space-y-1">
+                    {profileData.current_roles.map((r) => (
+                      <li key={r.role} className="flex items-center justify-between rounded-lg bg-[#f7f4ee] px-3 py-1.5 text-xs text-[#26352f]">
+                        <span className="font-semibold">{r.role_label}</span>
+                        <span className="text-[10px] text-[#617068]">since {fmtDate(r.started_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-[#26352f]">Member</p>
+                )}
+              </section>
+
+              {(profileData.past_roles && profileData.past_roles.length > 0) && (
+                <section>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Roles served</h4>
+                  <ul className="mt-2 space-y-1">
+                    {profileData.past_roles.map((r) => (
+                      <li key={`${r.role}-${r.ended_at}`} className="flex items-center justify-between rounded-lg border border-[#dfdbd1] px-3 py-1.5 text-xs text-[#617068]">
+                        <span className="font-semibold text-[#26352f]">{r.role_label}</span>
+                        <span className="text-[10px]">{fmtDate(r.started_at)} – {fmtDate(r.ended_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <p className="rounded-xl bg-[#fdf8ef] px-4 py-3 text-[11px] leading-relaxed text-[#617068]">
+                To correct any of these details, use <strong className="text-[#26352f]">Assign Leadership</strong> for roles,
+                or ask the clerk to propose a change — the member approves it on their dashboard before anything is applied.
+              </p>
+
+              <div className="flex items-center gap-3 pb-1">
+                <button type="button"
+                  onClick={() => { const member = members.find((m) => m.id === profileMemberId); if (member) { setProfileMemberId(null); setProfileData(null); handleStartEdit(member); } }}
+                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  Propose Changes
+                </button>
+                <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
+                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ Edit Profile Modal ══ */}
       {editingMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
@@ -2610,6 +2770,7 @@ export function UserManagement() {
           </div>
         </div>
       )}
+
 
       {/* ══ Transfer Modal ══ */}
       {transferMember && (

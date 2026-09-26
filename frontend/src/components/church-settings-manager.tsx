@@ -28,6 +28,9 @@ export function ChurchSettingsManager() {
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly");
+  const [splitReceiptMessage, setSplitReceiptMessage] = useState(
+    "Dear {name},\n\nYour contribution of {amount} has been received and distributed accordingly as follows\n\n{distribution}\n\nThank you, and may God bless you abundantly"
+  );
   const [defaultBusinessMeetingInvitationMessage, setDefaultBusinessMeetingInvitationMessage] = useState(
     "{greeting}, {name}. {church} is inviting you to a church business meeting scheduled for {day}, {date} at {meeting_time}, {location}. God bless you as you purpose to attend."
   );
@@ -88,6 +91,7 @@ export function ChurchSettingsManager() {
           if (data.clarion_call_heading) setClarionCallHeading(data.clarion_call_heading);
           if (data.clarion_call_subtext) setClarionCallSubtext(data.clarion_call_subtext);
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
+          if (data.split_receipt_message !== undefined && data.split_receipt_message) setSplitReceiptMessage(data.split_receipt_message);
           if (Array.isArray(data.invitation_placeholders)) {
             setInvitationPlaceholders(data.invitation_placeholders);
           }
@@ -161,6 +165,7 @@ export function ChurchSettingsManager() {
         clarion_call_heading: clarionCallHeading,
         clarion_call_subtext: clarionCallSubtext,
         default_receipt_message: defaultReceiptMessage,
+        split_receipt_message: splitReceiptMessage,
         default_business_meeting_invitation_message: defaultBusinessMeetingInvitationMessage,
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
         default_request_notification_message: requestNotificationMessage,
@@ -280,6 +285,24 @@ export function ChurchSettingsManager() {
               value={defaultReceiptMessage}
               onChange={(e) => setDefaultReceiptMessage(e.target.value)}
               placeholder="Dear {name}, your contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly"
+              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
+            />
+          </div>
+
+          {/* Split gifts reach the giver as one letter listing where each part
+              of the money went — one template, edited like the first. */}
+          <div className="mt-3 border-t border-[#5f8067]/20 pt-4">
+            <label className="block text-xs font-semibold text-[#26352f]">
+              Split-Gift Receipt Message
+            </label>
+            <p className="mt-0.5 text-xs text-[#617068]">
+              Used when one gift is spread over several accounts, so the giver gets one receipt listing the distribution instead of one per account. Supports <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{amount}"}</code> (the whole gift) and <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{distribution}"}</code> — the "Account: amount" lines.
+            </p>
+            <textarea
+              rows={4}
+              value={splitReceiptMessage}
+              onChange={(e) => setSplitReceiptMessage(e.target.value)}
+              placeholder="Dear {name}, your contribution of {amount} has been received and distributed accordingly as follows: {distribution}. Thank you, and may God bless you abundantly"
               className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
             />
           </div>
