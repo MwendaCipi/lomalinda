@@ -48,13 +48,6 @@ function driveGiveHref(drive: FundDrive) {
   return `/give?purpose=${encodeURIComponent(drive.title || drive.name)}`;
 }
 
-/** The audience-facing words for where a post travels. */
-function visibilityLabel(value: string): string {
-  if (value === "public_website") return "Public website";
-  if (value === "members_only") return "Members only";
-  return value === "all" ? "All users" : value;
-}
-
 export default function AnnouncementsPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [search, setSearch] = useState("");
@@ -92,19 +85,20 @@ export default function AnnouncementsPage() {
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
-            <div className="max-w-3xl">
+            {/* The heading and its search sit tight together: the feed below is
+                what the page is for, so the controls above it stay compact. */}
+            <div className="max-w-4xl space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+              <label className="block max-w-md text-sm font-semibold text-[#26352f]">
+                Search
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search announcements..."
+                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
+                />
+              </label>
             </div>
-
-            <label className="block max-w-md text-sm font-semibold text-[#26352f]">
-              Search
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search announcements..."
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
-              />
-            </label>
 
             {loading ? <p className="text-sm text-[#617068]">Loading announcements…</p> : items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-10 text-center text-[#617068]">No announcements found.</div>
@@ -113,38 +107,28 @@ export default function AnnouncementsPage() {
                 {items.map((item) => {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;
-                  const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-7 shadow-sm sm:p-9";
-                  const hasContributionAction = item.action_type && item.action_type !== "none" && item.action_type !== "respond";
+                  const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-7";
                   const content = (
                     <>
                       <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          {isDrive ? (
-                            <span className="rounded-full bg-[#b36b3c] px-3 py-1 text-xs font-semibold text-white">Fund drive</span>
-                          ) : (
-                            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
-                          )}
-                          <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
-                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">{visibilityLabel(item.visibility)}{item.audience?.length ? ` · ${item.audience.length} group${item.audience.length === 1 ? "" : "s"}` : ""}</span>
-                          {eventLabel(item) && (
-                            <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</span>
-                          )}
-                          {item.href && (
-                            <a
-                              href={item.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-full bg-[#26352f] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
-                            >
-                              Open link ↗
-                            </a>
-                          )}
-                          {hasContributionAction && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Contribution Action</span>}
-                          {item.action_type === "respond" && <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Response Action</span>}
-                          {item.expires_at && <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">Until {new Date(`${item.expires_at}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</span>}
-                        </div>
-                        <h2 className="mt-3 text-2xl font-semibold">{item.title}</h2>
-                        <p className="mt-4 text-base leading-7 text-[#26352f]">{item.text}</p>
+                        {/* No eyebrow and no badge row: the card is in the
+                            announcements feed, so the title, its event date
+                            and the words are the whole story. */}
+                        <h2 className="text-xl font-semibold sm:text-2xl">{item.title}</h2>
+                        {eventLabel(item) && (
+                          <p className="mt-2 text-sm font-semibold text-[#b36b3c]">Event date: {eventLabel(item)}</p>
+                        )}
+                        <p className="mt-3 text-base leading-7 text-[#26352f]">{item.text}</p>
+                        {item.href && (
+                          <a
+                            href={item.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex text-sm font-semibold text-[#b36b3c] underline underline-offset-2"
+                          >
+                            Open link ↗
+                          </a>
+                        )}
 
                         {isDrive && drive && (
                           <div className="mt-5 rounded-2xl bg-[#f7f4ee] p-4">
