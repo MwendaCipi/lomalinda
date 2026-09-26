@@ -244,7 +244,7 @@ export function EnrollmentForm({
           Full Name
           <input
             required
-            placeholder="Enter full name (e.g. Cyprian Mwenda Muriuki)"
+            placeholder="Enter full name (e.g. John Doe)"
             value={form.name}
             onChange={(event) => update("name", event.target.value)}
             className={inputClass}

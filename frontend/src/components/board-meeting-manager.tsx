@@ -33,92 +33,17 @@ interface BoardMeeting {
   created_at: string;
 }
 
-/** Agenda rows and their documents — step 2 of scheduling, and reusable on its own. */
-function AgendaBuilder({
-  agendas,
-  onAddRow,
-  onRemoveRow,
-  onChange,
-}: {
-  agendas: AgendaItem[];
-  onAddRow: () => void;
-  onRemoveRow: (index: number) => void;
-  onChange: (index: number, field: keyof AgendaItem, value: unknown) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#26352f]">
-          Agenda Items &amp; Document Attachments
-        </h4>
-        <button
-          type="button"
-          onClick={onAddRow}
-          className="rounded-lg bg-[#26352f] px-3 py-1 text-xs font-bold text-white hover:bg-[#1b2622]"
-        >
-          + Add Agenda Item
-        </button>
-      </div>
-
-      {agendas.length === 0 ? (
-        <p className="text-xs italic text-[#617068]">
-          No agenda items added yet. Click &quot;+ Add Agenda Item&quot; to attach documents per agenda.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {agendas.map((ag, idx) => (
-            <div key={idx} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/70 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-[#b36b3c]">Item #{idx + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveRow(idx)}
-                  className="text-xs font-bold text-red-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-              <input
-                type="text"
-                placeholder="Agenda Item Title *"
-                value={ag.title}
-                onChange={(e) => onChange(idx, "title", e.target.value)}
-                className="w-full rounded-lg border border-[#c9c5bb] px-3 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
-              />
-              <textarea
-                rows={2}
-                placeholder="Description / Notes (Optional)"
-                value={ag.description}
-                onChange={(e) => onChange(idx, "description", e.target.value)}
-                className="w-full rounded-lg border border-[#c9c5bb] px-3 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
-              />
-              <div>
-                <label className="block text-[11px] font-semibold text-[#617068]">
-                  Attach Document File (PDF / Word / Doc)
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) => onChange(idx, "file", e.target.files?.[0] || null)}
-                  className="mt-1 w-full text-xs text-[#617068] file:mr-2 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#26352f]"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+/** Agenda rows and their documents, as they hang off a saved meeting. */
 
 export function BoardMeetingManager() {
   const [meetings, setMeetings] = useState<BoardMeeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Create Meeting state. Scheduling is two dialogs: the meeting itself (step 1)
-  // and the agenda with its documents (step 2), so neither form has to carry both.
+  // Create Meeting state. Scheduling is one dialog — when and where the board
+  // meets; agenda items are added one by one to the created meeting.
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
+
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -132,7 +57,6 @@ export function BoardMeetingManager() {
   const [showInvitationDropdown, setShowInvitationDropdown] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [defaultInvitationMessage, setDefaultInvitationMessage] = useState("");
-  const [agendas, setAgendas] = useState<AgendaItem[]>([]);
 
   // Add Agenda Modal state for an existing meeting
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
@@ -181,23 +105,6 @@ export function BoardMeetingManager() {
       .catch(() => {});
   }, []);
 
-  const handleAddAgendaRow = () => {
-    setAgendas((prev) => [
-      ...prev,
-      { title: "", description: "", order: prev.length + 1, file: null },
-    ]);
-  };
-
-  const handleRemoveAgendaRow = (index: number) => {
-    setAgendas((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleAgendaChange = (index: number, field: keyof AgendaItem, value: unknown) => {
-    setAgendas((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    );
-  };
-
   const resetForm = () => {
     setTitle("");
     setMeetingDate("");
@@ -207,8 +114,6 @@ export function BoardMeetingManager() {
     setNotifySms(true);
     setNotifyEmail(true);
     setNotificationMessage(defaultInvitationMessage);
-    setAgendas([]);
-    setStep(1);
     setFormError(null);
   };
 
@@ -217,7 +122,7 @@ export function BoardMeetingManager() {
     setIsModalOpen(true);
   };
 
-  const validateStep1 = () => {
+  const validateForm = () => {
     if (!title.trim()) return "Meeting title is required.";
     if (!meetingDate) return "Meeting date is required.";
     if (!startTime || !endTime) return "Give the meeting a start and a finish time.";
@@ -225,24 +130,13 @@ export function BoardMeetingManager() {
     return null;
   };
 
-  const handleAddDetails = () => {
-    const problem = validateStep1();
-    if (problem) {
-      setFormError(problem);
-      return;
-    }
-    setFormError(null);
-    setStep(2);
-  };
-
   const handleCreateMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    const problem = validateStep1();
+    const problem = validateForm();
     if (problem) {
       setFormError(problem);
-      setStep(1);
       return;
     }
 
@@ -260,21 +154,6 @@ export function BoardMeetingManager() {
       if (notificationMessage.trim()) {
         formData.append("notification_message", notificationMessage.trim());
       }
-
-      const agendaPayload = agendas
-        .filter((a) => a.title.trim())
-        .map((a, idx) => ({
-          title: a.title.trim(),
-          description: a.description,
-          order: a.order || idx + 1,
-        }));
-      formData.append("agendas", JSON.stringify(agendaPayload));
-
-      agendas.forEach((a, idx) => {
-        if (a.file) {
-          formData.append(`agenda_file_${idx}`, a.file);
-        }
-      });
 
       const res = await fetch(`${API_URL}/api/members/board-meetings/`, {
         method: "POST",
@@ -446,7 +325,7 @@ export function BoardMeetingManager() {
           </div>
           <h3 className="mt-4 text-base font-bold text-[#26352f]">No church board meetings scheduled yet</h3>
           <p className="mt-1 text-xs text-[#617068]">
-            Click <span className="font-semibold text-[#26352f]">&quot;+ Schedule Board Meeting&quot;</span> to schedule a new meeting and attach agendas.
+            Click <span className="font-semibold text-[#26352f]">&quot;+ Schedule Board Meeting&quot;</span> to schedule a new meeting; agendas are added to it afterwards.
           </p>
           <button
             type="button"
@@ -591,15 +470,15 @@ export function BoardMeetingManager() {
         </div>
       )}
 
-      {/* Step 1 of scheduling: the meeting itself */}
-      {isModalOpen && step === 1 && (
+      {/* Scheduling: the meeting itself */}
+      {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
               <div>
-                <h3 className="text-xl font-bold text-[#26352f]">Schedule Church Board Meeting</h3>
+                <h3 className="text-xl font-bold text-[#26352f]">Schedule Board Meeting</h3>
                 <p className="mt-1 text-xs text-[#617068]">
-                  Step 1 of 2 — when and where the board meets. Add the agenda next.
+                  When and where the board meets. Agenda items are added to the meeting once it is created.
                 </p>
               </div>
               <button
@@ -764,7 +643,7 @@ export function BoardMeetingManager() {
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-4 py-2 text-xs outline-none focus:border-[#b36b3c]"
                 />
                 <p className="mt-1 text-[11px] text-[#617068]">
-                  This is the church&apos;s saved message; edit it for this meeting only. Placeholders filled per member:{" "}
+                  Placeholders filled per member:{" "}
                   {["{greeting}", "{name}", "{church}", "{title}", "{day}", "{date}", "{start_time}", "{end_time}", "{location}"]
                     .map((token) => (
                       <code key={token} className="mr-1 rounded border border-[#dfdbd1] bg-[#f7f4ee] px-1 text-[10px] text-[#b36b3c]">
@@ -775,7 +654,8 @@ export function BoardMeetingManager() {
               </div>
 
               {/* One row of actions at every width: Cancel holds the left
-                  edge, Add Details and Submit the right. */}
+                  edge, Submit the right. The agenda is not part of creating —
+                  items are added one by one to the created meeting. */}
               <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] pt-4">
                 <button
                   type="button"
@@ -784,88 +664,12 @@ export function BoardMeetingManager() {
                 >
                   Cancel
                 </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddDetails}
-                    className="rounded-full border border-[#b36b3c] px-4 py-2 text-xs font-bold text-[#b36b3c] hover:bg-[#faf7f2]"
-                  >
-                    Add Details
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
-                  >
-                    {submitting ? "Scheduling..." : "Submit"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2 of scheduling: agenda items and their documents */}
-      {isModalOpen && step === 2 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-              <div>
-                <h3 className="text-xl font-bold text-[#26352f]">Add Agenda &amp; Documents</h3>
-                <p className="mt-1 text-xs text-[#617068]">
-                  Step 2 of 2 — optional. Schedule now with Submit, or add agenda items and their documents first.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            {formError && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                {formError}
-              </div>
-            )}
-
-            <div className="mt-4 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/60 p-3 text-xs text-[#26352f]">
-              <p className="font-bold">{title || "Untitled meeting"}</p>
-              <p className="mt-0.5 text-[#617068]">
-                {meetingDate ? formatMeetingDate(meetingDate) : "No date"}
-                {startTime && endTime ? ` · ${formatTimeForDisplay(startTime)} – ${formatTimeForDisplay(endTime)}` : ""}
-                {location ? ` · ${location}` : ""}
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateMeeting} className="mt-5 space-y-4">
-              <AgendaBuilder
-                agendas={agendas}
-                onAddRow={handleAddAgendaRow}
-                onRemoveRow={handleRemoveAgendaRow}
-                onChange={handleAgendaChange}
-              />
-
-              <div className="flex flex-col-reverse items-stretch gap-2 border-t border-[#dfdbd1] pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormError(null);
-                    setStep(1);
-                  }}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#26352f] hover:bg-gray-100"
-                >
-                  ← Back
-                </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
+                  className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
                 >
-                  {submitting ? "Scheduling & Sending Invites..." : "Submit"}
+                  {submitting ? "Scheduling..." : "Submit"}
                 </button>
               </div>
             </form>
