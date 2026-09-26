@@ -20,6 +20,7 @@ import json
 import os
 import io
 import secrets
+import threading
 import time
 from decimal import Decimal
 from html.parser import HTMLParser
@@ -1356,6 +1357,38 @@ class PasswordResetConfirmView(APIView):
         return Response({'message': 'Your password has been reset. You can now sign in.'})
 
 
+def announcement_emails_run_inline():
+    """True while mail never really leaves the box: tests and development.
+
+    Django's test runner swaps SMTP for the in-memory backend (tests read their
+    assertions out of that outbox, which a background thread cannot reach in
+    time), and development prints mail to the console. Both are instant, so the
+    broadcast simply runs in the request there. Only a real SMTP send — the
+    throttled, minutes-long one — is pushed to a background thread.
+    """
+    return not settings.EMAIL_BACKEND.endswith('smtp.EmailBackend')
+
+
+def dispatch_announcement_emails_safely(announcement_id):
+    """Run the announcement broadcast off the request cycle, failures logged.
+
+    Threaded because the throttled pace makes a whole-congregation broadcast a
+    minutes-long job that must not hold an officer's request open (or a gunicorn
+    worker). ``fail_silently=False`` sends raise inside the loop; anything that
+    escapes it — a database error, a closed connection at the very first open —
+    is logged here so a failed broadcast is a visible log line, not silence.
+    """
+    try:
+        announcement = Announcement.objects.get(id=announcement_id)
+    except Announcement.DoesNotExist:
+        # Deleted between the post and the thread's start — nothing to send.
+        return
+    try:
+        send_announcement_emails(announcement)
+    except Exception:
+        logger.exception('Announcement email broadcast for #%s failed', announcement_id)
+
+
 def can_manage_announcements(user):
     """Leadership test shared by the announcement endpoints.
 
@@ -1380,8 +1413,19 @@ def send_announcement_emails(announcement):
     One message per recipient rather than one message with the whole
     congregation in its ``To`` header: every member is addressed the way a
     receipt addresses them ("Dear {name},") and no member sees anyone else's
-    address. The sends share one SMTP connection so a large congregation stays
-    a quick job rather than a connection per member.
+    address.
+
+    The sends share one SMTP connection so a large congregation stays a quick
+    job rather than a connection per member — but with a deliberate pause
+    between messages. A machine-gun loop with no gap is exactly the "unusual
+    sending activity" that got the mailbox blocked mid-broadcast (SMTP 550
+    5.4.6): Zoho and Gmail alike police sending velocity, not just daily
+    totals. The pause is configured in settings (ANNOUNCEMENT_SEND_DELAY), and
+    the whole broadcast can ride a separate mailbox via the
+    ANNOUNCEMENT_EMAIL_* settings so bulk volume never spends the main
+    account's velocity budget. A send that fails is logged with its recipient
+    and the server's answer instead of being swallowed — the Sep 25 failure
+    looked like success because nobody could see it.
     """
     from django.contrib.auth.models import User
     from django.core.mail import EmailMessage, get_connection
@@ -1398,13 +1442,70 @@ def send_announcement_emails(announcement):
         except Exception:
             attachment_bytes = None
 
-    connection = get_connection()
+    connection = get_connection(
+        host=settings.ANNOUNCEMENT_EMAIL_HOST,
+        port=settings.ANNOUNCEMENT_EMAIL_PORT,
+        username=settings.ANNOUNCEMENT_EMAIL_HOST_USER,
+        password=settings.ANNOUNCEMENT_EMAIL_HOST_PASSWORD,
+        use_tls=settings.ANNOUNCEMENT_EMAIL_USE_TLS,
+        timeout=settings.EMAIL_TIMEOUT,
+    )
     try:
         connection.open()
     except Exception:
         connection = None
 
     sent = 0
+    failed = 0
+    seen = set()
+    try:
+        for email, body in announcement_email_recipients(announcement, church_name):
+            message = EmailMessage(subject, body, settings.ANNOUNCEMENT_FROM_EMAIL, [email], connection=connection)
+            if attachment_bytes:
+                # The flyer or document rides along with the email; the SMS
+                # channel stays text-only by design.
+                message.attach(attachment_name, attachment_bytes)
+            try:
+                message.send(fail_silently=False)
+                sent += 1
+            except Exception as exc:
+                # One blocked recipient must not hide the rest — but it must
+                # also not disappear. A throttled mailbox answers 550 with its
+                # reason; that answer belongs in the logs.
+                failed += 1
+                logger.warning('Announcement email to %s failed: %s', email, exc)
+                # A refusal mid-broadcast usually means the mailbox itself has
+                # been blocked or the connection went stale; continuing
+                # one-by-one only burns the rest of the list on a dead
+                # connection. Distinguish the two by counting failures.
+                if failed >= settings.ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES:
+                    logger.error(
+                        'Announcement broadcast aborted after %d consecutive failures '
+                        '(last error: %s). %d recipients were not reached.',
+                        failed, exc, max(0, announcement_recipient_count(announcement, church_name) - sent - failed),
+                    )
+                    break
+            if settings.ANNOUNCEMENT_SEND_DELAY > 0:
+                time.sleep(settings.ANNOUNCEMENT_SEND_DELAY)
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+    if failed:
+        logger.warning('Announcement broadcast finished: %d sent, %d failed.', sent, failed)
+    return sent
+
+
+def announcement_email_recipients(announcement, church_name):
+    """Yield ``(address, body)`` pairs for an announcement's email audience.
+
+    Split from ``send_announcement_emails`` so the size of the audience can be
+    counted (for the failure log) without re-sending anything.
+    """
+    from django.contrib.auth.models import User
+
     seen = set()
     # An audience addresses the email to the ministry offices named: a post to
     # the choir goes to the choir's holders, not the whole congregation. Empty
@@ -1419,38 +1520,26 @@ def send_announcement_emails(announcement):
             if set(profile.get_roles()) & set(audience_codes):
                 holder_ids.add(profile.user_id)
         recipients = User.objects.filter(id__in=holder_ids, is_active=True).exclude(email='')
-    try:
-        for first_name, last_name, username, email in (
-            recipients.values_list('first_name', 'last_name', 'username', 'email')
-        ):
-            address = (email or '').strip()
-            if not address or address.lower() in seen:
-                continue
-            seen.add(address.lower())
-            # Same convention as a receipt: the member's own name, or a plain
-            # 'friend' when the account carries none.
-            name = ' '.join(part for part in (first_name, last_name) if part).strip() or 'friend'
-            body = f"Dear {name},\n\n{announcement.title}\n\n{announcement.text}"
-            if announcement.detail:
-                body += f"\n\n{announcement.detail}"
-            body += f"\n\n{church_name}"
-            message = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, [address], connection=connection)
-            if attachment_bytes:
-                # The flyer or document rides along with the email; the SMS
-                # channel stays text-only by design.
-                message.attach(attachment_name, attachment_bytes)
-            try:
-                message.send(fail_silently=False)
-                sent += 1
-            except Exception:
-                continue
-    finally:
-        if connection is not None:
-            try:
-                connection.close()
-            except Exception:
-                pass
-    return sent
+    for first_name, last_name, username, email in (
+        recipients.values_list('first_name', 'last_name', 'username', 'email')
+    ):
+        address = (email or '').strip()
+        if not address or address.lower() in seen:
+            continue
+        seen.add(address.lower())
+        # Same convention as a receipt: the member's own name, or a plain
+        # 'friend' when the account carries none.
+        name = ' '.join(part for part in (first_name, last_name) if part).strip() or 'friend'
+        body = f"Dear {name},\n\n{announcement.title}\n\n{announcement.text}"
+        if announcement.detail:
+            body += f"\n\n{announcement.detail}"
+        body += f"\n\n{church_name}"
+        yield address, body
+
+
+def announcement_recipient_count(announcement, church_name):
+    """How many inboxes the broadcast addresses (for honest failure logs)."""
+    return sum(1 for _ in announcement_email_recipients(announcement, church_name))
 
 
 class CanManageAnnouncements(permissions.BasePermission):
@@ -1555,10 +1644,24 @@ class AnnouncementView(generics.ListCreateAPIView):
         announcement.save(update_fields=['published'])
 
         if send_email:
-            try:
-                send_announcement_emails(announcement)
-            except Exception:
-                pass
+            # The broadcast takes a real-time pause between messages (a pace
+            # mail hosts accept), so it runs in a background thread and the
+            # officer posting never waits on it — or trips gunicorn's worker
+            # timeout when the congregation is large. In development and the
+            # test suite the send runs inline: tests assert on mail.outbox,
+            # which a thread cannot reach before the assertion runs.
+            if announcement_emails_run_inline():
+                try:
+                    send_announcement_emails(announcement)
+                except Exception:
+                    logger.exception('Announcement email broadcast failed')
+            else:
+                threading.Thread(
+                    target=dispatch_announcement_emails_safely,
+                    args=(announcement.id,),
+                    name=f'announcement-email-{announcement.id}',
+                    daemon=True,
+                ).start()
 
         if send_sms:
             try:

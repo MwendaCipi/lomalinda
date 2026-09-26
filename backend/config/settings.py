@@ -143,6 +143,28 @@ EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 # a From display name is an address-list separator. Email subjects drop the
 # comma for the same reason; bodies and signatures carry it (members/views.py).
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SDA Loma Linda Meru <noreply@sdalomalinda.or.ke>')
+# Announcements reach the whole congregation in one posting — a volume mail
+# hosts read as a burst, and the kind of traffic that got the main mailbox
+# blocked by Zoho's "unusual sending activity" rule (SMTP 550 5.4.6). The
+# broadcast therefore gets its own connection settings, so it can run on a
+# separate mailbox (its own velocity budget) while receipts and invitations
+# keep the main one. When no override is set, the main email settings above
+# are used unchanged.
+ANNOUNCEMENT_EMAIL_HOST = os.getenv('ANNOUNCEMENT_EMAIL_HOST', EMAIL_HOST)
+ANNOUNCEMENT_EMAIL_PORT = int(os.getenv('ANNOUNCEMENT_EMAIL_PORT', str(EMAIL_PORT)))
+ANNOUNCEMENT_EMAIL_HOST_USER = os.getenv('ANNOUNCEMENT_EMAIL_HOST_USER', EMAIL_HOST_USER)
+ANNOUNCEMENT_EMAIL_HOST_PASSWORD = os.getenv('ANNOUNCEMENT_EMAIL_HOST_PASSWORD', EMAIL_HOST_PASSWORD)
+ANNOUNCEMENT_EMAIL_USE_TLS = os.getenv('ANNOUNCEMENT_EMAIL_USE_TLS', 'true' if EMAIL_USE_TLS else 'false').lower() == 'true'
+ANNOUNCEMENT_FROM_EMAIL = os.getenv('ANNOUNCEMENT_FROM_EMAIL', DEFAULT_FROM_EMAIL)
+# A pause between the broadcast's messages: a machine-gun loop with no gap is
+# exactly what the velocity rule watches for. Two seconds keeps even a large
+# congregation's hourly rate gentle; zero restores the old behaviour.
+ANNOUNCEMENT_SEND_DELAY = float(os.getenv('ANNOUNCEMENT_SEND_DELAY', '2'))
+# A refusal repeated this many times in a row means the mailbox or the
+# connection is dead — not one bad address — so the broadcast stops and logs
+# what it could not reach instead of walking the whole list against a closed
+# door.
+ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES = int(os.getenv('ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES', '3'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 
