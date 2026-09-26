@@ -39,6 +39,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import DEPARTMENT_CHOICES, DepartmentEvent, DepartmentMembership
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -5023,7 +5024,7 @@ class UserRoleUpdateView(APIView):
             sync_role_groups(target_user, roles_param)
             added = [r for r in roles_param if r not in old_roles]
             removed = [r for r in old_roles if r not in roles_param and r != 'member']
-            role_display = role_labels(roles_param)
+            role_display = role_labels_with_assistants(target_profile, roles_param)
             if added or removed:
                 ChurchNotification.objects.create(
                     user=target_user,
@@ -6134,3 +6135,240 @@ class InventoryMovementCreateView(APIView):
         payload = InventoryItemSerializer(item).data
         payload['movement'] = InventoryMovementSerializer(movement).data
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+# ── Departments ──────────────────────────────────────────────────────────────
+# The elder's desk reads departments as units: one directory row per
+# department carrying its leadership, roll size and calendar count, plus two
+# nested endpoints for the roll and the calendar. Role changes themselves stay
+# on the existing user-role endpoint — the department view only needs to read
+# who holds what.
+
+
+def role_labels_with_assistants(profile, codes):
+    """Role labels that read "Assistant Choir Director" where the member
+    holds the role as an assistant — the same wording the UI shows, so a
+    letter about someone's service matches what they see on screen."""
+    assistant_codes = set(profile.get_assistant_roles()) if profile else set()
+    return ', '.join(
+        f"Assistant {role_label(code)}" if code in assistant_codes else role_label(code)
+        for code in codes
+    )
+
+
+def department_office_profile(user):
+    """The profile of a signed-in office holder, or None."""
+    profile = getattr(user, 'member_profile', None)
+    if profile and profile.has_role('admin', 'elder', 'clerk'):
+        return profile
+    return None
+
+
+#: The role code that leads each department, if one exists.
+DEPARTMENT_LEAD_ROLE = {
+    'amm': 'men_ministry',
+    'awm': 'women_ministry',
+    'aym': 'youth_leader',
+    'apm': 'apm_leader',
+    'chaplaincy': 'chaplaincy',
+}
+
+
+def department_holders(department):
+    """ ``(leader_dict_or_None, [assistant_dicts])`` for a department's lead role.
+
+    The leader is the first holder in join order; assistants are everyone
+    flagged as an assistant on that role. Roles without a lead role (none
+    today) yield ``(None, [])``.
+    """
+    role_code = DEPARTMENT_LEAD_ROLE.get(department)
+    if not role_code:
+        return None, []
+    leader = None
+    assistants = []
+    for profile in (
+        MemberProfile.objects.select_related('user')
+        .filter(user__is_active=True)
+        .order_by('pk')
+    ):
+        roles = profile.get_roles()
+        if role_code not in roles:
+            continue
+        user = profile.user
+        holder = {
+            'id': user.id,
+            'name': f"{user.first_name} {user.last_name}".strip() or user.get_username(),
+            'username': user.get_username(),
+            'email': user.email or '',
+            'phone_number': profile.phone_number or '',
+            'photo_url': getattr(profile, 'photo_url', '') or '',
+            # The full role set rides along so the picker can edit this
+            # holder's roles in place without another fetch.
+            'roles': list(roles),
+            'assistant_roles': list(profile.get_assistant_roles()),
+        }
+        if role_code in profile.get_assistant_roles():
+            assistants.append(holder)
+        elif leader is None:
+            leader = holder
+    return leader, assistants
+
+
+class DepartmentDirectoryView(APIView):
+    """One row per department: leadership, roll size, calendar count."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        counts = {
+            row['department']: row['total']
+            for row in DepartmentMembership.objects.values('department').annotate(total=Count('id'))
+        }
+        event_counts = {
+            row['department']: row['total']
+            for row in DepartmentEvent.objects.values('department').annotate(total=Count('id'))
+        }
+        departments = []
+        for code, label in DEPARTMENT_CHOICES:
+            leader, assistants = department_holders(code)
+            departments.append({
+                'code': code,
+                'label': label,
+                'lead_role': DEPARTMENT_LEAD_ROLE.get(code, ''),
+                'leader': leader,
+                'assistants': assistants,
+                'member_count': counts.get(code, 0),
+                'event_count': event_counts.get(code, 0),
+            })
+        return Response({'departments': departments})
+
+
+def can_manage_department(user, department):
+    """Office holders manage any department; a department's lead role manages its own."""
+    if department_office_profile(user):
+        return True
+    profile = getattr(user, 'member_profile', None)
+    if not profile:
+        return False
+    lead_role = DEPARTMENT_LEAD_ROLE.get(department)
+    return bool(lead_role and lead_role in profile.get_roles())
+
+
+class DepartmentMembersView(APIView):
+    """A department's roll: read it, add to it, remove from it."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        members = []
+        for membership in (
+            DepartmentMembership.objects.select_related('member', 'member__member_profile')
+            .filter(department=department, member__is_active=True)
+            .order_by('member__first_name', 'member__last_name')
+        ):
+            user = membership.member
+            profile = getattr(user, 'member_profile', None)
+            members.append({
+                'membership_id': membership.id,
+                'id': user.id,
+                'name': f"{user.first_name} {user.last_name}".strip() or user.get_username(),
+                'username': user.get_username(),
+                'email': user.email or '',
+                'phone_number': (profile.phone_number if profile else '') or '',
+                'gender': (profile.gender if profile else '') or '',
+                'added_at': membership.created_at,
+            })
+        return Response({'members': members})
+
+    def post(self, request, department):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only church officers or this department\'s leader can add members.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            target_user = User.objects.get(pk=request.data.get('member_id'))
+        except (User.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        membership, created = DepartmentMembership.objects.get_or_create(
+            member=target_user,
+            department=department,
+            defaults={'added_by': request.user},
+        )
+        if not created:
+            return Response({'detail': 'That member is already on this roll.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Member added to the roll.', 'membership_id': membership.id}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, department, member_id=None):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only church officers or this department\'s leader can remove members.'}, status=status.HTTP_403_FORBIDDEN)
+        target_id = member_id or request.data.get('member_id')
+        deleted, _ = DepartmentMembership.objects.filter(department=department, member_id=target_id).delete()
+        if not deleted:
+            return Response({'detail': 'That member is not on this roll.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Member removed from the roll.'})
+
+
+class DepartmentEventsView(APIView):
+    """A department's calendar: the stored events behind the ministry pages."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        events = DepartmentEvent.objects.filter(department=department)
+        events = events.order_by('event_date', 'event_time', 'title')
+        return Response({'events': [
+            {
+                'id': event.id,
+                'title': event.title,
+                'date': event.event_date,
+                'time': event.event_time,
+                'location': event.location,
+                'lead': event.lead,
+                'notes': event.notes,
+            }
+            for event in events
+        ]})
+
+    def post(self, request, department):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only church officers or this department\'s leader can add events.'}, status=status.HTTP_403_FORBIDDEN)
+        title = (request.data.get('title') or '').strip()
+        event_date = request.data.get('date') or ''
+        if not title or not event_date:
+            return Response({'detail': 'A title and a date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        event = DepartmentEvent.objects.create(
+            department=department,
+            title=title,
+            event_date=event_date,
+            event_time=(request.data.get('time') or '').strip(),
+            location=(request.data.get('location') or '').strip(),
+            lead=(request.data.get('lead') or '').strip(),
+            notes=(request.data.get('notes') or '').strip(),
+            created_by=request.user,
+        )
+        return Response({'detail': 'Event added to the calendar.', 'id': event.id}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, department, event_id=None):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only church officers or this department\'s leader can remove events.'}, status=status.HTTP_403_FORBIDDEN)
+        target_id = event_id or request.data.get('id')
+        deleted, _ = DepartmentEvent.objects.filter(department=department, pk=target_id).delete()
+        if not deleted:
+            return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Event removed from the calendar.'})

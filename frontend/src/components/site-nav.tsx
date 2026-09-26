@@ -237,6 +237,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     if (typeof window !== "undefined") {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
+      // Privacy on shared devices: signing out always closes the giving
+      // record, so the next person never inherits it revealed (the give
+      // page writes this key when the eye is opened).
+      localStorage.removeItem("my_givings_visible");
     }
     setUserState({
       isLoggedIn: false,

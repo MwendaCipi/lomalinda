@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { showAlert } from "@/lib/alerts";
 
 export type RoleOption = {
   value: string;
@@ -161,10 +162,17 @@ export function roleLabel(code: string): string {
   return ROLE_LABELS[code] || code.replaceAll("_", " ");
 }
 
-/** Human summary of a role list: "Clerk, Treasurer" or "Clerk +2" */
-export function formatRoles(roles: string[]): string {
+/** How one role reads out loud: "Choir Director", or "Assistant Choir
+    Director" when the holder shares it as the leader's assistant. */
+export function roleDisplayLabel(code: string, assistantRoles: string[] = []): string {
+  return assistantRoles.includes(code) ? `Assistant ${roleLabel(code)}` : roleLabel(code);
+}
+
+/** Human summary of a role list: "Clerk, Treasurer", "Clerk +2" or
+    "Assistant Choir Director +1" when assistants are given. */
+export function formatRoles(roles: string[], assistantRoles: string[] = []): string {
   if (!roles || roles.length === 0) return "Member";
-  const labels = roles.map(roleLabel);
+  const labels = roles.map((code) => roleDisplayLabel(code, assistantRoles));
   if (labels.length <= 2) return labels.join(", ");
   return `${labels[0]} +${labels.length - 1}`;
 }
@@ -296,7 +304,28 @@ export function RolesCombobox({
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const [register, setRegister] = useState<Record<string, RoleRegisterRow>>({});
+  // Drafts: ticks and assistant flags made inside the open picker stay local
+  // until Done confirms them, so a stray click outside reads as a cancel
+  // rather than a surprise change of the member's roles.
+  const [draftRoles, setDraftRoles] = useState<string[]>(selected);
+  const [draftAssistants, setDraftAssistants] = useState<string[]>(assistants);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Roles read alphabetically in the picker — the definition order is the
+  // org chart's, which is nobody's guess when looking for a role.
+  const sortedOptions = useMemo(
+    () => [...ROLE_OPTIONS].sort((a, b) => a.label.localeCompare(b.label)),
+    []
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      // Every open starts from the member's actual roles, never a stale draft.
+      setDraftRoles(selected);
+      setDraftAssistants(assistants);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Who leads each role: a role someone else holds cannot be handed out again,
   // and an assistant can only be named under an existing leader.
@@ -332,29 +361,67 @@ export function RolesCombobox({
   const toggle = (value: string) => {
     if (lockedRoles.includes(value)) return; // system role, cannot be dropped
     let next: string[];
-    let nextAssistants = [...assistants];
-    if (selected.includes(value)) {
-      next = selected.filter((r) => r !== value);
+    let nextAssistants = [...draftAssistants];
+    if (draftRoles.includes(value)) {
+      next = draftRoles.filter((r) => r !== value);
       if (next.length === 0) next = ["member"]; // stored default: no leadership role
       nextAssistants = nextAssistants.filter((code) => code !== value);
     } else if (value === "member") {
       next = ["member"]; // stored default: the plain Member role
       nextAssistants = [];
     } else {
-      next = [...selected.filter((r) => r !== "member"), value];
+      next = [...draftRoles.filter((r) => r !== "member"), value];
     }
     // keep canonical order
     const ordered = ROLE_OPTIONS.map((r) => r.value).filter((v) => next.includes(v));
     // An assistant assists a role they hold; dropping the role drops the flag.
-    onChange(ordered, nextAssistants.filter((code) => ordered.includes(code)));
+    setDraftRoles(ordered);
+    setDraftAssistants(nextAssistants.filter((code) => ordered.includes(code)));
   };
 
   const toggleAssistant = (value: string) => {
-    if (!selected.includes(value)) return;
-    const next = assistants.includes(value)
-      ? assistants.filter((code) => code !== value)
-      : [...assistants, value];
-    onChange(selected, next);
+    if (!draftRoles.includes(value)) return;
+    setDraftAssistants(
+      draftAssistants.includes(value)
+        ? draftAssistants.filter((code) => code !== value)
+        : [...draftAssistants, value]
+    );
+  };
+
+  /** Diff the draft against the member's real roles for the confirm dialog. */
+  const applyDraft = async () => {
+    const added = draftRoles.filter((code) => !selected.includes(code));
+    const removed = selected.filter((code) => !draftRoles.includes(code));
+    const assistantsAdded = draftAssistants.filter((code) => !assistants.includes(code));
+    const assistantsRemoved = assistants.filter((code) => !draftAssistants.includes(code));
+    if (
+      added.length === 0 &&
+      removed.length === 0 &&
+      assistantsAdded.length === 0 &&
+      assistantsRemoved.length === 0
+    ) {
+      setIsOpen(false);
+      return;
+    }
+    const lines: string[] = [];
+    if (added.length) lines.push(`Add: ${added.map(roleLabel).join(", ")}`);
+    if (removed.length) lines.push(`Remove: ${removed.map(roleLabel).join(", ")}`);
+    if (assistantsAdded.length) lines.push(`Mark assistant on: ${assistantsAdded.map(roleLabel).join(", ")}`);
+    if (assistantsRemoved.length) lines.push(`Stop assisting: ${assistantsRemoved.map(roleLabel).join(", ")}`);
+    const result = await showAlert(
+      "Confirm role changes",
+      lines.join("\n"),
+      "question",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Save changes",
+        cancelButtonText: "Keep editing",
+        confirmButtonColor: "#b36b3c",
+      }
+    );
+    if (!result.isConfirmed) return;
+    onChange(draftRoles, draftAssistants);
+    setIsOpen(false);
   };
 
   return (
@@ -374,9 +441,18 @@ export function RolesCombobox({
           })
         }
         className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
-        title={selected.map(roleLabel).join(", ")}
+        title={selected.map((code) => roleDisplayLabel(code, assistants)).join(", ")}
       >
-        <span className="max-w-[10rem] truncate">{selected.length ? formatRoles(selected) : "Select access"}</span>
+        {/* Compact on purpose: the first role plus a count — "Elder +2
+            others", "Assistant Choir Director" — keeps the column narrow;
+            the full list lives in the tooltip. */}
+        <span className="min-w-0 truncate">
+          {selected.length
+            ? selected.length > 1
+              ? `${roleDisplayLabel(selected[0], assistants)} +${selected.length - 1} other${selected.length - 1 === 1 ? "" : "s"}`
+              : roleDisplayLabel(selected[0], assistants)
+            : "Select access"}
+        </span>
         <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
@@ -398,8 +474,8 @@ export function RolesCombobox({
             <span className="flex-1">Role</span>
             {showAssistants && <span className="w-16 shrink-0 text-center">Assistant</span>}
           </div>
-          {ROLE_OPTIONS.filter((r) => !hiddenRoles.includes(r.value)).map((r) => {
-            const checked = selected.includes(r.value);
+          {sortedOptions.filter((r) => !hiddenRoles.includes(r.value)).map((r) => {
+            const checked = draftRoles.includes(r.value);
             const locked = checked && lockedRoles.includes(r.value);
             const row = register[r.value];
             const holderCount = row ? (row.leader ? 1 : 0) + (row.assistants?.length || 0) : 0;
@@ -467,7 +543,7 @@ export function RolesCombobox({
                     <input
                       type="checkbox"
                       aria-label={`${r.label} assistant`}
-                      checked={assistants.includes(r.value)}
+                      checked={draftAssistants.includes(r.value)}
                       disabled={!canAssist}
                       title={assistantTitle}
                       onChange={() => toggleAssistant(r.value)}
@@ -478,6 +554,20 @@ export function RolesCombobox({
               </div>
             );
           })}
+          {/* Done confirms the draft — through the confirmation dialog when
+              anything actually changed. */}
+          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-[#f0ece3] bg-white px-3 py-2">
+            <span className="text-[10px] text-[#617068]">
+              {draftRoles.length} role{draftRoles.length === 1 ? "" : "s"} selected
+            </span>
+            <button
+              type="button"
+              onClick={applyDraft}
+              className="rounded-xl bg-[#26352f] px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

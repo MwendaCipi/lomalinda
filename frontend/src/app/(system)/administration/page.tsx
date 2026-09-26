@@ -9,7 +9,7 @@ import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
-import { LeaderManagement } from "@/components/leader-management";
+import { DepartmentHub } from "@/components/department-hub";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
@@ -66,7 +66,7 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
-  leaders: "church leaders",
+  leaders: "church departments",
   board: "board meetings",
   business: "business meetings",
   announcements: "announcements",
@@ -294,8 +294,8 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👑</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Church Leaders</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Set, update, or unset leadership roles for church members.</span>
+                          <span className="block text-sm font-bold text-[#26352f]">Church Departments</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Each department's leadership, roll and calendar, managed in one place.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </div>
@@ -542,7 +542,7 @@ function AdministrationContent() {
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
 
             {/* Church Leaders View */}
-            {activeTab === "leaders" && (isClerk || isElder || isAdmin) && <LeaderManagement />}
+            {activeTab === "leaders" && (isClerk || isElder || isAdmin) && <DepartmentHub />}
 
             {/* Board Meetings Manager */}
             {activeTab === "board" && (isClerk || isElder || isAdmin) && (

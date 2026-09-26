@@ -26,9 +26,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * columns keeps the same grid for every roster.
  */
 const COL_INDEX = "w-8";
-const COL_NAME = "w-[14rem]";
+const COL_NAME = "w-[11rem]";
 const COL_CONTACT = "w-[12rem]";
-const COL_ROLE = "w-[13rem]";
+const COL_ROLE = "w-[10rem]";
 const COL_TYPE = "w-[9rem]";
 const COL_SEX = "w-[4rem]";
 
@@ -1917,7 +1917,7 @@ export function UserManagement() {
                         fill
                       />
                     </td>
-                    <td className={`py-3 text-[#617068] ${COL_SEX}`}>{m.gender || "—"}</td>
+                    <td className={`py-3 text-[#617068] pl-6 ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className="py-3 text-right">
                       <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
                         <button

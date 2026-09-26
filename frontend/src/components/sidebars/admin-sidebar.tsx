@@ -670,7 +670,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 1: Adventist Men (AMM) */}
-        {(isElder || isClerk || isAdmin || hasAnyRole("men_ministry")) && (
+        {hasAnyRole("men_ministry") && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Men (AMM)
@@ -684,7 +684,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 2: Adventist Women (AWM) */}
-        {(isElder || isClerk || isAdmin || hasAnyRole("women_ministry")) && (
+        {hasAnyRole("women_ministry") && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Women (AWM)
@@ -698,7 +698,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 3: Adventist Youth & Children */}
-        {(isElder || isClerk || isAdmin || hasAnyRole("youth_leader", "children_ministry")) && (
+        {hasAnyRole("youth_leader", "children_ministry") && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Youth &amp; Children
@@ -712,7 +712,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 4: Adventist Possibility Ministries (APM) */}
-        {(isElder || isClerk || isAdmin) && (
+        {hasAnyRole("apm_leader") && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Possibility (APM)
@@ -726,7 +726,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 5: Chaplaincy Ministry */}
-        {(isElder || isClerk || isAdmin || hasAnyRole("chaplaincy")) && (
+        {hasAnyRole("chaplaincy") && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Chaplaincy Ministry

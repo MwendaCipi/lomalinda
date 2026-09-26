@@ -46,35 +46,35 @@ export default function HymnalPage() {
       </section>
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
-        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
           {hymnals.map((item) => {
             const Icon = item.icon;
             return (
             <a
               key={item.id}
               href={item.href}
-              className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md"
+              className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md sm:p-4"
             >
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f7f4ee] text-[#26352f]"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f7f4ee] text-[#26352f] sm:h-9 sm:w-9"
                     aria-hidden="true"
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </span>
-                  <span className="rounded-full bg-[#b36b3c]/10 px-2.5 py-0.5 text-[10px] font-semibold text-[#b36b3c]">
+                  <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[9px] font-semibold text-[#b36b3c] sm:px-2.5 sm:text-[10px]">
                     {item.badge}
                   </span>
                 </div>
-                <h2 className="mt-2.5 text-sm font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c] sm:text-base">
+                <h2 className="mt-2 text-[13px] font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c] sm:mt-2.5 sm:text-base">
                   {item.title}
                 </h2>
-                <p className="mt-1 text-[11px] leading-5 text-[#617068]">{item.description}</p>
+                <p className="mt-1 text-[10px] leading-4 text-[#617068] sm:text-[11px] sm:leading-5">{item.description}</p>
               </div>
 
-              <div className="mt-3 border-t border-[#dfdbd1] pt-2.5">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-3.5 py-1.5 text-[11px] font-semibold text-white transition group-hover:bg-[#b36b3c]">
+              <div className="mt-2.5 border-t border-[#dfdbd1] pt-2 sm:mt-3 sm:pt-2.5">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-3 py-1 text-[10px] font-semibold text-white transition group-hover:bg-[#b36b3c] sm:px-3.5 sm:py-1.5 sm:text-[11px]">
                   <span>{item.button}</span>
                   <span>&rarr;</span>
                 </span>

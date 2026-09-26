@@ -1,10 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { Eye, EyeOff, RotateCw } from "lucide-react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+// Same key the money-giving page writes and sign-out clears: one eye state
+// per browser, covering both giving records.
+const GIVINGS_VISIBLE_KEY = "my_givings_visible";
 
 type InKindRecord = {
   id: number;
@@ -44,6 +49,9 @@ function GiveInKindPageContent() {
   // The giving form lives in a modal, opened by Give Now — the page itself is
   // the record of what has been given, mirroring the money-giving page.
   const [showGiveModal, setShowGiveModal] = useState(false);
+  // Privacy first, same as the money-giving page: the record starts hidden,
+  // the eye beside the heading reveals it, and the choice sticks across visits.
+  const [givingsVisible, setGivingsVisible] = useState(false);
 
   // ── In-Kind Report filters ──────────────────────────────────
   const PAGE_SIZE = 50;
@@ -97,6 +105,9 @@ function GiveInKindPageContent() {
     const token = localStorage.getItem("access_token");
     if (token) {
       setSignedIn(true);
+      // A member who revealed the record keeps it revealed on their next
+      // visit; sign-out clears the key so shared devices start private.
+      if (localStorage.getItem(GIVINGS_VISIBLE_KEY) === "1") setGivingsVisible(true);
       fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
         .then((res) => (res.ok ? res.json() : null))
         .then((me) => {
@@ -278,31 +289,61 @@ function GiveInKindPageContent() {
             {signedIn && (
               <section className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dfdbd1] px-5 py-4">
-                  <div>
+                  <div className="flex min-w-0 items-center gap-2">
                     <h2 className="text-base font-bold text-[#26352f]">My In-Kind Givings</h2>
-                    <p className="mt-0.5 text-[11px] text-[#617068]">
-                      {loadingRecords
-                        ? "Loading records…"
-                        : `${serverCount} gift${serverCount === 1 ? "" : "s"} · ${serverTotalItems} item${serverTotalItems === 1 ? "" : "s"}`}
-                    </p>
+                    {/* Same eye as the money page: crossed while hidden, open
+                        while shown, and the state persists across visits. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !givingsVisible;
+                        setGivingsVisible(next);
+                        try {
+                          localStorage.setItem(GIVINGS_VISIBLE_KEY, next ? "1" : "0");
+                        } catch {}
+                      }}
+                      aria-pressed={givingsVisible}
+                      aria-label={givingsVisible ? "Hide my in-kind givings" : "Show my in-kind givings"}
+                      title={givingsVisible ? "Hide my in-kind givings" : "Show my in-kind givings"}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                    >
+                      {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    </button>
                   </div>
+                  {/* Refresh in the header, like the money page — Give Now
+                      moves to the center of the hidden state. */}
                   <button
                     type="button"
-                    onClick={() => setShowGiveModal(true)}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+                    onClick={() => fetchRecords(page)}
+                    title="Refresh my in-kind givings"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
                   >
-                    Give Now
+                    <RotateCw className={`h-3.5 w-3.5 ${loadingRecords ? "animate-spin" : ""}`} />
+                    Refresh
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#dfdbd1] px-5 py-3">
+                {!givingsVisible ? (
+                  <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-5 py-10">
+                    <p className="text-xs text-[#617068]">Your in-kind giving record is hidden. Tap the eye beside “My In-Kind Givings” to show it.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowGiveModal(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#96552c]"
+                    >
+                      Give Now
+                    </button>
+                  </div>
+                ) : (
+                <>
+                <div className="flex flex-col gap-2 border-b border-[#dfdbd1] px-5 py-3 md:flex-row md:items-center md:justify-end">
                   <input
                     type="date"
                     value={fromDate}
                     max={toDate}
                     onChange={(e) => setFromDate(e.target.value)}
                     title="From date"
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
                   />
                   <span className="text-xs text-[#617068]">→</span>
                   <input
@@ -311,12 +352,12 @@ function GiveInKindPageContent() {
                     min={fromDate}
                     onChange={(e) => setToDate(e.target.value)}
                     title="To date"
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
                   />
                   <select
                     value={purposeFilter}
                     onChange={(e) => setPurposeFilter(e.target.value)}
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
                   >
                     <option value="all">All purposes</option>
                     {reportPurposes.map((p) => (
@@ -328,7 +369,7 @@ function GiveInKindPageContent() {
                     placeholder="Search..."
                     value={reportSearch}
                     onChange={(e) => setReportSearch(e.target.value)}
-                    className="min-w-[120px] flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="min-w-[120px] flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
                   />
                 </div>
 
@@ -403,13 +444,13 @@ function GiveInKindPageContent() {
                     {fromDate} → {toDate}
                     {!loadingRecords && serverCount > 0 && ` · ${serverTotalItems} item${serverTotalItems === 1 ? "" : "s"}`}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    <div className="flex w-full items-center justify-center gap-1.5 sm:w-auto">
                       <button
                         type="button"
                         onClick={() => goToPage(page - 1)}
                         disabled={page <= 1 || loadingRecords}
-                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-40"
+                        className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-40"
                       >
                         ‹ Prev
                       </button>
@@ -418,7 +459,7 @@ function GiveInKindPageContent() {
                         type="button"
                         onClick={() => goToPage(page + 1)}
                         disabled={page >= totalPages || loadingRecords}
-                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-40"
+                        className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-40"
                       >
                         Next ›
                       </button>
@@ -427,7 +468,7 @@ function GiveInKindPageContent() {
                       type="button"
                       onClick={handleExportCsv}
                       disabled={serverCount === 0}
-                      className="rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] disabled:opacity-50"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] disabled:opacity-50 sm:flex-none"
                     >
                       Export CSV
                     </button>
@@ -435,12 +476,14 @@ function GiveInKindPageContent() {
                       type="button"
                       onClick={handlePrintReport}
                       disabled={serverCount === 0}
-                      className="rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50 sm:flex-none"
                     >
                       🖨️ Print Report
                     </button>
                   </div>
                 </div>
+                </>
+                )}
               </section>
             )}
           </div>

@@ -5637,3 +5637,87 @@ class RoleHistoryTests(APITestCase):
         response = self.client.get(f'/api/members/users/{self.elder.id}/profile/')
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class DepartmentApiTests(APITestCase):
+    """The elder's desk reads departments as units.
+
+    One directory row per department carrying its leadership, roll size and
+    calendar count; the roll and calendar are nested endpoints with office
+    or lead-role permission.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('dept.elder', 'dept.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.leader = User.objects.create_user('dept.leader', 'dept.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        self.leader_profile = MemberProfile.objects.create(user=self.leader, role='men_ministry', roles='member,men_ministry')
+        self.assistant = User.objects.create_user('dept.assistant', 'dept.assistant@example.com', 'StrongPass#2026', first_name='Asha', last_name='Assistant')
+        MemberProfile.objects.create(user=self.assistant, role='men_ministry', roles='member,men_ministry', assistant_roles='men_ministry')
+        self.plain = User.objects.create_user('dept.plain', 'dept.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_directory_lists_departments_with_leadership(self):
+        self._auth(self.elder)
+        res = self.client.get('/api/members/departments/')
+        self.assertEqual(res.status_code, 200)
+        rows = {row['code']: row for row in res.data['departments']}
+        amm = rows['amm']
+        self.assertEqual(amm['leader']['id'], self.leader.id)
+        self.assertEqual([a['id'] for a in amm['assistants']], [self.assistant.id])
+        self.assertEqual(amm['member_count'], 0)
+        # Contacts ride along for the contact buttons.
+        self.assertTrue(amm['leader']['email'] or amm['leader']['phone_number'])
+
+    def test_roll_add_remove_and_permission(self):
+        self._auth(self.leader)
+        res = self.client.post('/api/members/departments/amm/members/', {'member_id': self.plain.id}, format='json')
+        self.assertEqual(res.status_code, 201)
+        res = self.client.post('/api/members/departments/amm/members/', {'member_id': self.plain.id}, format='json')
+        self.assertEqual(res.status_code, 400)
+        res = self.client.delete('/api/members/departments/amm/members/%d/' % self.plain.id)
+        self.assertEqual(res.status_code, 200)
+        # A plain member cannot manage the roll.
+        self._auth(self.plain)
+        res = self.client.post('/api/members/departments/amm/members/', {'member_id': self.leader.id}, format='json')
+        self.assertEqual(res.status_code, 403)
+
+    def test_office_add_remove(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/amm/members/', {'member_id': self.plain.id}, format='json')
+        self.assertIn(res.status_code, (201, 400))  # 400 = already there; both fine
+        res = self.client.get('/api/members/departments/amm/members/')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(any(row['id'] == self.plain.id for row in res.data['members']))
+
+    def test_events_add_list_delete(self):
+        self._auth(self.leader)
+        res = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:00 AM', 'location': 'Main Hall',
+        }, format='json')
+        self.assertEqual(res.status_code, 201)
+        res = self.client.get('/api/members/departments/amm/events/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data['events']), 1)
+        event_id = res.data['events'][0]['id']
+        res = self.client.delete('/api/members/departments/amm/events/%d/' % event_id)
+        self.assertEqual(res.status_code, 200)
+        # Other departments are isolated.
+        self._auth(self.elder)
+        res = self.client.get('/api/members/departments/awm/events/')
+        self.assertEqual(res.data['events'], [])
+
+    def test_role_replace_via_existing_endpoint(self):
+        # The department view replaces leadership through the same endpoint the
+        # users table uses; the leader-then-assistant ordering holds.
+        self._auth(self.elder)
+        res = self.client.patch('/api/members/users/%d/role/' % self.assistant.id, {
+            'roles': ['member', 'men_ministry'], 'assistant_roles': ['men_ministry'],
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+        # Letters and notifications read "Assistant AMM Leader" for a holder
+        # flagged as an assistant — matching what the UI shows.
+        self.assertEqual(res.data['role_display'], 'Member, Assistant AMM Leader')

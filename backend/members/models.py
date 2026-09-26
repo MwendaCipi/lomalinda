@@ -9,6 +9,18 @@ from django.utils import timezone
 
 from .roles import ROLE_CHOICES, normalize_roles, role_label
 
+# The church's departments. Keyed by the codes already used across the app
+# (role codes, the department tabs, the ministries pages); the label is the
+# name members read.
+DEPARTMENT_CHOICES = [
+    ('amm', 'Adventist Men Ministries (AMM)'),
+    ('awm', 'Adventist Women Ministries (AWM)'),
+    ('aym', 'Adventist Youth & Children (AYM)'),
+    ('apm', 'Adventist Possibility Ministries (APM)'),
+    ('chaplaincy', 'Chaplaincy Ministry'),
+]
+DEPARTMENT_CODES = tuple(code for code, _label in DEPARTMENT_CHOICES)
+
 CURRENT_PRIVACY_POLICY_VERSION = '2026-09-22'
 CURRENT_TERMS_OF_USE_VERSION = '2026-09-22'
 
@@ -199,8 +211,55 @@ class RoleHistory(models.Model):
     def __str__(self):
         return f"{self.member.get_username()} — {self.get_role_display()}"
 
+
+class DepartmentMembership(models.Model):
+    """A member's place on a department's roll.
+
+    Department rolls used to be guessed from age, gender and role; these rows
+    are the real list the department leader and the elder's desk both work
+    from. ``added_by`` records who put the person on the roll; nothing tracks
+    removals — a member is either on a roll or not.
+    """
+
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_memberships')
+    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_memberships_added')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('created_at',)
+        constraints = [
+            models.UniqueConstraint(fields=('member', 'department'), name='uniq_member_per_department'),
+        ]
+
     def __str__(self):
-        return f"{self.user.get_username()} ({self.get_role_display()})"
+        return f"{self.member.get_username()} — {self.get_department_display()}"
+
+
+class DepartmentEvent(models.Model):
+    """One entry on a department's calendar.
+
+    Stored, not sampled: the department detail view writes these and the
+    public ministry pages read the same rows, so a programme added at the
+    elder's desk is visible to the congregation without a rebuild.
+    """
+
+    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    title = models.CharField(max_length=160)
+    event_date = models.DateField()
+    event_time = models.CharField(max_length=20, blank=True, help_text="Free-text, e.g. '09:00 AM' or 'during divine service'")
+    location = models.CharField(max_length=160, blank=True)
+    lead = models.CharField(max_length=120, blank=True, help_text="Who leads the event; blank means the department itself")
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_events_created')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('event_date', 'event_time', 'title')
+        indexes = [models.Index(fields=['department', 'event_date'])]
+
+    def __str__(self):
+        return f"{self.get_department_display()} — {self.title} ({self.event_date})"
 
 
 class EnrollmentRequest(models.Model):

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { Check, Eye, EyeOff, SlidersHorizontal, X } from "lucide-react";
+import { Check, Eye, EyeOff, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -9,6 +9,10 @@ import { PublicSectionNav } from "@/components/public-section-nav";
 import { stewardshipLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** Remembers the eye toggle across visits: revealing the record is a
+    deliberate act, so the choice to show it sticks until hidden again. */
+const GIVINGS_VISIBLE_KEY = "my_givings_visible";
 
 const defaultPurposes = [
   "Tithe",
@@ -144,15 +148,23 @@ function GivePageContent() {
   // Privacy first: a member's giving record starts hidden, shown only while
   // the eye is open — screensharing a phone at church shouldn't expose it.
   const [givingsVisible, setGivingsVisible] = useState(false);
+  // Until this instant, refresh the record quietly after an M-Pesa gift: the
+  // prompt must be answered (PIN) before the contribution exists, so the list
+  // is polled until the new row lands — or the window lapses.
+  const [pendingRefreshUntil, setPendingRefreshUntil] = useState<number | null>(null);
 
-  const loadMyGivings = () => {
+  const loadMyGivings = (opts?: { silent?: boolean }) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
-    setLoadingGivings(true);
+    // Silent loads (polling) never show the spinner or blank the list on a
+    // hiccup — only deliberate refreshes do.
+    if (!opts?.silent) setLoadingGivings(true);
     fetch(`${API_URL}/api/members/contributions/?include_failed=1`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setMyGivings(Array.isArray(data) ? data : []))
-      .catch(() => setMyGivings([]))
+      .catch(() => {
+        if (!opts?.silent) setMyGivings([]);
+      })
       .finally(() => setLoadingGivings(false));
   };
 
@@ -160,9 +172,30 @@ function GivePageContent() {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
     setSignedIn(true);
+    // A member who chose to reveal their record keeps that choice on their
+    // next visit; read only while signed in, since the eye guards nothing
+    // for visitors.
+    if (localStorage.getItem(GIVINGS_VISIBLE_KEY) === "1") setGivingsVisible(true);
     loadMyGivings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // While a just-sent M-Pesa prompt is pending, quietly re-fetch the record
+  // so the completed gift appears on its own — no pull-to-refresh needed.
+  useEffect(() => {
+    if (pendingRefreshUntil === null) return;
+    const deadline = pendingRefreshUntil;
+    const tick = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(tick);
+        setPendingRefreshUntil(null);
+        return;
+      }
+      loadMyGivings({ silent: true });
+    }, 10000);
+    return () => clearInterval(tick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRefreshUntil]);
 
   // A signed-in giver's receipt is addressed from their account, so the form
   // only needs to know whether that account carries an email — it shows the
@@ -470,6 +503,9 @@ function GivePageContent() {
           showConfirmButton: false,
         });
         loadMyGivings();
+        // The PIN usually lands within a minute or two; keep the record
+        // fresh until the pending entry shows up (or five minutes pass).
+        setPendingRefreshUntil(Date.now() + 5 * 60 * 1000);
       } else {
         const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
         showAlert("Contribution Received", successMsg, "success");
@@ -512,7 +548,13 @@ function GivePageContent() {
                           the action. */}
                       <button
                         type="button"
-                        onClick={() => setGivingsVisible((v) => !v)}
+                        onClick={() => {
+                          const next = !givingsVisible;
+                          setGivingsVisible(next);
+                          try {
+                            localStorage.setItem(GIVINGS_VISIBLE_KEY, next ? "1" : "0");
+                          } catch {}
+                        }}
                         aria-pressed={givingsVisible}
                         aria-label={givingsVisible ? "Hide my givings" : "Show my givings"}
                         title={givingsVisible ? "Hide my givings" : "Show my givings"}
@@ -521,14 +563,17 @@ function GivePageContent() {
                         {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </button>
                     </div>
-                    {/* The second quick trigger: the panel's own Give Now, so
-                        a signed-in giver never has to scroll to the footer. */}
+                    {/* Refresh, not Give Now: while the record is hidden the
+                        empty middle becomes Give Now's home, and the header
+                        keeps a quiet way to pull the latest rows. */}
                     <button
                       type="button"
-                      onClick={() => setShowGiveModal(true)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+                      onClick={() => loadMyGivings()}
+                      title="Refresh my givings"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
                     >
-                      Give Now
+                      <RotateCw className={`h-3.5 w-3.5 ${loadingGivings ? "animate-spin" : ""}`} />
+                      Refresh
                     </button>
                   </div>
                   <div className={signedIn ? `flex flex-col gap-2 md:flex-row md:items-center ${givingsVisible ? "" : "hidden"}` : "flex flex-col gap-2 md:flex-row md:items-center"}>
@@ -600,8 +645,15 @@ function GivePageContent() {
                 </div>
 
                 {signedIn && !givingsVisible ? (
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-3">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 py-3">
                     <p className="text-xs text-[#617068]">Your giving record is hidden. Tap the eye beside “My Givings” to show it.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowGiveModal(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#96552c]"
+                    >
+                      Give Now
+                    </button>
                   </div>
                 ) : (
                 <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3" : "px-5 py-3"}>
