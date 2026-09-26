@@ -61,6 +61,7 @@ from tenants.models import GoogleIdentity
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
+from .treasury import apply_credit, credit_account
 
 
 class TestimonyAPITests(APITestCase):
@@ -5132,3 +5133,125 @@ class AnnouncementAudienceTests(APITestCase):
 
         addresses = [message.to[0] for message in mail.outbox]
         self.assertIn('everyone@example.com', addresses)
+
+
+class FundDriveAccountBackedTotalTests(APITestCase):
+    """The drive's headline reads from its linked treasury account.
+
+    ``account_name`` is the account reference the M-Pesa prompt shows — the
+    treasury account's own name. Every shilling that lands there, prompt or
+    desk receipt, was already credited through the one treasury door, so the
+    progress card reads the account's inflows and manual receipts count for
+    as much as prompt money. No matching account falls back to the ledgers.
+    """
+
+    def _drive(self, **kwargs):
+        defaults = dict(name='Welfare', title='Welfare', account_name='Welfare', target_amount=Decimal('10000.00'))
+        defaults.update(kwargs)
+        return FundraisingCampaign.objects.create(**defaults)
+
+    def _treasurer(self):
+        user = User.objects.create_user('fd.treasurer', 'fd.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role='treasurer', roles='treasurer')
+        return user
+
+    def test_the_total_is_the_linked_accounts_inflows(self):
+        drive = self._drive()
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        apply_credit(account=account, amount=Decimal('1200.00'), description='Contribution — M-Pesa (Welfare)', reference='QGH7XYZ')
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_raised'], 1200.0)
+        self.assertEqual(response.data['percentage_raised'], 12.0)
+
+    def test_manual_receipts_and_prompt_money_read_identically(self):
+        """A desk receipt credits the same account the prompt money credits,
+        so both are simply money the drive has received."""
+        drive = self._drive()
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        treasurer = self._treasurer()
+        apply_credit(account=account, amount=Decimal('3000.00'), description='Contribution — Cash (Welfare)', reference='CASH-1', created_by=treasurer)
+        apply_credit(account=account, amount=Decimal('800.00'), description='Contribution — M-Pesa (Welfare)', reference='QGH8ABC')
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 3800.0)
+
+    def test_spending_from_the_fund_does_not_unraise_its_money(self):
+        """A debit moves money out; it does not rewrite what was given."""
+        drive = self._drive()
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        apply_credit(account=account, amount=Decimal('2000.00'), description='Contribution — M-Pesa (Welfare)')
+        account.balance = Decimal('1500.00')
+        account.save(update_fields=['balance'])
+        from members.models import TreasuryAccountTransaction
+        TreasuryAccountTransaction.objects.create(
+            account=account, transaction_type='debit', amount=Decimal('500.00'),
+            description='Bought foodstuffs', created_by=self._treasurer(),
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 2000.0)
+
+    def test_a_transfer_into_the_fund_counts_as_raised(self):
+        drive = self._drive()
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        other = TreasuryAccount.objects.create(name='MainAcc', description='Main Account', balance=Decimal('0.00'))
+        from members.models import TreasuryAccountTransaction
+        TreasuryAccountTransaction.objects.create(
+            account=account, transaction_type='transfer_in', amount=Decimal('400.00'),
+            description='Transfer from MainAcc: seed', related_account=other,
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 400.0)
+
+    def test_the_case_of_the_reference_does_not_break_the_link(self):
+        drive = self._drive(account_name='Farewell')
+        TreasuryAccount.objects.create(name='Farewell', description='Farewell Fund', balance=Decimal('0.00'))
+        credit_account(
+            purpose='Farewell', amount=Decimal('750.00'),
+            description='Contribution — M-Pesa (Farewell)', reference='QGH9XYZ',
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 750.0)
+
+    def test_a_drive_without_a_matching_account_falls_back_to_the_ledgers(self):
+        """No treasury account answers to the reference, so the headline is
+        the ledger union — M-Pesa gifts plus purpose-named receipts."""
+        from members.models import CashContribution
+
+        drive = self._drive(account_name='NOACCOUNT')
+        treasurer = self._treasurer()
+        giver = User.objects.create_user('fd.giver', 'fd.giver@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        Contribution.objects.create(
+            member=giver, amount=Decimal('300.00'), giving_type='money',
+            purpose='Welfare', campaign=drive, status='completed', payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_on=timezone.now().date(), amount=Decimal('4500.00'),
+            purpose='Welfare', entry_type='individual', donor_name='Desk giver',
+            received_by=treasurer,
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 4800.0)
+
+    def test_a_drive_without_an_account_yet_with_a_zero_balance_still_reads_the_account(self):
+        """The account exists but nothing has landed: the headline is zero,
+        not the ledgers' sum — the account is the drive's book of record."""
+        from members.models import CashContribution
+
+        drive = self._drive()
+        TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        treasurer = self._treasurer()
+        CashContribution.objects.create(
+            received_on=timezone.now().date(), amount=Decimal('900.00'),
+            purpose='Welfare', entry_type='individual', donor_name='Desk giver',
+            received_by=treasurer,
+        )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 0.0)

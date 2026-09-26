@@ -1031,17 +1031,31 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         top.sort(key=lambda x: x['amount'], reverse=True)
         return top[:10]
 
-    def get_total_raised(self, obj):
-        """Every shilling the drive has raised, from all channels.
+    def _linked_treasury_account(self, obj):
+        """The treasury account the drive funnels into, or None.
 
-        M-Pesa contributions link to the drive directly (or name it as their
-        purpose), but the finance team's manually-receipted gifts — cash at
-        the desk, a cheque, a bank transfer — record no campaign link. They
-        still name the account on their purpose line, so the total is the
-        linked M-Pesa money plus every completed manual receipt whose purpose
-        names the drive or its account reference. Before this, a drive that
-        collected half its money at the desk read as if it had raised only
-        the M-Pesa half.
+        The drive's ``account_name`` is the short account reference the M-Pesa
+        prompt shows, which is exactly the treasury account's name. Matched
+        case-insensitively so 'Farewell' finds 'Farewell'.
+        """
+        from .models import TreasuryAccount
+        from .treasury import account_for_purpose
+
+        needle = (obj.account_name or obj.name or '').strip()
+        if not needle:
+            return None
+        exact = TreasuryAccount.objects.filter(name__iexact=needle).first()
+        if exact:
+            return exact
+        return account_for_purpose(needle)
+
+    def _ledger_totals(self, obj):
+        """The giving-ledger reading of the drive, kept as fallback.
+
+        When no treasury account answers to the drive's reference — an older
+        row, a misnamed reference — the headline still has a floor: the union
+        of the drive's M-Pesa gifts and its purpose-named manual receipts, as
+        before.
         """
         from django.db.models import Sum
         linked, extra = self._drive_mpesa(obj)
@@ -1057,6 +1071,25 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         cash_total = CashContribution.objects.filter(self._purpose_query(obj)).aggregate(Sum('amount'))['amount__sum'] or 0
         return float(mpesa_total + cash_total)
 
+    def get_total_raised(self, obj):
+        """Every shilling the drive has received, read from its account.
+
+        The drive is linked to a treasury account by its account reference;
+        that account's credit rows ARE the drive's money — manual desk
+        receipts and M-Pesa prompt money were already credited through the
+        same door, so reading the account makes the two indistinguishable in
+        the figure. A transfer in counts (money moved into the fund); a
+        debit does not (spending a fund does not un-raise what was given).
+        When the drive has no matching account, the giving ledgers are summed
+        by purpose instead, as before.
+        """
+        from .treasury import account_inflows
+
+        account = self._linked_treasury_account(obj)
+        if account is not None:
+            return float(account_inflows(account))
+        return self._ledger_totals(obj)
+
     def get_percentage_raised(self, obj):
         total = self.get_total_raised(obj)
         target = float(obj.target_amount) if obj.target_amount else 0.0
@@ -1065,7 +1098,11 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_donor_count(self, obj):
-        """Gifts across all channels: the M-Pesa union plus purpose-matched manual receipts."""
+        """Gifts across all channels: the M-Pesa union plus purpose-matched manual receipts.
+
+        The headline amount reads from the linked account; the donor count
+        stays a ledger count, which no opening-balance row can inflate.
+        """
         linked, extra = self._drive_mpesa(obj)
         return linked.count() + extra.count() + CashContribution.objects.filter(self._purpose_query(obj)).count()
 

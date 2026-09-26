@@ -53,6 +53,29 @@ def _amount(value):
     return amount if amount > 0 else None
 
 
+# The transaction kinds that put money INTO an account. A drive's progress
+# reads these: money the fund has received, however it arrived. Debits and
+# transfers out are money spent or moved on — spending a fund's balance does
+# not un-raise what was given.
+INFLOW_TYPES = ('credit', 'transfer_in')
+
+
+def account_inflows(account):
+    """Every shilling that has entered the account, from any door.
+
+    The sum of the account's own credit and transfer-in rows: prompt money
+    credited on Safaricom's word, desk receipts keyed in by the treasurer,
+    and any opening balance the church seeded — all equal residents of the
+    one transaction log, so all count alike.
+    """
+    from django.db.models import Sum
+
+    total = account.transactions.filter(
+        transaction_type__in=INFLOW_TYPES,
+    ).aggregate(total=Sum('amount'))['total']
+    return total or Decimal('0')
+
+
 def credit_account(*, purpose, amount, description, reference='', created_by=None, at=None):
     """Credit the named account with the amount; return the transaction.
 
