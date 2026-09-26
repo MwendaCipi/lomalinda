@@ -1407,7 +1407,26 @@ def can_manage_announcements(user):
     return user_has_right(user, 'announcements')
 
 
+# One broadcast at a time: the per-message pause only keeps the sending
+# velocity gentle if two officers posting at once cannot stack two loops — the
+# second broadcast waits for the first to finish.
+_announcement_broadcast_lock = threading.Lock()
+
+
 def send_announcement_emails(announcement):
+    """Deliver an announcement, one broadcast at a time.
+
+    Serialised: the second officer's posting waits rather than doubling the
+    sending rate.
+    """
+    _announcement_broadcast_lock.acquire()
+    try:
+        return _send_announcement_emails_locked(announcement)
+    finally:
+        _announcement_broadcast_lock.release()
+
+
+def _send_announcement_emails_locked(announcement):
     """Deliver an announcement to each member's own inbox, greeted by name.
 
     One message per recipient rather than one message with the whole
