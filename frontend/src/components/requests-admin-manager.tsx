@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
+import { RecordList } from "./record-list";
 import { TransferManagement } from "./transfer-management";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -96,6 +97,16 @@ type UnifiedRow = {
 };
 
 type KindFilter = "all" | RequestKind;
+
+/** Pill colour for a request status, shared by the table and the phone cards. */
+const statusPillClass = (status: string) =>
+  status === "pending" || status === "verification_pending" || status === "under_review" || status === "new" || status === "received"
+    ? "bg-amber-100 text-amber-800"
+    : status === "approved" || status === "completed"
+      ? "bg-emerald-100 text-emerald-800"
+      : status === "rejected" || status === "cancelled"
+        ? "bg-rose-100 text-rose-800"
+        : "bg-[#f7f4ee] text-[#617068]";
 
 /** The review-state filter: everything, still to answer, or already answered. */
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
@@ -467,11 +478,30 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     });
   }, [rows, activeTab, search, statusFilter]);
 
+  // Shared by the desktop table and the phone cards: RecordList renders one
+  // empty state for whichever layout is on screen.
+  const requestsEmptyState = (
+    <div>
+      <span className="text-4xl" aria-hidden="true">
+        🤝
+      </span>
+      <h3 className="mt-3 text-lg font-semibold text-[#26352f]">No requests found</h3>
+      <p className="mt-1 text-sm text-[#617068]">
+        {rows.length === 0
+          ? "Join, prayer, visitation, dedication, welfare and transfer requests will appear here."
+          : "Try a different search or clear the filter."}
+      </p>
+    </div>
+  );
+
   // Scrolling waits for the row to exist: the filters the link set change what
   // is rendered, so the element only appears on the following pass.
   useEffect(() => {
     if (!highlightKey) return;
-    const element = document.querySelector(`[data-request-row="${highlightKey}"]`);
+    // Both layouts carry the marker; scroll the one actually on screen (the
+    // hidden twin is display:none and has no box to scroll to).
+    const candidates = document.querySelectorAll<HTMLElement>(`[data-request-row="${highlightKey}"]`);
+    const element = Array.from(candidates).find((el) => el.offsetParent !== null) ?? candidates[0];
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [highlightKey, filteredRows]);
 
@@ -670,133 +700,182 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
       {/* The table scrolls beneath the pinned toolbar. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
-      {loading && (
-        <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
-          Loading requests...
-        </div>
-      )}
-
-      {!loading && (
-        <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white">
-          {filteredRows.length === 0 ? (
-            <div className="p-8 sm:p-12 text-center">
-              <span className="text-4xl" aria-hidden="true">
-                🤝
-              </span>
-              <h3 className="mt-3 text-lg font-semibold text-[#26352f]">No requests found</h3>
-              <p className="mt-1 text-sm text-[#617068]">
-                {rows.length === 0
-                  ? "Join, prayer, visitation, dedication, welfare and transfer requests will appear here."
-                  : "Try a different search or clear the filter."}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] uppercase tracking-wide text-[#617068]">
-                    <th className="px-4 py-3 font-semibold">Request</th>
-                    <th className="px-4 py-3 font-semibold">Desk</th>
-                    <th className="px-4 py-3 font-semibold">Details</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Submitted</th>
-                    <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row) => (
-                    <tr
-                      key={row.key}
-                      data-request-row={row.key}
-                      className={`border-b border-[#dfdbd1]/60 align-top last:border-0 ${
-                        highlightKey === row.key
-                          ? "bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
-                          : "hover:bg-[#faf9f5]"
-                      }`}
-                    >
-                      <td className="max-w-[220px] px-4 py-3">
-                        <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
-                        <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
-                          {KIND_META[row.kind].label}
-                        </span>
-                      </td>
-                      <td className="max-w-[280px] px-4 py-3">
-                        <p className="line-clamp-2 text-[#415047]">{row.summary}</p>
-                        {row.meta && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                            row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "new" || row.status === "received"
-                              ? "bg-amber-100 text-amber-800"
-                              : row.status === "approved" || row.status === "completed"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : row.status === "rejected" || row.status === "cancelled"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-[#f7f4ee] text-[#617068]"
-                          }`}
+        {/* Table on desktop, cards on phones — RecordList owns the breakpoint
+            pair, so the two layouts can't drift apart again. */}
+        <RecordList
+          rows={filteredRows}
+          loading={loading}
+          rowKey={(row) => row.key}
+          tableWrapperClassName="overflow-x-auto rounded-2xl border border-[#dfdbd1] bg-white"
+          tableClassName="w-full min-w-[720px] text-left text-sm"
+          headClassName="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] uppercase tracking-wide text-[#617068]"
+          headRowClassName=""
+          headCellClassName="px-4 py-3 font-semibold"
+          bodyClassName=""
+          headers={[
+            { label: "Request" },
+            { label: "Desk" },
+            { label: "Details" },
+            { label: "Status" },
+            { label: "Submitted" },
+            { label: "Actions", className: "text-right" },
+          ]}
+          loadingLabel="Loading requests..."
+          stateClassName="p-8 sm:p-12 text-center"
+          tableEmpty={requestsEmptyState}
+          cardsEmpty={requestsEmptyState}
+          cardsClassName="grid gap-3 p-3"
+          renderRow={(row) => (
+            <tr
+              data-request-row={row.key}
+              className={`border-b border-[#dfdbd1]/60 align-top last:border-0 ${
+                highlightKey === row.key
+                  ? "bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
+                  : "hover:bg-[#faf9f5]"
+              }`}
+            >
+              <td className="max-w-[220px] px-4 py-3">
+                <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
+                <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
+              </td>
+              <td className="px-4 py-3">
+                <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
+                  {KIND_META[row.kind].label}
+                </span>
+              </td>
+              <td className="max-w-[280px] px-4 py-3">
+                <p className="line-clamp-2 text-[#415047]">{row.summary}</p>
+                {row.meta && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPillClass(row.status)}`}
+                >
+                  {row.statusLabel}
+                </span>
+              </td>
+              <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">{formatDate(row.created_at)}</td>
+              <td className="px-4 py-3">
+                {row.reviewable && isElder && (
+                  <div className="flex justify-end gap-2">
+                    {row.join && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewJoin(row.join!.id, "approved")}
+                          className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                         >
-                          {row.statusLabel}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">{formatDate(row.created_at)}</td>
-                      <td className="px-4 py-3">
-                        {row.reviewable && isElder && (
-                          <div className="flex justify-end gap-2">
-                            {row.join && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={reviewingId === row.key}
-                                  onClick={() => handleReviewJoin(row.join!.id, "approved")}
-                                  className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                                >
-                                  {reviewingId === row.key ? "..." : "✓ Approve"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={reviewingId === row.key}
-                                  onClick={() => handleReviewJoin(row.join!.id, "rejected")}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-                                >
-                                  ✕ Reject
-                                </button>
-                              </>
-                            )}
-                            {row.transferId && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={reviewingId === row.key}
-                                  onClick={() => handleReviewTransfer(row.transferId!, "approved")}
-                                  className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                                >
-                                  {reviewingId === row.key ? "..." : "✓ Approve"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={reviewingId === row.key}
-                                  onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-                                >
-                                  ✕ Reject
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          {reviewingId === row.key ? "..." : "✓ Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewJoin(row.join!.id, "rejected")}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          ✕ Reject
+                        </button>
+                      </>
+                    )}
+                    {row.transferId && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewTransfer(row.transferId!, "approved")}
+                          className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {reviewingId === row.key ? "..." : "✓ Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          ✕ Reject
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </td>
+            </tr>
+          )}
+          renderCard={(row) => (
+            <div
+              data-request-row={row.key}
+              className={`space-y-2 rounded-2xl border bg-white p-4 shadow-sm ${
+                highlightKey === row.key
+                  ? "border-[#b36b3c]/40 bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
+                  : "border-[#dfdbd1]"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-[#26352f]">{row.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
+                </div>
+                <span className={`inline-block shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
+                  {KIND_META[row.kind].label}
+                </span>
+              </div>
+              <p className="line-clamp-3 text-xs text-[#415047]">{row.summary}</p>
+              {row.meta && <p className="truncate text-xs text-[#617068]">{row.meta}</p>}
+              <div className="flex items-center justify-between gap-2 border-t border-[#eeeae2] pt-2">
+                <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPillClass(row.status)}`}>
+                  {row.statusLabel}
+                </span>
+                <span className="text-[11px] text-[#617068]">{formatDate(row.created_at)}</span>
+              </div>
+              {row.reviewable && isElder && (
+                <div className="flex gap-2">
+                  {row.join && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewJoin(row.join!.id, "approved")}
+                        className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === row.key ? "..." : "✓ Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewJoin(row.join!.id, "rejected")}
+                        className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        ✕ Reject
+                      </button>
+                    </>
+                  )}
+                  {row.transferId && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewTransfer(row.transferId!, "approved")}
+                        className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === row.key ? "..." : "✓ Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
+                        className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        ✕ Reject
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        />
 
       {/* Still verifying their email — a hint the old joins tab carried. */}
       {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join") && (
