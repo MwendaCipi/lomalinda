@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { Check, SlidersHorizontal, X } from "lucide-react";
+import { Check, Eye, EyeOff, SlidersHorizontal, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -141,6 +141,9 @@ function GivePageContent() {
   // filtering is covered by the search box, which matches purpose text.
   const [givingStatusFilter, setGivingStatusFilter] = useState<"successful" | "failed" | "all">("successful");
   const [showStatusFilterMenu, setShowStatusFilterMenu] = useState(false);
+  // Privacy first: a member's giving record starts hidden, shown only while
+  // the eye is open — screensharing a phone at church shouldn't expose it.
+  const [givingsVisible, setGivingsVisible] = useState(false);
 
   const loadMyGivings = () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -502,7 +505,22 @@ function GivePageContent() {
               <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
                 <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
                   <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                      {/* The record starts hidden; the eye reveals it. Show the
+                          crossed eye while hidden, matching the state — not
+                          the action. */}
+                      <button
+                        type="button"
+                        onClick={() => setGivingsVisible((v) => !v)}
+                        aria-pressed={givingsVisible}
+                        aria-label={givingsVisible ? "Hide my givings" : "Show my givings"}
+                        title={givingsVisible ? "Hide my givings" : "Show my givings"}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      >
+                        {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+                    </div>
                     {/* The second quick trigger: the panel's own Give Now, so
                         a signed-in giver never has to scroll to the footer. */}
                     <button
@@ -513,7 +531,7 @@ function GivePageContent() {
                       Give Now
                     </button>
                   </div>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                  <div className={signedIn ? `flex flex-col gap-2 md:flex-row md:items-center ${givingsVisible ? "" : "hidden"}` : "flex flex-col gap-2 md:flex-row md:items-center"}>
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
                       <span className="shrink-0 text-xs text-[#617068]">→</span>
@@ -581,6 +599,11 @@ function GivePageContent() {
                   </div>
                 </div>
 
+                {signedIn && !givingsVisible ? (
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-3">
+                    <p className="text-xs text-[#617068]">Your giving record is hidden. Tap the eye beside “My Givings” to show it.</p>
+                  </div>
+                ) : (
                 <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3" : "px-5 py-3"}>
                   {/* Desktop table */}
                   <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
@@ -644,8 +667,11 @@ function GivePageContent() {
                     )}
                   </div>
                 </div>
+                )}
 
-                {/* Footer actions */}
+                {/* Footer actions — hidden with the record: the count and
+                    total would leak the giving it conceals. */}
+                {givingsVisible && (
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#dfdbd1] px-5 py-3">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <p className="text-[11px] text-[#617068]">{fromDate} → {toDate}</p>
@@ -671,6 +697,7 @@ function GivePageContent() {
                     </button>
                   </div>
                 </div>
+                )}
               </section>
             )}
 
@@ -750,8 +777,9 @@ function GivePageContent() {
                 </p>
               )}
 
-              {/* 2. Method of Giving & Giving Accounts — how the money moves
-                  is asked for first, then which accounts it goes to. */}
+              {/* 2. How the money moves first — method, then the phone the
+                  M-Pesa prompt goes to — and only then which accounts it
+                  goes to. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block self-start text-sm font-medium text-[#26352f]">
                   Method of Giving
@@ -764,6 +792,25 @@ function GivePageContent() {
                     <option value="bank_transfer">Bank-to-Bank</option>
                   </select>
                 </label>
+
+                {methodOfGiving === "mpesa" && (
+                  <label className="block self-start text-sm font-medium text-[#26352f]">
+                    Phone number
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                      minLength={10}
+                      required
+                      placeholder="e.g. 0712345678"
+                      value={phoneNumber}
+                      onFocus={liftAboveKeyboard}
+                      onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    />
+                  </label>
+                )}
 
                 <div className="block self-start text-sm font-medium text-[#26352f]">
                   <span>Giving accounts</span>
@@ -874,27 +921,9 @@ function GivePageContent() {
                 </div>
               )}
 
-              {/* 4. Method-Specific Fields & Details */}
-              {methodOfGiving === "mpesa" && (
-                <div className="grid grid-cols-1 gap-4">
-                  <label className="block text-sm font-medium text-[#26352f]">
-                    Phone number
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]{10}"
-                      maxLength={10}
-                      minLength={10}
-                      required
-                      placeholder="e.g. 0712345678"
-                      value={phoneNumber}
-                      onFocus={liftAboveKeyboard}
-                      onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                    />
-                  </label>
-                </div>
-              )}
+              {/* 4. Method-Specific Details — bank instructions and the deposit
+                  reference; the M-Pesa phone now sits beside the method above,
+                  where the prompt will be sent. */}
 
               {methodOfGiving === "bank_transfer" && (
                 <div className="space-y-4">
