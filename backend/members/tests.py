@@ -5362,3 +5362,91 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(mail.outbox[0].to, ['rr.giver@example.com'])
+
+
+class SexIsSetOnceTests(APITestCase):
+    """A member's sex is recorded once and cannot be rewritten by the member.
+
+    The field is a church record — the ministry register and every report that
+    groups by it read it — so a member may confirm what is on file but not
+    change it. The office can still correct a genuine error, through the change
+    request the member approves.
+    """
+
+    def setUp(self):
+        self.member = User.objects.create_user('sex.member', 'sex.member@example.com', 'ChurchPass#2026')
+        self.profile = MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.client.force_authenticate(self.member)
+
+    def _submit(self, gender, **extra):
+        payload = {'gender': gender, 'gifts': 'Teaching', 'ministry': 'adventist_men', 'disability': ['None']}
+        payload.update(extra)
+        return self.client.post('/api/members/me/profile-update/', payload, format='json')
+
+    def test_the_member_sets_it_the_first_time(self):
+        response = self._submit('Male')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Male')
+
+    def test_changing_it_afterwards_is_refused_and_the_record_stands(self):
+        self.profile.gender = 'Male'
+        self.profile.gifts = 'Teaching'
+        self.profile.ministry = 'Adventist Men'
+        self.profile.disability = 'None'
+        self.profile.save()
+
+        response = self._submit('Female')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('gender', response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Male')
+
+    def test_resubmitting_the_same_value_is_accepted(self):
+        """A form resubmitted because another field was missing must not fail."""
+        self.profile.gender = 'Female'
+        self.profile.gifts = 'Teaching'
+        self.profile.ministry = 'Adventist Men'
+        self.profile.disability = 'None'
+        self.profile.save()
+
+        response = self._submit('Female')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Female')
+
+    def test_a_blank_value_cannot_erase_it(self):
+        self.profile.gender = 'Male'
+        self.profile.gifts = 'Teaching'
+        self.profile.ministry = 'Adventist Men'
+        self.profile.disability = 'None'
+        self.profile.save()
+
+        response = self._submit('')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Male')
+
+    def test_the_office_can_propose_a_correction_the_member_approves(self):
+        """The one remaining way a recorded sex changes: the church office
+        proposes it and the member accepts."""
+        self.profile.gender = 'Male'
+        self.profile.save()
+        clerk = User.objects.create_user('sex.clerk', 'sex.clerk@example.com', 'ChurchPass#2026')
+        clerk_profile = MemberProfile.objects.create(user=clerk, role='clerk', roles='clerk')
+        self.client.force_authenticate(clerk)
+
+        response = self.client.patch(f'/api/members/users/{self.member.pk}/', {'gender': 'Female'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
+        proposal = ProfileChangeRequest.objects.filter(member=self.member, status='pending').first()
+        self.assertIsNotNone(proposal)
+        self.assertEqual(proposal.changes.get('gender'), 'Female')
+        # Nothing is written until the member consents.
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Male')
+        self.assertTrue(clerk_profile.has_role('clerk'))

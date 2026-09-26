@@ -113,6 +113,8 @@ export default function CompleteProfilePage() {
   const [nextPath, setNextPath] = useState("/dashboard");
   const [checking, setChecking] = useState(true);
   const [gender, setGender] = useState("");
+  // Set once by the member; after that the office is the only way to correct it.
+  const [genderLocked, setGenderLocked] = useState(false);
   const [gifts, setGifts] = useState<string[]>([]);
   const [ministry, setMinistry] = useState("");
   const [disability, setDisability] = useState<string[]>([]);
@@ -140,6 +142,7 @@ export default function CompleteProfilePage() {
         // Pre-fill whatever the office already has on record so the member
         // only fills the gaps.
         setGender(me.gender || "");
+        setGenderLocked(Boolean((me.gender || "").trim()));
         setGifts(me.gifts ? me.gifts.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
         setMinistry(me.ministry || "");
         setDisability(
@@ -224,12 +227,24 @@ export default function CompleteProfilePage() {
 
           <label className="block text-sm font-medium">
             Sex
-            <select value={gender} onChange={(event) => setGender(event.target.value)} className={inputClass} required>
+            <select
+              value={gender}
+              onChange={(event) => setGender(event.target.value)}
+              className={inputClass}
+              disabled={genderLocked}
+              required
+            >
               <option value="">-- Select Sex --</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
+            {genderLocked && (
+              <span className="mt-1 block text-xs font-normal text-[#617068]">
+                Already on record. It cannot be changed here — ask the church
+                office if it needs correcting.
+              </span>
+            )}
           </label>
 
           <ChipPicker

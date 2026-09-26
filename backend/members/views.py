@@ -1917,6 +1917,11 @@ class ProfileUpdateView(APIView):
     form can never quietly write something else, and it clears the pending
     flag only once every field carries a value — an empty gifts box cannot
     dismiss the request.
+
+    Sex is set once. It is a church record — the ministry register and its
+    reports read it — not a preference to be revised, so a member may confirm
+    the value on record but never rewrite it. A genuine clerical error is the
+    office's to correct, through the change request the member approves.
     """
 
     permission_classes = [IsAuthenticated]
@@ -1935,7 +1940,19 @@ class ProfileUpdateView(APIView):
             return str(value or '').strip()
 
         if 'gender' in request.data:
-            profile.gender = as_text(request.data.get('gender'))[:20]
+            submitted_gender = as_text(request.data.get('gender'))[:20]
+            recorded_gender = (profile.gender or '').strip()
+            if not recorded_gender:
+                # First and only time the member sets it.
+                profile.gender = submitted_gender
+            elif submitted_gender and submitted_gender != recorded_gender:
+                return Response(
+                    {
+                        'gender': 'Your sex is already on record and cannot be changed here. '
+                        'Ask the church office to correct it.',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if 'gifts' in request.data:
             profile.gifts = as_text(request.data.get('gifts'))
         if 'ministry' in request.data:
