@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ArrowLeft, Music, Music2, type LucideIcon } from "lucide-react";
+import { Music, Music2, type LucideIcon } from "lucide-react";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { materialSectionLinks } from "@/config/site-sections";
@@ -39,14 +38,7 @@ export default function HymnalPage() {
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <section className="px-6 pt-14 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <Link
-            href="/materials"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] hover:underline"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to all materials</span>
-          </Link>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Church Hymnals</h1>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Hymnals</h1>
           <p className="mt-3 max-w-2xl text-base leading-8 text-[#617068]">
             Worship hymnals in English and Swahili for personal, family, and church praise.
           </p>
@@ -61,28 +53,28 @@ export default function HymnalPage() {
             <a
               key={item.id}
               href={item.href}
-              className="group flex flex-col justify-between rounded-[2rem] border border-[#dfdbd1] bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md"
+              className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md"
             >
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <span
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#26352f]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f7f4ee] text-[#26352f]"
                     aria-hidden="true"
                   >
-                    <Icon className="h-6 w-6" />
+                    <Icon className="h-5 w-5" />
                   </span>
-                  <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">
+                  <span className="rounded-full bg-[#b36b3c]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#b36b3c]">
                     {item.badge}
                   </span>
                 </div>
-                <h2 className="mt-4 text-xl font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c] sm:text-2xl">
+                <h2 className="mt-3 text-base font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c] sm:text-lg">
                   {item.title}
                 </h2>
-                <p className="mt-2 text-sm leading-7 text-[#617068]">{item.description}</p>
+                <p className="mt-1.5 text-xs leading-6 text-[#617068]">{item.description}</p>
               </div>
 
-              <div className="mt-6 border-t border-[#dfdbd1] pt-4">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-5 py-2.5 text-xs font-semibold text-white transition group-hover:bg-[#b36b3c] sm:text-sm">
+              <div className="mt-4 border-t border-[#dfdbd1] pt-3">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-[#b36b3c]">
                   <span>{item.button}</span>
                   <span>&rarr;</span>
                 </span>
