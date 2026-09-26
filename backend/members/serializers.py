@@ -394,7 +394,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'support_account', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquar
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
+import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const financeRoles = ["treasurer", "admin"];
@@ -257,31 +258,56 @@ export default function ReconciliationPage() {
   };
 
   const handleResendReceipt = async (giving: IndividualGiving) => {
-    // A desk receipt saved without the giver's address cannot be sent to
-    // nobody — "pending" there was a promise nothing could keep. Ask the
-    // treasurer for the address (the receipt is their own entry) and keep it
-    // on the row, so the receipt actually reaches the giver.
-    let suppliedEmail = "";
-    if (giving.source === "cash" && !giving.giver_email) {
-      const answer = await showAlert(
-        "No email on this receipt",
-        `${giving.donor_name} was recorded without an email address, so the receipt for ${money(giving.amount)} has nowhere to go. Enter the giver's email to send it now — it is saved on the receipt.`,
-        "question",
-        {
-          input: "email",
-          inputPlaceholder: "name@example.com",
-          showCancelButton: true,
-          confirmButtonText: "Send receipt",
-          cancelButtonText: "Cancel",
-          inputValidator: (value) =>
-            /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((value || "").trim())
-              ? undefined
-              : "Enter a valid email address.",
-        },
-      );
-      if (!answer.isConfirmed || !answer.value) return;
-      suppliedEmail = String(answer.value).trim();
-    }
+    // One dialog for every resend: pick the channel — email, SMS, or both,
+    // both on by default. A desk receipt saved without the giver's address
+    // also asks for it here (the receipt is the treasurer's own entry).
+    const needsEmail = giving.source === "cash" && !giving.giver_email;
+    const escape = (value: string) =>
+      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const result = await showAlert("Resend receipt", "", "question", {
+      html: `
+        <div style="text-align:left;font-size:14px">
+          <p style="margin:0 0 12px">Send the receipt for <b>${escape(giving.donor_name)}</b> (KES ${money(giving.amount)}) to:</p>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="resend-channel-email" checked style="width:16px;height:16px" /> Email
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="resend-channel-sms" checked style="width:16px;height:16px" /> SMS
+          </label>
+          ${needsEmail ? '<input id="resend-email-value" class="swal2-input" style="margin-top:14px" placeholder="name@example.com" />' : ""}
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Send receipt",
+      cancelButtonText: "Cancel",
+      preConfirm: () => {
+        const useEmail = !!(document.getElementById("resend-channel-email") as HTMLInputElement | null)?.checked;
+        const useSms = !!(document.getElementById("resend-channel-sms") as HTMLInputElement | null)?.checked;
+        if (!useEmail && !useSms) {
+          Swal.showValidationMessage("Select email, SMS, or both.");
+          return false;
+        }
+        const typedEmail = needsEmail
+          ? ((document.getElementById("resend-email-value") as HTMLInputElement | null)?.value || "").trim()
+          : "";
+        if (useEmail && needsEmail) {
+          if (!typedEmail) {
+            Swal.showValidationMessage("This giver has no email on file — enter one to send by email.");
+            return false;
+          }
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(typedEmail)) {
+            Swal.showValidationMessage("Enter a valid email address.");
+            return false;
+          }
+        }
+        return {
+          channels: [...(useEmail ? ["email"] : []), ...(useSms ? ["sms"] : [])],
+          email: typedEmail,
+        };
+      },
+    });
+    if (!result.isConfirmed || !result.value) return;
+    const { channels, email: suppliedEmail } = result.value as { channels: string[]; email: string };
 
     setResendingId(giving.id);
     try {
@@ -291,14 +317,19 @@ export default function ReconciliationPage() {
         body: JSON.stringify({
           source: giving.source,
           id: giving.raw_id,
+          channels,
           ...(suppliedEmail ? { email: suppliedEmail } : {}),
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not resend receipt", data.detail || "The receipt could not be resent.", "error");
+        return;
+      }
+      if (data.sent) {
         showAlert("Receipt sent", data.detail || "Receipt resent successfully.", "success");
         setMessage("");
-        const nowStr = new Date().toISOString();
+        const nowStr = data.receipt_sent_at || new Date().toISOString();
         // The address supplied for an addressless receipt is now on the row.
         const patch = { receipt_sent_at: nowStr, ...(suppliedEmail ? { giver_email: suppliedEmail } : {}) };
         setPurposeGivings((prev) => {
@@ -308,8 +339,7 @@ export default function ReconciliationPage() {
         });
         setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...patch } : g)));
       } else {
-        const errData = await res.json().catch(() => ({}));
-        showAlert("Could not resend receipt", errData.detail || "The receipt could not be resent.", "error");
+        showAlert("Receipt not sent", data.detail || "Nothing was sent.", "warning");
       }
     } catch {
       showAlert("Could not resend receipt", "Network error. Please try again.", "error");

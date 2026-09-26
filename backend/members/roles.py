@@ -94,6 +94,13 @@ def role_allows_assistant(code):
 # The two non-ministry channels decide how far beyond the sign-in the post
 # travels.
 MINISTRY_AUDIENCE_OPTIONS = (
+    # The congregation groups a post can address, alongside the ministry
+    # offices below. These name membership, not office: a post to Adventist
+    # Men reaches the men, not only their leader.
+    ('adventist_men', 'Adventist Men'),
+    ('adventist_women', 'Adventist Women'),
+    ('young_adults', 'Young Adults'),
+    ('board', 'Board Members'),
     ('pm_leader', 'PM Leader (Personal Ministries)'),
     ('apm_leader', 'APM Leader (Possibility Ministries)'),
     ('men_ministry', 'AMM Leader (Adventist Men)'),

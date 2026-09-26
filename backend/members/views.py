@@ -65,6 +65,7 @@ from .meetings import (
     BOARD_KIND,
     BUSINESS_KIND,
     as_bool,
+    board_audience,
     broadcast_invitation,
     create_agendas,
     parse_clock,
@@ -1517,6 +1518,35 @@ def _send_announcement_emails_locked(announcement):
     return sent
 
 
+# The congregation groups named by membership rather than by office: a post
+# to Adventist Men addresses the men, not only their leader. 'board' is the
+# church board, whose membership is the roles themselves.
+MEMBERSHIP_AUDIENCE_CODES = {'adventist_men', 'adventist_women', 'young_adults', 'board'}
+
+
+def announcement_audience_user_ids(audience_codes):
+    """Users an audience addresses, or ``None`` when the post is to everyone.
+
+    An audience is a mixed list: ministry office codes (matched against the
+    roles a member holds), membership groups like Adventist Men (matched
+    against the member's own declared ministry), and the church board.
+    """
+    codes = {code for code in (audience_codes or []) if code}
+    if not codes:
+        return None
+    office_codes = codes - MEMBERSHIP_AUDIENCE_CODES
+    user_ids = set()
+    for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+        if office_codes and set(profile.get_roles()) & office_codes:
+            user_ids.add(profile.user_id)
+            continue
+        if profile.ministry and profile.ministry in codes:
+            user_ids.add(profile.user_id)
+    if 'board' in codes:
+        user_ids |= set(board_audience().values_list('id', flat=True))
+    return user_ids
+
+
 def announcement_email_recipients(announcement, church_name):
     """Yield ``(address, body)`` pairs for an announcement's email audience.
 
@@ -1535,12 +1565,9 @@ def announcement_email_recipients(announcement, church_name):
     recipients = roster_queryset().filter(is_active=True).exclude(email='')
     audience_codes = list(getattr(announcement, 'audience', None) or [])
     if audience_codes:
-        # The audience addresses the email to the ministry offices named: a
+        # The audience addresses the email to the offices and groups named: a
         # post to the choir goes to the choir's holders, not the congregation.
-        holder_ids = set()
-        for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
-            if set(profile.get_roles()) & set(audience_codes):
-                holder_ids.add(profile.user_id)
+        holder_ids = announcement_audience_user_ids(audience_codes)
         recipients = roster_queryset().filter(id__in=holder_ids, is_active=True).exclude(email='')
     for first_name, last_name, username, email in (
         recipients.values_list('first_name', 'last_name', 'username', 'email')
@@ -1694,10 +1721,7 @@ class AnnouncementView(generics.ListCreateAPIView):
                 sms_recipients = roster_queryset().filter(is_active=True)
                 audience_codes = list(announcement.audience or [])
                 if audience_codes:
-                    holder_ids = set()
-                    for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
-                        if set(profile.get_roles()) & set(audience_codes):
-                            holder_ids.add(profile.user_id)
+                    holder_ids = announcement_audience_user_ids(audience_codes)
                     sms_recipients = sms_recipients.filter(id__in=holder_ids)
                 for u in sms_recipients:
                     ChurchNotification.objects.create(
@@ -2921,11 +2945,27 @@ class ResendContributionReceiptView(APIView):
         if not source or not raw_id:
             return Response({'detail': 'source and id are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Which channels the treasurer picked in the resend dialog. Both are
+        # on by default — the same default the receipt form itself carries.
+        raw_channels = request.data.get('channels')
+        if raw_channels is None:
+            channels = {'email', 'sms'}
+        elif isinstance(raw_channels, (list, tuple)):
+            channels = {str(item).strip().lower() for item in raw_channels}
+        else:
+            channels = {str(raw_channels).strip().lower()}
+        send_email = 'email' in channels
+        send_sms = 'sms' in channels
+        if not send_email and not send_sms:
+            return Response(
+                {'detail': 'Select email, SMS, or both before resending.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # get_or_create guarantees a settings row exists — first() could
         # return None on a fresh tenant and crash the attribute reads below.
         church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
         now = timezone.now()
-        sent_destinations = []
 
         if source in ['digital']:
             contribution = Contribution.objects.filter(id=raw_id).first()
@@ -2934,31 +2974,33 @@ class ResendContributionReceiptView(APIView):
 
             receipt_ref = contribution.mpesa_receipt_number or contribution.paystack_reference or f"REC-{contribution.id}"
             donor_name = contribution.donor_name or (contribution.member.get_full_name() if contribution.member else 'Church Member')
+            # A digital gift's receipt belongs to the giver's own verified
+            # address and phone — never a third party typed into this dialog.
             email = contribution.donor_email or (contribution.member.email if contribution.member else '')
-            if not email:
+            phone = contribution.phone_number or ''
+            if not phone and contribution.member:
+                profile = getattr(contribution.member, 'member_profile', None)
+                phone = getattr(profile, 'phone_number', '') or ''
+            if send_email and not email:
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            if email:
-                amount_display = f"KES {contribution.amount:,.2f}"
-                body = (
-                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)}\n\n"
-                    f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
-                    f"{receipt_email_signature()}"
-                )
-                try:
-                    send_mail(
-                        f"Receipt Copy — {contribution.purpose}",
-                        body,
-                        settings.DEFAULT_FROM_EMAIL,
-                        [email],
-                        fail_silently=False,
-                    )
-                    sent_destinations.append(f"Email ({email})")
-                except Exception:
-                    return Response({'detail': 'The receipt email could not be sent. Check the email configuration and address.'}, status=status.HTTP_502_BAD_GATEWAY)
-
-            contribution.receipt_sent_at = now
-            contribution.save(update_fields=['receipt_sent_at'])
+            amount_display = f"KES {contribution.amount:,.2f}"
+            body = (
+                f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)}\n\n"
+                f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
+                f"{receipt_email_signature()}"
+            )
+            delivery = _deliver_receipt_message(
+                subject=f"Receipt Copy — {contribution.purpose}",
+                body=body,
+                email=email if send_email else '',
+                phone=phone if send_sms else '',
+                mark_sent=lambda: None,
+            )
+            sent = bool(delivery['email_sent'] or delivery['sms_sent'])
+            if sent:
+                contribution.receipt_sent_at = now
+                contribution.save(update_fields=['receipt_sent_at'])
 
         elif source == 'cash':
             cash = CashContribution.objects.filter(id=raw_id).first()
@@ -2973,7 +3015,8 @@ class ResendContributionReceiptView(APIView):
             # this the row sat at "pending" forever with no way to send it.
             supplied_email = (request.data.get('email') or '').strip()
             email = (cash.giver_email or '').strip() or supplied_email
-            if not email:
+            phone = (cash.giver_phone or '').strip()
+            if send_email and not email:
                 return Response(
                     {'detail': "This receipt has no giver's email on file. Enter one to send it."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -2984,35 +3027,42 @@ class ResendContributionReceiptView(APIView):
                 except Exception:
                     return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            if email:
-                amount_display = f"KES {cash.amount:,.2f}"
-                body = (
-                    f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, cash.purpose)}\n\n"
-                    f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel='Cash', receipt_ref=receipt_ref, date_display=cash.received_on)}\n\n"
-                    f"{receipt_email_signature()}"
-                )
-                try:
-                    send_mail(
-                        f"Receipt Copy — {cash.purpose}",
-                        body,
-                        settings.DEFAULT_FROM_EMAIL,
-                        [email],
-                        fail_silently=False,
-                    )
-                    sent_destinations.append(f"Email ({email})")
-                except Exception:
-                    return Response({'detail': 'The receipt email could not be sent. Check the email configuration and address.'}, status=status.HTTP_502_BAD_GATEWAY)
-
-            cash.giver_email = email
-            cash.receipt_sent_at = now
-            cash.save(update_fields=['giver_email', 'receipt_sent_at'])
+            amount_display = f"KES {cash.amount:,.2f}"
+            body = (
+                f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, cash.purpose)}\n\n"
+                f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel='Cash', receipt_ref=receipt_ref, date_display=cash.received_on)}\n\n"
+                f"{receipt_email_signature()}"
+            )
+            delivery = _deliver_receipt_message(
+                subject=f"Receipt Copy — {cash.purpose}",
+                body=body,
+                email=email if send_email else '',
+                phone=phone if send_sms else '',
+                mark_sent=lambda: None,
+            )
+            sent = bool(delivery['email_sent'] or delivery['sms_sent'])
+            # An address typed here for an addressless receipt is kept, so the
+            # row is finished for good even if the send itself failed.
+            if supplied_email:
+                cash.giver_email = email
+            if supplied_email or sent:
+                if sent:
+                    cash.receipt_sent_at = now
+                cash.save(update_fields=['giver_email', 'receipt_sent_at'])
         else:
             return Response({'detail': 'Invalid source.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        dest_text = ", ".join(sent_destinations) if sent_destinations else "Email"
+        detail = cash_receipt_delivery_message(
+            delivery,
+            email_requested=send_email,
+            sms_requested=send_sms,
+            has_email=bool(email),
+            has_phone=bool(phone),
+        )
         return Response({
-            'detail': f'Email sent; SMS was not sent because SMS is not configured.' if sent_destinations else 'Receipt email could not be sent.',
-            'receipt_sent_at': now.isoformat(),
+            'detail': detail,
+            'sent': sent,
+            'receipt_sent_at': now.isoformat() if sent else None,
         })
 
 

@@ -331,6 +331,10 @@ class Announcement(models.Model):
     # so no second list of departments can drift out of step.
     audience = models.JSONField(default=list, blank=True, help_text="Ministry role codes this post addresses; empty means the whole congregation")
     action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, default='none')
+    # A post may ask for support of one account ("Request support"), naming the
+    # treasury account it invites giving to — the same wording the giving form
+    # shows. Empty means the post asks for nothing.
+    support_account = models.CharField(max_length=80, blank=True, default='', help_text='Treasury account this post invites support for')
     attachment = models.FileField(upload_to='announcement-attachments/', blank=True, null=True)
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
     is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")

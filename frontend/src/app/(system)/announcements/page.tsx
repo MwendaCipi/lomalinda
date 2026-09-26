@@ -52,7 +52,7 @@ function driveGiveHref(drive: FundDrive) {
 function visibilityLabel(value: string): string {
   if (value === "public_website") return "Public website";
   if (value === "members_only") return "Members only";
-  return value === "all" ? "Everyone" : value;
+  return value === "all" ? "All users" : value;
 }
 
 export default function AnnouncementsPage() {
@@ -125,7 +125,7 @@ export default function AnnouncementsPage() {
                             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b36b3c]">Announcement</p>
                           )}
                           <span className="rounded-full bg-[#f7f4ee] px-3 py-1 text-xs font-semibold text-[#617068]">{new Date(item.created_at).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" })}</span>
-                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">{visibilityLabel(item.visibility)}{item.audience?.length ? ` · ${item.audience.length} ministr${item.audience.length === 1 ? "y" : "ies"}` : ""}</span>
+                          <span className="rounded-full bg-[#eef2ed] px-3 py-1 text-xs font-semibold text-[#3d5148]">{visibilityLabel(item.visibility)}{item.audience?.length ? ` · ${item.audience.length} group${item.audience.length === 1 ? "" : "s"}` : ""}</span>
                           {eventLabel(item) && (
                             <span className="rounded-full bg-[#b36b3c]/10 px-3 py-1 text-xs font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</span>
                           )}

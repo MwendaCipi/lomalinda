@@ -5134,6 +5134,40 @@ class AnnouncementAudienceTests(APITestCase):
         addresses = [message.to[0] for message in mail.outbox]
         self.assertIn('everyone@example.com', addresses)
 
+    def test_a_membership_group_addresses_its_own_members(self):
+        """The group "Adventist Men" reaches the men, not only their leader."""
+        from django.core import mail
+
+        man = User.objects.create_user('aud.man', 'man@example.com', 'ChurchPass#2026', first_name='Man')
+        MemberProfile.objects.create(user=man, role='member', roles='member', ministry='adventist_men')
+        woman = User.objects.create_user('aud.woman', 'woman@example.com', 'ChurchPass#2026', first_name='Woman')
+        MemberProfile.objects.create(user=woman, role='member', roles='member', ministry='adventist_women')
+
+        self._post(sharing_option='email', audience=['adventist_men'])
+
+        addresses = sorted(message.to[0] for message in mail.outbox)
+        self.assertEqual(addresses, ['man@example.com'])
+
+    def test_the_board_group_excludes_plain_members(self):
+        from django.core import mail
+
+        elder = User.objects.create_user('aud.elder', 'elder@example.com', 'ChurchPass#2026', first_name='Elder')
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder')
+        plain = User.objects.create_user('aud.plain', 'plain@example.com', 'ChurchPass#2026', first_name='Plain')
+        MemberProfile.objects.create(user=plain, role='member', roles='member')
+
+        self._post(sharing_option='email', audience=['board'])
+
+        addresses = sorted(message.to[0] for message in mail.outbox)
+        self.assertIn('elder@example.com', addresses)
+        self.assertNotIn('plain@example.com', addresses)
+
+    def test_a_support_request_keeps_the_account_it_names(self):
+        response = self._post(support_account='Welfare Fund')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['support_account'], 'Welfare Fund')
+
 
 class FundDriveAccountBackedTotalTests(APITestCase):
     """The drive's headline reads from its linked treasury account.
@@ -5362,6 +5396,56 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(mail.outbox[0].to, ['rr.giver@example.com'])
+
+    @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
+    @patch('members.views.requests.post')
+    def test_sms_only_needs_no_email_and_actually_goes_out(self, sms_post):
+        """The channel picker's SMS-only choice must not be blocked by a
+        missing address: a phone-only giver can still get the receipt."""
+        from django.core import mail
+
+        sms_post.return_value.raise_for_status.return_value = None
+        cash = self._cash()
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'channels': ['sms']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(response.data['sent'])
+        cash.refresh_from_db()
+        self.assertIsNotNone(cash.receipt_sent_at)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0791000746')
+
+    @override_settings(SMS_API_URL='', SMS_API_KEY='')
+    def test_sms_only_reports_honestly_when_sms_is_not_configured(self):
+        cash = self._cash()
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'channels': ['sms']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertFalse(response.data['sent'])
+        self.assertIn('SMS', response.data['detail'])
+        cash.refresh_from_db()
+        self.assertIsNone(cash.receipt_sent_at)
+
+    def test_no_channel_selected_is_refused(self):
+        cash = self._cash(giver_email='has@example.com')
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'channels': []},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class SexIsSetOnceTests(APITestCase):
