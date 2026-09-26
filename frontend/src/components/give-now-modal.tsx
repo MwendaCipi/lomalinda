@@ -390,8 +390,8 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             </label>
           )}
 
-          {/* 2. Method of Giving & Giving Accounts — how the money moves
-              is asked for first, then which accounts it goes to. */}
+          {/* 2. How the money moves first — method, then the phone the
+              M-Pesa prompt goes to — and only then which accounts it goes to. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="block self-start text-sm font-medium text-[#26352f]">
               Method of Giving
@@ -404,6 +404,25 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                 <option value="bank_transfer">Bank-to-Bank</option>
               </select>
             </label>
+
+            {methodOfGiving === "mpesa" && (
+              <label className="block self-start text-sm font-medium text-[#26352f]">
+                Phone number
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  minLength={10}
+                  required
+                  placeholder="e.g. 0712345678"
+                  value={phoneNumber}
+                  onFocus={liftAboveKeyboard}
+                  onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                />
+              </label>
+            )}
 
             <div className="block self-start text-sm font-medium text-[#26352f]">
               <span>Giving accounts</span>
@@ -514,27 +533,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             </div>
           )}
 
-          {/* 4. Method-Specific Fields & Details */}
-          {methodOfGiving === "mpesa" && (
-            <div className="grid grid-cols-1 gap-4">
-              <label className="block text-sm font-medium text-[#26352f]">
-                Phone number
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  minLength={10}
-                  required
-                  placeholder="e.g. 0712345678"
-                  value={phoneNumber}
-                  onFocus={liftAboveKeyboard}
-                  onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-            </div>
-          )}
+          {/* 4. Method-specific details — the bank card for bank transfers. */}
 
           {methodOfGiving === "bank_transfer" && (
             <div className="space-y-4">
