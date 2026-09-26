@@ -863,9 +863,9 @@ export default function ReconciliationPage() {
                       </table>
                     </div>
 
-                    {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons — flush on the tab bar. */}
+                    {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons — flush on the tab bar. The column totals belong to the table, so a phone (where the rows are cards) drops them and keeps the actions. */}
                     <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
-                      <table className="w-full text-left text-sm">
+                      <table className="hidden w-full text-left text-sm md:table">
                         <tfoot>
                           <tr>
                             <td className="px-4 py-2.5 text-xs text-[#617068] font-mono w-12">#</td>
