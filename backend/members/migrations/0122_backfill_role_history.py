@@ -7,13 +7,24 @@ def forwards(apps, schema_editor):
     MemberProfile = apps.get_model('members', 'MemberProfile')
     for profile in MemberProfile.objects.all():
         user = profile.user
-        now = timezone.now()
-        for code in profile.get_roles():
-            RoleHistory.objects.get_or_create(
+        # Historical models carry fields, not methods: get_roles() is
+        # re-implemented here — the comma-separated roles plus the legacy
+        # single role, deduplicated, falling back to plain membership.
+        codes = [code.strip() for code in (profile.roles or '').split(',') if code.strip()]
+        legacy = (profile.role or '').strip()
+        if legacy and legacy not in codes:
+            codes.append(legacy)
+        if not codes:
+            codes = ['member']
+        for code in codes:
+            if RoleHistory.objects.filter(member=user, role=code, ended_at__isnull=True).exists():
+                continue
+            RoleHistory.objects.create(
                 member=user,
                 role=code,
-                ended_at__isnull=True,
-                defaults={'started_at': user.date_joined or now},
+                # The member has held the role since they joined; the field's
+                # own default (now) covers a missing date_joined.
+                started_at=user.date_joined or timezone.now(),
             )
 
 
