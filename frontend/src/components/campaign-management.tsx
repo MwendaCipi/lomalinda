@@ -80,6 +80,9 @@ export function CampaignManagement({
   const [isOfficial, setIsOfficial] = useState<boolean | null>(null);
   const [canEdit, setCanEdit] = useState<boolean>(false);
   const [broadcastingId, setBroadcastingId] = useState<number | null>(null);
+  // The table search: drives are few, but the desk still wants to find one
+  // by name or account reference without reading the whole list.
+  const [search, setSearch] = useState("");
 
   // New Campaign Form state
   const todayStr = new Date().toISOString().split("T")[0];
@@ -111,8 +114,27 @@ export function CampaignManagement({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [issuingCards, setIssuingCards] = useState(false);
 
-  // Actions menu dropdown state
+  // Actions menu dropdown state, plus which way it opens: the last rows sit
+  // against the wrapper's bottom edge, where a downward menu is clipped.
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [dropUpActionsId, setDropUpActionsId] = useState<number | null>(null);
+
+  const toggleActionsMenu = (id: number, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (openActionsId === id) {
+      setDropUpActionsId(null);
+      setOpenActionsId(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDropUpActionsId(window.innerHeight - rect.bottom < 260 ? id : null);
+    setOpenActionsId(id);
+  };
+
+  /** Closing the menu also clears its opening direction. */
+  const closeActionsMenu = () => {
+    setOpenActionsId(null);
+    setDropUpActionsId(null);
+  };
   // The drive being edited — when set, the create modal opens prefilled in edit mode.
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   // The drive a manual receipt is being recorded against.
@@ -192,10 +214,17 @@ export function CampaignManagement({
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setCampaigns(data))
+      .then((data) => setCampaigns(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }
+
+  /** The drives the search names, case-insensitively, on name or account ref. */
+  const filteredCampaigns = campaigns.filter((c) => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return true;
+    return `${c.title || ""} ${c.name} ${c.account_name || ""}`.toLowerCase().includes(needle);
+  });
 
   function fetchUsers(token: string) {
     fetch(`${API_URL}/api/members/users/`, {
@@ -524,27 +553,27 @@ export function CampaignManagement({
           )}
 
           {/* Top Banner / Header */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#dfdbd1] pb-6">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Fund Drives {isAdminMode && "& Goal Management"}
-              </h1>
-              <p className="mt-2 text-sm text-[#617068]">
-                {isAdminMode
-                  ? "Create standing or temporary fund drives with custom account names, target goals, and automated broadcasts."
-                  : "Follow the church's active fund drives, see progress toward each goal, and support a cause."}
-              </p>
+          <div className="border-b border-[#dfdbd1] pb-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Fund Drives {isAdminMode && "& Goal Management"}
+                </h1>
+                <p className="mt-2 text-sm text-[#617068]">
+                  {isAdminMode
+                    ? "Drives are opened from a treasury account's Promote action; manage targets, dates and broadcasts here."
+                    : "Follow the church's active fund drives, see progress toward each goal, and support a cause."}
+                </p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by drive or account..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-64"
+                aria-label="Search fund drives"
+              />
             </div>
-
-            {isAdminMode && canEdit && (
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center justify-center rounded-full bg-[#5f8067] px-6 py-3 text-xs font-bold text-white transition hover:bg-[#4d6d55] shrink-0 shadow-sm"
-              >
-                + Create New Fund Drive
-              </button>
-            )}
           </div>
 
           {/* New Fund Drive Modal */}
@@ -996,14 +1025,16 @@ export function CampaignManagement({
           {/* Existing Campaigns List */}
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-[#26352f]">
-              {isAdminMode ? `All Fund Drives (${campaigns.length})` : `Active Fund Drives (${campaigns.length})`}
+              {isAdminMode ? `All Fund Drives (${filteredCampaigns.length})` : `Active Fund Drives (${filteredCampaigns.length})`}
             </h2>
 
-            {campaigns.length === 0 ? (
+            {filteredCampaigns.length === 0 ? (
               <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-[#dfdbd1]">
                 <p className="text-sm text-[#617068]">
-                  {isAdminMode
-                    ? 'No fund drives created yet. Click "+ Create New Fund Drive" to get started.'
+                  {search.trim()
+                    ? `No fund drives match "${search.trim()}".`
+                    : isAdminMode
+                    ? 'No fund drives yet. Open one from a treasury account with its Promote action.'
                     : "There are no active fund drives right now. Please check back soon."}
                 </p>
               </div>
@@ -1011,7 +1042,7 @@ export function CampaignManagement({
               <>
                 {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
                 <RecordList
-                  rows={campaigns}
+                  rows={filteredCampaigns}
                   loading={false}
                   rowKey={(c) => c.id}
                   headers={[
@@ -1101,7 +1132,7 @@ export function CampaignManagement({
                               <div className="relative inline-block text-left">
                                 <button
                                   type="button"
-                                  onClick={() => setOpenActionsId(openActionsId === c.id ? null : c.id)}
+                                  onClick={(e) => toggleActionsMenu(c.id, e)}
                                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] shadow-sm hover:bg-[#f7f4ee] hover:border-[#b36b3c] transition-colors focus:outline-none"
                                 >
                                   <span>Actions</span>
@@ -1114,12 +1145,12 @@ export function CampaignManagement({
                                   <>
                                     <div
                                       className="fixed inset-0 z-10"
-                                      onClick={() => setOpenActionsId(null)}
+                                      onClick={closeActionsMenu}
                                     />
-                                    <div className="absolute right-0 mt-1.5 z-20 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left">
+                                    <div className={`absolute right-0 z-20 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left ${dropUpActionsId === c.id ? "bottom-full mb-1.5" : "top-full mt-1.5"}`}>
                                       <Link
                                         href={`/support/campaigns/${c.id}`}
-                                        onClick={() => setOpenActionsId(null)}
+                                        onClick={closeActionsMenu}
                                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] hover:text-[#b36b3c] transition-colors"
                                       >
                                         💳 View Card &rarr;
@@ -1130,7 +1161,7 @@ export function CampaignManagement({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setOpenActionsId(null);
+                                              closeActionsMenu();
                                               handleOpenEdit(c);
                                             }}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
@@ -1141,7 +1172,7 @@ export function CampaignManagement({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setOpenActionsId(null);
+                                              closeActionsMenu();
                                               setReceiptCampaign(c);
                                             }}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
@@ -1152,7 +1183,7 @@ export function CampaignManagement({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setOpenActionsId(null);
+                                              closeActionsMenu();
                                               handleOpenIssueCards(c);
                                             }}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#b36b3c] hover:bg-[#f7f4ee] transition-colors"
@@ -1163,7 +1194,7 @@ export function CampaignManagement({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setOpenActionsId(null);
+                                              closeActionsMenu();
                                               handleBroadcastMessage(c.id, c.title || c.name);
                                             }}
                                             disabled={broadcastingId === c.id}
@@ -1175,7 +1206,7 @@ export function CampaignManagement({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setOpenActionsId(null);
+                                              closeActionsMenu();
                                               handleToggleCampaignActive(c.id, c.is_active);
                                             }}
                                             className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${

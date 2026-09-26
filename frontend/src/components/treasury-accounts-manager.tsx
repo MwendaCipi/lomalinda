@@ -145,6 +145,24 @@ export function TreasuryAccountsManager() {
 
   const totalLiquidity = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
+  // The desk searches by description, the short prompt name, or the account
+  // number — the same three wordings the table itself shows.
+  const [accountSearch, setAccountSearch] = useState("");
+  const filteredAccounts = accounts.filter((a) => {
+    const needle = accountSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return `${a.description || ""} ${a.name} ${a.account_number || ""}`.toLowerCase().includes(needle);
+  });
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const filteredTransactions = transactions.filter((tx) => {
+    const needle = transactionSearch.trim().toLowerCase();
+    if (!needle) return true;
+    const account = accounts.find((a) => a.id === tx.account);
+    return `${tx.description || ""} ${tx.reference || ""} ${tx.account_name || ""} ${tx.related_account_name || ""} ${account?.description || ""} ${tx.transaction_type_display || tx.transaction_type}`
+      .toLowerCase()
+      .includes(needle);
+  });
+
   /** Money arriving in an account (a credit, or the receiving half of a transfer). */
   const isCreditMovement = (tx: AccountTransaction) =>
     tx.transaction_type === "credit" || tx.transaction_type === "transfer_in";
@@ -384,37 +402,47 @@ export function TreasuryAccountsManager() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {/* ── Header: which of the two tables is showing, and the way between them ── */}
+      {/* ── Header: which of the two tables is showing, its search, and the way between them ── */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
           <h2 className="text-xl font-bold text-[#26352f]">Treasury Accounts</h2>
           <p className="text-xs text-[#617068]">
             {view === "accounts"
-              ? `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
-              : `${transactions.length} ${transactions.length === 1 ? "movement" : "movements"}`}
+              ? `${filteredAccounts.length} of ${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
+              : `${filteredTransactions.length} of ${transactions.length} ${transactions.length === 1 ? "movement" : "movements"}`}
           </p>
         </div>
-        <div
-          className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:self-auto"
-          role="group"
-          aria-label="Treasury view"
-        >
-          {([
-            { key: "accounts" as const, label: `Accounts (${accounts.length})` },
-            { key: "transactions" as const, label: `Transaction log (${transactions.length})` },
-          ]).map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setView(option.key)}
-              aria-pressed={view === option.key}
-              className={`h-8 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${
-                view === option.key ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <input
+            type="text"
+            placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
+            value={view === "accounts" ? accountSearch : transactionSearch}
+            onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
+            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-60"
+            aria-label={view === "accounts" ? "Search treasury accounts" : "Search account transactions"}
+          />
+          <div
+            className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:self-auto"
+            role="group"
+            aria-label="Treasury view"
+          >
+            {([
+              { key: "accounts" as const, label: `Accounts (${accounts.length})` },
+              { key: "transactions" as const, label: `Transaction log (${transactions.length})` },
+            ]).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setView(option.key)}
+                aria-pressed={view === option.key}
+                className={`h-8 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${
+                  view === option.key ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -430,7 +458,7 @@ export function TreasuryAccountsManager() {
             Both stay mounted with the chosen one shown, so whichever is on screen
             keeps the full height of the workspace instead of sharing it. */}
         <RecordList
-          rows={accounts}
+          rows={filteredAccounts}
           loading={loading}
           rowKey={(acc) => acc.id}
           tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
@@ -590,7 +618,7 @@ export function TreasuryAccountsManager() {
         />
 
         <RecordList
-            rows={transactions}
+            rows={filteredTransactions}
             loading={loading}
             rowKey={(tx) => tx.id}
             tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"

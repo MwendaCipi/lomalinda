@@ -422,8 +422,68 @@ function AdministrationContent() {
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                       </Link>
+
+                      <Link
+                        href="/administration/fund-drives"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">💗</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Fund Drives</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Manage the church's fund drives — targets, dates, receipts and member invites.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      </Link>
+
+                      <div
+                        onClick={() => {
+                          setActiveTab("expenditures");
+                          router.push("/administration?tab=expenditures", { scroll: false });
+                        }}
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🧾</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Expenditure</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Record what the church spends, per account, and keep the books balanced.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      </div>
+
+                      <div
+                        onClick={() => {
+                          setActiveTab("refunds");
+                          router.push("/administration?tab=refunds", { scroll: false });
+                        }}
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">↩️</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">M-Pesa Refunds</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Return mistaken or duplicate giving through B2C payouts.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      </div>
                     </>
                   )}
+
+                  {/* The deaconate desk, on phones as in the desktop sidebar. */}
+                  {isElder || isClerk || isAdmin ? (
+                    <div
+                      onClick={() => {
+                        setActiveTab("inventory");
+                        router.push("/administration?tab=inventory", { scroll: false });
+                      }}
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📦</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-[#26352f]">Deaconate Ministry</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Church property inventory, duty rota, deaconate roster and ordinances calendar.</span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                    </div>
+                  ) : null}
 
                   {isAdmin && (
                     <div
@@ -441,6 +501,26 @@ function AdministrationContent() {
                         <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>
                   )}
+
+                  {/* The departments' desks (AMM, AWM, AYM, APM, Chaplaincy) —
+                      the desktop sidebar's department sections, as one card
+                      per department opening its members register. */}
+                  {isElder || isClerk || isAdmin ? (
+                    <div
+                      onClick={() => {
+                        setActiveTab("dept-amm-members");
+                        router.push("/administration?tab=dept-amm-members", { scroll: false });
+                      }}
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🤝</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-[#26352f]">Departments</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Members, calendars and activities for AMM, AWM, AYM, APM and Chaplaincy.</span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
