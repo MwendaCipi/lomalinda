@@ -642,26 +642,30 @@ export function BoardMeetingManager() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Start Time *</label>
-                  <input
-                    type="time"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-xs outline-none focus:border-[#b36b3c]"
-                  />
-                </div>
+                {/* Start and end share one row even on a phone — a pair of
+                    times reads as one line, not two fields. */}
+                <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#26352f]">Start Time *</label>
+                    <input
+                      type="time"
+                      required
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-2.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#26352f]">End Time *</label>
-                  <input
-                    type="time"
-                    required
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-xs outline-none focus:border-[#b36b3c]"
-                  />
+                  <div>
+                    <label className="block text-xs font-bold text-[#26352f]">End Time *</label>
+                    <input
+                      type="time"
+                      required
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-2.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -770,28 +774,30 @@ export function BoardMeetingManager() {
                 </p>
               </div>
 
-              <div className="flex flex-col-reverse items-stretch gap-2 border-t border-[#dfdbd1] pt-4 sm:flex-row sm:items-center sm:justify-between">
+              {/* One row of actions at every width: Cancel holds the left
+                  edge, Add Details and Submit the right. */}
+              <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#26352f] hover:bg-gray-100"
+                  className="rounded-full border border-[#c9c5bb] px-4 py-2 text-xs font-semibold text-[#26352f] hover:bg-gray-100"
                 >
                   Cancel
                 </button>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleAddDetails}
-                    className="rounded-full border border-[#b36b3c] px-5 py-2 text-xs font-bold text-[#b36b3c] hover:bg-[#faf7f2]"
+                    className="rounded-full border border-[#b36b3c] px-4 py-2 text-xs font-bold text-[#b36b3c] hover:bg-[#faf7f2]"
                   >
                     Add Details
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
+                    className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
                   >
-                    {submitting ? "Scheduling & Sending Invites..." : "Submit"}
+                    {submitting ? "Scheduling..." : "Submit"}
                   </button>
                 </div>
               </div>
