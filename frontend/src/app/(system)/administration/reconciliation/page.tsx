@@ -395,9 +395,10 @@ export default function ReconciliationPage() {
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-[#dfdbd1] overflow-hidden">
             
             {/* Header Controls (Flex-shrink-0) — the view's name sits beside the
-                controls on a wide screen and above them on a phone. */}
+                controls on a wide screen; a phone drops it, since the toggle
+                below already says which view is open. */}
             <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <h1 className="w-full sm:w-auto shrink-0 whitespace-nowrap text-center sm:text-left text-sm font-semibold sm:text-base text-[#26352f]">
+              <h1 className="hidden sm:block shrink-0 whitespace-nowrap text-sm font-semibold sm:text-base text-[#26352f]">
                 {viewMode === "all_givings" ? "Individual Givings" : "Contributions Ledger"}
               </h1>
 
