@@ -2946,9 +2946,22 @@ class ResendContributionReceiptView(APIView):
 
             receipt_ref = cash.receipt_number or f"CASH-{cash.id}"
             donor_name = cash.donor_name or 'Church Member'
-            email = cash.giver_email
+            # A desk receipt is the treasurer's own entry, so they may finish
+            # it here: when the receipt was saved without the giver's address,
+            # the resend can carry one, which is then kept on the row. Without
+            # this the row sat at "pending" forever with no way to send it.
+            supplied_email = (request.data.get('email') or '').strip()
+            email = (cash.giver_email or '').strip() or supplied_email
             if not email:
-                return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'detail': "This receipt has no giver's email on file. Enter one to send it."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if supplied_email and supplied_email != (cash.giver_email or '').strip():
+                try:
+                    validate_email(supplied_email)
+                except Exception:
+                    return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if email:
                 amount_display = f"KES {cash.amount:,.2f}"
@@ -2969,8 +2982,9 @@ class ResendContributionReceiptView(APIView):
                 except Exception:
                     return Response({'detail': 'The receipt email could not be sent. Check the email configuration and address.'}, status=status.HTTP_502_BAD_GATEWAY)
 
+            cash.giver_email = email
             cash.receipt_sent_at = now
-            cash.save(update_fields=['receipt_sent_at'])
+            cash.save(update_fields=['giver_email', 'receipt_sent_at'])
         else:
             return Response({'detail': 'Invalid source.'}, status=status.HTTP_400_BAD_REQUEST)
 

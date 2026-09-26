@@ -5255,3 +5255,110 @@ class FundDriveAccountBackedTotalTests(APITestCase):
 
         response = self.client.get(f'/api/members/campaigns/{drive.id}/')
         self.assertEqual(response.data['total_raised'], 0.0)
+
+
+class ReceiptResendWithoutAnAddressTests(APITestCase):
+    """A desk receipt with no giver address can still be delivered.
+
+    A receipt saved without an email sat at "Receipt pending" forever: the
+    resend refused (no destination), so the row promised a delivery nothing
+    could make. The treasurer — whose own entry the receipt is — may supply
+    the address on resend, which is kept on the row. Digital gifts keep their
+    stored, verified address: the finance desk cannot redirect them.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('rr.treasurer', 'rr.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(self.treasurer)
+        from django.core import mail
+        mail.outbox.clear()
+
+    def _cash(self, **kwargs):
+        defaults = dict(
+            received_on=timezone.now().date(), amount=Decimal('200.00'), purpose='Farewell',
+            entry_type='individual', donor_name='Duncan Mwirigi',
+            giver_phone='0791000746', received_by=self.treasurer,
+        )
+        defaults.update(kwargs)
+        return CashContribution.objects.create(**defaults)
+
+    def test_the_treasurer_can_supply_the_missing_address(self):
+        from django.core import mail
+
+        cash = self._cash()
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'email': 'duncan@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        cash.refresh_from_db()
+        self.assertEqual(cash.giver_email, 'duncan@example.com')
+        self.assertIsNotNone(cash.receipt_sent_at)
+        self.assertEqual(mail.outbox[0].to, ['duncan@example.com'])
+
+    def test_without_any_address_it_says_so_instead_of_failing_obscurely(self):
+        cash = self._cash()
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data['detail'].lower())
+        cash.refresh_from_db()
+        self.assertIsNone(cash.receipt_sent_at)
+
+    def test_a_malformed_address_is_refused_and_nothing_is_sent(self):
+        from django.core import mail
+
+        cash = self._cash()
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'email': 'not-an-address'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(mail.outbox, [])
+        cash.refresh_from_db()
+        self.assertEqual(cash.giver_email, '')
+        self.assertIsNone(cash.receipt_sent_at)
+
+    def test_a_stored_address_needs_no_prompt(self):
+        from django.core import mail
+
+        cash = self._cash(giver_email='already@example.com')
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(mail.outbox[0].to, ['already@example.com'])
+
+    def test_a_digital_gift_cannot_be_redirected_by_the_desk(self):
+        """The desk's typed address is ignored: a digital gift's receipt goes
+        to the giver's own stored address, never to a third party."""
+        from django.core import mail
+
+        giver = User.objects.create_user('rr.giver', 'rr.giver@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        contribution = Contribution.objects.create(
+            member=giver, amount=Decimal('100.00'), giving_type='money', purpose='Tithe',
+            status='completed', payment_method='mpesa', donor_email='',
+        )
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': contribution.id, 'email': 'someone.else@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(mail.outbox[0].to, ['rr.giver@example.com'])

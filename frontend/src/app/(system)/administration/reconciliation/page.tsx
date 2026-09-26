@@ -257,23 +257,56 @@ export default function ReconciliationPage() {
   };
 
   const handleResendReceipt = async (giving: IndividualGiving) => {
+    // A desk receipt saved without the giver's address cannot be sent to
+    // nobody — "pending" there was a promise nothing could keep. Ask the
+    // treasurer for the address (the receipt is their own entry) and keep it
+    // on the row, so the receipt actually reaches the giver.
+    let suppliedEmail = "";
+    if (giving.source === "cash" && !giving.giver_email) {
+      const answer = await showAlert(
+        "No email on this receipt",
+        `${giving.donor_name} was recorded without an email address, so the receipt for ${money(giving.amount)} has nowhere to go. Enter the giver's email to send it now — it is saved on the receipt.`,
+        "question",
+        {
+          input: "email",
+          inputPlaceholder: "name@example.com",
+          showCancelButton: true,
+          confirmButtonText: "Send receipt",
+          cancelButtonText: "Cancel",
+          inputValidator: (value) =>
+            /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((value || "").trim())
+              ? undefined
+              : "Enter a valid email address.",
+        },
+      );
+      if (!answer.isConfirmed || !answer.value) return;
+      suppliedEmail = String(answer.value).trim();
+    }
+
     setResendingId(giving.id);
     try {
       const res = await fetch(`${API_URL}/api/members/treasury/resend-receipt/`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ source: giving.source, id: giving.raw_id }),
+        body: JSON.stringify({
+          source: giving.source,
+          id: giving.raw_id,
+          ...(suppliedEmail ? { email: suppliedEmail } : {}),
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         showAlert("Receipt sent", data.detail || "Receipt resent successfully.", "success");
         setMessage("");
         const nowStr = new Date().toISOString();
+        // The address supplied for an addressless receipt is now on the row.
+        const patch = { receipt_sent_at: nowStr, ...(suppliedEmail ? { giver_email: suppliedEmail } : {}) };
         setPurposeGivings((prev) => {
           const currentList = prev[giving.purpose] || [];
-          const updated = currentList.map((g) => (g.id === giving.id ? { ...g, receipt_sent_at: nowStr } : g));
+          const updated = currentList.map((g) => (g.id === giving.id ? { ...g, ...patch } : g));
           return { ...prev, [giving.purpose]: updated };
         });
+        setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...patch } : g)));
       } else {
         const errData = await res.json().catch(() => ({}));
         showAlert("Could not resend receipt", errData.detail || "The receipt could not be resent.", "error");
@@ -573,9 +606,13 @@ export default function ReconciliationPage() {
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Receipt sent
                                         </span>
-                                      ) : (
+                                      ) : g.giver_email ? (
                                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                                           Receipt pending
+                                        </span>
+                                      ) : (
+                                        <span className="rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                          No email on file
                                         </span>
                                       )}
                                     </div>
@@ -655,9 +692,13 @@ export default function ReconciliationPage() {
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Sent
                                           </span>
-                                        ) : (
+                                        ) : g.giver_email ? (
                                           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                                             Pending
+                                          </span>
+                                        ) : (
+                                          <span className="rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                            No email on file
                                           </span>
                                         )}
                                       </td>
@@ -926,8 +967,12 @@ export default function ReconciliationPage() {
                                 )}
 
                                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#eeeae2]">
-                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-[#5f8067]" : "text-[#b36b3c]"}`}>
-                                    {giving.receipt_sent_at ? "Receipt sent" : "Receipt pending"}
+                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-[#5f8067]" : giving.giver_email ? "text-[#b36b3c]" : "text-[#617068]"}`}>
+                                    {giving.receipt_sent_at
+                                      ? "Receipt sent"
+                                      : giving.giver_email
+                                      ? "Receipt pending"
+                                      : "No email on file"}
                                   </span>
                                   <div className="flex items-center gap-2">
                                     {(giving.giver_phone || giving.giver_email) && (
@@ -1017,9 +1062,13 @@ export default function ReconciliationPage() {
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Receipt sent
                                         </span>
-                                      ) : (
+                                      ) : giving.giver_email ? (
                                         <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                                           Pending
+                                        </span>
+                                      ) : (
+                                        <span className="inline-block rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                          No email on file
                                         </span>
                                       )}
                                     </td>
