@@ -1523,13 +1523,16 @@ def announcement_email_recipients(announcement, church_name):
     Split from ``send_announcement_emails`` so the size of the audience can be
     counted (for the failure log) without re-sending anything.
     """
-    from django.contrib.auth.models import User
-
     seen = set()
     # An audience addresses the email to the ministry offices named: a post to
     # the choir goes to the choir's holders, not the whole congregation. Empty
     # audience keeps the broadcast to everyone.
-    recipients = User.objects.filter(is_active=True).exclude(email='')
+    #
+    # "Everyone" means the church's approved roster, not every row in the user
+    # table: a public join request creates an account that is a request until a
+    # leader accepts it, and nobody who has not been accepted should receive
+    # the church's mail. roster_queryset() is the one definition of that line.
+    recipients = roster_queryset().filter(is_active=True).exclude(email='')
     audience_codes = list(getattr(announcement, 'audience', None) or [])
     if audience_codes:
         # The audience addresses the email to the ministry offices named: a
@@ -1538,7 +1541,7 @@ def announcement_email_recipients(announcement, church_name):
         for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
             if set(profile.get_roles()) & set(audience_codes):
                 holder_ids.add(profile.user_id)
-        recipients = User.objects.filter(id__in=holder_ids, is_active=True).exclude(email='')
+        recipients = roster_queryset().filter(id__in=holder_ids, is_active=True).exclude(email='')
     for first_name, last_name, username, email in (
         recipients.values_list('first_name', 'last_name', 'username', 'email')
     ):
@@ -1687,7 +1690,8 @@ class AnnouncementView(generics.ListCreateAPIView):
                 from django.contrib.auth.models import User
                 # Same audience rule as the email: a post addressed to a
                 # ministry notifies its holders, otherwise the congregation.
-                sms_recipients = User.objects.filter(is_active=True)
+                # The same audience rule as the email: approved accounts only.
+                sms_recipients = roster_queryset().filter(is_active=True)
                 audience_codes = list(announcement.audience or [])
                 if audience_codes:
                     holder_ids = set()

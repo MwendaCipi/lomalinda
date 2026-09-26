@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 
@@ -40,6 +41,7 @@ export function TreasuryAccountsManager() {
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   // Two views over one set of data: the accounts themselves, and the movement
   // log behind them. Accounts opens first — it is what the desk visits for.
+  const router = useRouter();
   const [view, setView] = useState<"accounts" | "transactions">("accounts");
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -278,6 +280,19 @@ export function TreasuryAccountsManager() {
     }
   };
 
+  /** Promote an account: open the drive form with this account answering for it.
+   *
+   * The drive's account reference is the account's short name, which is exactly
+   * what the M-Pesa prompt shows and what the drive's progress reads — so a
+   * promoted account's money and its drive's totals are the same money.
+   */
+  const openPromoteForAccount = (account: TreasuryAccount) => {
+    const params = new URLSearchParams({ new: "1", account: account.name });
+    const label = (account.description || account.name).trim();
+    if (label) params.set("label", label);
+    router.push(`/administration/fund-drives?${params.toString()}`);
+  };
+
   const openEditForAccount = (account: TreasuryAccount) => {
     setEditForm({
       name: account.name,
@@ -489,6 +504,7 @@ export function TreasuryAccountsManager() {
                         { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "credit"); } },
                         { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "debit"); } },
                         { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); openTransferFromAccount(acc.id); }, disabled: accounts.length < 2 },
+                        { label: "Promote", icon: <Megaphone className="h-4 w-4 text-[#3d7146]" />, run: () => { setOpenMenuAccountId(null); openPromoteForAccount(acc); } },
                         { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); setSupportAccount(acc); } },
                         { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => { setOpenMenuAccountId(null); openEditForAccount(acc); } },
                         { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); handleDeleteAccount(acc); } },
@@ -548,6 +564,7 @@ export function TreasuryAccountsManager() {
                               { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => openCreditDebitForAccount(acc.id, "credit") },
                               { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => openCreditDebitForAccount(acc.id, "debit") },
                               { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => openTransferFromAccount(acc.id), disabled: accounts.length < 2 },
+                              { label: "Promote", icon: <Megaphone className="h-4 w-4 text-[#3d7146]" />, run: () => openPromoteForAccount(acc) },
                               { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => setSupportAccount(acc) },
                               { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => openEditForAccount(acc) },
                               { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => handleDeleteAccount(acc) },
@@ -719,15 +736,10 @@ export function TreasuryAccountsManager() {
         </div>
         {view === "accounts" && (
           <div className="flex items-center gap-2">
-            {/* Transferring is a per-account action (each row has Transfer), so the
-                footer offers the other thing a treasurer needs here: a new drive. */}
-            <Link
-              href="/administration/fund-drives?new=1"
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#c9c5bb] bg-white px-3 text-xs font-semibold text-[#26352f] shadow-sm transition hover:bg-[#f7f4ee] sm:px-3.5"
-            >
-              <HandHeart className="h-4 w-4 text-[#b36b3c]" />
-              <span>Add Fund Drive</span>
-            </Link>
+            {/* An account is the one way to a drive: each row can be Promoted,
+                which opens the drive form with that account answering for it.
+                A separate "Add Fund Drive" button was a second, disconnected
+                path to the same thing. */}
             <button
               type="button"
               onClick={() => setShowAddAccountModal(true)}

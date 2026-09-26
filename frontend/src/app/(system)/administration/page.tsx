@@ -393,6 +393,24 @@ function AdministrationContent() {
 
                   {isFinance && (
                     <>
+                      {/* The finances' own desk. It was only reachable from the
+                          desktop sidebar, so a treasurer on a phone had no card
+                          for the accounts they open most. */}
+                      <div
+                        onClick={() => {
+                          setActiveTab("accounts");
+                          router.push("/administration?tab=accounts", { scroll: false });
+                        }}
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🏦</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-[#26352f]">Treasury Accounts</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Set up church accounts, watch balances, and promote an account into a fund drive.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      </div>
+
                       <Link
                         href="/administration/reconciliation"
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"

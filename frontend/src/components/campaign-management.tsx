@@ -63,10 +63,16 @@ type CampaignMode = "admin" | "member";
 export function CampaignManagement({
   mode = "member",
   openCreate = false,
+  presetAccount = "",
+  presetAccountLabel = "",
 }: {
   mode?: CampaignMode;
   /** Open the creation form as soon as the officer is allowed to see it. */
   openCreate?: boolean;
+  /** A promoted treasury account: its short reference answers for the drive. */
+  presetAccount?: string;
+  /** The account's human wording, used to name the drive being promoted. */
+  presetAccountLabel?: string;
 }) {
   const isAdminMode = mode === "admin";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -166,9 +172,20 @@ export function CampaignManagement({
   useEffect(() => {
     if (openCreate && canEdit && !openedCreateForm.current) {
       openedCreateForm.current = true;
+      if (presetAccount) {
+        // Promoting an account: the drive is about that account, so its short
+        // reference answers for the M-Pesa prompt and its wording names the
+        // drive. Both stay editable.
+        setForm((prev) => ({
+          ...prev,
+          account_name: presetAccount,
+          name: prev.name || presetAccountLabel || presetAccount,
+          title: prev.title || presetAccountLabel,
+        }));
+      }
       setShowCreateModal(true);
     }
-  }, [openCreate, canEdit]);
+  }, [openCreate, canEdit, presetAccount, presetAccountLabel]);
 
   function fetchCampaigns(token: string) {
     fetch(`${API_URL}/api/members/campaigns/`, {

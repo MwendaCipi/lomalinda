@@ -5450,3 +5450,103 @@ class SexIsSetOnceTests(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.gender, 'Male')
         self.assertTrue(clerk_profile.has_role('clerk'))
+
+
+class AnnouncementReachesOnlyApprovedAccountsTests(APITestCase):
+    """The church's mail goes to its approved accounts, nobody else.
+
+    A public join request creates an account that is a *request* until a leader
+    accepts it, and the installation's superuser is the owner rather than a
+    member. Both were on the broadcast list because the audience was "active"
+    rather than "on the roster".
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('aud2.elder', 'aud2.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.client.force_authenticate(self.elder)
+        from django.core import mail
+        mail.outbox.clear()
+
+    def _announce(self):
+        return self.client.post('/api/members/announcements/', {
+            'title': 'Sabbath reminder',
+            'text': 'See you on Sabbath.',
+            'visibility': 'members_only',
+            'sharing_option': 'email',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+    def _member(self, username, first, email, **extra):
+        user = User.objects.create_user(username, email, 'ChurchPass#2026', first_name=first, is_active=extra.pop('is_active', True), **extra)
+        MemberProfile.objects.create(user=user, role='member', roles='member')
+        return user
+
+    def test_an_approved_member_receives_it(self):
+        from django.core import mail
+
+        self._member('aud2.approved', 'Grace', 'aud2.approved@example.com')
+
+        response = self._announce()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIn('aud2.approved@example.com', [message.to[0] for message in mail.outbox])
+
+    def test_a_pending_join_request_is_not_mailed(self):
+        from django.core import mail
+
+        requester = self._member('aud2.requester', 'Not Yet', 'aud2.requester@example.com')
+        EnrollmentRequest.objects.create(
+            user=requester, email='aud2.requester@example.com', first_name='Not Yet',
+            status='pending', expires_at=timezone.now() + timedelta(days=7),
+        )
+
+        self._announce()
+
+        self.assertNotIn('aud2.requester@example.com', [message.to[0] for message in mail.outbox])
+
+    def test_a_rejected_request_is_not_mailed(self):
+        from django.core import mail
+
+        requester = self._member('aud2.rejected', 'Refused', 'aud2.rejected@example.com')
+        EnrollmentRequest.objects.create(
+            user=requester, email='aud2.rejected@example.com', first_name='Refused',
+            status='rejected', expires_at=timezone.now() + timedelta(days=7),
+        )
+
+        self._announce()
+
+        self.assertNotIn('aud2.rejected@example.com', [message.to[0] for message in mail.outbox])
+
+    def test_the_installation_owner_is_not_on_the_congregation_list(self):
+        from django.core import mail
+
+        owner = User.objects.create_superuser('aud2.owner', 'aud2.owner@example.com', 'ChurchPass#2026')
+
+        self._announce()
+
+        addresses = [message.to[0] for message in mail.outbox]
+        self.assertNotIn('aud2.owner@example.com', addresses)
+        self.assertTrue(owner.is_superuser)
+
+    def test_the_sms_audience_follows_the_same_line(self):
+        """The in-app SMS notice is addressed the same way as the email."""
+        requester = self._member('aud2.sms', 'Pending', 'aud2.sms@example.com')
+        EnrollmentRequest.objects.create(
+            user=requester, email='aud2.sms@example.com', first_name='Pending', status='pending',
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Sabbath reminder by SMS',
+            'text': 'See you on Sabbath.',
+            'visibility': 'members_only',
+            'sharing_option': 'sms',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertFalse(
+            ChurchNotification.objects.filter(user=requester).exists(),
+            'an unapproved account should not receive the church SMS notice',
+        )
