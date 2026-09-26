@@ -1,10 +1,9 @@
 """Issuing the JWT pair the app signs in with.
 
-Sign-in has two doors — a username and password, or a verified Google account —
-and both must answer with the same body. The client routes a member straight
-afterwards based on the profile state in that body (change the password they
-were given, or fill in the profile details they still owe), so the two doors
-share the helpers here rather than each assembling the response.
+A sign-in must answer with one body the client can route the member from: the
+profile state in that body decides whether they first change the password they
+were given or fill in the profile details they still owe, so the helpers live
+here rather than being reassembled by each caller.
 """
 
 from django.contrib.auth.models import update_last_login
@@ -39,8 +38,8 @@ def sign_in_payload(user):
     """A complete sign-in answer: a fresh JWT pair plus the onboarding flags.
 
     The token comes from the serializer's ``get_token`` so its claims match the
-    password path exactly, and ``last_login`` is stamped for both doors, which
-    keeps "last seen" reports honest for members who only ever use Google.
+    password path exactly, and ``last_login`` is stamped here, which keeps
+    "last seen" reports honest.
     """
     refresh = ChurchTokenObtainPairSerializer.get_token(user)
     if api_settings.UPDATE_LAST_LOGIN:

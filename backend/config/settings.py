@@ -166,7 +166,6 @@ ANNOUNCEMENT_SEND_DELAY = float(os.getenv('ANNOUNCEMENT_SEND_DELAY', '2'))
 # door.
 ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES = int(os.getenv('ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES', '3'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
-GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
@@ -176,11 +175,6 @@ REST_FRAMEWORK = {
         # for one person clicking their emailed link — and re-pasting a
         # mistyped token — far below what probing for 122-bit tokens needs.
         'invitation_public': os.getenv('INVITATION_THROTTLE_RATE', '30/hour'),
-        # Google sign-in (members/google_auth.py). One church wi-fi can share an
-        # address — a whole congregation signing in on a Sabbath morning is
-        # normal — so this sits above the invitation budget, while still capping
-        # what a stranger can hammer it with.
-        'google_signin': os.getenv('GOOGLE_SIGNIN_THROTTLE_RATE', '60/hour'),
     },
 }
 

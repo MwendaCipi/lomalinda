@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { showAlert } from "@/lib/alerts";
 import { destinationAfterSignIn, storeSession } from "@/lib/auth";
-import { GOOGLE_SIGN_IN_ENABLED, type GoogleCredentialResponse } from "@/lib/google-identity";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -55,34 +53,6 @@ function LoginContent() {
     }
   }
 
-  /**
-   * Google hands the browser a signed ID token; the API verifies it before
-   * believing anything in it and answers with the same JWT pair the password
-   * form returns, so the member's next steps are shared between the two doors.
-   */
-  async function handleGoogleCredential(credential: GoogleCredentialResponse) {
-    setLoading(true);
-    setMessage("");
-    try {
-      const response = await fetch(`${API_URL}/api/auth/google/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential: credential.credential }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Unable to sign in with Google.");
-      storeSession(data);
-      setMessage("You are signed in.");
-      router.push(destinationAfterSignIn(data, nextParam));
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unable to connect to the server.";
-      setMessage(errorMsg);
-      showAlert("Google sign-in failed", errorMsg, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
@@ -92,16 +62,6 @@ function LoginContent() {
           <p className="mt-4 rounded-xl bg-[#eef2ed] p-3 text-xs text-[#3d5148] sm:text-sm">
             Your account is ready. Sign in with the username and password you just chose.
           </p>
-        )}
-        {GOOGLE_SIGN_IN_ENABLED && (
-          <div className="mt-6">
-            <GoogleSignInButton onCredential={handleGoogleCredential} disabled={loading} />
-            <div className="mt-4 flex items-center gap-3 text-xs uppercase tracking-wide text-[#8a9086]">
-              <span className="h-px flex-1 bg-[#dfdbd1]" aria-hidden="true" />
-              or
-              <span className="h-px flex-1 bg-[#dfdbd1]" aria-hidden="true" />
-            </div>
-          </div>
         )}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm font-medium">

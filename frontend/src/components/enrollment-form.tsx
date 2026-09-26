@@ -338,13 +338,13 @@ export function EnrollmentForm({
       </div>
 
       {transferDirection === "transfer_in" ? (
-        <div className="grid gap-3 pt-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 pt-3">
           <button
             type="submit"
             disabled={loading}
             className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
           >
-            {loading ? "Sending..." : "Verify with Email"}
+            {loading ? "Sending..." : "Verify via Email"}
           </button>
           <button
             type="button"

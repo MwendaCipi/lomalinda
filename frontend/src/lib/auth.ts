@@ -1,9 +1,8 @@
 /**
  * What the app does with a sign-in answer.
  *
- * Both sign-in doors — username/password and Google — return the same body, so
- * storing the session and deciding where the member goes next happens here
- * rather than in each caller.
+ * Sign-in returns one body, so storing the session and deciding where the
+ * member goes next happens here rather than in each caller.
  */
 
 export type SignInResponse = {
