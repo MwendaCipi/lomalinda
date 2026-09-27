@@ -10,7 +10,10 @@
  * office audience's devices can be woken when a request lands.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+// Same convention as site-nav: an unset variable means the API lives on this
+// very origin (nginx proxies /api) — a loopback fallback here would send the
+// deployed site's browsers chasing 127.0.0.1 and every call would fail.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
