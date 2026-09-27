@@ -279,7 +279,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             ? user.roles
             : [user?.role || ""]
           ).map((r: string) => r.toLowerCase().trim());
-          setIsElder(roles.some((r: string) => ["admin", "elder", "clerk"].includes(r)) || Boolean(user?.is_staff));
+          // Review powers ride the roles the API itself enforces; a desk lead
+          // (pastor, chaplain, children, welfare) reads their desks here but
+          // join/transfer decisions stay with the office.
+          setIsElder(
+            roles.some((r: string) =>
+              ["admin", "elder", "clerk", "pastor", "chaplaincy", "children_ministry", "welfare_leader"].includes(r)
+            ) || Boolean(user?.is_staff)
+          );
         })
         .catch(() => setIsElder(false));
     }

@@ -26,12 +26,14 @@ type StaffRole =
   | "admin"
   | "clerk"
   | "elder"
+  | "pastor"
   | "youth_leader"
   | "choir_director"
   | "children_ministry"
   | "men_ministry"
   | "women_ministry"
   | "chaplaincy"
+  | "welfare_leader"
   | "treasurer"
   | "member";
 
@@ -39,12 +41,14 @@ const officialRoles: StaffRole[] = [
   "admin",
   "clerk",
   "elder",
+  "pastor",
   "youth_leader",
   "choir_director",
   "children_ministry",
   "men_ministry",
   "women_ministry",
   "chaplaincy",
+  "welfare_leader",
   "treasurer",
 ];
 
@@ -184,6 +188,10 @@ function AdministrationContent() {
   const isAdmin = hasAnyRole("admin");
   const isClerk = hasAnyRole("clerk", "admin");
   const isElder = hasAnyRole("elder", "admin");
+  // Department leads whose desks receive request notices: they reach the
+  // requests tab through the bell/email deep links, where their desks'
+  // lists answer for them (the API returns only what they may see).
+  const isRequestsDeskLead = hasAnyRole("pastor", "chaplaincy", "children_ministry", "welfare_leader", "admin");
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
   const isFinance = hasAnyRole("treasurer", "admin");
@@ -567,7 +575,7 @@ function AdministrationContent() {
 
             {/* Received Requests Manager (including Transfers) — the manager
                 owns its own scrolling: toolbar pinned, table scrolls. */}
-            {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin) && (
+            {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin || isRequestsDeskLead) && (
               <div className="h-full min-h-0">
                 <RequestsAdminManager
                   initialTab={activeTab === "transfers" ? "transfers" : "all"}

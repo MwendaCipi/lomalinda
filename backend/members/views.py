@@ -967,7 +967,7 @@ class EnrollmentAdminListView(generics.ListAPIView):
 
     def get_queryset(self):
         profile = getattr(self.request.user, 'member_profile', None)
-        if self.request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder')):
+        if self.request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder', 'pastor')):
             return EnrollmentRequest.objects.select_related('user').order_by('-created_at')
         return EnrollmentRequest.objects.none()
 
@@ -984,7 +984,7 @@ class EnrollmentDecisionView(APIView):
 
     def post(self, request, pk):
         profile = getattr(request.user, 'member_profile', None)
-        if not (request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder'))):
+        if not (request.user.is_staff or (profile and profile.has_role('admin', 'clerk', 'elder', 'pastor'))):
             return Response({'detail': 'Only church officials can review join requests.'}, status=status.HTTP_403_FORBIDDEN)
         enrollment = EnrollmentRequest.objects.select_related('user').filter(pk=pk).first()
         if not enrollment:
@@ -3134,7 +3134,8 @@ class SupportSubmissionView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'elder'):
+            # The welfare leader answers the welfare desk their notices point to.
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor', 'welfare_leader'):
                 return SupportSubmission.objects.all().order_by('-id')
         return SupportSubmission.objects.none()
 
@@ -3645,7 +3646,7 @@ class PrayerRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'elder', 'chaplaincy'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor', 'chaplaincy'):
                 return PrayerRequest.objects.all().order_by('-created_at')
         return PrayerRequest.objects.none()
 
@@ -3670,7 +3671,7 @@ class ChildDedicationRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'elder', 'children_ministry'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor', 'children_ministry'):
                 return ChildDedicationRequest.objects.all().order_by('-id')
         return ChildDedicationRequest.objects.none()
 
@@ -4300,7 +4301,7 @@ class MembershipRemovalRequestView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         profile = getattr(self.request.user, 'member_profile', None)
-        if profile and profile.has_role('admin', 'clerk', 'elder'):
+        if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor'):
             return MembershipRemovalRequest.objects.select_related('member', 'requested_by', 'reviewed_by').all()
         return MembershipRemovalRequest.objects.none()
 
@@ -4629,7 +4630,7 @@ class VisitationRequestView(generics.ListCreateAPIView):
         user = self.request.user
         if user and user.is_authenticated:
             profile = getattr(user, 'member_profile', None)
-            if profile and profile.has_role('admin', 'clerk', 'elder', 'chaplaincy'):
+            if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor', 'chaplaincy'):
                 return VisitationRequest.objects.all().order_by('-id')
         return VisitationRequest.objects.none()
 

@@ -30,6 +30,9 @@ ROLE_DEFINITIONS = (
     ('first_elder', 'First Elder', 'Church Leaders', False, False),
     ('second_elder', 'Second Elder', 'Church Leaders', False, False),
     ('third_elder', 'Third Elder', 'Church Leaders', False, False),
+    # The congregation's shepherd: a full Church Leaders office. Co-pastors
+    # each hold the role — like the elder roles, it takes no assistant.
+    ('pastor', 'Church Pastor', 'Church Leaders', False, False),
     ('head_deacon', 'Head Deacon', 'Church Leaders', False, True),
     ('head_deaconess', 'Head Deaconess', 'Church Leaders', False, True),
     ('treasurer', 'Treasurer', 'Treasury', False, True),
@@ -164,6 +167,8 @@ DEFAULT_ROLE_RIGHTS = {
     'first_elder': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
     'second_elder': ('board_invitations', 'business_invitations', 'announcements'),
     'third_elder': ('board_invitations', 'business_invitations', 'announcements'),
+    # The pastor shepherds every desk, so the rights mirror an elder's.
+    'pastor': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
     'treasurer': ('finance', 'treasury_accounts', 'reports'),
     'head_deacon': ('requests_admin',),
     'head_deaconess': ('requests_admin',),

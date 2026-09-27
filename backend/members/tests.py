@@ -5886,3 +5886,80 @@ class RequestAudienceSplitTests(APITestCase):
         notify_request_safely('transfer', 4, submitted_by='Jane', church_name='C')
         self.assertEqual(self._rows_for(self.elder).count(), 2)
         self.assertEqual(self._rows_for(self.clerk).count(), 2)
+
+
+class PastorAndDeskLeadRoutingTests(APITestCase):
+    """The shepherd and the department leads hear the desks that are theirs.
+
+    A request routed to an office holder must be a request that office holder
+    can actually see: the pastor joins the every-desk audience (elder parity),
+    chaplaincy walks prayer and visitation, the children leader receives
+    dedications, and the welfare leader receives welfare — each with matching
+    desk-read permission on the API.
+    """
+
+    def setUp(self):
+        self.pastor = User.objects.create_user('route.pastor', 'route.pastor@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.chaplain = User.objects.create_user('route.chaplain', 'route.chaplain@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.chaplain, role='chaplaincy', roles='chaplaincy,member')
+        self.children = User.objects.create_user('route.children', 'route.children@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.children, role='children_ministry', roles='children_ministry,member')
+        self.welfare = User.objects.create_user('route.welfare', 'route.welfare@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.welfare, role='welfare_leader', roles='welfare_leader,member')
+        self.plain = User.objects.create_user('route.plain', 'route.plain@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+    def _rows(self, user):
+        return ChurchNotification.objects.filter(user=user)
+
+    def test_pastor_hears_every_desk_and_reads_the_desk(self):
+        from .requests import notify_request_safely
+
+        for kind, rid in (('prayer', 11), ('join', 12), ('transfer', 13)):
+            notify_request_safely(kind, rid, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows(self.pastor).count(), 3)
+        # Elder parity on the desk itself.
+        self.client.force_authenticate(self.pastor)
+        res = self.client.get('/api/members/enrollment-requests/')
+        self.assertEqual(res.status_code, 200)
+
+    def test_chaplain_walks_prayer_and_visitation_only(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('prayer', 21, submitted_by='Jane', church_name='C')
+        notify_request_safely('visitation', 22, submitted_by='Jane', church_name='C')
+        notify_request_safely('join', 23, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows(self.chaplain).count(), 2)
+        titles = ' '.join(row.title for row in self._rows(self.chaplain))
+        self.assertIn('prayer request', titles)
+        self.assertIn('visitation request', titles)
+        # And the chaplain can read the prayer desk.
+        self.client.force_authenticate(self.chaplain)
+        res = self.client.get('/api/members/prayer-requests/')
+        self.assertEqual(res.status_code, 200)
+
+    def test_children_leader_receives_dedications_and_reads_desk(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('dedication', 31, submitted_by='Jane', church_name='C')
+        notify_request_safely('welfare', 32, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows(self.children).count(), 1)
+        self.assertIn('dedication', self._rows(self.children).first().title)
+        self.client.force_authenticate(self.children)
+        res = self.client.get('/api/members/child-dedications/')
+        self.assertEqual(res.status_code, 200)
+
+    def test_welfare_leader_receives_welfare_and_reads_desk(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('welfare', 41, submitted_by='Jane', church_name='C')
+        notify_request_safely('join', 42, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows(self.welfare).count(), 1)
+        self.assertIn('welfare request', self._rows(self.welfare).first().title)
+        # The welfare desk is the support-submission list.
+        self.client.force_authenticate(self.welfare)
+        res = self.client.get('/api/members/support-submissions/')
+        self.assertEqual(res.status_code, 200)
+        # A plain member hears and reads nothing.
+        self.assertEqual(self._rows(self.plain).count(), 0)

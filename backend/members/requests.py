@@ -63,21 +63,35 @@ REQUEST_LABELS = {
 }
 
 # Who answers the church's requests. Elders and the clerk take every desk —
-# join, prayer, visitation, dedication, welfare, transfer. Administrators are
+# join, prayer, visitation, dedication, welfare, transfer — and so does the
+# church pastor, whose office sits with the leaders. Administrators are
 # deliberately noise-reduced: join requests are the ones that gate an account
 # (the office cannot admit a member without them), so that is the only desk
 # that reaches the admin role. An account holding both roles still hears both.
 ELDER_ROLE_CODES = frozenset({'elder', 'first_elder', 'second_elder', 'third_elder'})
 CLERK_ROLE_CODES = frozenset({'clerk'})
+PASTOR_ROLE_CODES = frozenset({'pastor'})
+
+# Desks whose work belongs to a department lead hear that lead too — the same
+# roles each desk already admits as viewers. Chaplaincy walks the prayer and
+# visitation desks; the children leader receives dedications; welfare belongs
+# to the welfare leader. A request kind absent here routes to the office only.
+DESK_EXTRA_ROLE_CODES = {
+    'prayer': {'chaplaincy'},
+    'visitation': {'chaplaincy'},
+    'dedication': {'children_ministry'},
+    'welfare': {'welfare_leader'},
+}
 
 
 def request_audience(kind=''):
     """Active accounts that should hear about a request of this kind."""
     from .models import MemberProfile
 
-    wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES)
+    wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
     if kind == 'join':
         wanted.add(ADMIN_ROLE)
+    wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
     audience_ids = set()
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
         if set(profile.get_roles()) & wanted:
