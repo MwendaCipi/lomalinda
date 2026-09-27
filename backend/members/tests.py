@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+import csv
 from decimal import Decimal
 from io import StringIO
 import uuid
@@ -6504,3 +6505,68 @@ class InKindThermalReceiptTests(APITestCase):
         self._auth(self.stranger)
         res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AnnouncementResponsesCsvTests(APITestCase):
+    """Officers export a poll's answers as CSV — respondent names included —
+    while members and strangers are refused."""
+
+    def setUp(self):
+        self.officer = User.objects.create_user('poll.officer', 'poll.officer@example.com', 'StrongPass#2026', first_name='Otis', last_name='Officer')
+        MemberProfile.objects.create(user=self.officer, role='admin', roles='admin,member')
+        self.member = User.objects.create_user('poll.member', 'poll.member@example.com', 'StrongPass#2026', first_name='Miriam', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def _poll(self):
+        return Announcement.objects.create(
+            title='Choir visit', text='Will you join the choir visit to Nkubu?',
+            announcement_type='opinion', response_mode='closed',
+            response_options='Yes, I will attend\nNo, I cannot make it',
+            published=True, event_date_from=timezone.localdate(),
+        )
+
+    def test_officer_downloads_csv_with_names(self):
+        poll = self._poll()
+        AnnouncementResponse.objects.create(announcement=poll, user=self.member, action_type='respond', response_choice='Yes, I will attend')
+        AnnouncementResponse.objects.create(announcement=poll, action_type='respond', response_text='Count me in', respondent_name='Walk-in Wanjiru', respondent_phone='0712345678')
+        self._auth(self.officer)
+        res = self.client.get(f'/api/members/announcements/{poll.pk}/answers.csv')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('text/csv', res['Content-Type'])
+        rows = list(csv.reader(StringIO(res.content.decode('utf-8'))))
+        self.assertEqual(rows[0], ['Respondent', 'Phone', 'Answer', 'Answered on'])
+        answers = [row[2] for row in rows[1:]]
+        self.assertIn('Yes, I will attend', answers)
+        self.assertIn('Count me in', answers)
+        # Names: the signed-in member resolves from their account; the
+        # walk-in keeps the name they typed.
+        names = [row[0] for row in rows[1:]]
+        self.assertIn('Miriam Member', names)
+        self.assertIn('Walk-in Wanjiru', names)
+        phones = [row[1] for row in rows[1:]]
+        self.assertIn('0712345678', phones)
+
+    def test_member_and_anonymous_are_refused(self):
+        poll = self._poll()
+        self._auth(self.member)
+        res = self.client.get(f'/api/members/announcements/{poll.pk}/answers.csv')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        res = self.client.get(f'/api/members/announcements/{poll.pk}/answers.csv')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_non_opinion_announcement_exports_actions(self):
+        post = Announcement.objects.create(
+            title='Camp pledge', text='Support the camp.',
+            announcement_type='awareness', published=True, event_date_from=timezone.localdate(),
+        )
+        AnnouncementResponse.objects.create(announcement=post, user=self.member, action_type='tithe', pledge_amount=Decimal('1500.00'), response_text='God bless')
+        self._auth(self.officer)
+        res = self.client.get(f'/api/members/announcements/{post.pk}/answers.csv')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = list(csv.reader(StringIO(res.content.decode('utf-8'))))
+        self.assertEqual(rows[0], ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Answered on'])
+        self.assertEqual(rows[1][2], 'Tithe')
+        self.assertEqual(rows[1][4], '1500.00')

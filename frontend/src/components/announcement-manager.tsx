@@ -305,6 +305,27 @@ export function AnnouncementManager({
     }
   }
 
+  async function handleExportAnswers(item: Announcement) {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/announcements/${item.id}/answers.csv`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Poll_Answers_${item.id}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      showAlert("Export Failed", "We could not export the answers for this post.", "error");
+    }
+  }
+
   function handleEdit(item: Announcement) {
     setEditingId(item.id);
     setMessage("");
@@ -930,7 +951,19 @@ export function AnnouncementManager({
                 </p>
               )}
               <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
-                <span>Posted {dayLabel(item.created_at.slice(0, 10))}</span>
+                <span className="flex items-center gap-2">
+                  Posted {dayLabel(item.created_at.slice(0, 10))}
+                  {item.announcement_type === "opinion" && (
+                    <button
+                      type="button"
+                      onClick={() => handleExportAnswers(item)}
+                      className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                      title="Download the answers as CSV, respondent names included"
+                    >
+                      ⬇ Export answers
+                    </button>
+                  )}
+                </span>
                 <span className="font-semibold text-[#3d5148]">{windowLabel(item)}</span>
               </div>
             </article>

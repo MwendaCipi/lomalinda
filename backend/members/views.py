@@ -1,3 +1,6 @@
+import csv
+from io import StringIO
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
@@ -6667,3 +6670,54 @@ class DepartmentEventsView(APIView):
         if not deleted:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Event removed from the calendar.'})
+
+
+class AnnouncementResponsesCsvView(APIView):
+    """A poll's answers as CSV, one row per response, names included.
+
+    Officers need the raw answers — who answered what and when — to take to
+    the board or paste into a report. Only announcement managers may fetch
+    it; responses to ordinary announcements (not opinion polls) come out
+    too, labelled by action type, so nothing is lost.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not can_manage_announcements(request.user):
+            return Response({'detail': 'Only officers who manage announcements may export answers.'}, status=status.HTTP_403_FORBIDDEN)
+        announcement = Announcement.objects.filter(pk=pk).first()
+        if announcement is None:
+            return Response({'detail': 'Announcement not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_opinion = announcement.announcement_type == 'opinion'
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        if is_opinion:
+            header = ['Respondent', 'Phone', 'Answer', 'Answered on']
+        else:
+            header = ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Answered on']
+        writer.writerow(header)
+
+        for response in announcement.responses.select_related('user').order_by('created_at'):
+            name = response.respondent_name
+            if not name and response.user:
+                name = response.user.get_full_name() or response.user.username
+            phone = response.respondent_phone or ''
+            when = timezone.localtime(response.created_at).strftime('%Y-%m-%d %H:%M')
+            if is_opinion:
+                answer = response.response_choice or response.response_text
+                writer.writerow([name or 'Anonymous', phone, answer or '', when])
+            else:
+                writer.writerow([
+                    name or 'Anonymous', phone, response.get_action_type_display(),
+                    response.response_text or '',
+                    str(response.pledge_amount) if response.pledge_amount is not None else '',
+                    when,
+                ])
+
+        stamp = timezone.localtime().strftime('%Y%m%d')
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="poll_answers_{pk}_{stamp}.csv"'
+        return response

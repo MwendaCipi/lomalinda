@@ -390,8 +390,12 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     }
   };
 
-  const hasUnread =
-    notifications.some((n) => !readNotificationIds.includes(n.id)) || unreadServerNotifications.length > 0;
+  // The bell's badge: everything the popover would call unread — personal
+  // notifications the server still marks unread, plus announcements not yet
+  // opened on this device.
+  const unreadAnnouncements = notifications.filter((n) => !readNotificationIds.includes(n.id)).length;
+  const unreadCount = unreadServerNotifications.length + unreadAnnouncements;
+  const hasUnread = unreadCount > 0;
 
   // Click outside to close popovers
   useEffect(() => {
@@ -565,8 +569,13 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
               aria-label="Notifications"
             >
               <Bell className="w-4.5 h-4.5" />
-              {(unreadServerNotifications.length > 0 || hasUnread) && (
-                <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-[#b36b3c] ring-2 ring-[#26352f]" />
+              {hasUnread && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#b36b3c] px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[#26352f]"
+                  aria-label={`${unreadCount > 9 ? "9+" : unreadCount} unread notifications`}
+                >
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
               )}
             </button>
 
