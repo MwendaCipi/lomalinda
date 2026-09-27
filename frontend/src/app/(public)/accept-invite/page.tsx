@@ -380,15 +380,23 @@ function AcceptInviteContent() {
             </label>
             <PasswordRules password={password} />
             <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-              <input type="checkbox" checked={privacyAccepted} aria-invalid={Boolean(fieldErrors.privacy)} onChange={(event) => { setPrivacyAccepted(event.target.checked); setFieldErrors((current) => ({ ...current, privacy: "" })); }} className="mt-1 h-4 w-4 accent-[#5f8067]" />
-              <span>I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link>.</span>
+              <input
+                type="checkbox"
+                checked={privacyAccepted && termsAccepted}
+                aria-invalid={Boolean(fieldErrors.privacy) || Boolean(fieldErrors.terms)}
+                onChange={(event) => {
+                  const agreed = event.target.checked;
+                  setPrivacyAccepted(agreed);
+                  setTermsAccepted(agreed);
+                  setFieldErrors((current) => ({ ...current, privacy: "", terms: "" }));
+                }}
+                className="mt-1 h-4 w-4 accent-[#5f8067]"
+              />
+              <span>
+                I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link> and <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>.
+              </span>
             </label>
-            <FieldError message={fieldErrors.privacy} />
-            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-              <input type="checkbox" checked={termsAccepted} aria-invalid={Boolean(fieldErrors.terms)} onChange={(event) => { setTermsAccepted(event.target.checked); setFieldErrors((current) => ({ ...current, terms: "" })); }} className="mt-1 h-4 w-4 accent-[#5f8067]" />
-              <span>I agree to the <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>.</span>
-            </label>
-            <FieldError message={fieldErrors.terms} />
+            <FieldError message={fieldErrors.privacy || fieldErrors.terms} />
             <button
               type="submit"
               disabled={submitting}

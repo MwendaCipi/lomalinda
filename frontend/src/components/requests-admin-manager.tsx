@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { TransferManagement } from "./transfer-management";
 
@@ -549,11 +550,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           beneath scrolls under it. */}
       <div className="shrink-0 space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-[#26352f]">Received Requests</h2>
-          <p className="mt-0.5 text-sm text-[#617068]">
-            Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-2xl font-semibold text-[#26352f]">Received Requests</h2>
+            <p className="mt-0.5 text-sm text-[#617068]">
+              Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
+            </p>
+          </div>
         </div>
         <button
           onClick={fetchAll}

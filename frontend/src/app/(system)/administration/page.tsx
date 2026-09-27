@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -188,6 +189,8 @@ function AdministrationContent() {
   const isAdmin = hasAnyRole("admin");
   const isClerk = hasAnyRole("clerk", "admin");
   const isElder = hasAnyRole("elder", "admin");
+  // The pastor stands with the office on the Departments view.
+  const isPastor = hasAnyRole("pastor");
   // Department leads whose desks receive request notices: they reach the
   // requests tab through the bell/email deep links, where their desks'
   // lists answer for them (the API returns only what they may see).
@@ -246,24 +249,6 @@ function AdministrationContent() {
         {/* MAIN WORKSPACE CONTENT */}
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
           <div className="w-full h-full flex flex-col bg-white border-l border-[#dfdbd1] overflow-hidden">
-            {/* Mobile Back Button (Visible only on Mobile when viewing sub-tab;
-                the leaders view opts out — its full-height table owns the screen —
-                and so does the treasury accounts view, whose own footer bar
-                carries the actions mobile needs). */}
-            {activeTab !== "overview" && activeTab !== "users" && activeTab !== "leaders" && activeTab !== "accounts" && (
-              <div className="flex shrink-0 items-center justify-between border-b border-[#dfdbd1] bg-white p-4 lg:hidden">
-                <button
-                  onClick={() => {
-                    setActiveTab("overview");
-                    router.push("/administration?tab=overview", { scroll: false });
-                  }}
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] transition hover:text-[#26352f]"
-                >
-                  &larr; Back to Cards Overview
-                </button>
-              </div>
-            )}
-
             <div
               className={`flex-1 min-h-0 ${
                 tableContainedTabs.includes(activeTab)
@@ -550,7 +535,7 @@ function AdministrationContent() {
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
 
             {/* Church Leaders View */}
-            {activeTab === "leaders" && (isClerk || isElder || isAdmin) && <DepartmentHub />}
+            {activeTab === "leaders" && (isClerk || isElder || isAdmin || isPastor) && <DepartmentHub />}
 
             {/* Board Meetings Manager */}
             {activeTab === "board" && (isClerk || isElder || isAdmin) && (

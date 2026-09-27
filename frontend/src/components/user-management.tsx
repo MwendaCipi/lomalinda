@@ -13,6 +13,7 @@ import {
   SYSTEM_ROLE_HELP,
 } from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -1717,7 +1718,10 @@ export function UserManagement() {
       {/* ── Header ── */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
-          <h2 className="text-xl font-bold text-[#26352f]">User Management</h2>
+          <span className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <h2 className="text-xl font-bold text-[#26352f]">User Management</h2>
+          </span>
           <p className="text-xs text-[#617068]">
             {visibleMembers.length} records registered
           </p>

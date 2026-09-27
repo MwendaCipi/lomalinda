@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -173,11 +174,14 @@ export function MpesaRefundManager() {
     <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">M-Pesa Refunds</h2>
-          <p className="mt-1 text-sm text-[#617068]">
-            Refund completed M-Pesa contributions back to the member&apos;s phone and track each payout until Safaricom confirms it.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-2xl font-bold text-[#26352f]">M-Pesa Refunds</h2>
+            <p className="mt-1 text-sm text-[#617068]">
+              Refund completed M-Pesa contributions back to the member&apos;s phone and track each payout until Safaricom confirms it.
+            </p>
+          </div>
         </div>
         <button
           onClick={async () => {

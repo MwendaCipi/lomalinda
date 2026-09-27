@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { RecordList } from "./record-list";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -354,6 +355,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           <div className="shrink-0 border-b border-[#dfdbd1] bg-white px-5 py-3 sm:px-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
+                <BackToOverviewArrow />
                 <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
                 <h2 className="text-sm font-bold text-[#26352f]">Property Inventory</h2>
                 <span className="text-[11px] text-[#617068]">
@@ -568,9 +570,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* ── TAB: DEACONATE ROSTER ── */}
       {activeTab === "members" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-[#26352f]">Deaconate Board Roster</h2>
-            <p className="text-xs text-[#617068]">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <div>
+              <h2 className="text-base font-bold text-[#26352f]">Deaconate Board Roster</h2>
+              <p className="text-xs text-[#617068]">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
+            </div>
           </div>
           <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
             No deaconate members have been recorded yet.
@@ -581,9 +586,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* ── TAB: CALENDAR & ORDINANCES ── */}
       {activeTab === "calendar" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-[#26352f]">Deaconate Ordinances &amp; Event Schedule</h2>
-            <p className="text-xs text-[#617068]">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <div>
+              <h2 className="text-base font-bold text-[#26352f]">Deaconate Ordinances &amp; Event Schedule</h2>
+              <p className="text-xs text-[#617068]">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
+            </div>
           </div>
           <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
             No deaconate events have been recorded yet.

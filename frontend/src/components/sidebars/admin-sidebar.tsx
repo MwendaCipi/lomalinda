@@ -179,7 +179,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Crown className="h-4 w-4 shrink-0" />
-                    <span>Church Leaders</span>
+                    <span>Departments</span>
                   </div>
                   {currentTab === "leaders" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </button>
@@ -194,7 +194,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 >
                   <div className="flex items-center gap-2.5">
                     <Crown className="h-4 w-4 shrink-0" />
-                    <span>Church Leaders</span>
+                    <span>Departments</span>
                   </div>
                   {currentTab === "leaders" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
                 </Link>
@@ -670,7 +670,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 1: Adventist Men (AMM) */}
-        {hasAnyRole("men_ministry") && (
+        {hasAnyRole("men_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Men (AMM)
@@ -684,7 +684,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 2: Adventist Women (AWM) */}
-        {hasAnyRole("women_ministry") && (
+        {hasAnyRole("women_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Women (AWM)
@@ -698,7 +698,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 3: Adventist Youth & Children */}
-        {hasAnyRole("youth_leader", "children_ministry") && (
+        {hasAnyRole("youth_leader", "children_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Youth &amp; Children
@@ -712,7 +712,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 4: Adventist Possibility Ministries (APM) */}
-        {hasAnyRole("apm_leader") && (
+        {hasAnyRole("apm_leader") && !isAdmin && !isElder && !isClerk && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Adventist Possibility (APM)
@@ -726,7 +726,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         )}
 
         {/* Department 5: Chaplaincy Ministry */}
-        {hasAnyRole("chaplaincy") && (
+        {hasAnyRole("chaplaincy") && !isAdmin && !isElder && !isClerk && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Chaplaincy Ministry

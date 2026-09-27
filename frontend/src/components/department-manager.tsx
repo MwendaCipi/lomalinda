@@ -16,6 +16,7 @@ import {
   Accessibility,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 export type DepartmentKey = "amm" | "awm" | "aym" | "apm" | "chaplaincy";
 
@@ -305,14 +306,17 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
       {/* Header Banner */}
       <div className={`rounded-2xl border border-[#dfdbd1] ${config.bgColor} p-6 text-white shadow-sm`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <Building2 className="h-6 w-6 text-[#f5d0a9]" />
-              <h1 className="text-xl font-bold tracking-tight">{config.fullName}</h1>
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <div>
+              <div className="flex items-center gap-2.5">
+                <Building2 className="h-6 w-6 text-[#f5d0a9]" />
+                <h1 className="text-xl font-bold tracking-tight">{config.fullName}</h1>
+              </div>
+              <p className="mt-1.5 text-xs text-[#e8e2d5] leading-relaxed max-w-2xl">
+                {config.description}
+              </p>
             </div>
-            <p className="mt-1.5 text-xs text-[#e8e2d5] leading-relaxed max-w-2xl">
-              {config.description}
-            </p>
           </div>
           <div className="shrink-0">
             <span className="rounded-full bg-white/20 px-3.5 py-1 text-xs font-bold backdrop-blur-sm">

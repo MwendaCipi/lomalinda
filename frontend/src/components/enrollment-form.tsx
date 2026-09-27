@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -45,12 +46,16 @@ export function EnrollmentForm({
   initialJoiningMode = "membership_transfer",
   onSubmitted,
 }: EnrollmentFormProps) {
+  const router = useRouter();
   const [transferDirection, setTransferDirection] = useState<TransferDirection>("transfer_in");
   const [joiningMode, setJoiningMode] = useState<JoiningMode>(initialJoiningMode);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  /** After the verification email lands, the code entry replaces the details. */
+  const [codeStage, setCodeStage] = useState(false);
+  const [codeValue, setCodeValue] = useState("");
 
   /**
    * "A church member" is somebody already on a church roll who is asking to be
@@ -73,10 +78,23 @@ export function EnrollmentForm({
   function clearForm() {
     setForm(emptyForm);
     setMessage("");
+    setCodeStage(false);
+    setCodeValue("");
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    // Step 2 (code typed): the details are already with the office — carry the
+    // code to the setup page, where phone and sign-in details are asked.
+    if (codeStage && transferDirection === "transfer_in") {
+      const clean = codeValue.trim().toUpperCase();
+      if (!clean) {
+        showAlert("Code required", "Enter the verification code from your email to continue.", "warning");
+        return;
+      }
+      router.push(`/enroll/confirm?code=${encodeURIComponent(clean)}`);
+      return;
+    }
     if (!termsAccepted) {
       showAlert("Terms required", "Please accept the Privacy Policy and Terms of Use before continuing.", "warning");
       return;
@@ -120,9 +138,10 @@ export function EnrollmentForm({
         if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit your request.");
         const successMsg =
           data.message ||
-          "A verification link has been sent to your email. Please check your inbox (and spam folder) to complete your account setup.";
+          "A verification code has been sent to your email. Enter it below to continue your account setup.";
         setMessage(successMsg);
-        showAlert("Verification Email Sent", successMsg, "success");
+        showAlert("Verification Code Sent", successMsg, "success");
+        setCodeStage(true);
         setForm(emptyForm);
         onSubmitted?.("enrollment");
       } catch (error) {
@@ -180,10 +199,40 @@ export function EnrollmentForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
 
+      {/* Step 2: the verification code from the email. The consent box belongs
+          here rather than on step 1 — the server records the agreement when
+          the account is completed, so asking on the code step keeps the two
+          forms' consent wording identical (one sentence, both documents). */}
+      {codeStage && transferDirection === "transfer_in" && (
+        <div className="space-y-4 pt-2">
+          <label className="block text-sm font-medium">
+            Verification code
+            <input
+              required
+              autoFocus
+              autoComplete="one-time-code"
+              placeholder="ABCD-EFGH"
+              value={codeValue}
+              onChange={(event) => setCodeValue(event.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <p className="text-xs leading-5 text-[#617068]">
+            Type the code from the email we just sent — then continue below to add your phone number and sign-in details.
+          </p>
+          <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" />
+            <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
+          </label>
+        </div>
+      )}
+
+      {!codeStage && (
       <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
         <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" />
         <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
       </label>
+      )}
 
       {allowTransferOut && (
         <div>
@@ -344,7 +393,7 @@ export function EnrollmentForm({
             disabled={loading}
             className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
           >
-            {loading ? "Sending..." : "Verify via Email"}
+            {loading ? "Sending..." : codeStage ? "Verify code" : "Verify via Email"}
           </button>
           <button
             type="button"

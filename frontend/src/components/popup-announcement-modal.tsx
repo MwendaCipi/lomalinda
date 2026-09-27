@@ -22,6 +22,9 @@ type Announcement = {
   detail?: string;
   href?: string;
   visibility: string;
+  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  response_mode?: "open" | "closed" | "";
+  response_options?: string;
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   is_popup: boolean;
   action_prompt?: string;
@@ -40,6 +43,7 @@ export function PopupAnnouncementModal() {
   const [current, setCurrent] = useState<Announcement | null>(null);
   const [pledgeAmount, setPledgeAmount] = useState("");
   const [responseText, setResponseText] = useState("");
+  const [responseChoice, setResponseChoice] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +77,9 @@ export function PopupAnnouncementModal() {
 
   const actionType = current.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
+  const isOpinion = current.announcement_type === "opinion";
+  const opinionIsClosed = isOpinion && current.response_mode === "closed";
+  const opinionOptions = (current.response_options || "").split("\n").map((line) => line.trim()).filter(Boolean);
   const actionLabel = actionType.replaceAll("_", " ");
 
   function dismissCurrent() {
@@ -100,6 +107,7 @@ export function PopupAnnouncementModal() {
         action_type: actionType,
         pledge_amount: pledgeAmount ? parseFloat(pledgeAmount) : null,
         response_text: responseText,
+        response_choice: responseChoice,
         respondent_name: name,
         respondent_phone: phone,
       };
@@ -119,6 +127,7 @@ export function PopupAnnouncementModal() {
 
       setPledgeAmount("");
       setResponseText("");
+      setResponseChoice("");
       setName("");
       setPhone("");
 
@@ -178,19 +187,25 @@ export function PopupAnnouncementModal() {
 
         <form onSubmit={handleActionSubmit} className="mt-6 space-y-4">
           <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#fbf6f0] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">
-              {isContributionAction && `User Action: ${actionLabel} Contribution`}
-              {actionType === "respond" && "User Action: Response"}
-              {actionType === "none" && "No Action Required"}
-            </p>
-            <p className="mt-1 text-xs text-[#617068]">
-              {current.action_prompt ||
-                (isContributionAction
-                  ? "You may enter a contribution amount, or dismiss this announcement."
-                  : actionType === "respond"
-                  ? "You may enter your response, or dismiss this announcement."
-                  : "You can dismiss this announcement when you are done reading.")}
-            </p>
+            {/* An Opinion post's question speaks for itself — no action header
+                or instruction above the answer options. */}
+            {!isOpinion && (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">
+                  {isContributionAction && `User Action: ${actionLabel} Contribution`}
+                  {actionType === "respond" && "User Action: Response"}
+                  {actionType === "none" && "No Action Required"}
+                </p>
+                <p className="mt-1 text-xs text-[#617068]">
+                  {current.action_prompt ||
+                    (isContributionAction
+                      ? "You may enter a contribution amount, or dismiss this announcement."
+                      : actionType === "respond"
+                      ? "You may enter your response, or dismiss this announcement."
+                      : "You can dismiss this announcement when you are done reading.")}
+                </p>
+              </>
+            )}
 
             {isContributionAction && (
               <div className="mt-3 space-y-3">
@@ -210,7 +225,20 @@ export function PopupAnnouncementModal() {
               </div>
             )}
 
-            {actionType === "respond" && (
+            {actionType === "respond" && isOpinion && opinionIsClosed ? (
+              <div className="mt-3 space-y-2">
+                {opinionOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setResponseChoice(option)}
+                    className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${responseChoice === option ? "border-[#b36b3c] bg-[#fbf6f0] text-[#26352f]" : "border-[#c9c5bb] bg-white text-[#415047] hover:border-[#b36b3c]"}`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            ) : actionType === "respond" && (
               <div className="mt-3 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#26352f]">
@@ -277,6 +305,8 @@ export function PopupAnnouncementModal() {
             >
               {submitting ? (
                 "Submitting..."
+              ) : isOpinion ? (
+                "Submit Response"
               ) : isContributionAction ? (
                 "Submit Contribution Action"
               ) : actionType === "respond" ? (

@@ -22,7 +22,7 @@ import io
 import secrets
 import threading
 import time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin
 import requests
@@ -39,7 +39,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .models import DEPARTMENT_CHOICES, DepartmentEvent, DepartmentMembership
+from .models import DEPARTMENT_CHOICES, DepartmentBudget, DepartmentEvent, DepartmentMembership
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -136,14 +136,16 @@ def receipt_summary(*, account, amount, payment_channel, receipt_ref, date_displ
 
 def send_enrollment_email(enrollment):
     church_name = current_church_name()
-    link = f"{settings.FRONTEND_URL}/enroll/confirm?token={enrollment.token}"
-    account_label = 'friend account' if enrollment.joining_mode == 'friend' else 'church account'
+    # The sentence reads best with the short name: "join SDA Loma Linda" —
+    # the town suffix and the account-type clause are dropped here.
+    short_name = church_name.split(',')[0].strip()
     send_mail(
         f'Verify your {church_name_plain(church_name)} account',
         f"Hello {enrollment.first_name or 'there'},\n\n"
-        f"Thank you for choosing to join {church_name} as a {account_label}.\n\n"
-        f"Please click the link below to verify your email and complete setting up your account:\n{link}\n\n"
-        f"This link is valid for 48 hours.\n\n"
+        f"Thank you for choosing to join {short_name}.\n\n"
+        f"Your verification code is:\n\n{enrollment.raw_code}\n\n"
+        f"Enter this code on the create-account page to continue setting up your account. "
+        f"It is valid for 48 hours.\n\n"
         f"Warm regards,\n{church_name}",
         settings.DEFAULT_FROM_EMAIL,
         [enrollment.email],
@@ -237,24 +239,19 @@ def send_invitation_email(invitation):
         f" with the following access: {role_labels(special_codes)}."
         if special_codes else '.'
     )
-    # The code goes in the letter beside the link: a mail app that refuses to
-    # open the link (or a link broken across two lines) must not leave the
-    # invitee with nothing to type.
+    # The code goes first: both account-creation doors are typed-code forms
+    # now, so the invitee enters the code at the same place a self-signer
+    # enters their verification code, and the two letters read alike.
     code = invitation_code_text(invitation)
     subject = f'You are invited to {church_name_plain(church_name)}'
     body = (
         f"Hello {invitee},\n\n"
         f"{church_name_clause(church_name)} has invited you to create your own account as a {account_label}"
         f"{access_clause}\n\n"
-        "Click the link below to choose your username and password:\n"
-        f"{invitation_url(invitation)}\n\n"
-        + (
-            "If the link will not open, go to "
-            f"{settings.FRONTEND_URL}/accept-invite and enter this invitation code:\n"
-            f"{code}\n\n"
-            if code else ''
-        )
-        + f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
+        "Your invitation code is:\n\n"
+        f"{code}\n\n"
+        f"Go to {settings.FRONTEND_URL}/accept-invite, enter this code, and choose your username and password.\n\n"
+        f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
         "Once your account is ready you can sign in at "
         f"{settings.FRONTEND_URL}/login\n\n"
         f"Warm regards,\n{church_name}"
@@ -880,6 +877,11 @@ class EnrollmentRequestView(generics.CreateAPIView):
             validated_data['terms_accepted_at'] = timezone.now()
             validated_data['terms_of_use_version'] = CURRENT_TERMS_OF_USE_VERSION
         email = validated_data['email'].lower().strip()
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'email': 'An account already exists for this email address. Try signing in or resetting your password instead.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         token = uuid.uuid4()
         enrollment, _ = EnrollmentRequest.objects.update_or_create(
             email=email,
@@ -891,12 +893,14 @@ class EnrollmentRequestView(generics.CreateAPIView):
                 'expires_at': timezone.now() + timedelta(hours=48),
             }
         )
+        enrollment.set_code()
+        enrollment.save(update_fields=['code'])
         try:
             send_enrollment_email(enrollment)
         except Exception:
             pass
         return Response({
-            'message': 'A verification link has been sent to your email. Please check your inbox (and spam folder) to complete your account setup.',
+            'message': 'A verification code has been sent to your email. Enter it on this page to continue your account setup.',
             'token': str(enrollment.token)
         }, status=status.HTTP_200_OK)
 
@@ -905,9 +909,9 @@ class EnrollmentVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        enrollment = EnrollmentRequest.objects.filter(token=request.query_params.get('token'), status__in=('verification_pending', 'approved'), expires_at__gt=timezone.now()).first()
-        if not enrollment:
-            return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        enrollment = EnrollmentRequest.from_code(request.query_params.get('code'))
+        if enrollment is None or enrollment.status not in ('verification_pending', 'approved') or enrollment.expires_at <= timezone.now():
+            return Response({'detail': 'This verification code is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'email': enrollment.email, 'first_name': enrollment.first_name, 'last_name': enrollment.last_name, 'joining_mode': enrollment.joining_mode})
 
 
@@ -917,18 +921,21 @@ class EnrollmentCompleteView(APIView):
     def post(self, request):
         serializer = EnrollmentCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        enrollment = EnrollmentRequest.objects.filter(token=serializer.validated_data['token'], status__in=('verification_pending', 'approved'), expires_at__gt=timezone.now()).first()
-        if not enrollment:
-            return Response({'detail': 'This enrollment link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        enrollment = EnrollmentRequest.from_code(serializer.validated_data['code'])
+        if enrollment is None or enrollment.status not in ('verification_pending', 'approved') or enrollment.expires_at <= timezone.now():
+            return Response({'detail': 'This verification code is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(username=serializer.validated_data['username']).exists():
             return Response({'username': 'That username is already in use.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(email__iexact=enrollment.email).exists():
             return Response({'email': 'An account already exists for this email.'}, status=status.HTTP_400_BAD_REQUEST)
         user = User.objects.create_user(username=serializer.validated_data['username'], email=enrollment.email, first_name=enrollment.first_name, last_name=enrollment.last_name, password=serializer.validated_data['password'], is_active=enrollment.status == 'approved')
+        # Form two asks the phone again, so the freshest answer wins over the
+        # one typed at sign-up (they may differ; the person is present now).
+        submitted_phone = re.sub(r'\D', '', serializer.validated_data.get('phone_number') or '')
         from .models import MemberProfile
         MemberProfile.objects.create(
             user=user,
-            phone_number=enrollment.phone_number,
+            phone_number=submitted_phone or enrollment.phone_number,
             account_type={'friend': 'friend', 'sabbath_school': 'sabbath_school'}.get(enrollment.joining_mode, 'member'),
             privacy_accepted_at=enrollment.privacy_accepted_at or timezone.now(),
             privacy_policy_version=enrollment.privacy_policy_version or CURRENT_PRIVACY_POLICY_VERSION,
@@ -1822,6 +1829,16 @@ class AnnouncementActionView(APIView):
         response_text = request.data.get('response_text', '')
         respondent_name = request.data.get('respondent_name', '')
         respondent_phone = request.data.get('respondent_phone', '')
+        # A closed opinion question is answered by picking one of the options
+        # the officer wrote; the picked line is stored verbatim so tallies can
+        # be grouped by exactly the words that were offered.
+        response_choice = str(request.data.get('response_choice', '') or '').strip()
+        if announcement.announcement_type == 'opinion' and announcement.response_mode == 'closed':
+            options = [line.strip() for line in (announcement.response_options or '').splitlines() if line.strip()]
+            if response_choice and response_choice not in options:
+                return Response({'response_choice': 'Choose one of the listed options.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not response_choice and not response_text:
+                return Response({'response_choice': 'Pick one of the options to respond.'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user if request.user.is_authenticated else None
         if user and not respondent_name:
@@ -1833,6 +1850,7 @@ class AnnouncementActionView(APIView):
             action_type=action_type,
             pledge_amount=pledge_amount if pledge_amount else None,
             response_text=response_text,
+            response_choice=response_choice,
             respondent_name=respondent_name,
             respondent_phone=respondent_phone,
         )
@@ -6288,7 +6306,7 @@ def role_labels_with_assistants(profile, codes):
 def department_office_profile(user):
     """The profile of a signed-in office holder, or None."""
     profile = getattr(user, 'member_profile', None)
-    if profile and profile.has_role('admin', 'elder', 'clerk'):
+    if profile and profile.has_role('admin', 'elder', 'clerk', 'pastor'):
         return profile
     return None
 
@@ -6381,6 +6399,64 @@ def can_manage_department(user, department):
         return False
     lead_role = DEPARTMENT_LEAD_ROLE.get(department)
     return bool(lead_role and lead_role in profile.get_roles())
+
+
+class DepartmentBudgetView(APIView):
+    """A department's budget lines: read, add, remove.
+
+    The elder's desk keeps each department's planned spending here — what the
+    treasurer's consolidated budget spreadsheet distributes by hand today.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        rows = DepartmentBudget.objects.filter(department=department).order_by('-year', 'title')
+        return Response({'budgets': [
+            {
+                'id': row.id,
+                'year': row.year,
+                'title': row.title,
+                'amount': row.amount,
+                'notes': row.notes,
+                'created_at': row.created_at,
+            }
+            for row in rows
+        ]})
+
+    def post(self, request, department):
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only office holders or the department lead can manage its budget.'}, status=status.HTTP_403_FORBIDDEN)
+        codes = {code for code, _label in DEPARTMENT_CHOICES}
+        if department not in codes:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        title = str(request.data.get('title') or '').strip()
+        if not title:
+            return Response({'title': 'Name what the money is for.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            year = int(request.data.get('year') or timezone.localdate().year)
+        except (TypeError, ValueError):
+            return Response({'year': 'Enter a valid year.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            amount = Decimal(str(request.data.get('amount') or 0))
+        except (InvalidOperation, ValueError):
+            return Response({'amount': 'Enter a valid amount.'}, status=status.HTTP_400_BAD_REQUEST)
+        row, created = DepartmentBudget.objects.update_or_create(
+            department=department, year=year, title=title,
+            defaults={'amount': amount, 'notes': str(request.data.get('notes') or '').strip(), 'created_by': request.user},
+        )
+        return Response({'id': row.id, 'year': row.year, 'title': row.title, 'amount': row.amount, 'notes': row.notes}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def delete(self, request, department, budget_id):
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only office holders or the department lead can manage its budget.'}, status=status.HTTP_403_FORBIDDEN)
+        deleted, _ = DepartmentBudget.objects.filter(pk=budget_id, department=department).delete()
+        if not deleted:
+            return Response({'detail': 'Budget line not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Budget line removed.'})
 
 
 class DepartmentMembersView(APIView):

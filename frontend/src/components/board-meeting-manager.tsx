@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -285,13 +286,16 @@ export function BoardMeetingManager() {
     <div className="space-y-6">
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-xl font-extrabold text-[#26352f] flex items-center gap-2">
-            <span>🛡️</span> Church Board Meetings
-          </h2>
-          <p className="mt-1 text-xs text-[#617068]">
-            Schedule church board meetings, attach agenda documents, record minutes, and notify board members.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-xl font-extrabold text-[#26352f] flex items-center gap-2">
+              <span>🛡️</span> Church Board Meetings
+            </h2>
+            <p className="mt-1 text-xs text-[#617068]">
+              Schedule church board meetings, attach agenda documents, record minutes, and notify board members.
+            </p>
+          </div>
         </div>
         <button
           type="button"

@@ -23,47 +23,81 @@ function FieldError({ message }: { message?: string }) {
 function EnrollmentConfirmContent() {
   const params = useSearchParams();
   const router = useRouter();
-  const token = params.get("token") ?? "";
-  const formRef = useRef<HTMLFormElement>(null);
+  /** The emailed verification code: pre-filled from /create-account, typed here otherwise. */
+  const initialCode = (params.get("code") ?? "").trim();
+
+  const [code, setCode] = useState(initialCode);
+  const [verified, setVerified] = useState(false);
+  const [verifying, setVerifying] = useState(Boolean(initialCode));
 
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  /** Fatal: the verification link itself is unusable. */
-  const [linkError, setLinkError] = useState("");
+  /** Fatal: no usable code, so there is nothing to retry on this page. */
+  const [codeError, setCodeError] = useState("");
   /** Recoverable: shown inline, form stays open. */
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState("");
   /** Success: the account now exists, so the form is replaced. */
   const [successMessage, setSuccessMessage] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [accountType, setAccountType] = useState("member");
+  const [submitting, setSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  /** True when the person never agreed through create-account (e.g. an office-created enrollment). */
+  const [needsConsent, setNeedsConsent] = useState(true);
 
   useEffect(() => {
-    if (!token) {
-      setLinkError("This verification link is not valid. Please start again so we can email you a new one.");
-      setLoading(false);
+    if (!initialCode) {
+      setVerifying(false);
       return;
     }
-    fetch(`${API_URL}/api/members/auth/enrollment/verify/?token=${encodeURIComponent(token)}`)
+    let cancelled = false;
+    fetch(`${API_URL}/api/members/auth/enrollment/verify/?code=${encodeURIComponent(initialCode)}`)
       .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "This verification link is invalid or has expired.");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "This verification code is invalid or has expired.");
+        if (cancelled) return;
         setEmail(data.email);
-        setAccountType(data.joining_mode === "friend" ? "friend" : data.joining_mode === "sabbath_school" ? "sabbath_school" : "member");
+        setVerified(true);
+        setNeedsConsent(false);
       })
-      .catch((error) =>
-        setLinkError(
-          error instanceof Error && error.message
-            ? error.message
-            : "This verification link is invalid or has expired."
-        )
-      )
-      .finally(() => setLoading(false));
-  }, [token]);
+      .catch((error) => {
+        if (!cancelled) setCodeError(error instanceof Error ? error.message : "This verification code is invalid or has expired.");
+      })
+      .finally(() => {
+        if (!cancelled) setVerifying(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialCode]);
+
+  /** The typed path to the same verification, for a code entered on this page directly. */
+  async function submitCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const clean = code.trim().toUpperCase();
+    if (!clean) {
+      setCodeError("Enter the verification code from your email.");
+      return;
+    }
+    setCodeError("");
+    setVerifying(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/auth/enrollment/verify/?code=${encodeURIComponent(clean)}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "This verification code is invalid or has expired.");
+      setEmail(data.email);
+      setVerified(true);
+      setNeedsConsent(false);
+    } catch (error) {
+      setCodeError(error instanceof Error ? error.message : "That code does not match a pending sign-up. Check it and try again.");
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   function focusFirstError(errors: FieldErrors) {
     requestAnimationFrame(() => {
@@ -78,8 +112,10 @@ function EnrollmentConfirmContent() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanUsername = username.trim();
+    const cleanPhone = phoneNumber.replace(/\D/g, "").slice(0, 10);
     const nextErrors: FieldErrors = {};
 
+    if (!cleanPhone || cleanPhone.length !== 10) nextErrors.phoneNumber = "Enter a valid 10-digit phone number.";
     if (!cleanUsername) nextErrors.username = "Choose a username you will sign in with.";
     else if (/\s/.test(cleanUsername)) nextErrors.username = "Usernames cannot contain spaces.";
     if (!password) nextErrors.password = "Choose a password.";
@@ -90,8 +126,8 @@ function EnrollmentConfirmContent() {
     if (password && password !== confirmPassword) {
       nextErrors.confirmPassword = "The two passwords do not match. Please retype the confirmation.";
     }
-    if (!privacyAccepted) nextErrors.privacy = "Please accept the privacy policy to continue.";
-    if (!termsAccepted) nextErrors.terms = "Please accept the Terms of Use to continue.";
+    if (needsConsent && !privacyAccepted) nextErrors.privacy = "Please accept the privacy policy to continue.";
+    if (needsConsent && !termsAccepted) nextErrors.terms = "Please accept the Terms of Use to continue.";
 
     setGeneralError("");
     if (Object.keys(nextErrors).length > 0) {
@@ -101,12 +137,18 @@ function EnrollmentConfirmContent() {
     }
 
     setFieldErrors({});
-    setLoading(true);
+    setSubmitting(true);
     try {
       const response = await fetch(`${API_URL}/api/members/auth/enrollment/complete/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, username: cleanUsername, password, privacy_accepted: privacyAccepted, terms_accepted: termsAccepted }),
+        body: JSON.stringify({
+          code: code.trim().toUpperCase(),
+          username: cleanUsername,
+          phone_number: cleanPhone,
+          password,
+          ...(needsConsent ? { privacy_accepted: privacyAccepted, terms_accepted: termsAccepted } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -114,6 +156,7 @@ function EnrollmentConfirmContent() {
           "username",
           "password",
           "confirmPassword",
+          "phoneNumber",
           "privacy",
           "terms",
         ]);
@@ -135,19 +178,63 @@ function EnrollmentConfirmContent() {
     } catch {
       setGeneralError("We could not reach the church server. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
+
+  const heading = "Set up your church account";
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Set up your {accountType === "friend" ? "friend" : accountType === "sabbath_school" ? "Sabbath School" : "church"} account
-        </h1>
-        {email && !linkError && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{heading}</h1>
+        {email && verified && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}
 
-        {!successMessage && !linkError && (
+        {verifying && !codeError && <p className="mt-6 text-sm text-[#617068]">Checking your code…</p>}
+
+        {/* Stage 1: the code. Skipped when a verified code arrived in the address. */}
+        {!verified && !verifying && !successMessage && (
+          <form onSubmit={submitCode} noValidate className="mt-8 space-y-5">
+            <p className="text-sm leading-6 text-[#617068]">
+              Enter the verification code we emailed you to continue setting up your account.
+            </p>
+            <label className="block text-sm font-medium">
+              Verification code
+              <input
+                name="code"
+                required
+                autoComplete="one-time-code"
+                placeholder="ABCD-EFGH"
+                value={code}
+                aria-invalid={Boolean(codeError)}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                  setCodeError("");
+                }}
+                className={fieldClass(Boolean(codeError))}
+              />
+            </label>
+            {codeError && (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                {codeError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={verifying}
+              className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white disabled:opacity-60"
+            >
+              {verifying ? "Checking…" : "Continue"}
+            </button>
+            <Link href="/create-account" className="block text-center text-sm font-semibold text-[#b36b3c]">
+              Start a new sign-up
+            </Link>
+          </form>
+        )}
+
+        {/* Stage 2: phone and sign-in details. Consent appears only for those
+            who never agreed through create-account. */}
+        {verified && !successMessage && (
           <form ref={formRef} onSubmit={submit} noValidate className="mt-8 space-y-5">
             {generalError && (
               <p
@@ -158,6 +245,27 @@ function EnrollmentConfirmContent() {
               </p>
             )}
 
+            <label className="block text-sm font-medium">
+              Phone number
+              <input
+                name="phoneNumber"
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                required
+                autoComplete="tel"
+                placeholder="e.g. 0712345678 (10 digits)"
+                value={phoneNumber}
+                aria-invalid={Boolean(fieldErrors.phoneNumber)}
+                onChange={(event) => {
+                  setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10));
+                  setFieldErrors((current) => ({ ...current, phoneNumber: "" }));
+                }}
+                className={fieldClass(Boolean(fieldErrors.phoneNumber))}
+              />
+              <FieldError message={fieldErrors.phoneNumber} />
+            </label>
             <label className="block text-sm font-medium">
               Username
               <input
@@ -211,50 +319,54 @@ function EnrollmentConfirmContent() {
               <FieldError message={fieldErrors.confirmPassword} />
             </label>
             <PasswordRules password={password} />
-            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-              <input
-                type="checkbox"
-                checked={privacyAccepted}
-                aria-invalid={Boolean(fieldErrors.privacy)}
-                onChange={(event) => {
-                  setPrivacyAccepted(event.target.checked);
-                  setFieldErrors((current) => ({ ...current, privacy: "" }));
-                }}
-                className="mt-1 h-4 w-4 accent-[#5f8067]"
-              />
-              <span>
-                I agree to the{" "}
-                <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">
-                  Privacy Policy
-                </Link>
-                .
-              </span>
-            </label>
-            <FieldError message={fieldErrors.privacy} />
-            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                aria-invalid={Boolean(fieldErrors.terms)}
-                onChange={(event) => {
-                  setTermsAccepted(event.target.checked);
-                  setFieldErrors((current) => ({ ...current, terms: "" }));
-                }}
-                className="mt-1 h-4 w-4 accent-[#5f8067]"
-              />
-              <span>
-                I agree to the{" "}
-                <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>
-                .
-              </span>
-            </label>
-            <FieldError message={fieldErrors.terms} />
+            {needsConsent && (
+              <>
+                <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+                  <input
+                    type="checkbox"
+                    checked={privacyAccepted}
+                    aria-invalid={Boolean(fieldErrors.privacy)}
+                    onChange={(event) => {
+                      setPrivacyAccepted(event.target.checked);
+                      setFieldErrors((current) => ({ ...current, privacy: "" }));
+                    }}
+                    className="mt-1 h-4 w-4 accent-[#5f8067]"
+                  />
+                  <span>
+                    I agree to the{" "}
+                    <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
+                <FieldError message={fieldErrors.privacy} />
+                <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    aria-invalid={Boolean(fieldErrors.terms)}
+                    onChange={(event) => {
+                      setTermsAccepted(event.target.checked);
+                      setFieldErrors((current) => ({ ...current, terms: "" }));
+                    }}
+                    className="mt-1 h-4 w-4 accent-[#5f8067]"
+                  />
+                  <span>
+                    I agree to the{" "}
+                    <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>
+                    .
+                  </span>
+                </label>
+                <FieldError message={fieldErrors.terms} />
+              </>
+            )}
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting}
               className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white disabled:opacity-60"
             >
-              {loading ? "Saving..." : "Create account"}
+              {submitting ? "Saving..." : "Create account"}
             </button>
           </form>
         )}
@@ -262,16 +374,13 @@ function EnrollmentConfirmContent() {
         {successMessage && (
           <p className="mt-6 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{successMessage}</p>
         )}
-        {linkError && <p className="mt-6 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{linkError}</p>}
+        {codeError && !verified && (
+          <p className="mt-6 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{codeError}</p>
+        )}
 
-        {(successMessage || linkError) && (
+        {successMessage && (
           <Link href="/login" className="mt-6 block text-center text-sm font-semibold text-[#b36b3c]">
             Go to sign in
-          </Link>
-        )}
-        {linkError && (
-          <Link href="/create-account" className="mt-3 block text-center text-sm font-semibold text-[#b36b3c]">
-            Start a new sign-up
           </Link>
         )}
       </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -232,11 +233,14 @@ export function BusinessMeetingManager() {
     <div className="space-y-6">
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-xl font-extrabold text-[#26352f]">Business Meetings</h2>
-          <p className="mt-1 text-xs text-[#617068]">
-            Manage church business meeting schedules, agendas, supporting documents, and recorded minutes.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-xl font-extrabold text-[#26352f]">Business Meetings</h2>
+            <p className="mt-1 text-xs text-[#617068]">
+              Manage church business meeting schedules, agendas, supporting documents, and recorded minutes.
+            </p>
+          </div>
         </div>
         <button
           type="button"

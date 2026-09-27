@@ -4,6 +4,7 @@ from io import StringIO
 from unittest.mock import patch
 from urllib.parse import unquote
 
+from django.core import mail
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
@@ -55,7 +56,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, DepartmentBudget, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -971,13 +972,14 @@ class InvitationAPITests(APITestCase):
         self.assertIsNotNone(invitation.sent_at)
         recipient = mock_send.call_args[0][3]
         self.assertEqual(recipient, ['grace@example.com'])
-        # The email carries the raw token even though the database stores only
-        # its hash: the link in the response must open the same invitation.
+        # The letter leads with the typed code; the raw token stays in the API
+        # response alone, since both doors are typed-code forms now.
         raw_token = response.data['invite_url'].split('token=')[1]
-        self.assertIn(raw_token, mock_send.call_args[0][1])
+        self.assertNotIn(raw_token, mock_send.call_args[0][1])
+        self.assertIn('Your invitation code is:', mock_send.call_args[0][1])
 
-    def test_the_email_carries_a_code_beside_the_link(self):
-        """The letter offers both ways in: the link, and a code under it."""
+    def test_the_email_carries_a_code_in_place_of_the_link(self):
+        """The letter offers one way in: the code, typed at accept-invite."""
         self.client.force_authenticate(user=self.admin_user)
         with patch('members.views.send_mail') as mock_send:
             response = self.client.post('/api/members/invitations/', {
@@ -993,8 +995,9 @@ class InvitationAPITests(APITestCase):
         self.assertRegex(code, r'^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$')
         body = mock_send.call_args[0][1]
         self.assertIn(code, body)
-        self.assertIn('enter this invitation code', body)
+        self.assertIn('enter this code, and choose your username and password', body)
         self.assertIn('/accept-invite', body)
+        self.assertNotIn('?token=', body)
 
     def test_a_typed_code_redeems_the_invitation_in_place_of_the_link(self):
         cache.clear()
@@ -1584,7 +1587,10 @@ class EmailBrandingTests(APITestCase):
 
         subject, body = mock_send.call_args[0][0], mock_send.call_args[0][1]
         self.assertEqual(subject, f'Verify your {self.HEADER_NAME} account')
-        self.assertIn(f'join {self.CHURCH} as a church account', body)
+        # The joining sentence ends at the short name: no town suffix, no
+        # account-type clause.
+        self.assertIn('Thank you for choosing to join SDA Loma Linda.', body)
+        self.assertNotIn('as a church account', body)
         self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
         self.assertNotIn('Loma Linda SDA Church', body)
 
@@ -5092,7 +5098,9 @@ class AnnouncementAudienceTests(APITestCase):
         self.assertNotIn('plain@example.com', addresses)
 
     def test_a_support_request_keeps_the_account_it_names(self):
-        response = self._post(support_account='Welfare Fund')
+        # Support lives on the promotion type since types took over the form:
+        # an awareness post is a plain notice, and its account is stripped.
+        response = self._post(announcement_type='promotion', support_account='Welfare Fund')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data['support_account'], 'Welfare Fund')
@@ -6051,3 +6059,282 @@ class AnnouncementTypeTests(APITestCase):
         self.assertEqual(res.data['support_account'], 'Local Church Budget')
         # A promotion carries no meeting link, whatever the client sent.
         self.assertEqual(res.data['href'], '')
+
+
+class EnrollmentCodeFlowTests(APITestCase):
+    """Account creation runs on a typed verification code, not a emailed link.
+
+    One coherent shape across both doors: the letter carries a code, form one
+    collects who is joining, form two collects the sign-in details, and every
+    step is something a person reads off a screen and types back.
+    """
+
+    def _signup(self, **overrides):
+        payload = {
+            'name': 'Test Enrollee',
+            'first_name': 'Test',
+            'last_name': 'Enrollee',
+            'email': 'code.flow@example.com',
+            'phone_number': '0712345678',
+            'joining_mode': 'baptism',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/auth/enrollment-request/', payload, format='json')
+
+    def test_signup_returns_a_code_not_a_link(self):
+        response = self._signup()
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        enrollment = EnrollmentRequest.objects.get(email='code.flow@example.com')
+        # The email carries the readable code; the database stores only its digest.
+        self.assertTrue(enrollment.code)
+        self.assertFalse(enrollment.raw_code)
+        body = mail.outbox[-1].body
+        self.assertIn('Your verification code is:', body)
+        self.assertNotIn('click the link below', body.lower())
+
+    def test_existing_email_is_refused_at_signup(self):
+        User.objects.create_user('taken.email', 'code.taken@example.com', 'ChurchPass#2026')
+        response = self._signup(email='code.taken@example.com')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        self.assertIn('already exists', response.data['email'])
+
+    def test_verify_and_complete_run_on_the_code(self):
+        response = self._signup()
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        enrollment = EnrollmentRequest.objects.get(email='code.flow@example.com')
+        enrollment.refresh_from_db()
+        self.assertIsNotNone(enrollment.code)
+
+        # The raw code is only ever in the letter: read it out of the email
+        # the sign-up just sent, exactly as the person receiving it would.
+        body = mail.outbox[-1].body
+        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip().replace('-', '')
+
+        verify = self.client.get(f'/api/members/auth/enrollment/verify/?code={raw}')
+        self.assertEqual(verify.status_code, status.HTTP_200_OK, verify.data)
+        self.assertEqual(verify.data['email'], 'code.flow@example.com')
+
+        complete = self.client.post('/api/members/auth/enrollment/complete/', {
+            'code': raw,
+            'username': 'code.flow.user',
+            'password': 'ChurchPass#2026',
+            'phone_number': '0712345678',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }, format='json')
+        self.assertEqual(complete.status_code, status.HTTP_201_CREATED, complete.data)
+        user = User.objects.get(username='code.flow.user')
+        self.assertEqual(user.email, 'code.flow@example.com')
+        profile = MemberProfile.objects.get(user=user)
+        self.assertEqual(profile.phone_number, '0712345678')
+        self.assertTrue(profile.privacy_accepted_at)
+
+    def test_a_wrong_code_is_refused(self):
+        verify = self.client.get('/api/members/auth/enrollment/verify/?code=WRONGCODE')
+        self.assertEqual(verify.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_completion_without_agreement_is_refused(self):
+        response = self._signup()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = mail.outbox[-1].body
+        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip().replace('-', '')
+        complete = self.client.post('/api/members/auth/enrollment/complete/', {
+            'code': raw,
+            'username': 'code.flow.user2',
+            'password': 'ChurchPass#2026',
+            'phone_number': '0712345678',
+            'privacy_accepted': False,
+            'terms_accepted': False,
+        }, format='json')
+        self.assertEqual(complete.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class InvitationEmailLeadsWithCodeTests(APITestCase):
+    """The invitation letter carries the code first, like the enrollment letter."""
+
+    def test_invitation_email_prints_the_code_before_the_link(self):
+        from members.views import send_invitation_email
+        invitation = Invitation(email='lead.code@example.com', first_name='Ada', last_name='Mutua', account_type='member')
+        invitation.set_code()
+        invitation.expires_at = timezone.now() + timedelta(days=7)
+        with patch('members.views.send_mail') as mock_send:
+            send_invitation_email(invitation)
+        body = mock_send.call_args[0][1]
+        self.assertIn('Your invitation code is:', body)
+        # The letter names the accept-invite page as the place to type the
+        # code; the old token link is gone.
+        self.assertIn('/accept-invite', body)
+        self.assertNotIn('?token=', body)
+
+
+class OpinionAnnouncementTests(APITestCase):
+    """An Opinion post asks the congregation a question and hears it back.
+
+    Only an opinion post carries the request-response machinery: every other
+    type is a statement, so the serializer strips any response config that
+    arrives on one, exactly as it strips a link from a promotion.
+    """
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('opinion.clerk', 'opinion.clerk@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        self.client.force_authenticate(self.clerk)
+
+    def _post(self, **overrides):
+        payload = {
+            'title': 'Camp attendance',
+            'text': 'Will you attend this year’s youth camp?',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': str(timezone.localdate() + timedelta(days=7)),
+            'announcement_type': 'opinion',
+            'response_mode': 'closed',
+            'response_options': 'Yes, I will attend\nNo, I cannot make it\nMaybe\n\n',
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/announcements/', payload, format='json')
+
+    def test_a_closed_opinion_stores_clean_options(self):
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        announcement = Announcement.objects.get(title='Camp attendance')
+        # Trailing blanks were dropped; the stored lines are the buttons.
+        self.assertEqual(announcement.response_options, 'Yes, I will attend\nNo, I cannot make it\nMaybe')
+        self.assertEqual(announcement.action_type, 'respond')
+
+    def test_a_closed_opinion_needs_two_options(self):
+        response = self._post(response_options='Only one option')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_an_open_opinion_carries_no_options(self):
+        response = self._post(response_mode='open', response_options='These should be stripped')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        announcement = Announcement.objects.get(title='Camp attendance')
+        self.assertEqual(announcement.response_options, '')
+        self.assertEqual(announcement.response_mode, 'open')
+
+    def test_other_types_never_carry_response_config(self):
+        response = self._post(
+            title='A plain notice',
+            announcement_type='awareness',
+            response_mode='closed',
+            response_options='Yes\nNo',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        announcement = Announcement.objects.get(title='A plain notice')
+        self.assertEqual(announcement.response_mode, '')
+        self.assertEqual(announcement.response_options, '')
+        self.assertEqual(announcement.action_type, 'none')
+
+    def test_a_closed_opinion_only_accepts_listed_options(self):
+        self._post()
+        announcement = Announcement.objects.get(title='Camp attendance')
+        member = User.objects.create_user('opinion.member', 'opinion.member@example.com', 'ChurchPass#2026')
+
+        good = self.client.post(
+            f'/api/members/announcements/{announcement.pk}/action/',
+            {'action_type': 'respond', 'response_choice': 'Maybe'},
+            format='json',
+        )
+        self.assertEqual(good.status_code, status.HTTP_201_CREATED, good.data)
+        self.assertEqual(AnnouncementResponse.objects.get(pk=good.data['id']).response_choice, 'Maybe')
+
+        unlisted = self.client.force_authenticate(member) or self.client.post(
+            f'/api/members/announcements/{announcement.pk}/action/',
+            {'action_type': 'respond', 'response_choice': 'Somewhat yes'},
+            format='json',
+        )
+        self.assertEqual(unlisted.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_closed_opinion_needs_a_choice(self):
+        self._post()
+        announcement = Announcement.objects.get(title='Camp attendance')
+        empty = self.client.post(
+            f'/api/members/announcements/{announcement.pk}/action/',
+            {'action_type': 'respond', 'response_choice': '', 'response_text': ''},
+            format='json',
+        )
+        self.assertEqual(empty.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class DepartmentBudgetTests(APITestCase):
+    """A department's budget lives at the elder's desk now.
+
+    Office holders manage any department's planned spending lines; the
+    department's own lead manages theirs; a plain member neither reads nor
+    writes another department's budget.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('bud.elder', 'bud.elder@example.com', 'StrongPass#2026', first_name='Beth', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.pastor = User.objects.create_user('bud.pastor', 'bud.pastor@example.com', 'StrongPass#2026', first_name='Peter', last_name='Pastor')
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.leader = User.objects.create_user('bud.leader', 'bud.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='men_ministry', roles='member,men_ministry')
+        self.plain = User.objects.create_user('bud.plain', 'bud.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_office_adds_and_updates_a_budget_line(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': 'Camp gear', 'year': 2026, 'amount': '25000', 'notes': 'Two tents',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        # Same department + year + title updates rather than duplicating.
+        res2 = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': 'Camp gear', 'year': 2026, 'amount': '30000',
+        }, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(DepartmentBudget.objects.filter(department='amm').count(), 1)
+        self.assertEqual(res2.data['amount'], Decimal('30000'))
+
+    def test_department_lead_manages_their_own_budget(self):
+        self._auth(self.leader)
+        res = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': 'Transport', 'year': 2026, 'amount': '8000',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        # But not another department's.
+        res2 = self.client.post('/api/members/departments/aym/budgets/', {
+            'title': 'Buses', 'year': 2026, 'amount': '12000',
+        }, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_pastor_manages_any_department_budget(self):
+        self._auth(self.pastor)
+        res = self.client.post('/api/members/departments/awm/budgets/', {
+            'title': 'Convention', 'year': 2026, 'amount': '15000',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_plain_member_cannot_write_a_budget(self):
+        self._auth(self.plain)
+        res = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': 'Anything', 'year': 2026, 'amount': '1000',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(DepartmentBudget.objects.filter(department='amm').exists())
+
+    def test_blank_title_is_rejected(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': '  ', 'year': 2026, 'amount': '5000',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_budget_line_can_be_removed(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/amm/budgets/', {
+            'title': 'Bibles', 'year': 2026, 'amount': '4000',
+        }, format='json')
+        budget_id = res.data['id']
+        res_del = self.client.delete(f'/api/members/departments/amm/budgets/{budget_id}/')
+        self.assertEqual(res_del.status_code, status.HTTP_200_OK)
+        self.assertFalse(DepartmentBudget.objects.filter(pk=budget_id).exists())

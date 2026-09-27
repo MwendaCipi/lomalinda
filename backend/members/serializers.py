@@ -203,8 +203,13 @@ class EnrollmentRequestSerializer(serializers.ModelSerializer):
 
 
 class EnrollmentCompleteSerializer(serializers.Serializer):
-    token = serializers.UUIDField()
+    # The account is completed with the emailed verification code, not a link:
+    # both account-creation doors (sign-up and invitation) are typed-code forms,
+    # so a code typed wrong once can simply be retyped. The lookup uses the
+    # normalized uppercase form, matching how the code was hashed.
+    code = serializers.CharField(max_length=20)
     username = serializers.CharField(max_length=150)
+    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     password = serializers.CharField(
         write_only=True, min_length=PASSWORD_MIN_LENGTH, help_text=PASSWORD_REQUIREMENTS
     )
@@ -303,7 +308,7 @@ class AnnouncementResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AnnouncementResponse
-        fields = ('id', 'announcement', 'user', 'username', 'action_type', 'pledge_amount', 'response_text', 'respondent_name', 'respondent_phone', 'created_at')
+        fields = ('id', 'announcement', 'user', 'username', 'action_type', 'pledge_amount', 'response_text', 'response_choice', 'respondent_name', 'respondent_phone', 'created_at')
         read_only_fields = ('id', 'user', 'created_at')
 
 
@@ -413,26 +418,53 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         # The type decides which special fields belong to the post. Fields a
         # type does not use are cleared, so the stored row always matches the
         # form the officer completed; the link is required where it is the
-        # whole point (web conference).
+        # whole point (web conference), and the options where the question is
+        # a closed one (opinion).
         announcement_type = attrs.get('announcement_type', instance.announcement_type if instance else 'awareness')
         if announcement_type == 'web_conference':
             href = attrs.get('href') if 'href' in attrs else (instance.href if instance else '')
             if not (href or '').strip():
                 raise serializers.ValidationError('A web conference announcement needs a meeting link.')
             attrs['support_account'] = ''
+            attrs['response_mode'] = ''
+            attrs['response_options'] = ''
+            attrs['action_type'] = 'none'
         elif announcement_type == 'promotion':
             attrs['href'] = ''
             support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
             if not (support_account or '').strip():
                 raise serializers.ValidationError('A promotion / contribution announcement needs a treasury account.')
-        else:  # awareness: a plain notice carries no link and no account
+            attrs['response_mode'] = ''
+            attrs['response_options'] = ''
+            attrs['action_type'] = 'none'
+        elif announcement_type == 'opinion':
             attrs['href'] = ''
             attrs['support_account'] = ''
+            attrs['action_type'] = 'respond'
+            mode = attrs.get('response_mode') or 'open'
+            if mode not in ('open', 'closed'):
+                raise serializers.ValidationError('An opinion post answers openly or among fixed options.')
+            options_text = attrs.get('response_options') if 'response_options' in attrs else (instance.response_options if instance else '')
+            if mode == 'closed':
+                options = [line.strip() for line in (options_text or '').splitlines() if line.strip()]
+                if len(options) < 2:
+                    raise serializers.ValidationError('A closed-response opinion needs at least two options, one per line.')
+                # The stored options are the cleaned lines, so the buttons a
+                # member sees and the choice saved are always the same words.
+                attrs['response_options'] = '\n'.join(options)
+            else:
+                attrs['response_options'] = ''
+        else:  # awareness: a plain notice carries no link, no account, no question
+            attrs['href'] = ''
+            attrs['support_account'] = ''
+            attrs['response_mode'] = ''
+            attrs['response_options'] = ''
+            attrs['action_type'] = 'none'
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

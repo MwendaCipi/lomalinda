@@ -37,6 +37,9 @@ type FeedItem = {
   attachment_size?: number | null;
   visibility: string;
   audience?: string[];
+  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  response_mode?: "open" | "closed" | "";
+  response_options?: string;
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account?: string | null;
   support_account_display?: string | null;
@@ -56,6 +59,12 @@ export default function AnnouncementsPage() {
   const [supportAccount, setSupportAccount] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  // Opinion answering: which card's form is open, what is typed or picked.
+  const [opinionId, setOpinionId] = useState<number | null>(null);
+  const [opinionText, setOpinionText] = useState("");
+  const [opinionChoice, setOpinionChoice] = useState("");
+  const [opinionBusy, setOpinionBusy] = useState(false);
+  const [opinionDone, setOpinionDone] = useState<number[]>([]);
 
   // The feed is what is live right now, nearest event first. Each announcement
   // carries the window it is displayed for, so there is no From/To to pick and
@@ -82,6 +91,39 @@ export default function AnnouncementsPage() {
     const timer = window.setTimeout(loadFeed, 200);
     return () => window.clearTimeout(timer);
   }, [loadFeed]);
+
+  /** Submit an opinion answer, then confirm inline on the card. */
+  async function submitOpinion(item: FeedItem) {
+    if (opinionBusy) return;
+    const isClosed = item.response_mode === "closed";
+    if (isClosed && !opinionChoice) return;
+    if (!isClosed && !opinionText.trim()) return;
+    setOpinionBusy(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_URL}/api/members/announcements/${item.id}/action/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          action_type: "respond",
+          response_text: isClosed ? "" : opinionText.trim(),
+          response_choice: isClosed ? opinionChoice : "",
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Unable to submit your response.");
+      }
+      setOpinionDone((current) => [...current, item.id]);
+      setOpinionId(null);
+      setOpinionText("");
+      setOpinionChoice("");
+    } catch {
+      // The form stays open so the answer is not lost; the member can retry.
+    } finally {
+      setOpinionBusy(false);
+    }
+  }
 
   return (
     <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
@@ -132,6 +174,67 @@ export default function AnnouncementsPage() {
                           >
                             Open link ↗
                           </a>
+                        )}
+
+                        {/* An Opinion post asks the congregation a question;
+                            the answer arrives in the shape the officer chose
+                            — free text, or a pick among the posted options. */}
+                        {item.announcement_type === "opinion" && (
+                          <div className="mt-5 border-t border-[#dfdbd1] pt-4">
+                            {opinionDone.includes(item.id) ? (
+                              <p className="text-sm font-semibold text-[#3d7146]">Thank you — your response has been recorded.</p>
+                            ) : opinionId === item.id ? (
+                              <div className="space-y-3">
+                                {item.response_mode === "closed" && item.response_options ? (
+                                  <div className="space-y-2">
+                                    {item.response_options.split("\n").map((line) => line.trim()).filter(Boolean).map((option) => (
+                                      <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => setOpinionChoice(option)}
+                                        className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${opinionChoice === option ? "border-[#b36b3c] bg-[#fbf6f0] text-[#26352f]" : "border-[#c9c5bb] bg-white text-[#415047] hover:border-[#b36b3c]"}`}
+                                      >
+                                        {option}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <textarea
+                                    rows={3}
+                                    value={opinionText}
+                                    onChange={(event) => setOpinionText(event.target.value)}
+                                    placeholder="Write your response..."
+                                    className="w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                                  />
+                                )}
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    disabled={opinionBusy || (item.response_mode === "closed" ? !opinionChoice : !opinionText.trim())}
+                                    onClick={() => submitOpinion(item)}
+                                    className="rounded-full bg-[#b36b3c] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+                                  >
+                                    {opinionBusy ? "Submitting..." : "Send response"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpinionId(null); setOpinionText(""); setOpinionChoice(""); }}
+                                    className="text-sm font-semibold text-[#617068] hover:underline"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => { setOpinionId(item.id); setOpinionChoice(""); setOpinionText(""); }}
+                                className="rounded-full bg-[#b36b3c] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#96552e]"
+                              >
+                                Respond
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         {isDrive && drive && (

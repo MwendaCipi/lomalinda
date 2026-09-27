@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Receipt, Filter, Search, Trash2 } from "lucide-react";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -171,11 +172,14 @@ export function ExpenditureManager() {
     <div className="flex h-full min-h-0 flex-col gap-8 overflow-hidden p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">Church Expenditures</h2>
-          <p className="mt-1 text-sm text-[#617068]">
-            Record church expenses, debit designated treasury accounts, and track disbursement logs.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-2xl font-bold text-[#26352f]">Church Expenditures</h2>
+            <p className="mt-1 text-sm text-[#617068]">
+              Record church expenses, debit designated treasury accounts, and track disbursement logs.
+            </p>
+          </div>
         </div>
         <button
           onClick={() => setShowModal(true)}

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { ROLE_OPTIONS } from "./roles-combobox";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
@@ -214,11 +215,14 @@ export function ChurchSettingsManager() {
   return (
     <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
       <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-[#26352f]">Church Settings & Configuration</h2>
-          <p className="mt-1 text-xs text-[#617068]">
-            Configure custom homepage clarion call message, service links, and church details.
-          </p>
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h2 className="text-2xl font-semibold text-[#26352f]">Church Settings & Configuration</h2>
+            <p className="mt-1 text-xs text-[#617068]">
+              Configure custom homepage clarion call message, service links, and church details.
+            </p>
+          </div>
         </div>
         <span className="rounded-full bg-[#26352f] px-3 py-1 text-xs font-semibold text-white">
           Admin Portal

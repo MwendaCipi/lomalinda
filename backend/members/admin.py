@@ -169,8 +169,9 @@ class EnrollmentRequestAdmin(admin.ModelAdmin):
                 enrollment.user.save(update_fields=['is_active'])
             else:
                 enrollment.token = uuid.uuid4()
+                enrollment.set_code()
                 enrollment.expires_at = timezone.now() + timedelta(hours=48)
-                enrollment.save(update_fields=['token', 'expires_at'])
+                enrollment.save(update_fields=['token', 'code', 'expires_at'])
                 from .views import send_enrollment_email
                 send_enrollment_email(enrollment)
             approved += 1

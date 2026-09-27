@@ -19,7 +19,9 @@ import {
   ArrowLeft,
   CalendarDays,
   ChevronRight,
+  Landmark,
   Mail,
+  Megaphone,
   Phone,
   Search,
   UserPlus,
@@ -33,6 +35,7 @@ import {
   ROLE_OPTIONS,
   type RoleRegisterRow,
 } from "./roles-combobox";
+import { AnnouncementManager } from "./announcement-manager";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -394,10 +397,12 @@ function DepartmentDetail({
   department,
   onBack,
   onChanged,
+  initialTab = "members",
 }: {
   department: DepartmentRow;
   onBack: () => void;
   onChanged: () => void;
+  initialTab?: "members" | "calendar";
 }) {
   const style = DEPARTMENT_STYLES[department.code];
   const leadRole = DEPARTMENT_LEAD_ROLE[department.code];
@@ -407,7 +412,7 @@ function DepartmentDetail({
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [subTab, setSubTab] = useState<"members" | "calendar">("members");
+  const [subTab, setSubTab] = useState<"members" | "calendar">(initialTab);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
@@ -526,25 +531,27 @@ function DepartmentDetail({
 
   return (
     <div className="space-y-5">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" /> All departments
-      </button>
-
       {/* Header */}
       <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xl" aria-hidden="true">{style.icon}</span>
-              <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
+          <div className="flex min-w-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to all departments"
+              className="lg:hidden -ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-[#26352f] transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl" aria-hidden="true">{style.icon}</span>
+                <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
+              </div>
+              <p className="mt-1 text-xs text-[#617068]">
+                {roll.length} member{roll.length === 1 ? "" : "s"} on the roll · {events.length} calendar event{events.length === 1 ? "" : "s"}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-[#617068]">
-              {roll.length} member{roll.length === 1 ? "" : "s"} on the roll · {events.length} calendar event{events.length === 1 ? "" : "s"}
-            </p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button
@@ -720,7 +727,13 @@ function DepartmentDetail({
 export function DepartmentHub() {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // Which department detail (and which of its tabs) is open; the row's
+  // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
+  const [detailTab, setDetailTab] = useState<"members" | "calendar">("members");
+  // Which department's budget modal or Communicate flow is open.
+  const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
+  const [communicateDept, setCommunicateDept] = useState<DepartmentRow | null>(null);
 
   const loadDirectory = useCallback(() => {
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
@@ -749,53 +762,345 @@ export function DepartmentHub() {
         department={selected}
         onBack={() => setSelected(null)}
         onChanged={loadDirectory}
+        initialTab={detailTab}
       />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
-        <h2 className="text-lg font-bold text-[#26352f]">Church Departments</h2>
+        <h2 className="text-lg font-bold text-[#26352f]">Departments &amp; Ministries</h2>
         <p className="mt-0.5 text-xs text-[#617068]">
-          Open a department to see its leadership, contact them, adjust roles, manage its roll and calendar.
+          Each row: the department's leadership, and its calendar, roll, budget and announcements.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {departments.map((department) => {
-          const style = DEPARTMENT_STYLES[department.code];
-          return (
-            <button
-              key={department.code}
-              type="button"
-              onClick={() => setSelected(department)}
-              className="group rounded-2xl border border-[#dfdbd1] bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg" aria-hidden="true">{style.icon}</span>
-                    <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
-                  </div>
-                  <p className="mt-2 text-xs text-[#617068]">
-                    {department.leader
-                      ? `${department.leader.name}${department.assistants.length ? ` · Assistant: ${department.assistants[0].name}` : ""}`
-                      : "No leader set"}
+      {departments.map((department) => {
+        const style = DEPARTMENT_STYLES[department.code];
+        return (
+          <div
+            key={department.code}
+            className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm sm:p-5"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              {/* Identity + the two offices, inline: leader, then assistant. */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg" aria-hidden="true">{style.icon}</span>
+                  <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
+                </div>
+                <div className="mt-2 space-y-1 text-xs">
+                  <p className="text-[#26352f]">
+                    <span className="font-semibold text-[#617068]">Leader:</span>{" "}
+                    {department.leader ? (
+                      <>
+                        <span className="font-semibold">{department.leader.name}</span>
+                        {department.leader.phone_number && <span className="text-[#617068]"> · {department.leader.phone_number}</span>}
+                      </>
+                    ) : (
+                      <span className="italic text-[#8b9790]">not set</span>
+                    )}
+                  </p>
+                  <p className="text-[#26352f]">
+                    <span className="font-semibold text-[#617068]">Assistant:</span>{" "}
+                    {department.assistants.length > 0 ? (
+                      <>
+                        <span className="font-semibold">{department.assistants.map((a) => a.name).join(", ")}</span>
+                        {department.assistants[0].phone_number && <span className="text-[#617068]"> · {department.assistants[0].phone_number}</span>}
+                      </>
+                    ) : (
+                      <span className="italic text-[#8b9790]">not set</span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-[#617068]">
+                    {department.member_count} on roll · {department.event_count} event{department.event_count === 1 ? "" : "s"}
                   </p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" />
               </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-semibold text-[#617068]">
-                  {department.member_count} on roll
-                </span>
-                <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-semibold text-[#617068]">
-                  {department.event_count} event{department.event_count === 1 ? "" : "s"}
-                </span>
+
+              {/* Actions: open the full view, or work on one strand directly. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailTab("members");
+                    setSelected(department);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
+                >
+                  Open <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Budget"
+                  onClick={() => setBudgetDept(department)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                >
+                  <Landmark className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  title="Calendar"
+                  onClick={() => {
+                    setDetailTab("calendar");
+                    setSelected(department);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  title="Members"
+                  onClick={() => {
+                    setDetailTab("members");
+                    setSelected(department);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                >
+                  <Users className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  title="Communicate — post an announcement to this department"
+                  onClick={() => setCommunicateDept(department)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                >
+                  <Megaphone className="h-4 w-4" />
+                </button>
               </div>
-            </button>
-          );
-        })}
+            </div>
+          </div>
+        );
+      })}
+
+      {budgetDept && (
+        <DepartmentBudgetModal
+          department={budgetDept}
+          onClose={() => setBudgetDept(null)}
+        />
+      )}
+      {communicateDept && (
+        <CommunicateModal
+          department={communicateDept}
+          onClose={() => setCommunicateDept(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** A budget line as the API returns it. */
+type BudgetRow = {
+  id: number;
+  year: number;
+  title: string;
+  amount: string | number;
+  notes: string;
+};
+
+/**
+ * One department's budget: planned spending lines, added and removed at the
+ * desk. Amounts are planned figures, not treasury transactions — money still
+ * moves through the treasurer's desks.
+ */
+function DepartmentBudgetModal({
+  department,
+  onClose,
+}: {
+  department: DepartmentRow;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<BudgetRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(() => {
+    fetch(`${API_URL}/api/members/departments/${department.code}/budgets/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { budgets: [] }))
+      .then((data) => setRows(data.budgets || []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [department.code]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function addLine(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/departments/${department.code}/budgets/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ year: Number(year), title: title.trim(), amount: Number(amount || 0) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Could not save the budget line.");
+      setTitle("");
+      setAmount("");
+      load();
+    } catch (error) {
+      showAlert("Budget not saved", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeLine(id: number) {
+    const answer = await showAlert("Remove this budget line?", `${title || "The line"} will be taken off ${department.label}'s budget.`, "warning", {
+      showCancelButton: true,
+      confirmButtonText: "Remove",
+      cancelButtonText: "Keep",
+      confirmButtonColor: "#b91c1c",
+    });
+    if (!answer.isConfirmed) return;
+    try {
+      const response = await fetch(`${API_URL}/api/members/departments/${department.code}/budgets/${id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error("Could not remove the budget line.");
+      load();
+    } catch (error) {
+      showAlert("Not removed", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  }
+
+  const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${department.label} budget`}
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1]"
+      >
+        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-[#26352f]">{department.label} — Budget</h3>
+            <p className="text-[11px] text-[#617068]">Planned spending lines; the treasury still moves the money.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={addLine} className="mt-4 flex flex-wrap items-end gap-2">
+          <label className="min-w-0 flex-1 text-xs font-semibold text-[#26352f]">
+            What the money is for
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Camp fees subsidy"
+              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+            />
+          </label>
+          <label className="w-24 text-xs font-semibold text-[#26352f]">
+            KES
+            <input
+              type="number"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+            />
+          </label>
+          <label className="w-24 text-xs font-semibold text-[#26352f]">
+            Year
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={saving || !title.trim()}
+            className="inline-flex h-9 items-center rounded-xl bg-[#b36b3c] px-4 text-xs font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Add line"}
+          </button>
+        </form>
+
+        {loading ? (
+          <p className="py-8 text-center text-xs text-[#617068]">Loading the budget…</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-xs text-[#617068]">No budget lines yet for this department.</p>
+        ) : (
+          <div className="mt-4 divide-y divide-[#eeeae2]">
+            {rows.map((row) => (
+              <div key={row.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-[#26352f]">{row.title}</p>
+                  <p className="text-[11px] text-[#617068]">{row.year}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs font-semibold text-[#26352f]">KES {Number(row.amount || 0).toLocaleString("en-KE")}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeLine(row.id)}
+                    className="rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-red-300 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between py-2.5 text-xs font-bold text-[#26352f]">
+              <span>Total planned</span>
+              <span>KES {total.toLocaleString("en-KE")}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Communicate: the announcement composer, opened already addressed to this
+ * department. The audience codes are the department's own; the composer's
+ * Post-to list carries the same vocabulary, so the preselection renders
+ * correctly and the member can widen it if the message is for more people.
+ */
+function CommunicateModal({
+  department,
+  onClose,
+}: {
+  department: DepartmentRow;
+  onClose: () => void;
+}) {
+  const audienceCode = DEPARTMENT_LEAD_ROLE[department.code];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Post an announcement to ${department.label}`}
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-[#dfdbd1]"
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#dfdbd1] bg-white px-6 py-4">
+          <h3 className="text-base font-bold text-[#26352f]">Announcement — {department.label}</h3>
+          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-6">
+          <AnnouncementManager
+            presetAudience={audienceCode ? [audienceCode] : []}
+            composerOnly
+            onDone={onClose}
+          />
+        </div>
       </div>
     </div>
   );

@@ -287,9 +287,33 @@ class EnrollmentRequest(models.Model):
     terms_accepted_at = models.DateTimeField(null=True, blank=True)
     terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    code = models.CharField(max_length=64, unique=True, blank=True, default='', editable=False, help_text="SHA-256 hash of the short verification code emailed to the person")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # The raw verification code only lives in memory: set_code() keeps it here
+    # so the email that goes out in the same request cycle can quote it, while
+    # the database stores only its digest. An enrollment read back from the
+    # database therefore has no code to show until set_code() runs again.
+    raw_code = None
+
+    def set_code(self, raw_code=None):
+        """Hash a fresh verification code (or a given one) and store it."""
+        self.raw_code = str(raw_code or self._new_code())
+        self.code = invitation_code_hash(self.raw_code)
+        return self.raw_code
+
+    @staticmethod
+    def _new_code():
+        return ''.join(secrets.choice(INVITATION_CODE_ALPHABET) for _ in range(INVITATION_CODE_LENGTH))
+
+    @classmethod
+    def from_code(cls, raw_code):
+        """The enrollment the typed verification code belongs to, or None."""
+        if not normalize_invitation_code(raw_code):
+            return None
+        return cls.objects.filter(code=invitation_code_hash(raw_code)).first()
 
     def __str__(self):
         return self.email
@@ -433,14 +457,28 @@ class Announcement(models.Model):
     # What kind of post this is, which decides which special fields belong to
     # it: an Awareness post is a plain notice; a Web conference carries a
     # meeting link; a Promotion / Contribution names a treasury account it
-    # invites support for. The serializer clears the fields a type does not
+    # invites support for; an Opinion asks the congregation a question and
+    # hears them back. The serializer clears the fields a type does not
     # use, so the data always matches the form the officer saw.
     TYPE_CHOICES = [
         ('awareness', 'Awareness'),
         ('web_conference', 'Web conference'),
         ('promotion', 'Promotion / Contribution'),
+        ('opinion', 'Opinion'),
     ]
-    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account')
+    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account; opinion asks for responses')
+    # An Opinion post collects answers in one of two shapes. ``open`` is free
+    # text — members write what they think. ``closed`` offers fixed options
+    # the officer writes here, one per line; a member picks one. The same
+    # field is the officer's only place to write the question's options, so
+    # the feed can render the buttons and the response records which one was
+    # chosen — no second model, no drift between question and answer.
+    RESPONSE_MODE_CHOICES = [
+        ('open', 'Open response'),
+        ('closed', 'Closed response'),
+    ]
+    response_mode = models.CharField(max_length=10, choices=RESPONSE_MODE_CHOICES, default='open', blank=True, help_text='Opinion posts only: open text answers, or a choice among fixed options')
+    response_options = models.TextField(blank=True, default='', help_text='Opinion posts with closed responses: one option per line, exactly as members will see them')
     # A post may ask for support of one account ("Request support"), naming the
     # treasury account it invites giving to — the same wording the giving form
     # shows. Empty means the post asks for nothing.
@@ -497,6 +535,10 @@ class AnnouncementResponse(models.Model):
     action_type = models.CharField(max_length=40, choices=ACTION_TYPE_CHOICES)
     pledge_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     response_text = models.TextField(blank=True)
+    # The option a member picked on a closed-response opinion post, stored
+    # exactly as the officer wrote it. Free-text answers keep using
+    # response_text; a choice fills this and may carry nothing else.
+    response_choice = models.CharField(max_length=200, blank=True, default='')
     respondent_name = models.CharField(max_length=120, blank=True)
     respondent_phone = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -780,6 +822,30 @@ class ChurchBudget(models.Model):
 
     class Meta:
         ordering = ['-year']
+
+
+class DepartmentBudget(models.Model):
+    """One department's budget line for a year: what it plans to spend on.
+
+    The elder's desk records these from the Departments & Ministries view; a
+    department may carry several lines in a year (programs, welfare,
+    equipment), which is why this is a table and not a field.
+    """
+
+    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    year = models.PositiveIntegerField()
+    title = models.CharField(max_length=160, help_text="What the money is for, e.g. 'Camp fees subsidy'")
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_budgets_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-year', 'title')
+        constraints = [models.UniqueConstraint(fields=['department', 'year', 'title'], name='unique_department_budget_line')]
+
+    def __str__(self):
+        return f"{self.get_department_display()} {self.year}: {self.title}"
 
 
 class PrayerRequest(models.Model):

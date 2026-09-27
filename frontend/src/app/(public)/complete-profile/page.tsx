@@ -214,9 +214,9 @@ export default function CompleteProfilePage() {
   return (
     <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-[#f7f4ee] px-6 pb-28 pt-10 text-[#26352f] sm:items-center sm:pb-10">
       <section className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-        <h1 className="text-3xl font-semibold tracking-tight">Complete your profile</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Add more details</h1>
         <p className="mt-3 text-sm leading-6 text-[#617068]">
-          The church leadership needs more details from you before you continue:
+          Add a few more details to help the church run smoothly — the leadership uses these to plan ministries and reach you. You can sign in with your new account first:
         </p>
         <form onSubmit={submit} className="mt-6 space-y-5">
           {error && (

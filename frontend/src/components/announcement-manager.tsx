@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { RecordList } from "./record-list";
@@ -18,6 +19,13 @@ const POST_TO_OPTIONS: { value: string; label: string }[] = [
   { value: "adventist_women", label: "Adventist Women" },
   { value: "young_adults", label: "Young Adults" },
   { value: "board", label: "Board Members" },
+  // Department addressing: a post to one of these reaches the department's
+  // roll holders and its members (the backend resolves both).
+  { value: "men_ministry", label: "AMM — Adventist Men" },
+  { value: "women_ministry", label: "AWM — Adventist Women" },
+  { value: "youth_leader", label: "AYM — Youth & Children" },
+  { value: "apm_leader", label: "APM — Possibility Ministries" },
+  { value: "chaplaincy", label: "Chaplaincy" },
 ];
 
 const REACH_LABELS: Record<string, string> = {
@@ -52,7 +60,10 @@ type Announcement = {
   visibility: string;
   audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
-  announcement_type?: "awareness" | "web_conference" | "promotion";
+  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  response_mode?: "open" | "closed" | "";
+  response_options?: string;
+  responses?: { id: number; action_type: string; response_text?: string; response_choice?: string; respondent_name?: string; created_at: string }[];
   support_account?: string | null;
   sharing_option?: string;
   action_prompt?: string;
@@ -112,10 +123,17 @@ function channelsLabel(sharing?: string): string {
     .join(", ");
 }
 
-export function AnnouncementManager() {
+export function AnnouncementManager({
+  presetAudience,
+  /** Communicate mode: render only the compose modal, open from the start,
+      with its own full-screen chrome and close behaviour suppressed — the
+      host modal supplies both. */
+  composerOnly = false,
+  onDone,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void } = {}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(composerOnly);
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -124,12 +142,18 @@ export function AnnouncementManager() {
     text: "",
     // Church announcements default to the congregation, not the wider web.
     visibility: "members_only",
-    audience: [] as string[],
+    // Communicate-from-a-department opens the composer already addressed.
+    audience: (presetAudience ?? []) as string[],
     // The kind of post decides which special fields the form shows: a plain
-    // notice (default), a meeting link, or a supported account.
-    announcement_type: "awareness" as "awareness" | "web_conference" | "promotion",
+    // notice (default), a meeting link, a supported account, or a question
+    // the congregation answers.
+    announcement_type: "awareness" as "awareness" | "web_conference" | "promotion" | "opinion",
     action_type: "none",
     support_account: "",
+    // Opinion posts only: how members answer, and the fixed options for a
+    // closed question (one per line).
+    response_mode: "open" as "open" | "closed",
+    response_options: "",
     // Site and email are the ordinary pair: the post shows on the site and
     // lands in inboxes. SMS is added for the occasions it is wanted.
     sharing_option: "site,email",
@@ -240,6 +264,8 @@ export function AnnouncementManager() {
       announcement_type: item.announcement_type ?? "awareness",
       action_type: item.action_type ?? "none",
       support_account: item.support_account ?? "",
+      response_mode: item.response_mode === "closed" ? "closed" : "open",
+      response_options: item.response_options ?? "",
       sharing_option: item.sharing_option || "site,email",
       href: item.href ?? "",
       event_date_from: item.event_date_from ?? "",
@@ -253,10 +279,12 @@ export function AnnouncementManager() {
       title: "",
       text: "",
       visibility: "members_only",
-      audience: [],
+      audience: (presetAudience ?? []) as string[],
       announcement_type: "awareness",
       action_type: "none",
       support_account: "",
+      response_mode: "open",
+      response_options: "",
       sharing_option: "site,email",
       href: "",
       event_date_from: "",
@@ -265,6 +293,11 @@ export function AnnouncementManager() {
     setEditingId(null);
     setAttachment(null);
     setMessage("");
+    if (composerOnly) {
+      // Communicate mode: posted (or cancelled) — hand control back to the host.
+      onDone?.();
+      return;
+    }
     setShowCreateModal(false);
   }
 
@@ -300,6 +333,18 @@ export function AnnouncementManager() {
       const err = "A promotion / contribution announcement needs a treasury account.";
       setMessage(err);
       showAlert("Account Missing", err, "error");
+      return;
+    }
+    // A closed opinion question must offer at least two choices, or members
+    // have nothing to pick between.
+    if (
+      form.announcement_type === "opinion" &&
+      form.response_mode === "closed" &&
+      form.response_options.split("\n").map((line) => line.trim()).filter(Boolean).length < 2
+    ) {
+      const err = "A closed opinion question needs at least two response options, one per line.";
+      setMessage(err);
+      showAlert("Response Options Missing", err, "error");
       return;
     }
     setSubmitting(true);
@@ -346,177 +391,10 @@ export function AnnouncementManager() {
     }
   }
 
-  return (
-    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
-      {/* Top Header */}
-      <div className="shrink-0 border-b border-[#dfdbd1] pb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
-            Announcements Management
-          </h1>
-          <p className="mt-1 text-sm text-[#617068]">
-            Manage published church bulletins, announcements, and member notifications.
-          </p>
-        </div>
-      </div>
-
-      {/* Announcements — ledger-style table container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        {/* The announcement board is cards at every width — a bulletin reads as
-            a bulletin, not as a ledger row. */}
-        <RecordList
-          rows={announcements}
-          loading={loadingList}
-          rowKey={(item) => item.id}
-          cardsOnly
-          loadingLabel="Loading announcements..."
-          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
-          cardsStateClassName="col-span-full py-12 text-center text-sm text-[#617068]"
-          cardsEmpty={
-            <>
-              <span className="text-4xl">📢</span>
-              <p className="mt-3 text-sm font-semibold text-[#26352f]">No announcements available.</p>
-              <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
-            </>
-          }
-          renderCard={(item) => (
-            <article
-              key={item.id}
-              className="flex flex-col gap-2.5 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-xs shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(item)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
-                    title="Edit Announcement"
-                    aria-label="Edit Announcement"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item.id, item.title)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                    title="Delete Announcement"
-                    aria-label="Delete Announcement"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
-              <AnnouncementAttachment
-                attachment={item.attachment}
-                name={item.attachment_name}
-                size={item.attachment_size}
-                compact
-                className="mt-1"
-              />
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148] capitalize">
-                  {item.visibility}
-                </span>
-                <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
-                  Via {channelsLabel(item.sharing_option)}
-                </span>
-                {item.announcement_type && item.announcement_type !== "awareness" && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    {item.announcement_type === "web_conference" ? "Web conference" : "Promotion / Contribution"}
-                  </span>
-                )}
-                {item.action_type && item.action_type !== "none" && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
-                    {item.action_type.replaceAll("_", " ")}
-                  </span>
-                )}
-                {item.support_account && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    Support: {item.support_account}
-                  </span>
-                )}
-              </div>
-              {eventLabel(item) && (
-                <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
-              )}
-              {item.href && (
-                <p className="text-[10px]">
-                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
-                    Open link ↗
-                  </a>
-                </p>
-              )}
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
-                <span>Posted {dayLabel(item.created_at.slice(0, 10))}</span>
-                <span className="font-semibold text-[#3d5148]">{windowLabel(item)}</span>
-              </div>
-            </article>
-          )}
-          />
-
-        {/* Sticky Footer */}
-        <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <span className="text-xs text-[#617068] sm:text-sm">
-              Showing <strong className="text-[#26352f]">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMessage("");
-                setShowCreateModal(true);
-              }}
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add Announcement</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Add Announcement Modal */}
-
-      {/* Add Announcement Modal */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !submitting) resetAndCloseModal();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-announcement-title"
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
-          >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-              <div>
-                <h2 id="create-announcement-title" className="text-xl font-bold text-[#26352f]">
-                  {editingId ? "Edit Announcement" : "Post Announcement"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={resetAndCloseModal}
-                className="rounded-full p-2 text-xl leading-none text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
+  /** The compose form: the fields, the message row, the Cancel/Post buttons. */
+  function renderComposerFields() {
+    return (
+      <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
               {/* The type leads: it decides which special fields the rest of
                   the form shows. */}
               <label className="block text-xs font-semibold text-[#26352f]">
@@ -527,15 +405,17 @@ export function AnnouncementManager() {
                     const type = e.target.value as typeof form.announcement_type;
                     // Switching type drops the fields the new type does not
                     // use, so the form never carries hidden stale values.
-                    if (type === "awareness") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
-                    else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "" }));
-                    else setForm((f) => ({ ...f, announcement_type: type, href: "" }));
+                    if (type === "awareness") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
+                    else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
+                    else if (type === "opinion") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
+                    else setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
                   }}
                   className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                 >
                   <option value="awareness">Awareness</option>
                   <option value="web_conference">Web conference</option>
                   <option value="promotion">Promotion / Contribution</option>
+                  <option value="opinion">Opinion</option>
                 </select>
               </label>
 
@@ -675,15 +555,36 @@ export function AnnouncementManager() {
                 </div>
               </label>
 
-              <label className="flex items-center gap-2.5 rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#26352f]">
-                <input
-                  type="checkbox"
-                  checked={form.action_type === "respond"}
-                  onChange={(e) => setForm({ ...form, action_type: e.target.checked ? "respond" : "none" })}
-                  className="h-4 w-4 accent-[#b36b3c]"
-                />
-                Request response
-              </label>
+              {/* Asking for a response is what an Opinion post is; the other
+                  types are statements, so only the Opinion form offers it. */}
+              {form.announcement_type === "opinion" && (
+                <>
+                  <label className="block text-xs font-semibold text-[#26352f]">
+                    Response type *
+                    <select
+                      value={form.response_mode}
+                      onChange={(e) => setForm({ ...form, response_mode: e.target.value as "open" | "closed" })}
+                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    >
+                      <option value="open">Open — members write their answer</option>
+                      <option value="closed">Closed — members pick from options</option>
+                    </select>
+                  </label>
+                  {form.response_mode === "closed" && (
+                    <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                      Options *<span className="font-normal text-[#617068]"> (one per line — members see these as buttons)</span>
+                      <textarea
+                        required
+                        rows={4}
+                        value={form.response_options}
+                        onChange={(e) => setForm({ ...form, response_options: e.target.value })}
+                        placeholder={"Yes, I will attend\nNo, I cannot make it\nMaybe — I will confirm later"}
+                        className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                      />
+                    </label>
+                  )}
+                </>
+              )}
 
               {form.announcement_type === "promotion" && (
                 <label className="block text-xs font-semibold text-[#26352f]">
@@ -780,9 +681,202 @@ export function AnnouncementManager() {
                 </button>
               </div>
             </form>
+    );
+  }
+
+  /** The compose dialog: overlay + card in manager mode; called via renderComposerForm(true) when embedded. */
+  function renderComposerForm(inline = false) {
+    const card = (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-announcement-title"
+        className={inline ? "w-full" : "max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"}
+      >
+        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+          <h2 id="create-announcement-title" className="text-xl font-bold text-[#26352f]">
+            {editingId ? "Edit Announcement" : "Post Announcement"}
+          </h2>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={resetAndCloseModal}
+            className="rounded-full p-2 text-xl leading-none text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+            aria-label="Close modal"
+          >
+            ✕
+          </button>
+        </div>
+        <div className={inline ? "mt-6" : ""}>
+          {renderComposerFields()}
+        </div>
+      </div>
+    );
+    if (inline) return card;
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !submitting) resetAndCloseModal();
+        }}
+      >
+        {card}
+      </div>
+    );
+  }
+
+  function renderComposerOverlay() {
+    return renderComposerForm(false);
+  }
+
+  if (composerOnly) {
+    // Communicate mode: the compose fields alone — the host modal supplies
+    // the frame, the heading, and the close button.
+    return renderComposerFields();
+  }
+
+  return (
+    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
+      {/* Top Header */}
+      <div className="shrink-0 border-b border-[#dfdbd1] pb-6">
+        <div className="flex items-center gap-1">
+          <BackToOverviewArrow />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
+              Announcements Management
+            </h1>
+            <p className="mt-1 text-sm text-[#617068]">
+              Manage published church bulletins, announcements, and member notifications.
+            </p>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Announcements — ledger-style table container */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
+        {/* The announcement board is cards at every width — a bulletin reads as
+            a bulletin, not as a ledger row. */}
+        <RecordList
+          rows={announcements}
+          loading={loadingList}
+          rowKey={(item) => item.id}
+          cardsOnly
+          loadingLabel="Loading announcements..."
+          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
+          cardsStateClassName="col-span-full py-12 text-center text-sm text-[#617068]"
+          cardsEmpty={
+            <>
+              <span className="text-4xl">📢</span>
+              <p className="mt-3 text-sm font-semibold text-[#26352f]">No announcements available.</p>
+              <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
+            </>
+          }
+          renderCard={(item) => (
+            <article
+              key={item.id}
+              className="flex flex-col gap-2.5 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-xs shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(item)}
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+                    title="Edit Announcement"
+                    aria-label="Edit Announcement"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.id, item.title)}
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                    title="Delete Announcement"
+                    aria-label="Delete Announcement"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
+              <AnnouncementAttachment
+                attachment={item.attachment}
+                name={item.attachment_name}
+                size={item.attachment_size}
+                compact
+                className="mt-1"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148] capitalize">
+                  {item.visibility}
+                </span>
+                <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
+                  Via {channelsLabel(item.sharing_option)}
+                </span>
+                {item.announcement_type && item.announcement_type !== "awareness" && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    {item.announcement_type === "web_conference" ? "Web conference" : item.announcement_type === "opinion" ? "Opinion" : "Promotion / Contribution"}
+                  </span>
+                )}
+                {item.action_type && item.action_type !== "none" && item.action_type !== "respond" && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
+                    {item.action_type.replaceAll("_", " ")}
+                  </span>
+                )}
+                {item.support_account && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    Support: {item.support_account}
+                  </span>
+                )}
+              </div>
+              {eventLabel(item) && (
+                <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
+              )}
+              {item.href && (
+                <p className="text-[10px]">
+                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
+                    Open link ↗
+                  </a>
+                </p>
+              )}
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
+                <span>Posted {dayLabel(item.created_at.slice(0, 10))}</span>
+                <span className="font-semibold text-[#3d5148]">{windowLabel(item)}</span>
+              </div>
+            </article>
+          )}
+          />
+
+        {/* Sticky Footer */}
+        <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+            <span className="text-xs text-[#617068] sm:text-sm">
+              Showing <strong className="text-[#26352f]">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setMessage("");
+                setShowCreateModal(true);
+              }}
+              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add Announcement</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Announcement Modal */}
+      {showCreateModal && renderComposerOverlay()}
     </section>
   );
 }

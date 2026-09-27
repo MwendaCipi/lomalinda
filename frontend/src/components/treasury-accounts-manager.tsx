@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 
@@ -405,7 +406,10 @@ export function TreasuryAccountsManager() {
       {/* ── Header: which of the two tables is showing, its search, and the way between them ── */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
-          <h2 className="text-xl font-bold text-[#26352f]">Treasury Accounts</h2>
+          <span className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <h2 className="text-xl font-bold text-[#26352f]">Treasury Accounts</h2>
+          </span>
           <p className="text-xs text-[#617068]">
             {view === "accounts"
               ? `${filteredAccounts.length} of ${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
