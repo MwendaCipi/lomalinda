@@ -5744,6 +5744,10 @@ class RequestBellNotificationTests(APITestCase):
         notice = ChurchNotification.objects.filter(user=self.elder).latest('created_at')
         self.assertIn('join request', notice.title)
         self.assertEqual(notice.link, '/administration?tab=requests&request=join-7')
+        # The letter names the desk first, in caps, and points at the desk —
+        # not at the sign-in page, which would re-gate a signed-in reader.
+        self.assertTrue(notice.message.startswith('JOIN REQUEST'))
+        self.assertIn('Open the site to respond', notice.message)
         self.assertFalse(notice.read)
         # A plain member is not the audience and gets no row.
         self.assertFalse(ChurchNotification.objects.filter(user=self.plain).exists())
@@ -5845,3 +5849,40 @@ class AnnouncementPreferenceTests(APITestCase):
         notify_request_safely('join', 43, submitted_by='Jane Doe', church_name='Sda Loma Linda')
         notice = ChurchNotification.objects.filter(user=elder).latest('created_at')
         self.assertIn('join request', notice.title)
+
+
+class RequestAudienceSplitTests(APITestCase):
+    """Each desk reaches the office holders who answer that desk.
+
+    Elders and the clerk take every request. Administrators hear only join
+    requests — the desk that gates an account — so the other desks stay off
+    their plate. An account holding several roles hears everything its roles
+    call for.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('aud.admin', 'aud.admin@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
+        self.elder = User.objects.create_user('aud.elder', 'aud.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.clerk = User.objects.create_user('aud.clerk', 'aud.clerk@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk,member')
+
+    def _rows_for(self, user):
+        return ChurchNotification.objects.filter(user=user)
+
+    def test_admin_hears_join_only(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('join', 1, submitted_by='Jane', church_name='C')
+        notify_request_safely('prayer', 2, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows_for(self.admin).count(), 1)
+        self.assertIn('join request', self._rows_for(self.admin).first().title)
+
+    def test_elder_and_clerk_hear_every_desk(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('prayer', 3, submitted_by='Jane', church_name='C')
+        notify_request_safely('transfer', 4, submitted_by='Jane', church_name='C')
+        self.assertEqual(self._rows_for(self.elder).count(), 2)
+        self.assertEqual(self._rows_for(self.clerk).count(), 2)

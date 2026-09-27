@@ -27,7 +27,7 @@ User = get_user_model()
 # as well as in the model default so an empty setting still sends a sentence
 # rather than a blank letter.
 DEFAULT_REQUEST_NOTIFICATION_MESSAGE = (
-    '{greeting}, {user_name} has submitted a {request}. Log in to respond to it: {link}'
+    '{greeting}, {user_name} has submitted a {request}. Open the site to respond to it: {link}'
 )
 DEFAULT_MEMBERSHIP_APPROVAL_MESSAGE = (
     'Dear {name},\n\n'
@@ -62,39 +62,37 @@ REQUEST_LABELS = {
     'transfer': 'membership transfer request',
 }
 
-# Who answers the church's requests: its administrators and its elders. The
-# elder roles take no assistants, and an administrator is a system role, so
-# there is nothing to exclude here the way the board audience excludes
-# assistants. A plain member's own request is not announced to them.
-AUDIENCE_ROLE_CODES = frozenset({
-    ADMIN_ROLE,
-    'elder',
-    'first_elder',
-    'second_elder',
-    'third_elder',
-})
+# Who answers the church's requests. Elders and the clerk take every desk —
+# join, prayer, visitation, dedication, welfare, transfer. Administrators are
+# deliberately noise-reduced: join requests are the ones that gate an account
+# (the office cannot admit a member without them), so that is the only desk
+# that reaches the admin role. An account holding both roles still hears both.
+ELDER_ROLE_CODES = frozenset({'elder', 'first_elder', 'second_elder', 'third_elder'})
+CLERK_ROLE_CODES = frozenset({'clerk'})
 
 
-def request_audience():
-    """Active accounts holding an administrative or eldership role."""
+def request_audience(kind=''):
+    """Active accounts that should hear about a request of this kind."""
     from .models import MemberProfile
 
+    wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES)
+    if kind == 'join':
+        wanted.add(ADMIN_ROLE)
     audience_ids = set()
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
-        if set(profile.get_roles()) & AUDIENCE_ROLE_CODES:
+        if set(profile.get_roles()) & wanted:
             audience_ids.add(profile.user_id)
     return User.objects.filter(id__in=audience_ids, is_active=True).distinct()
 
 
 def request_desk_link(kind, request_id):
-    """The sign-in link that lands on the requests desk with one request open.
+    """The link that lands on the requests desk with one request open.
 
-    The requests desk is behind the sign-in, so the link carries the
-    destination rather than pointing at it directly — an elder reading the
-    email on a phone may not be signed in yet.
+    Points straight at the desk, not at the sign-in page: a reader who is
+    already signed in goes straight there, and one who is not is bounced to
+    sign-in by the desk itself with the destination preserved.
     """
-    destination = f'/administration?tab=requests&request={kind}-{request_id}'
-    return f'{settings.FRONTEND_URL}/login?next={quote(destination, safe="")}'
+    return f'{settings.FRONTEND_URL}/administration?tab=requests&request={kind}-{request_id}'
 
 
 def request_notification_template(settings_obj=None):
@@ -116,7 +114,7 @@ def membership_approval_template(settings_obj=None):
 
 
 def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None):
-    """Email the elders and administrators that a request is waiting.
+    """Email the right office holders that a request is waiting.
 
     Returns how many letters left the building. A failure is never allowed to
     fail the member's request: the submission matters more than the notice.
@@ -135,18 +133,22 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     if submitted_at is not None:
         subject = f'{subject} · {submitted_at.strftime("%d %b %Y")}'
 
+    desk_link = f'/administration?tab=requests&request={kind}-{request_id}'
+    # The letter opens with the desk named, all caps, before anything else:
+    # an inbox scan should read the desk before the sender's name registers.
+    body = f"{label.upper()}\n\n{render_message(template, context_common)}"
+
     sent = 0
     already_sent = set()
-    audience = list(request_audience())
+    audience = list(request_audience(kind))
     for user in audience:
         address = (user.email or '').strip()
         # Two accounts can share one mailbox; that inbox gets one letter, not two.
         if not address or address.lower() in already_sent:
             continue
         already_sent.add(address.lower())
-        message = render_message(template, context_common)
         try:
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [address], fail_silently=True)
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [address], fail_silently=True)
             sent += 1
         except Exception:
             continue
@@ -160,8 +162,8 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
         ChurchNotification(
             user=user,
             title=subject,
-            message=render_message(template, context_common),
-            link=f'/administration?tab=requests&request={kind}-{request_id}',
+            message=body,
+            link=desk_link,
         )
         for user in audience
     ])
@@ -171,12 +173,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     try:
         from .push import push_request_notification
 
-        push_request_notification(
-            kind,
-            subject,
-            render_message(template, context_common),
-            f'/administration?tab=requests&request={kind}-{request_id}',
-        )
+        push_request_notification(kind, subject, body, desk_link)
     except Exception:
         pass
     return sent
