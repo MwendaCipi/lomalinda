@@ -111,14 +111,20 @@ export function DashboardAnnouncements() {
         )}
       </div>
 
+      {/* The rail's height is constant whatever the slide carries: the
+          title holds one line, the body always has room for two, and the
+          detail line keeps its slot even when empty — so the panels below
+          never jump as the slides turn. */}
       <div className="mt-2.5">
-        <h2 className="text-lg font-bold leading-snug text-[#26352f] sm:text-xl">
+        <h2 className="line-clamp-1 text-lg font-bold leading-snug text-[#26352f] sm:text-xl">
           {current ? current.title : gatheringLabel(gathering, now)}
         </h2>
-        <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#415047]">
+        <p className="mt-1.5 line-clamp-2 min-h-[3rem] text-sm leading-6 text-[#415047]">
           {current ? current.text : `${gathering.time} · ${gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}`}
         </p>
-        {current?.detail && <p className="mt-1 line-clamp-1 text-xs text-[#617068]">{current.detail}</p>}
+        <p className="mt-1 line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-[#617068]">
+          {current?.detail || ""}
+        </p>
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3">

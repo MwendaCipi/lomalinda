@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
+import { DashboardQuarterlyGiving } from "@/components/dashboard-quarterly-giving";
 import { GroupedBarChart } from "@/components/mini-charts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -134,7 +135,7 @@ export function MemberHome() {
 
   // ── Role-tailored quick tiles ─────────────────────────────────────────────
   const tiles = [
-    { href: "/give", label: "Give & Offerings", desc: "Tithe, offerings and funds", icon: HandHeart },
+    { href: "/give", label: "Tithes & Offerings", desc: "Tithe, offerings and funds", icon: HandHeart },
     { href: "/announcements", label: "Announcements", desc: "Church news and notices", icon: Megaphone },
     { href: "/materials", label: "Lessons & Materials", desc: "Sabbath School readings", icon: BookOpen },
     { href: "/member", label: "My Profile", desc: "Details and giving history", icon: UserRound },
@@ -201,14 +202,13 @@ export function MemberHome() {
           in. A "See more" opens the full feed in Fellowship. */}
       <DashboardAnnouncements />
 
-      {/* Hero — the greeting alone. The clarion call belongs to the website's
-          landing page now, and the dashboard's money and tools live in the
-          panels below. */}
-      <section className="mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
+      {/* Hero — the greeting, kept to its own height so the church's news
+          and the member's tools sit above the fold. */}
+      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-5 text-white shadow-md sm:px-8 sm:py-6">
         {/* The greeting is meant to read as one line on a phone as well as on a
             wide screen, so the size follows the viewport between the two ends
             instead of switching at a breakpoint and wrapping in between. */}
-        <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
+        <h1 className="text-[clamp(1.25rem,5.4vw,2rem)] font-bold leading-tight tracking-tight">
           {greeting}, {firstName}.
         </h1>
       </section>
@@ -320,6 +320,11 @@ export function MemberHome() {
               )}
             </div>
           </section>
+
+          {/* Quarterly giving — the year's quarters, for the officers who
+              keep the books. It asks the same analytics endpoint the Church
+              finances panel used, which refuses anyone outside treasury. */}
+          {hasAny(["treasurer", "admin"]) && <DashboardQuarterlyGiving />}
         </>
       )}
     </main>
