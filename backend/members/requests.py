@@ -137,7 +137,8 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
 
     sent = 0
     already_sent = set()
-    for user in request_audience():
+    audience = list(request_audience())
+    for user in audience:
         address = (user.email or '').strip()
         # Two accounts can share one mailbox; that inbox gets one letter, not two.
         if not address or address.lower() in already_sent:
@@ -149,6 +150,35 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
             sent += 1
         except Exception:
             continue
+
+    # The same news also lands in the bell: an office holder who hasn't opened
+    # their email still sees the request waiting in the app, and tapping it
+    # opens the requests desk with that request highlighted.
+    from .models import ChurchNotification
+
+    ChurchNotification.objects.bulk_create([
+        ChurchNotification(
+            user=user,
+            title=subject,
+            message=render_message(template, context_common),
+            link=f'/administration?tab=requests&request={kind}-{request_id}',
+        )
+        for user in audience
+    ])
+
+    # And, for those who enabled it, the phone itself: an encrypted web push
+    # through each browser's service worker, wakeable with the app closed.
+    try:
+        from .push import push_request_notification
+
+        push_request_notification(
+            kind,
+            subject,
+            render_message(template, context_common),
+            f'/administration?tab=requests&request={kind}-{request_id}',
+        )
+    except Exception:
+        pass
     return sent
 
 

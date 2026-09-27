@@ -114,27 +114,56 @@ export function CampaignManagement({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [issuingCards, setIssuingCards] = useState(false);
 
-  // Actions menu dropdown state, plus which way it opens: the last rows sit
-  // against the wrapper's bottom edge, where a downward menu is clipped.
+  // Actions menu state. The menu renders `fixed` at coordinates captured from
+  // its button, because an `absolute` menu is clipped by the table wrapper's
+  // `overflow-hidden` — fatal for a one-row table, whose wrapper bottom sits
+  // right under the row no matter how much page remains below it.
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [dropUpActionsId, setDropUpActionsId] = useState<number | null>(null);
+  const [actionsMenuPos, setActionsMenuPos] = useState<{
+    right: number;
+    dropUp: boolean;
+    top: number;
+    bottom: number;
+  } | null>(null);
 
   const toggleActionsMenu = (id: number, event: React.MouseEvent<HTMLButtonElement>) => {
     if (openActionsId === id) {
-      setDropUpActionsId(null);
+      setActionsMenuPos(null);
       setOpenActionsId(null);
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    setDropUpActionsId(window.innerHeight - rect.bottom < 260 ? id : null);
+    const dropUp = window.innerHeight - rect.bottom < 260;
+    setActionsMenuPos({
+      right: window.innerWidth - rect.right,
+      dropUp,
+      top: rect.bottom + 6,
+      bottom: window.innerHeight - rect.top + 6,
+    });
     setOpenActionsId(id);
   };
 
-  /** Closing the menu also clears its opening direction. */
+  /** Closing the menu also clears its captured position. */
   const closeActionsMenu = () => {
     setOpenActionsId(null);
-    setDropUpActionsId(null);
+    setActionsMenuPos(null);
   };
+
+  // A fixed menu doesn't travel with the page, so any scroll or resize would
+  // strand it in space — close it instead of letting it drift.
+  useEffect(() => {
+    if (openActionsId === null) return;
+    const close = () => {
+      setOpenActionsId(null);
+      setActionsMenuPos(null);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [openActionsId]);
   // The drive being edited — when set, the create modal opens prefilled in edit mode.
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   // The drive a manual receipt is being recorded against.
@@ -1141,13 +1170,20 @@ export function CampaignManagement({
                                   </svg>
                                 </button>
 
-                                {openActionsId === c.id && (
+                                {openActionsId === c.id && actionsMenuPos && (
                                   <>
                                     <div
-                                      className="fixed inset-0 z-10"
+                                      className="fixed inset-0 z-30"
                                       onClick={closeActionsMenu}
                                     />
-                                    <div className={`absolute right-0 z-20 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left ${dropUpActionsId === c.id ? "bottom-full mb-1.5" : "top-full mt-1.5"}`}>
+                                    <div
+                                      className="fixed z-40 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left"
+                                      style={
+                                        actionsMenuPos.dropUp
+                                          ? { right: actionsMenuPos.right, bottom: actionsMenuPos.bottom }
+                                          : { right: actionsMenuPos.right, top: actionsMenuPos.top }
+                                      }
+                                    >
                                       <Link
                                         href={`/support/campaigns/${c.id}`}
                                         onClick={closeActionsMenu}

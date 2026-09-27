@@ -22,10 +22,13 @@ import {
   Calendar,
   X,
   UserPlus,
-  Download
+  Download,
+  Inbox
 } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { triggerPwaInstall } from "./pwa-register";
+import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
+import { showAlert } from "@/lib/alerts";
 import { normalizePath } from "@/lib/paths";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -48,6 +51,16 @@ interface AnnouncementItem {
   text?: string;
   detail?: string;
   created_at?: string;
+}
+
+/** A server-pushed notification (e.g. a join request waiting for the office). */
+interface ChurchNotificationItem {
+  id: number;
+  title: string;
+  message: string;
+  link?: string;
+  read: boolean;
+  created_at: string;
 }
 
 export function SiteNav({ navigationLocked = false }: { navigationLocked?: boolean } = {}) {
@@ -106,6 +119,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   });
 
   const [notifications, setNotifications] = useState<AnnouncementItem[]>([]);
+  const [serverNotifications, setServerNotifications] = useState<ChurchNotificationItem[]>([]);
+  const [pushState, setPushState] = useState<PushSupport | null>(null);
+  const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
   const [readNotificationIds, setReadNotificationIds] = useState<number[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -198,25 +214,124 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       .catch(() => setNotifications([]));
   }, [pathname]);
 
+  // Load personal notifications (requests waiting on this office holder).
+  // Anonymous visitors get nothing — the bell simply shows announcements.
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) {
+      setServerNotifications([]);
+      return;
+    }
+    fetch(`${API_URL}/api/members/notifications/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: unknown) => {
+        setServerNotifications(Array.isArray(data) ? data.slice(0, 8) : []);
+      })
+      .catch(() => setServerNotifications([]));
+  }, [pathname]);
+
+  // Whether this device can take phone notifications (and whether they're on),
+  // plus the member's announcement channel preferences. Only asked once signed
+  // in — the bell gains its toggles for signed-in users.
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) {
+      setPushState(null);
+      setAnnouncePrefs(null);
+      return;
+    }
+    getPushState().then(setPushState).catch(() => setPushState(null));
+    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
+      })
+      .catch(() => setAnnouncePrefs(null));
+  }, [pathname, userState.isLoggedIn]);
+
+  const updateAnnouncePref = (field: "email" | "push", value: boolean) => {
+    if (!announcePrefs) return;
+    const apiField = field === "email" ? "announce_email" : "announce_push";
+    setAnnouncePrefs({ ...announcePrefs, [field]: value });
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/members/me/`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ [apiField]: value }),
+    }).catch(() => {});
+  };
+
+  const handleTogglePhoneNotifications = async () => {
+    if (!pushState?.supported) return;
+    if (pushState.enabled) {
+      await disablePush();
+      setPushState({ supported: true, enabled: false });
+      return;
+    }
+    const result = await enablePush();
+    if (result.ok) {
+      setPushState({ supported: true, enabled: true });
+      showAlert("Phone notifications on", "You will now be alerted on this device when a request is waiting for the office.", "success");
+    } else {
+      showAlert("Not enabled", result.error || "This browser would not allow notifications.", "warning");
+    }
+  };
+
+  // A notification tapped while the app is already open asks this tab to navigate.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "push-navigate" && event.data.link) {
+        router.push(event.data.link);
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [router]);
+
+  const unreadServerNotifications = serverNotifications.filter((n) => !n.read);
+
+  const markServerNotificationsRead = () => {
+    const unread = serverNotifications.filter((n) => !n.read);
+    if (unread.length === 0) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    // Optimistic flip so the dot clears at once; a failed POST just means the
+    // dot returns on the next load — never worth blocking the popover for.
+    setServerNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    fetch(`${API_URL}/api/members/notifications/`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: unread.map((n) => n.id) }),
+    }).catch(() => {});
+  };
+
   const handleToggleNotifications = () => {
     const nextShow = !showNotifications;
     setShowNotifications(nextShow);
     setShowUserMenu(false);
 
-    if (nextShow && notifications.length > 0) {
-      const updated = Array.from(new Set([...readNotificationIds, ...notifications.map((n) => n.id)]));
-      setReadNotificationIds(updated);
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("read_notification_ids", JSON.stringify(updated));
-        } catch {
-          // ignore
+    if (nextShow) {
+      markServerNotificationsRead();
+      if (notifications.length > 0) {
+        const updated = Array.from(new Set([...readNotificationIds, ...notifications.map((n) => n.id)]));
+        setReadNotificationIds(updated);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("read_notification_ids", JSON.stringify(updated));
+          } catch {
+            // ignore
+          }
         }
       }
     }
   };
 
-  const hasUnread = notifications.some((n) => !readNotificationIds.includes(n.id));
+  const hasUnread =
+    notifications.some((n) => !readNotificationIds.includes(n.id)) || unreadServerNotifications.length > 0;
 
   // Click outside to close popovers
   useEffect(() => {
@@ -390,7 +505,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
               aria-label="Notifications"
             >
               <Bell className="w-4.5 h-4.5" />
-              {hasUnread && (
+              {(unreadServerNotifications.length > 0 || hasUnread) && (
                 <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-[#b36b3c] ring-2 ring-[#26352f]" />
               )}
             </button>
@@ -401,9 +516,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-[#26352f]">Notifications</span>
-                    {notifications.length > 0 && (
+                    {notifications.length + serverNotifications.length > 0 && (
                       <span className="text-[10px] bg-[#26352f]/10 text-[#26352f] font-bold px-2 py-0.5 rounded-full">
-                        {notifications.length}
+                        {notifications.length + serverNotifications.length}
                       </span>
                     )}
                   </div>
@@ -416,7 +531,39 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                 </div>
 
                 <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {notifications.length > 0 ? (
+                  {serverNotifications.length > 0 && (
+                    <div className="space-y-2">
+                      {serverNotifications.map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => {
+                            markServerNotificationsRead();
+                            setShowNotifications(false);
+                            if (n.link) router.push(n.link);
+                          }}
+                          className={`w-full text-left bg-[#f7f4ee] p-2.5 rounded-xl border transition flex items-start gap-2.5 ${
+                            n.read ? "border-slate-200/70 hover:bg-slate-100/70" : "border-[#b36b3c]/40 ring-1 ring-[#b36b3c]/20"
+                          }`}
+                        >
+                          <Inbox className="w-4 h-4 text-[#b36b3c] shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs text-[#26352f] block truncate">{n.title}</strong>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{n.message}</p>
+                          </div>
+                          {!n.read && <span className="h-2 w-2 rounded-full bg-[#b36b3c] shrink-0 mt-1.5" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {notifications.length > 0 && serverNotifications.length > 0 && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Announcements</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+                  )}
+                  {notifications.length > 0 || serverNotifications.length > 0 ? (
                     notifications.map((ann) => (
                       <div
                         key={ann.id}
@@ -440,7 +587,46 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100">
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  {pushState?.supported && userState.isLoggedIn && (
+                    <button
+                      type="button"
+                      onClick={handleTogglePhoneNotifications}
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
+                        pushState.enabled
+                          ? "border-[#dfdbd1] bg-white text-[#617068] hover:bg-[#f7f4ee]"
+                          : "border-[#b36b3c] bg-[#b36b3c] text-white hover:bg-[#96552e]"
+                      }`}
+                    >
+                      {pushState.enabled ? "Turn off phone notifications" : "Turn on phone notifications"}
+                    </button>
+                  )}
+                  {announcePrefs && (
+                    <div className="rounded-xl bg-[#f7f4ee] p-2.5 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#617068]">Announcements reach me by</p>
+                      <label className="flex items-center justify-between text-xs text-[#26352f] cursor-pointer">
+                        <span>Email</span>
+                        <input
+                          type="checkbox"
+                          checked={announcePrefs.email}
+                          onChange={(e) => updateAnnouncePref("email", e.target.checked)}
+                          className="h-3.5 w-3.5 accent-[#5f8067]"
+                        />
+                      </label>
+                      {pushState?.supported && (
+                        <label className="flex items-center justify-between text-xs text-[#26352f] cursor-pointer">
+                          <span>Phone notification</span>
+                          <input
+                            type="checkbox"
+                            checked={announcePrefs.push}
+                            onChange={(e) => updateAnnouncePref("push", e.target.checked)}
+                            className="h-3.5 w-3.5 accent-[#5f8067]"
+                          />
+                        </label>
+                      )}
+                      <p className="text-[10px] text-slate-400">Requests for the office always notify, whatever you switch off here.</p>
+                    </div>
+                  )}
                   <Link
                     href="/announcements"
                     onClick={() => setShowNotifications(false)}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "sda-loma-linda-meru-v7";
+const CACHE_NAME = "sda-loma-linda-meru-v8";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -118,9 +118,48 @@ async function networkOnlyFallbackOffline(request) {
   }
 }
 
+/* ── Web Push ────────────────────────────────────────────────────────────
+   The server encrypts a small JSON payload ({title, body, link}) to each
+   device; the browser wakes this worker even with the app closed and the
+   OS shows the notification. Clicking it deep-links into the app. */
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+  const title = payload.title || "SDA Loma Linda";
+  const options = {
+    body: payload.body || "",
+    icon: "/icons/meru/app-icon-192.png",
+    badge: "/icons/meru/app-icon-192.png",
+    tag: payload.link || undefined, // one notice per destination, no stacking
+    data: { link: payload.link || "/administration?tab=requests" },
+    renotify: false,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.link) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Focus an existing window of this app if one is open.
+      for (const client of clientList) {
+        if ("focus" in client) {
+          client.postMessage({ type: "push-navigate", link: target });
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return; // third-party: untouched
 

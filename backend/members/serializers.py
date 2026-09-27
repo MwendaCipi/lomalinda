@@ -518,10 +518,11 @@ class MemberEmailSerializer(serializers.Serializer):
     Receipts are addressed from the account (see receipt_email_for), so a
     member with no address on file had no way to ever receive one. This is the
     narrow door that lets them fix it — nothing else about the account is
-    writable from here.
+    writable from here. Now optional: a PATCH may carry only the notification
+    switches (announce_email / announce_push) and leave the address untouched.
     """
 
-    email = serializers.EmailField(allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
 
     def validate_email(self, value):
         return value.strip()
@@ -910,7 +911,7 @@ class BoardMeetingSerializer(serializers.ModelSerializer):
 class ChurchNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchNotification
-        fields = ('id', 'title', 'message', 'read', 'created_at')
+        fields = ('id', 'title', 'message', 'link', 'read', 'created_at')
         read_only_fields = ('id', 'created_at')
 
 

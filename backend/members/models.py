@@ -107,6 +107,10 @@ class MemberProfile(models.Model):
         help_text="Ministry the member belongs to, self-declared at profile update",
     )
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
+    # Notification preferences. Mass communication (announcements) respects
+    # these; duty notices (a request waiting for the office) always arrive.
+    announce_email = models.BooleanField(default=True, help_text="Receive announcement broadcasts by email")
+    announce_push = models.BooleanField(default=True, help_text="Receive announcements as phone/browser notifications")
     must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
     profile_update_pending = models.BooleanField(
         default=False,
@@ -961,6 +965,12 @@ class ChurchSettings(models.Model):
         blank=True,
         help_text="Rights per role: {role_code: [right_code, ...]}"
     )
+    # Web Push (VAPID): the key pair identifies the church server to browser
+    # push services. Generate once with the management command; rotate by
+    # replacing both values (existing subscriptions keep working only while
+    # the private key is stable, so rotation means everyone re-enables).
+    vapid_public_key = models.CharField(max_length=200, blank=True)
+    vapid_private_key = models.CharField(max_length=200, blank=True)
     bank_name = models.CharField(max_length=160, default='KCB Bank Kenya', blank=True)
     bank_account_name = models.CharField(max_length=160, default='SDA Church Main Account', blank=True)
     bank_account_number = models.CharField(max_length=80, default='1122334455', blank=True)
@@ -1112,6 +1122,9 @@ class ChurchNotification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=160)
     message = models.TextField()
+    # In-app destination (e.g. "/administration?tab=requests&request=join-3") for
+    # notifications that open somewhere; blank renders as a plain list item.
+    link = models.CharField(max_length=300, blank=True)
     read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1120,6 +1133,24 @@ class ChurchNotification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.user.username}: {self.title}"
+
+
+class PushSubscription(models.Model):
+    """A browser's permission to receive push, one row per device.
+
+    A member may be signed in on a phone and a laptop; each granted us its own
+    subscription (endpoint + keys), so rows multiply per user rather than
+    replacing each other. Dead endpoints (browser reinstalled, subscription
+    expired) are deleted on first 404/410 from the push service.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_subscriptions')
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=120)
+    auth = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Push subscription for {self.user.username}"
 
 
 class VisitationRequest(models.Model):

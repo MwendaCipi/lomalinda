@@ -95,7 +95,17 @@ function channelsLabel(sharing?: string): string {
     .split(",")
     .map((part) => {
       const value = part.trim().toLowerCase();
-      return value === "site" ? "Site" : value === "sms" ? "SMS" : value === "email" ? "Email" : value === "all" ? "Site, Email, SMS" : part.trim();
+      return value === "site"
+        ? "Site"
+        : value === "sms"
+          ? "SMS"
+          : value === "email"
+            ? "Email"
+            : value === "phone"
+              ? "Phone"
+              : value === "all"
+                ? "Site, Email, SMS, Phone"
+                : part.trim();
     })
     .filter(Boolean)
     .join(", ");
@@ -577,7 +587,7 @@ export function AnnouncementManager() {
                   </button>
                   {showSharingDropdown && (
                     <div className="absolute z-50 mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white shadow-lg p-2 space-y-1">
-                      {["site", "sms", "email"].map((channel) => {
+                      {["site", "sms", "email", "phone"].map((channel) => {
                         const selected = form.sharing_option.split(",").map((s) => s.trim()).includes(channel);
                         return (
                           <button
@@ -596,7 +606,13 @@ export function AnnouncementManager() {
                               )}
                             </span>
                             <span className="text-[#26352f]">
-                              {channel === "site" ? "On the Site" : channel === "sms" ? "Through SMS" : "Through Email"}
+                              {channel === "site"
+                                ? "On the Site"
+                                : channel === "sms"
+                                  ? "Through SMS"
+                                  : channel === "email"
+                                    ? "Through Email"
+                                    : "As Phone Notification"}
                             </span>
                           </button>
                         );

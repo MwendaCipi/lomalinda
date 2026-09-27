@@ -1382,6 +1382,20 @@ def dispatch_announcement_emails_safely(announcement_id):
         logger.exception('Announcement email broadcast for #%s failed', announcement_id)
 
 
+def _push_announcement_safely(announcement_id):
+    """Deliver an announcement as web push off the request cycle, failures logged."""
+    try:
+        announcement = Announcement.objects.get(id=announcement_id)
+    except Announcement.DoesNotExist:
+        return
+    try:
+        from .push import push_announcement
+
+        push_announcement(announcement)
+    except Exception:
+        logger.exception('Announcement push broadcast for #%s failed', announcement_id)
+
+
 def can_manage_announcements(user):
     """Leadership test shared by the announcement endpoints.
 
@@ -1563,16 +1577,22 @@ def announcement_email_recipients(announcement, church_name):
     """Yield ``(address, body)`` pairs for an announcement's email audience.
 
     Split from ``send_announcement_emails`` so the size of the audience can be
-    counted (for the failure log) without re-sending anything.
+    counted (for the failure log) without re-sending anything. Members who
+    switched announcement emails off are withheld here — their address stays
+    on the account for receipts and duty notices, it just stops receiving
+    mass broadcasts. The pref is read as ``None`` for accounts with no
+    profile, and ``None`` still receives: only a deliberate ``False`` opts out.
     """
     seen = set()
     # The audience rule lives in announcement_recipients(): approved accounts
     # only, member accounts only for a members-only post, the named offices
     # and groups for an audience.
     recipients = announcement_recipients(announcement).exclude(email='')
-    for first_name, last_name, username, email in (
-        recipients.values_list('first_name', 'last_name', 'username', 'email')
+    for first_name, last_name, username, email, wants_email in (
+        recipients.values_list('first_name', 'last_name', 'username', 'email', 'member_profile__announce_email')
     ):
+        if wants_email is False:
+            continue
         address = (email or '').strip()
         if not address or address.lower() in seen:
             continue
@@ -1686,6 +1706,9 @@ class AnnouncementView(generics.ListCreateAPIView):
         channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
         send_email = any(c in ('email', 'all') for c in channels) or sharing_raw in ('email', 'all')
         send_sms = any(c in ('sms', 'all') for c in channels) or sharing_raw in ('sms', 'all')
+        # ``phone`` is the web-push channel: a device notification rather than
+        # an inbox letter. ``all`` carries every channel, push included.
+        send_push = any(c in ('phone', 'all') for c in channels) or sharing_raw in ('phone', 'all')
         show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
 
         # Publish strictly by channel choice: an announcement that goes out on
@@ -1712,6 +1735,25 @@ class AnnouncementView(generics.ListCreateAPIView):
                     name=f'announcement-email-{announcement.id}',
                     daemon=True,
                 ).start()
+
+        # Phone/browser push: every device of the audience that enabled it,
+        # when the officer chose the Phone channel for this post. Runs off the
+        # request cycle like the email broadcast; a failure is a log line,
+        # never a broken announcement. Without VAPID keys (fresh installs,
+        # the test suite) there is nothing to wake and no thread either.
+        if send_push:
+            try:
+                from .push import vapid_keys_ready
+
+                if vapid_keys_ready():
+                    threading.Thread(
+                        target=_push_announcement_safely,
+                        args=(announcement.id,),
+                        name=f'announcement-push-{announcement.id}',
+                        daemon=True,
+                    ).start()
+            except Exception:
+                pass
 
         if send_sms:
             try:
@@ -1914,22 +1956,44 @@ class MeView(APIView):
             'gifts': profile.gifts if profile else '',
             'ministry': profile.ministry if profile else '',
             'disability': profile.disability if profile else '',
+            'announce_email': profile.announce_email if profile else True,
+            'announce_push': profile.announce_push if profile else True,
             'profile_update_pending': bool(profile and profile.needs_profile_update()),
         })
 
     def patch(self, request):
-        """Let a member set or correct the email on their own account.
+        """Let a member set their email and notification preferences.
 
         Gift receipts are addressed from the account, never from the giving
         form, so a member whose account has no address could never receive
         one. This is the way out of that: the address is written to the
         account first, and the next receipt follows it. An empty string clears
         it, which is how a member says they would rather have SMS only.
+
+        The two switches govern mass communication only: ``announce_email``
+        withholds announcement broadcasts, ``announce_push`` announcement
+        notifications. Duty notices — a request waiting for your office —
+        always arrive regardless of both.
         """
         serializer = MemberEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        request.user.email = serializer.validated_data['email']
-        request.user.save(update_fields=['email'])
+        if 'email' in serializer.validated_data:
+            request.user.email = serializer.validated_data['email']
+            request.user.save(update_fields=['email'])
+
+        profile = getattr(request.user, 'member_profile', None)
+        if profile is not None:
+            changed = []
+            for field in ('announce_email', 'announce_push'):
+                if field in request.data:
+                    value = request.data[field]
+                    if value in (True, False, 'true', 'false', 'True', 'False', '1', '0', 1, 0):
+                        new_value = value in (True, 'true', 'True', '1', 1)
+                        if getattr(profile, field) != new_value:
+                            setattr(profile, field, new_value)
+                            changed.append(field)
+            if changed:
+                profile.save(update_fields=changed)
         return self.get(request)
 
 
@@ -4491,6 +4555,70 @@ class ChurchNotificationView(generics.ListAPIView):
 
     def get_queryset(self):
         return ChurchNotification.objects.filter(user=self.request.user)
+
+    def post(self, request):
+        """Mark notifications read, optionally scoped to specific ids.
+
+        A body of ``{"ids": [1, 2]}`` marks exactly those; an empty body marks
+        everything for this user. Each notification owner's ``read`` flag is
+        their own — there is no cross-user marking here.
+        """
+        ids = request.data.get('ids') if isinstance(request.data, dict) else None
+        qs = ChurchNotification.objects.filter(user=request.user, read=False)
+        if isinstance(ids, list) and ids:
+            qs = qs.filter(id__in=[i for i in ids if isinstance(i, int)])
+        updated = qs.update(read=True)
+        return Response({'marked': updated})
+
+
+class PushKeyView(APIView):
+    """The server's VAPID public key, for the browser's subscription call."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import ChurchSettings
+
+        row = ChurchSettings.objects.first()
+        key = (row.vapid_public_key if row else '') or ''
+        return Response({'public_key': key})
+
+
+class PushSubscribeView(APIView):
+    """Register or remove this browser's push subscription.
+
+    POST stores the endpoint + encryption keys against the signed-in account;
+    DELETE removes it (used both by “turn off” and by the service worker when
+    the browser itself retires the subscription).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .models import PushSubscription
+
+        endpoint = (request.data.get('endpoint') or '').strip()
+        keys = request.data.get('keys') or {}
+        p256dh = (keys.get('p256dh') or '').strip()
+        auth = (keys.get('auth') or '').strip()
+        if not endpoint or not p256dh or not auth:
+            return Response(
+                {'error': 'endpoint and keys are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        PushSubscription.objects.update_or_create(
+            endpoint=endpoint[:500],
+            defaults={'user': request.user, 'p256dh': p256dh[:120], 'auth': auth[:120]},
+        )
+        return Response({'status': 'subscribed'})
+
+    def delete(self, request):
+        from .models import PushSubscription
+
+        endpoint = (request.data.get('endpoint') or '').strip()
+        if endpoint:
+            PushSubscription.objects.filter(endpoint=endpoint[:500], user=request.user).delete()
+        return Response({'status': 'unsubscribed'})
 
 
 class VisitationRequestView(generics.ListCreateAPIView):

@@ -5721,3 +5721,127 @@ class DepartmentApiTests(APITestCase):
         # Letters and notifications read "Assistant AMM Leader" for a holder
         # flagged as an assistant — matching what the UI shows.
         self.assertEqual(res.data['role_display'], 'Member, Assistant AMM Leader')
+
+
+class RequestBellNotificationTests(APITestCase):
+    """A request must ring the bell, not just the inbox.
+
+    Every request notice emails the office audience *and* creates an in-app
+    notification carrying a deep link to the requests desk; the notifications
+    endpoint lists the owner's rows and marks them read on demand.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('bell.elder', 'bell.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.plain = User.objects.create_user('bell.plain', 'bell.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+    def test_request_notice_creates_bell_notifications_for_audience(self):
+        from .requests import notify_request_safely
+
+        notify_request_safely('join', 7, submitted_by='Jane Doe', church_name='Sda Loma Linda')
+        notice = ChurchNotification.objects.filter(user=self.elder).latest('created_at')
+        self.assertIn('join request', notice.title)
+        self.assertEqual(notice.link, '/administration?tab=requests&request=join-7')
+        self.assertFalse(notice.read)
+        # A plain member is not the audience and gets no row.
+        self.assertFalse(ChurchNotification.objects.filter(user=self.plain).exists())
+
+    def test_notifications_list_and_mark_read(self):
+        ChurchNotification.objects.create(
+            user=self.elder, title='New join request', message='body', link='/administration?tab=requests',
+        )
+        self.client.force_authenticate(self.elder)
+        res = self.client.get('/api/members/notifications/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]['link'], '/administration?tab=requests')
+        # Marking read flips only this owner's rows.
+        res = self.client.post('/api/members/notifications/', {'ids': [res.data[0]['id']]}, format='json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['marked'], 1)
+        self.assertTrue(ChurchNotification.objects.get(user=self.elder).read)
+        # Another account sees none of the elder's rows.
+        self.client.force_authenticate(self.plain)
+        res = self.client.get('/api/members/notifications/')
+        self.assertEqual(res.data, [])
+
+
+class VapidKeyCommandTests(TestCase):
+    """The enable-push flow starts with a key pair on record."""
+
+    def test_command_generates_and_stores_keys(self):
+        from django.core.management import call_command
+
+        call_command('generate_vapid_keys', verbosity=0)
+        row = ChurchSettings.objects.first()
+        self.assertTrue(row.vapid_public_key)
+        self.assertIn('PRIVATE KEY', row.vapid_private_key)
+        # The public half is exactly what browsers expect: base64url of the
+        # 65-byte uncompressed P-256 point.
+        import base64
+        raw = base64.urlsafe_b64decode(row.vapid_public_key + '==')
+        self.assertEqual(len(raw), 65)
+
+
+class AnnouncementPreferenceTests(APITestCase):
+    """Announcements are mass communication; members choose their channels.
+
+    ``announce_email`` withholds the broadcast letter, ``announce_push`` the
+    phone notification — but duty notices (requests) ignore both switches.
+    """
+
+    def setUp(self):
+        self.poster = User.objects.create_user('pref.poster', 'pref.poster@example.com', 'StrongPass#2026', is_staff=True)
+        self.lover = User.objects.create_user('pref.lover', 'pref.lover@example.com', 'StrongPass#2026', first_name='Lena', last_name='Lovesmail')
+        self.lover_profile = MemberProfile.objects.create(user=self.lover, role='member', roles='member')
+        self.opter = User.objects.create_user('pref.opter', 'pref.opter@example.com', 'StrongPass#2026', first_name='Otis', last_name='Optout')
+        self.opter_profile = MemberProfile.objects.create(user=self.opter, role='member', roles='member', announce_email=False)
+
+    def _post_announcement(self):
+        self.client.force_authenticate(self.poster)
+        res = self.client.post('/api/members/announcements/', {
+            'title': 'Work day at church',
+            'text': 'Bring gloves.',
+            'visibility': 'all',
+            'sharing_option': 'site,email',
+        }, format='json')
+        self.assertEqual(res.status_code, 201)
+        return res
+
+    def test_opted_out_member_receives_no_email(self):
+        from django.core import mail
+
+        self._post_announcement()
+        recipients = [m.to[0] for m in mail.outbox]
+        self.assertIn('pref.lover@example.com', recipients)
+        self.assertNotIn('pref.opter@example.com', recipients)
+
+    def test_me_exposes_and_updates_preferences(self):
+        self.client.force_authenticate(self.opter)
+        res = self.client.get('/api/members/me/')
+        self.assertEqual(res.data['announce_email'], False)
+        self.assertEqual(res.data['announce_push'], True)
+        res = self.client.patch('/api/members/me/', {
+            'announce_email': True, 'announce_push': False,
+        }, format='json')
+        self.assertEqual(res.data['announce_email'], True)
+        self.assertEqual(res.data['announce_push'], False)
+        self.opter_profile.refresh_from_db()
+        self.assertFalse(self.opter_profile.announce_push)
+
+    def test_request_notifications_ignore_announcement_prefs(self):
+        from .requests import notify_request_safely
+
+        self.opter_profile.announce_push = False
+        self.opter_profile.save()
+        # A request is duty, not mass communication: bell rows land regardless.
+        notify_request_safely('join', 42, submitted_by='Jane Doe', church_name='Sda Loma Linda')
+        # The office audience is role-based; our members here are plain, so no
+        # rows for them — assert the mechanism itself with an elder instead.
+        elder = User.objects.create_user('pref.elder', 'pref.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder,member', announce_push=False, announce_email=False)
+        notify_request_safely('join', 43, submitted_by='Jane Doe', church_name='Sda Loma Linda')
+        notice = ChurchNotification.objects.filter(user=elder).latest('created_at')
+        self.assertIn('join request', notice.title)
