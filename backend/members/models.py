@@ -287,7 +287,10 @@ class EnrollmentRequest(models.Model):
     terms_accepted_at = models.DateTimeField(null=True, blank=True)
     terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    code = models.CharField(max_length=64, unique=True, blank=True, default='', editable=False, help_text="SHA-256 hash of the short verification code emailed to the person")
+    # Nullable: enrollment rows made before codes existed (and ones awaiting
+    # a fresh code) have none, and Postgres treats NULLs as distinct in a
+    # unique index, so history never blocks a new code.
+    code = models.CharField(max_length=64, unique=True, null=True, blank=True, editable=False, help_text="SHA-256 hash of the short verification code emailed to the person")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
