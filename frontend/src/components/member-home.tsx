@@ -31,8 +31,6 @@ const CLARION_DEFAULT_LINES = [
   "A faith to share.",
   "A hope that transforms lives.",
 ];
-const CLARION_DEFAULT_SUBTEXT =
-  "Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.";
 
 type Me = {
   first_name: string;
@@ -93,7 +91,6 @@ export function MemberHome() {
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
-  const [encouragement, setEncouragement] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -127,14 +124,11 @@ export function MemberHome() {
       .catch(() => setProfileChange(null))
       .finally(() => setLoading(false));
 
-    // The church's own line of encouragement, editable in church settings.
-    // Public read: it is greeting copy, not private data.
+    // The clarion call: the church's standing welcome, editable in church
+    // settings. Public read: it is greeting copy, not private data.
     fetch(`${API_URL}/api/members/church-settings/`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setEncouragement(data?.dashboard_encouragement_line || "");
-        // The clarion call is the same copy the public site greets visitors
-        // with — the dashboard reuses it under the greeting.
         setClarion({ heading: data?.clarion_call_heading || "", subtext: data?.clarion_call_subtext || "" });
       })
       .catch(() => {});
@@ -188,14 +182,11 @@ export function MemberHome() {
 
   // ── My giving ────────────────────────────────────────────────────────────
   const completed = contributions.filter((c) => (c.status || "completed") === "completed");
-  const encouragementLine = encouragement.trim();
-
   // The clarion call: the same copy the public site opens with — settings
   // fall back to the standing defaults exactly as the website does.
   const clarionHeadingLines = (clarion?.heading || "").trim()
     ? (clarion?.heading || "").trim().split("\n").map((line) => line.trim()).filter(Boolean)
     : CLARION_DEFAULT_LINES;
-  const clarionSubtext = (clarion?.subtext || "").trim() || CLARION_DEFAULT_SUBTEXT;
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: "First name",
@@ -253,12 +244,6 @@ export function MemberHome() {
               {line}
             </p>
           ))}
-          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/75 sm:text-sm">{clarionSubtext}</p>
-          {encouragementLine && (
-            <p className="mt-3 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
-              {encouragementLine}
-            </p>
-          )}
         </div>
       </section>
 

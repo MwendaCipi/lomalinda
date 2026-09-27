@@ -1065,15 +1065,6 @@ class ChurchSettings(models.Model):
     mpesa_account_number = models.CharField(max_length=60, blank=True, default='', help_text='Account number members type in the M-Pesa prompt (e.g. TITHE)')
     mpesa_account_name = models.CharField(max_length=160, blank=True, default='', help_text='Name registered on the M-Pesa receiving account')
     mpesa_phone_number = models.CharField(max_length=20, blank=True, default='', help_text='Phone number for Send Money instructions (leave blank to hide)')
-    # One short line of encouragement on the dashboard greeting. Kept short on
-    # purpose: it sits under the greeting on every member's phone, so a paragraph
-    # would push their actual work off the screen.
-    dashboard_encouragement_line = models.CharField(
-        max_length=140,
-        default='Jesus is coming again.',
-        blank=True,
-        help_text='Short encouragement shown under the dashboard greeting (140 characters).',
-    )
     # The legal pages (/privacy, /terms) render these when the church has
     # written them; the built-in wording ships with the app and is the fallback
     # while the boxes are empty, so the pages are never blank.

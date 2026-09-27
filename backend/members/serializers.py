@@ -840,7 +840,6 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_membership_approval_message',
             'request_placeholders',
             'approval_placeholders',
-            'dashboard_encouragement_line',
             'privacy_policy',
             'terms_of_use',
             'invitation_placeholders',

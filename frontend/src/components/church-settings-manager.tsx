@@ -52,9 +52,6 @@ export function ChurchSettingsManager() {
     "Dear {name},\n\nYour request to join {church} has been approved. You can now sign in at {link} to take part in the life of the church.\n\nGod bless you."
   );
   // The line the dashboard greeting ends with. Short by design; the API caps it
-  // at the same length this input does.
-  const [encouragementLine, setEncouragementLine] = useState("Jesus is coming again.");
-  const ENCOURAGEMENT_MAX = 140;
   // Per-role rights as configured on the Church Roles Configuration box.
   const [roleRights, setRoleRights] = useState<RoleRightsPayload>({ rights: [], by_role: {} });
   // Which role's rights the settings screen is currently showing.
@@ -107,9 +104,6 @@ export function ChurchSettingsManager() {
           }
           if (data.default_membership_approval_message) {
             setMembershipApprovalMessage(data.default_membership_approval_message);
-          }
-          if (typeof data.dashboard_encouragement_line === "string") {
-            setEncouragementLine(data.dashboard_encouragement_line);
           }
           if (data.default_business_meeting_invitation_message) {
             setDefaultBusinessMeetingInvitationMessage(data.default_business_meeting_invitation_message);
@@ -171,7 +165,6 @@ export function ChurchSettingsManager() {
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
         default_request_notification_message: requestNotificationMessage,
         default_membership_approval_message: membershipApprovalMessage,
-        dashboard_encouragement_line: encouragementLine.trim(),
         role_rights: roleRights.by_role,
         bank_name: bankName,
         bank_account_name: bankAccountName,
@@ -588,28 +581,6 @@ export function ChurchSettingsManager() {
               className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
             />
           </div>
-        </div>
-
-        {/* Dashboard encouragement */}
-        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>💬</span> Dashboard Greeting Line
-          </h3>
-          <p className="mt-1 text-xs text-[#617068]">
-            Shown under &quot;Good morning, [name].&quot; on every member&apos;s dashboard. Keep it to one short line — two
-            lines at most on a phone.
-          </p>
-          <input
-            type="text"
-            maxLength={ENCOURAGEMENT_MAX}
-            value={encouragementLine}
-            onChange={(e) => setEncouragementLine(e.target.value.slice(0, ENCOURAGEMENT_MAX))}
-            placeholder="e.g. Jesus is coming again."
-            className="mt-3 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
-          />
-          <p className="mt-1 text-right text-[11px] text-[#617068]">
-            {encouragementLine.length}/{ENCOURAGEMENT_MAX}
-          </p>
         </div>
 
         {/* Legal documents */}
