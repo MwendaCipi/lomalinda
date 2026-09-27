@@ -467,9 +467,9 @@ class Announcement(models.Model):
         ('awareness', 'Awareness'),
         ('web_conference', 'Web conference'),
         ('promotion', 'Promotion / Contribution'),
-        ('opinion', 'Opinion'),
+        ('opinion', 'Opinion poll'),
     ]
-    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account; opinion asks for responses')
+    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account; an opinion poll asks for responses')
     # An Opinion post collects answers in one of two shapes. ``open`` is free
     # text — members write what they think. ``closed`` offers fixed options
     # the officer writes here, one per line; a member picks one. The same
@@ -480,8 +480,8 @@ class Announcement(models.Model):
         ('open', 'Open response'),
         ('closed', 'Closed response'),
     ]
-    response_mode = models.CharField(max_length=10, choices=RESPONSE_MODE_CHOICES, default='open', blank=True, help_text='Opinion posts only: open text answers, or a choice among fixed options')
-    response_options = models.TextField(blank=True, default='', help_text='Opinion posts with closed responses: one option per line, exactly as members will see them')
+    response_mode = models.CharField(max_length=10, choices=RESPONSE_MODE_CHOICES, default='open', blank=True, help_text='Opinion polls only: open text answers, or a choice among fixed options')
+    response_options = models.TextField(blank=True, default='', help_text='Opinion polls with closed responses: one option per line, exactly as members will see them')
     # A post may ask for support of one account ("Request support"), naming the
     # treasury account it invites giving to — the same wording the giving form
     # shows. Empty means the post asks for nothing.

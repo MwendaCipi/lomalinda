@@ -415,7 +415,7 @@ export function AnnouncementManager({
                   <option value="awareness">Awareness</option>
                   <option value="web_conference">Web conference</option>
                   <option value="promotion">Promotion / Contribution</option>
-                  <option value="opinion">Opinion</option>
+                  <option value="opinion">Opinion poll</option>
                 </select>
               </label>
 
@@ -555,10 +555,30 @@ export function AnnouncementManager({
                 </div>
               </label>
 
-              {/* Asking for a response is what an Opinion post is; the other
-                  types are statements, so only the Opinion form offers it. */}
+              {/* An opinion poll asks the congregation a question and hears
+                  it back; the other types are statements. The question text
+                  leads, then the answer shape it collects. */}
               {form.announcement_type === "opinion" && (
                 <>
+                  <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                    Opinion question *
+                    <textarea
+                      required
+                      rows={3}
+                      maxLength={ANNOUNCEMENT_TEXT_LIMIT}
+                      value={form.text}
+                      onChange={(e) => setForm({ ...form, text: e.target.value })}
+                      placeholder="Ask the question members will answer, e.g. Will you join the choir's visit to Nkubu?"
+                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    />
+                    <span
+                      className={`mt-1 block text-right text-[10px] font-semibold ${
+                        form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
+                      }`}
+                    >
+                      {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
+                    </span>
+                  </label>
                   <label className="block text-xs font-semibold text-[#26352f]">
                     Response type *
                     <select
@@ -571,8 +591,8 @@ export function AnnouncementManager({
                     </select>
                   </label>
                   {form.response_mode === "closed" && (
-                    <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
-                      Options *<span className="font-normal text-[#617068]"> (one per line — members see these as buttons)</span>
+                    <label className="block text-xs font-semibold text-[#26352f]">
+                      Options *<span className="font-normal text-[#617068]"> (one per line)</span>
                       <textarea
                         required
                         rows={4}
@@ -643,25 +663,29 @@ export function AnnouncementManager({
                 />
               </label>
 
-              <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
-                Announcement Text *
-                <textarea
-                  required
-                  rows={4}
-                  maxLength={ANNOUNCEMENT_TEXT_LIMIT}
-                  value={form.text}
-                  onChange={(e) => setForm({ ...form, text: e.target.value })}
-                  placeholder="Write full announcement content..."
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                />
-                <span
-                  className={`mt-1 block text-right text-[10px] font-semibold ${
-                    form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
-                  }`}
-                >
-                  {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
-                </span>
-              </label>
+              {/* Other types keep the ordinary body field; an opinion poll's
+                  body is its question, collected in the poll block above. */}
+              {form.announcement_type !== "opinion" && (
+                <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                  Announcement Text *
+                  <textarea
+                    required
+                    rows={4}
+                    maxLength={ANNOUNCEMENT_TEXT_LIMIT}
+                    value={form.text}
+                    onChange={(e) => setForm({ ...form, text: e.target.value })}
+                    placeholder="Write full announcement content..."
+                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  />
+                  <span
+                    className={`mt-1 block text-right text-[10px] font-semibold ${
+                      form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
+                    }`}
+                  >
+                    {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
+                  </span>
+                </label>
+              )}
 
               {message && (
                 <div className="md:col-span-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700">
@@ -826,7 +850,7 @@ export function AnnouncementManager({
                 </span>
                 {item.announcement_type && item.announcement_type !== "awareness" && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    {item.announcement_type === "web_conference" ? "Web conference" : item.announcement_type === "opinion" ? "Opinion" : "Promotion / Contribution"}
+                    {item.announcement_type === "web_conference" ? "Web conference" : item.announcement_type === "opinion" ? "Opinion poll" : "Promotion / Contribution"}
                   </span>
                 )}
                 {item.action_type && item.action_type !== "none" && item.action_type !== "respond" && (

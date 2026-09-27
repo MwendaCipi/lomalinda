@@ -1088,9 +1088,15 @@ def generate_contribution_thermal_receipt_pdf(
         y -= size + gap
 
     def dashed():
+        # A dotted rule drawn as a line, spanning exactly margin to margin —
+        # a string of dashes is character-counted and bleeds past the edge.
         nonlocal y
-        c.setFont("Courier", 8)
-        c.drawString(margin, y, "-" * 46)
+        c.saveState()
+        c.setStrokeColor(dark)
+        c.setLineWidth(0.7)
+        c.setDash(1, 2)
+        c.line(margin, y + 3, WIDTH - margin, y + 3)
+        c.restoreState()
         y -= 11
 
     dark = colors.HexColor("#26352f")
