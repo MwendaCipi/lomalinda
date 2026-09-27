@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 
 from .meetings import eat_greeting, recipient_name, render_message
 from .roles import ADMIN_ROLE
@@ -127,6 +127,50 @@ def membership_approval_template(settings_obj=None):
     return configured or DEFAULT_MEMBERSHIP_APPROVAL_MESSAGE
 
 
+def request_email_html(*, heading: str, body_text: str, link: str, church_name: str) -> str:
+    """The request letter as email-client-safe HTML.
+
+    The desk name leads in its own dark block, the sentence follows, and the
+    destination becomes a button rather than a bare URL. Everything
+    user-supplied is escaped — names arrive from public forms, and an
+    unescaped name is HTML injection straight into an elder's inbox. If the
+    sentence carries the link (the default wording does), the bare URL is
+    lifted out of the text so the button is the one way through; a custom
+    template without ``{link}`` simply keeps its full sentence.
+    """
+    import html as html_module
+
+    body_html = html_module.escape(body_text).replace('\n', '<br />')
+    stripped = body_html.replace(html_module.escape(link), '').rstrip()
+    if stripped.endswith(':'):
+        body_html = stripped
+    button = (
+        f'<a href="{html_module.escape(link, quote=True)}" '
+        'style="display:inline-block;background:#b36b3c;color:#ffffff;text-decoration:none;'
+        'font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;'
+        'padding:10px 22px;border-radius:999px;">Open the requests desk</a>'
+    )
+    return (
+        '<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f7f4ee;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;'
+        'overflow:hidden;border:1px solid #dfdbd1;">'
+        '<tr><td style="background:#26352f;padding:14px 24px;">'
+        f'<span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;'
+        f'letter-spacing:2px;color:#ffffff;">{html_module.escape(heading)}</span>'
+        '</td></tr>'
+        '<tr><td style="padding:24px;font-family:Georgia,serif;font-size:15px;line-height:24px;color:#26352f;">'
+        f'{body_html}'
+        f'<div style="margin-top:20px;">{button}</div>'
+        '</td></tr>'
+        '<tr><td style="padding:14px 24px;background:#faf9f5;border-top:1px solid #dfdbd1;'
+        'font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#617068;">'
+        f'{html_module.escape(church_name)} &middot; Sent to the office that answers this desk.'
+        '</td></tr>'
+        '</table></body></html>'
+    )
+
+
 def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None):
     """Email the right office holders that a request is waiting.
 
@@ -148,9 +192,16 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
         subject = f'{subject} · {submitted_at.strftime("%d %b %Y")}'
 
     desk_link = f'/administration?tab=requests&request={kind}-{request_id}'
+    full_link = request_desk_link(kind, request_id)
     # The letter opens with the desk named, all caps, before anything else:
     # an inbox scan should read the desk before the sender's name registers.
     body = f"{label.upper()}\n\n{render_message(template, context_common)}"
+    html_body = request_email_html(
+        heading=label.upper(),
+        body_text=render_message(template, context_common),
+        link=full_link,
+        church_name=church_name,
+    )
 
     sent = 0
     already_sent = set()
@@ -162,7 +213,9 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
             continue
         already_sent.add(address.lower())
         try:
-            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [address], fail_silently=True)
+            message = EmailMultiAlternatives(subject, body, settings.DEFAULT_FROM_EMAIL, [address])
+            message.attach_alternative(html_body, 'text/html')
+            message.send(fail_silently=True)
             sent += 1
         except Exception:
             continue

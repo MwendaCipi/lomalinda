@@ -5963,3 +5963,44 @@ class PastorAndDeskLeadRoutingTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         # A plain member hears and reads nothing.
         self.assertEqual(self._rows(self.plain).count(), 0)
+
+
+class RequestEmailHtmlTests(APITestCase):
+    """The request letter carries a styled HTML alternative.
+
+    The desk heading leads in its own block and the destination becomes a
+    button; the plain-text body is unchanged for text-only clients. Anything
+    user-supplied is escaped — a name is HTML injection into an elder's inbox
+    otherwise.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('html.elder', 'html.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+
+    def test_html_alternative_has_heading_button_and_escape(self):
+        from django.core import mail
+
+        self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'Please pray for our family.',
+            'name': 'Grace <script>alert(1)</script> Kioni',
+            'anonymous': False,
+        }, format='json')
+
+        self.assertTrue(mail.outbox)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ['html.elder@example.com'])
+        # The plain part still reads as before (text-only clients).
+        self.assertIn('PRAYER REQUEST', message.body)
+        self.assertIn('Grace', message.body)
+        # The HTML alternative: dark heading block, button, escaped name.
+        html_part = next(alt for content, mime in message.alternatives for alt in [content] if mime == 'text/html')
+        self.assertIn('PRAYER REQUEST', html_part)
+        self.assertIn('Open the requests desk', html_part)
+        self.assertIn('background:#26352f', html_part)
+        self.assertIn('request=prayer-', html_part)
+        self.assertNotIn('<script>', html_part)
+        self.assertIn('&lt;script&gt;', html_part)
+        # The bare URL is lifted out of the sentence when the wording ends
+        # with it, so the button is the one way through.
+        self.assertNotIn('<br />https://', html_part)
