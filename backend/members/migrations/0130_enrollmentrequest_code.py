@@ -29,12 +29,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # The column first, WITHOUT the unique index: rows are backfilled ''
-        # here, and a unique index this early would collide with itself.
+        # The column first — nullable from the start (the '' backfill is
+        # placeholder data, and the null-out below must be legal), WITHOUT
+        # the unique index.
         migrations.AddField(
             model_name='enrollmentrequest',
             name='code',
-            field=models.CharField(blank=True, default='', editable=False, help_text='SHA-256 hash of the short verification code emailed to the person', max_length=64),
+            field=models.CharField(blank=True, default='', editable=False, help_text='SHA-256 hash of the short verification code emailed to the person', max_length=64, null=True),
         ),
         # Rows that predate codes have none — their '' is "no code", so store
         # it as NULL before the unique index lands.
