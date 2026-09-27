@@ -52,6 +52,7 @@ type Announcement = {
   visibility: string;
   audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  announcement_type?: "awareness" | "web_conference" | "promotion";
   support_account?: string | null;
   sharing_option?: string;
   action_prompt?: string;
@@ -124,6 +125,9 @@ export function AnnouncementManager() {
     // Church announcements default to the congregation, not the wider web.
     visibility: "members_only",
     audience: [] as string[],
+    // The kind of post decides which special fields the form shows: a plain
+    // notice (default), a meeting link, or a supported account.
+    announcement_type: "awareness" as "awareness" | "web_conference" | "promotion",
     action_type: "none",
     support_account: "",
     // Site and email are the ordinary pair: the post shows on the site and
@@ -233,6 +237,7 @@ export function AnnouncementManager() {
       text: item.text,
       visibility: postTo.reach,
       audience: postTo.ministries,
+      announcement_type: item.announcement_type ?? "awareness",
       action_type: item.action_type ?? "none",
       support_account: item.support_account ?? "",
       sharing_option: item.sharing_option || "site,email",
@@ -249,6 +254,7 @@ export function AnnouncementManager() {
       text: "",
       visibility: "members_only",
       audience: [],
+      announcement_type: "awareness",
       action_type: "none",
       support_account: "",
       sharing_option: "site,email",
@@ -280,6 +286,20 @@ export function AnnouncementManager() {
       const err = "Set the event date — when it begins. The post leads the feed as the day approaches and comes down after the event ends.";
       setMessage(err);
       showAlert("Event Date Missing", err, "error");
+      return;
+    }
+    // The type's own field is the whole point of the post, so it is checked
+    // client-side too; the API enforces the same rule.
+    if (form.announcement_type === "web_conference" && !form.href.trim()) {
+      const err = "A web conference announcement needs its meeting link.";
+      setMessage(err);
+      showAlert("Meeting Link Missing", err, "error");
+      return;
+    }
+    if (form.announcement_type === "promotion" && !form.support_account.trim()) {
+      const err = "A promotion / contribution announcement needs a treasury account.";
+      setMessage(err);
+      showAlert("Account Missing", err, "error");
       return;
     }
     setSubmitting(true);
@@ -406,6 +426,11 @@ export function AnnouncementManager() {
                 <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
                   Via {channelsLabel(item.sharing_option)}
                 </span>
+                {item.announcement_type && item.announcement_type !== "awareness" && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    {item.announcement_type === "web_conference" ? "Web conference" : "Promotion / Contribution"}
+                  </span>
+                )}
                 {item.action_type && item.action_type !== "none" && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
                     {item.action_type.replaceAll("_", " ")}
@@ -492,6 +517,28 @@ export function AnnouncementManager() {
             </div>
 
             <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
+              {/* The type leads: it decides which special fields the rest of
+                  the form shows. */}
+              <label className="block text-xs font-semibold text-[#26352f]">
+                Announcement type *
+                <select
+                  value={form.announcement_type}
+                  onChange={(e) => {
+                    const type = e.target.value as typeof form.announcement_type;
+                    // Switching type drops the fields the new type does not
+                    // use, so the form never carries hidden stale values.
+                    if (type === "awareness") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
+                    else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "" }));
+                    else setForm((f) => ({ ...f, announcement_type: type, href: "" }));
+                  }}
+                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                >
+                  <option value="awareness">Awareness</option>
+                  <option value="web_conference">Web conference</option>
+                  <option value="promotion">Promotion / Contribution</option>
+                </select>
+              </label>
+
               <label className="block text-xs font-semibold text-[#26352f]">
                 Title *
                 <input
@@ -557,16 +604,22 @@ export function AnnouncementManager() {
                 </div>
               </div>
 
-              <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
-                Link (optional)
-                <input
-                  type="url"
-                  value={form.href}
-                  onChange={(e) => setForm({ ...form, href: e.target.value })}
-                  placeholder="https://… — meeting or registration link"
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                />
-              </label>
+              {/* The link belongs to the web-conference type only; the account
+                  picker belongs to the promotion type only. Awareness shows
+                  neither — a plain notice is a plain notice. */}
+              {form.announcement_type === "web_conference" && (
+                <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                  Meeting link *
+                  <input
+                    type="url"
+                    required
+                    value={form.href}
+                    onChange={(e) => setForm({ ...form, href: e.target.value })}
+                    placeholder="https://… — Zoom, Meet or Teams link"
+                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  />
+                </label>
+              )}
 
               <label className="block text-xs font-semibold text-[#26352f]">
                 Share Announcement Via *<span className="font-normal text-[#617068]"> (select one or more)</span>
@@ -632,21 +685,23 @@ export function AnnouncementManager() {
                 Request response
               </label>
 
-              <label className="block text-xs font-semibold text-[#26352f]">
-                Request support
-                <select
-                  value={form.support_account}
-                  onChange={(e) => setForm({ ...form, support_account: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
-                >
-                  <option value="">-- Select account --</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.description || account.name}>
-                      {account.description || account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {form.announcement_type === "promotion" && (
+                <label className="block text-xs font-semibold text-[#26352f]">
+                  Support account *
+                  <select
+                    value={form.support_account}
+                    onChange={(e) => setForm({ ...form, support_account: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  >
+                    <option value="">-- Select account --</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.description || account.name}>
+                        {account.description || account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-[#26352f]">

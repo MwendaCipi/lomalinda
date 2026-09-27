@@ -409,11 +409,30 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         end = attrs.get('event_date_to', instance.event_date_to if instance else None)
         if start and end and end < start:
             raise serializers.ValidationError('The event cannot end before it starts.')
+
+        # The type decides which special fields belong to the post. Fields a
+        # type does not use are cleared, so the stored row always matches the
+        # form the officer completed; the link is required where it is the
+        # whole point (web conference).
+        announcement_type = attrs.get('announcement_type', instance.announcement_type if instance else 'awareness')
+        if announcement_type == 'web_conference':
+            href = attrs.get('href') if 'href' in attrs else (instance.href if instance else '')
+            if not (href or '').strip():
+                raise serializers.ValidationError('A web conference announcement needs a meeting link.')
+            attrs['support_account'] = ''
+        elif announcement_type == 'promotion':
+            attrs['href'] = ''
+            support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
+            if not (support_account or '').strip():
+                raise serializers.ValidationError('A promotion / contribution announcement needs a treasury account.')
+        else:  # awareness: a plain notice carries no link and no account
+            attrs['href'] = ''
+            attrs['support_account'] = ''
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'action_type', 'support_account', 'support_account_display', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

@@ -6004,3 +6004,50 @@ class RequestEmailHtmlTests(APITestCase):
         # The bare URL is lifted out of the sentence when the wording ends
         # with it, so the button is the one way through.
         self.assertNotIn('<br />https://', html_part)
+
+
+class AnnouncementTypeTests(APITestCase):
+    """The announcement's type decides which special fields belong to it.
+
+    Awareness is a plain notice: it carries no link and no account, and the
+    API clears any it is handed. A web conference must carry its meeting
+    link; a promotion must name the treasury account it supports.
+    """
+
+    def setUp(self):
+        self.poster = User.objects.create_user('atype.poster', 'atype.poster@example.com', 'StrongPass#2026', is_staff=True)
+
+    def _post(self, **overrides):
+        self.client.force_authenticate(self.poster)
+        payload = {
+            'title': 'Youth camp', 'text': 'Camp is coming.',
+            'visibility': 'members_only', 'sharing_option': 'site',
+            'event_date_from': '2026-12-01',
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/announcements/', payload, format='json')
+
+    def test_awareness_strips_link_and_account(self):
+        res = self._post(announcement_type='awareness', href='https://meet.example.com/x', support_account='Local Church Budget')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['announcement_type'], 'awareness')
+        self.assertEqual(res.data['href'], '')
+        self.assertEqual(res.data['support_account'], '')
+
+    def test_web_conference_requires_link(self):
+        res = self._post(announcement_type='web_conference')
+        self.assertEqual(res.status_code, 400)
+        res = self._post(announcement_type='web_conference', href='https://zoom.us/j/123')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['href'], 'https://zoom.us/j/123')
+        # A conference does not solicit funds, whatever the client sent.
+        self.assertEqual(res.data['support_account'], '')
+
+    def test_promotion_requires_account(self):
+        res = self._post(announcement_type='promotion')
+        self.assertEqual(res.status_code, 400)
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget', href='https://stray.example.com')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['support_account'], 'Local Church Budget')
+        # A promotion carries no meeting link, whatever the client sent.
+        self.assertEqual(res.data['href'], '')

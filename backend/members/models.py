@@ -430,6 +430,17 @@ class Announcement(models.Model):
     # so no second list of departments can drift out of step.
     audience = models.JSONField(default=list, blank=True, help_text="Ministry role codes this post addresses; empty means the whole congregation")
     action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, default='none')
+    # What kind of post this is, which decides which special fields belong to
+    # it: an Awareness post is a plain notice; a Web conference carries a
+    # meeting link; a Promotion / Contribution names a treasury account it
+    # invites support for. The serializer clears the fields a type does not
+    # use, so the data always matches the form the officer saw.
+    TYPE_CHOICES = [
+        ('awareness', 'Awareness'),
+        ('web_conference', 'Web conference'),
+        ('promotion', 'Promotion / Contribution'),
+    ]
+    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account')
     # A post may ask for support of one account ("Request support"), naming the
     # treasury account it invites giving to — the same wording the giving form
     # shows. Empty means the post asks for nothing.
