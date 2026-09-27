@@ -29,6 +29,7 @@ import { AccessibilityMenu } from "./accessibility-menu";
 import { triggerPwaInstall } from "./pwa-register";
 import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
 import { showAlert } from "@/lib/alerts";
+import Swal from "sweetalert2";
 import { normalizePath } from "@/lib/paths";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -122,6 +123,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   const [serverNotifications, setServerNotifications] = useState<ChurchNotificationItem[]>([]);
   const [pushState, setPushState] = useState<PushSupport | null>(null);
   const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
+  const pushPromptShown = useRef(false);
   const [readNotificationIds, setReadNotificationIds] = useState<number[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -263,6 +265,60 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       body: JSON.stringify({ [apiField]: value }),
     }).catch(() => {});
   };
+
+  // A member who has not turned notifications on gets one gentle ask per
+  // sign-in session, a moment after the page settles. Three doors: turn on,
+  // not now (asked again next session), or never (they configure it later in
+  // their profile's Notification preferences). Blocked at the browser level
+  // already? Asking again would be rude — skip silently.
+  useEffect(() => {
+    if (!userState.isLoggedIn || !pushState) return;
+    if (!pushState.supported || pushState.enabled) return;
+    if (typeof Notification !== "undefined" && Notification.permission === "denied") return;
+    try {
+      if (localStorage.getItem("push_prompt_dismissed") === "true") return;
+    } catch {
+      // Storage unavailable: still ask once, politely.
+    }
+    if (pushPromptShown.current) return;
+    pushPromptShown.current = true;
+    const timer = setTimeout(() => {
+      Swal.fire({
+        title: "Notifications on this device?",
+        text: "Turn on phone notifications and the church can reach you here even with the app closed — announcements, and requests waiting for your office if you serve. You can change this anytime under Notification preferences on your profile.",
+        icon: "question",
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: "Turn on",
+        confirmButtonColor: "#b36b3c",
+        denyButtonText: "Don't ask again",
+        denyButtonColor: "#6b7280",
+        cancelButtonText: "Not now",
+        cancelButtonColor: "#26352f",
+        // The permission request must ride the click's user gesture, so the
+        // enable happens inside preConfirm rather than after the dialog.
+        preConfirm: () => enablePush(),
+      }).then((result) => {
+        if (result.isConfirmed) {
+          const outcome = result.value as { ok: boolean; error?: string } | undefined;
+          if (outcome?.ok) {
+            setPushState({ supported: true, enabled: true });
+            showAlert("Phone notifications on", "You will now be alerted on this device when something needs you.", "success");
+          } else {
+            showAlert("Not enabled", outcome?.error || "This browser would not allow notifications.", "warning");
+          }
+        } else if (result.isDenied) {
+          try {
+            localStorage.setItem("push_prompt_dismissed", "true");
+          } catch {
+            // ignore
+          }
+        }
+        // "Not now": nothing stored — we simply ask again next session.
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [userState.isLoggedIn, pushState]);
 
   const handleTogglePhoneNotifications = async () => {
     if (!pushState?.supported) return;
