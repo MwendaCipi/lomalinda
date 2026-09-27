@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { kenyaCounties } from "@/config/kenya-counties";
 import { MemberSidebar } from "@/components/sidebars/member-sidebar";
+import { getPushState, PushSupport } from "@/lib/push";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
@@ -17,6 +18,40 @@ export default function MemberPage() {
   const [message, setMessage] = useState(token ? "Loading your giving history..." : "Sign in to view your giving history.");
   const [detailsMessage, setDetailsMessage] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
+  const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
+  const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
+  const [prefMessage, setPrefMessage] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    fetch(`${API_URL}/api/members/me/`, { headers })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
+      })
+      .catch(() => {});
+    getPushState().then(setPushSupport).catch(() => setPushSupport(null));
+  }, [token]);
+
+  async function saveAnnouncePref(field: "email" | "push", value: boolean) {
+    if (!announcePrefs) return;
+    const previous = announcePrefs;
+    setAnnouncePrefs({ ...announcePrefs, [field]: value });
+    setPrefMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(field === "email" ? { announce_email: value } : { announce_push: value }),
+      });
+      if (!response.ok) throw new Error();
+      setPrefMessage("Preference saved.");
+    } catch {
+      setAnnouncePrefs(previous);
+      showAlert("Not saved", "Your preference could not be saved. Try again.", "error");
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -123,6 +158,56 @@ export default function MemberPage() {
               </button>
               {detailsMessage && <p className="mt-3 text-sm text-[#617068]">{detailsMessage}</p>}
             </form>
+          )}
+
+          {announcePrefs && (
+            <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
+              <h2 className="text-xl font-semibold">Notification preferences</h2>
+              <p className="mt-2 text-sm leading-6 text-[#617068]">
+                Choose how announcements reach you. Requests waiting for the office always notify, whatever you switch off here.
+              </p>
+              <div className="mt-5 space-y-3">
+                <label className="flex items-center justify-between gap-4 rounded-2xl bg-[#f7f4ee] px-4 py-3 text-sm font-medium cursor-pointer">
+                  <span>
+                    Announcements by email
+                    <span className="block text-xs font-normal text-[#617068]">The broadcast letters, not receipts — those always come.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={announcePrefs.email}
+                    onChange={(e) => saveAnnouncePref("email", e.target.checked)}
+                    className="h-4 w-4 shrink-0 accent-[#5f8067]"
+                  />
+                </label>
+                {pushSupport?.supported ? (
+                  <label className="flex items-center justify-between gap-4 rounded-2xl bg-[#f7f4ee] px-4 py-3 text-sm font-medium cursor-pointer">
+                    <span>
+                      Announcements as phone notifications
+                      <span className="block text-xs font-normal text-[#617068]">A notification on this device when an announcement is posted.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={announcePrefs.push}
+                      onChange={(e) => saveAnnouncePref("push", e.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-[#5f8067]"
+                    />
+                  </label>
+                ) : (
+                  <div className="rounded-2xl bg-[#f7f4ee] px-4 py-3 text-sm font-medium">
+                    Announcements as phone notifications
+                    <span className="mt-0.5 block text-xs font-normal text-[#617068]">
+                      Not available in this browser. On iPhone, add the app to your Home Screen first.
+                    </span>
+                  </div>
+                )}
+              </div>
+              {pushSupport?.supported && !pushSupport.enabled && announcePrefs.push && (
+                <p className="mt-3 text-xs text-[#617068]">
+                  To receive them on <em>this</em> device, also tap <strong>Turn on phone notifications</strong> in the bell at the top of the page — that grants the browser permission.
+                </p>
+              )}
+              {prefMessage && <p className="mt-3 text-sm text-[#617068]">{prefMessage}</p>}
+            </section>
           )}
 
           <div className="mt-8 space-y-4">
