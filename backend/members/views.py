@@ -190,6 +190,15 @@ def current_church_name():
     return CHURCH_DEFAULT_NAME
 
 
+def church_name_short(name=None):
+    """The church's name without its town — the receipt letterhead form.
+
+    The thermal receipt reads 'SDA Loma Linda' (no 'Meru'); a name the office
+    wrote without a comma is returned as is.
+    """
+    return church_name_plain(name)
+
+
 def church_name_plain(name=None):
     """Church name where it modifies what follows, or where it sits in a header.
 
@@ -2165,8 +2174,8 @@ class MemberThermalReceiptView(APIView):
 
         donor = row.member or request.user
         donor_name = f"{donor.first_name} {donor.last_name}".strip() or row.donor_name or donor.username
-        church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+        # The receipt letterhead is the short form: SDA Loma Linda, no town.
+        church_name = church_name_short()
 
         pdf_bytes = generate_contribution_thermal_receipt_pdf(
             church_name=church_name,
@@ -4020,8 +4029,8 @@ class InKindThermalReceiptView(APIView):
             return Response({'detail': 'This receipt belongs to another giver.'}, status=status.HTTP_404_NOT_FOUND)
 
         items = [line.strip() for line in (gift.items or '').splitlines() if line.strip()] or ['In-kind gift']
-        church_setting = ChurchSettings.objects.first()
-        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+        # The receipt letterhead is the short form: SDA Loma Linda, no town.
+        church_name = church_name_short()
 
         pdf_bytes = generate_in_kind_thermal_receipt_pdf(
             church_name=church_name,

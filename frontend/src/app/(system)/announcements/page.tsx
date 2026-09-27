@@ -59,6 +59,11 @@ export default function AnnouncementsPage() {
   const [supportAccount, setSupportAccount] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  // Pledging: which card's pledge form is open, and what is pledged in it.
+  const [pledgeFor, setPledgeFor] = useState<number | null>(null);
+  const [pledgeAmount, setPledgeAmount] = useState("");
+  const [pledgeBusy, setPledgeBusy] = useState(false);
+  const [pledgeDone, setPledgeDone] = useState<number[]>([]);
   // Opinion answering: which card's form is open, what is typed or picked.
   const [opinionId, setOpinionId] = useState<number | null>(null);
   const [opinionText, setOpinionText] = useState("");
@@ -125,6 +130,34 @@ export default function AnnouncementsPage() {
     }
   }
 
+  /** Record a pledge against a giving announcement, then confirm on the card. */
+  async function submitPledge(item: FeedItem) {
+    if (pledgeBusy || !pledgeAmount) return;
+    setPledgeBusy(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_URL}/api/members/announcements/${item.id}/action/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          action_type: item.kind === "fund_drive" ? "respond" : item.action_type || "none",
+          pledge_amount: parseFloat(pledgeAmount),
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Unable to record your pledge.");
+      }
+      setPledgeDone((current) => [...current, item.id]);
+      setPledgeFor(null);
+      setPledgeAmount("");
+    } catch {
+      // The form stays open so the pledge is not lost; the member can retry.
+    } finally {
+      setPledgeBusy(false);
+    }
+  }
+
   return (
     <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
@@ -153,6 +186,9 @@ export default function AnnouncementsPage() {
                 {items.map((item) => {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;
+                  // A support-account post carries its own giving actions —
+                  // the same Pledge / In-kind / Give Money row a drive gets.
+                  const supportGives = !isDrive && Boolean(item.support_account_display);
                   const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-7";
                   const content = (
                     <>
@@ -270,20 +306,37 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
-                      {/* A support-account post asks for giving to one account;
-                          its Give now opens the giving form with that account
-                          already chosen — the drive cards' own action, for a
-                          plain account. */}
-                      {!isDrive && item.support_account_display && (
-                        <div className="mt-6 flex flex-wrap gap-3 border-t border-[#dfdbd1] pt-5">
-                          <button
-                            type="button"
-                            onClick={() => setSupportAccount(item.support_account_display ?? null)}
-                            className="rounded-full bg-[#3d7146] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#335e3a]"
-                          >
-                            Give now
-                          </button>
-                          <span className="self-center text-xs text-[#617068]">
+                      {/* The giving actions, always one row, left to right:
+                          Pledge, In-kind, Give Money. A support-account post
+                          opens the giving form with that account already
+                          chosen; a drive opens straight into its own giving
+                          modal. */}
+                      {supportGives && (
+                        <div className="mt-6 border-t border-[#dfdbd1] pt-5">
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              disabled={pledgeDone.includes(item.id)}
+                              onClick={() => { setPledgeFor(item.id); setPledgeAmount(""); }}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] disabled:opacity-50 sm:text-sm"
+                            >
+                              Pledge
+                            </button>
+                            <Link
+                              href="/support/in-kind"
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                            >
+                              In-kind
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => setSupportAccount(item.support_account_display ?? null)}
+                              className="rounded-full bg-[#3d7146] px-2 py-2.5 text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                            >
+                              Give Money
+                            </button>
+                          </div>
+                          <span className="mt-2 block text-center text-xs text-[#617068]">
                             towards {item.support_account_display}
                             {item.support_account && item.support_account !== item.support_account_display ? ` (${item.support_account})` : ""}
                           </span>
@@ -291,20 +344,67 @@ export default function AnnouncementsPage() {
                       )}
 
                       {isDrive && drive && (
-                        <div className="mt-6 flex flex-wrap gap-3 border-t border-[#dfdbd1] pt-5">
-                          <Link
-                            href={driveGiveHref(drive)}
-                            className="rounded-full bg-[#3d7146] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#335e3a]"
-                          >
-                            Give now
-                          </Link>
-                          <Link
-                            href={`${driveGiveHref(drive)}&pledge=1`}
-                            className="rounded-full border border-[#c9c5bb] bg-white px-6 py-2.5 text-sm font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                          >
-                            Pledge
-                          </Link>
+                        <div className="mt-6 border-t border-[#dfdbd1] pt-5">
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              disabled={pledgeDone.includes(item.id)}
+                              onClick={() => { setPledgeFor(item.id); setPledgeAmount(""); }}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] disabled:opacity-50 sm:text-sm"
+                            >
+                              Pledge
+                            </button>
+                            <Link
+                              href="/support/in-kind"
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                            >
+                              In-kind
+                            </Link>
+                            <Link
+                              href={driveGiveHref(drive)}
+                              className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                            >
+                              Give Money
+                            </Link>
+                          </div>
                         </div>
+                      )}
+
+                      {/* The pledge form, opened by the card's Pledge button;
+                          the pledge lands in the announcement's responses,
+                          where the CSV export reaches it. */}
+                      {pledgeFor === item.id && (
+                        <div className="mt-4 rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4">
+                          <label className="block text-xs font-semibold text-[#26352f]">Pledge Amount (KES)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="e.g. 5000"
+                            value={pledgeAmount}
+                            onChange={(event) => setPledgeAmount(event.target.value)}
+                            className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm outline-none focus:border-[#b36b3c]"
+                          />
+                          <div className="mt-3 flex items-center gap-3">
+                            <button
+                              type="button"
+                              disabled={pledgeBusy || !pledgeAmount}
+                              onClick={() => submitPledge(item)}
+                              className="rounded-full bg-[#b36b3c] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+                            >
+                              {pledgeBusy ? "Submitting..." : "Record pledge"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setPledgeFor(null); setPledgeAmount(""); }}
+                              className="text-sm font-semibold text-[#617068] hover:underline"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {pledgeDone.includes(item.id) && (
+                        <p className="mt-3 text-sm font-semibold text-[#3d7146]">Thank you — your pledge has been recorded.</p>
                       )}
                     </>
                   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -39,9 +39,11 @@ type Announcement = {
 
 export function PopupAnnouncementModal() {
   const pathname = usePathname();
+  const router = useRouter();
   const [queue, setQueue] = useState<Announcement[]>([]);
   const [current, setCurrent] = useState<Announcement | null>(null);
   const [pledgeAmount, setPledgeAmount] = useState("");
+  const [pledgeOpen, setPledgeOpen] = useState(false);
   const [responseText, setResponseText] = useState("");
   const [responseChoice, setResponseChoice] = useState("");
   const [name, setName] = useState("");
@@ -73,6 +75,14 @@ export function PopupAnnouncementModal() {
       .catch(() => undefined);
   }, []);
 
+  // Each announcement starts with its pledge field closed.
+  useEffect(() => {
+    setPledgeOpen(false);
+    setPledgeAmount("");
+    setResponseText("");
+    setResponseChoice("");
+  }, [current?.id]);
+
   if (pathname === "/" || !current) return null;
 
   const actionType = current.action_type || "none";
@@ -90,9 +100,23 @@ export function PopupAnnouncementModal() {
     setCurrent(remaining.length > 0 ? remaining[0] : null);
   }
 
+  /** A giving action leaves the popup for the page that serves it — the
+      announcement counts as read, so it does not pop again. */
+  function leaveFor(href: string) {
+    dismissCurrent();
+    router.push(href);
+  }
+
   async function handleActionSubmit(e: FormEvent) {
     e.preventDefault();
     if (!current) return;
+    // A giving announcement submitted with no amount pledged is just a read
+    // confirmation — mark it handled and move on rather than storing an
+    // empty pledge.
+    if (isContributionAction && !pledgeAmount) {
+      dismissCurrent();
+      return;
+    }
     setSubmitting(true);
     setStatusMessage("");
 
@@ -199,7 +223,7 @@ export function PopupAnnouncementModal() {
                 <p className="mt-1 text-xs text-[#617068]">
                   {current.action_prompt ||
                     (isContributionAction
-                      ? "You may enter a contribution amount, or dismiss this announcement."
+                      ? "Pledge an amount, give in kind, or give money — or dismiss this announcement."
                       : actionType === "respond"
                       ? "You may enter your response, or dismiss this announcement."
                       : "You can dismiss this announcement when you are done reading.")}
@@ -209,19 +233,47 @@ export function PopupAnnouncementModal() {
 
             {isContributionAction && (
               <div className="mt-3 space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">
-                    Contribution Amount (KES)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 1000"
-                    value={pledgeAmount}
-                    onChange={(e) => setPledgeAmount(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
-                  />
+                {/* The giving actions, one row, left to right: Pledge,
+                    In-kind, Give Money. Pledge opens the amount field in
+                    place; the other two leave for their pages. */}
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPledgeOpen((open) => !open)}
+                    className={`rounded-full border px-2 py-2.5 text-xs font-bold transition sm:text-sm ${pledgeOpen ? "border-[#b36b3c] bg-[#fbf6f0] text-[#b36b3c]" : "border-[#c9c5bb] bg-white text-[#26352f] hover:border-[#b36b3c] hover:text-[#b36b3c]"}`}
+                  >
+                    Pledge
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => leaveFor("/support/in-kind")}
+                    className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                  >
+                    In-kind
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => leaveFor(`/give?purpose=${encodeURIComponent(current.title)}`)}
+                    className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                  >
+                    Give Money
+                  </button>
                 </div>
+                {pledgeOpen && (
+                  <div>
+                    <label className="block text-xs font-semibold text-[#26352f]">
+                      Pledge Amount (KES)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 1000"
+                      value={pledgeAmount}
+                      onChange={(e) => setPledgeAmount(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -298,23 +350,21 @@ export function PopupAnnouncementModal() {
             >
               Dismiss
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 rounded-2xl bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#96552e] disabled:opacity-50"
-            >
-              {submitting ? (
-                "Submitting..."
-              ) : isOpinion ? (
-                "Submit Response"
-              ) : isContributionAction ? (
-                "Submit Contribution Action"
-              ) : actionType === "respond" ? (
-                "Submit Response & Continue"
-              ) : (
-                "Done"
-              )}
-            </button>
+            {actionType !== "none" && (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 rounded-2xl bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#96552e] disabled:opacity-50"
+              >
+                {submitting
+                  ? "Submitting..."
+                  : isOpinion
+                  ? "Submit Response"
+                  : isContributionAction
+                  ? "Record pledge"
+                  : "Submit Response & Continue"}
+              </button>
+            )}
           </div>
         </form>
       </div>

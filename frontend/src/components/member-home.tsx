@@ -16,21 +16,11 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { roleLabel } from "@/components/roles-combobox";
 import { showAlert } from "@/lib/alerts";
-import { NextGatheringCard } from "@/components/next-gathering-card";
-import { DashboardAnalytics } from "@/components/dashboard-analytics";
+import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { GroupedBarChart } from "@/components/mini-charts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-// The clarion call's fallback copy — the same standing welcome the public
-// site opens with when settings carry no custom text.
-const CLARION_DEFAULT_LINES = [
-  "A place to belong.",
-  "A faith to share.",
-  "A hope that transforms lives.",
-];
 
 type Me = {
   first_name: string;
@@ -87,7 +77,6 @@ function fmtCompactKes(value: number) {
 export function MemberHome() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [clarion, setClarion] = useState<{ heading?: string; subtext?: string } | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
@@ -123,27 +112,12 @@ export function MemberHome() {
       .then((data) => setProfileChange(data?.pending ? (data.change_request as ProfileChange) : null))
       .catch(() => setProfileChange(null))
       .finally(() => setLoading(false));
-
-    // The clarion call: the church's standing welcome, editable in church
-    // settings. Public read: it is greeting copy, not private data.
-    fetch(`${API_URL}/api/members/church-settings/`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setClarion({ heading: data?.clarion_call_heading || "", subtext: data?.clarion_call_subtext || "" });
-      })
-      .catch(() => {});
   }, [router]);
 
   const roles = me?.roles && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const firstName = me?.first_name || me?.username || "there";
-  const nonMemberRoles = roles.filter((r) => r !== "member");
-  const isLeader = nonMemberRoles.length > 0;
 
-  const has = (r: string) => roles.includes(r);
   const hasAny = (list: string[]) => list.some((r) => roles.includes(r));
-  // The whole church's money is for the officers who keep it; the endpoint
-  // refuses anyone else, and members still get their own giving below.
-  const seesChurchFinances = hasAny(["treasurer", "admin", "elder", "clerk"]);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -182,11 +156,6 @@ export function MemberHome() {
 
   // ── My giving ────────────────────────────────────────────────────────────
   const completed = contributions.filter((c) => (c.status || "completed") === "completed");
-  // The clarion call: the same copy the public site opens with — settings
-  // fall back to the standing defaults exactly as the website does.
-  const clarionHeadingLines = (clarion?.heading || "").trim()
-    ? (clarion?.heading || "").trim().split("\n").map((line) => line.trim()).filter(Boolean)
-    : CLARION_DEFAULT_LINES;
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: "First name",
@@ -227,42 +196,27 @@ export function MemberHome() {
 
   return (
     <main className="dashboard-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      {/* Hero — a greeting and the church's clarion call: the same standing
-          welcome the public site opens with, so members hear the same call a
-          visitor hears. Money and tools live in the panels below; roles are
-          not badges here — leadership shortcuts surface themselves instead. */}
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
+      {/* The week's announcements slide by above the greeting: the church's
+          news leads, and when nothing is published the next gathering stands
+          in. A "See more" opens the full feed in Fellowship. */}
+      <DashboardAnnouncements />
+
+      {/* Hero — the greeting alone. The clarion call belongs to the website's
+          landing page now, and the dashboard's money and tools live in the
+          panels below. */}
+      <section className="mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
         {/* The greeting is meant to read as one line on a phone as well as on a
             wide screen, so the size follows the viewport between the two ends
             instead of switching at a breakpoint and wrapping in between. */}
         <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
           {greeting}, {firstName}.
         </h1>
-        <div className="mt-4 border-t border-white/15 pt-4">
-          {clarionHeadingLines.map((line, idx) => (
-            <p key={idx} className="text-base font-semibold leading-snug text-[#f1c89e] sm:text-lg">
-              {line}
-            </p>
-          ))}
-        </div>
       </section>
-
-      {/* The week's card — the same next-gathering + announcements card the
-          public site shows, rotating below the greeting so the church speaks
-          with one voice to members and visitors alike. */}
-      <div className="mt-6">
-        <NextGatheringCard />
-      </div>
 
       {loading ? (
         <p className="mt-8 text-center text-sm text-[#617068]">Loading your dashboard…</p>
       ) : (
         <>
-          {/* Church funds and giving analytics — officers only, and first: a
-              treasurer opens this page for the church's money, not for the
-              personal giving strip in the header above. */}
-          {seesChurchFinances && <DashboardAnalytics />}
-
           {/* A proposed profile edit, awaiting the member's own approval.
               Nothing on their record moves until they choose here. */}
           {profileChange && (
@@ -322,45 +276,6 @@ export function MemberHome() {
               </Link>
             ))}
           </section>
-
-          {/* Leadership strip */}
-          {isLeader && (
-            <section className="mt-4 rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4 sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold text-[#26352f]">Leadership shortcuts</h2>
-                  <p className="text-[11px] text-[#617068]">
-                    Tailored for: {nonMemberRoles.map((r) => roleLabel(r)).join(", ")}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link href="/administration" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                    Open Administration
-                  </Link>
-                  {hasAny(["treasurer", "admin"]) && (
-                    <Link href="/administration/reconciliation" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                      Reconciliation
-                    </Link>
-                  )}
-                  {hasAny(["elder", "admin", "clerk"]) && (
-                    <Link href="/administration?tab=announcements" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                      Post announcement
-                    </Link>
-                  )}
-                  {hasAny(["treasurer", "admin"]) && (
-                    <Link href="/support/budget" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                      Church budget
-                    </Link>
-                  )}
-                  {hasAny(["elder", "admin"]) && (
-                    <Link href="/requests" className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
-                      Review requests
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
 
           {/* Recent giving */}
           <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">

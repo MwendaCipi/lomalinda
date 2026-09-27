@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { nextGathering, gatheringLabel, type ChurchTimes } from "@/lib/gathering";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type ChurchSettings = { latitude: string | null; longitude: string | null; midweek_vespers_link: string; live_service_link: string; live_service_active: boolean; midweek_vespers_time: string; friday_vespers_time: string; sabbath_time: string };
-type Gathering = { day: number; hour: number; minute: number; endHour: number; endMinute: number; name: string; time: string; online: boolean; active: boolean; date: Date };
+type ChurchSettings = ChurchTimes & {
+  latitude: string | null;
+  longitude: string | null;
+  midweek_vespers_link: string;
+  live_service_link: string;
+  live_service_active: boolean;
+};
 
 type Announcement = {
   id: number;
@@ -18,18 +24,6 @@ type Announcement = {
   action_prompt?: string;
 };
 
-function clockRange(value: string | undefined, fallbackStart: [number, number], fallbackEnd: [number, number]) {
-  const matches = (value || "").match(/(\d{1,2}):(\d{2})\s*([AP]M)/gi) || [];
-  const parse = (text: string | undefined, fallback: [number, number]) => {
-    if (!text) return fallback;
-    const match = text.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
-    if (!match) return fallback;
-    let hour = Number(match[1]) % 12; if (match[3].toUpperCase() === "PM") hour += 12;
-    return [hour, Number(match[2])] as [number, number];
-  };
-  return [parse(matches[0], fallbackStart), parse(matches[1], fallbackEnd)] as const;
-}
-
 /**
  * The card beside the clarion hero: the next gathering, and the week's
  * announcements.
@@ -39,6 +33,11 @@ function clockRange(value: string | undefined, fallbackStart: [number, number], 
  * they now rotate through this one, so the column stays a single card and the
  * clarion call never moves. While a programme is actually happening the card
  * holds on the gathering so its live link is never rotated away.
+ *
+ * A giving announcement's slide carries the giving actions themselves —
+ * Pledge, In-kind and Give Money, always in one row, left to right — instead
+ * of a form-and-done flow; the Fellowship feed is where a member answers an
+ * opinion question or reads the full text.
  */
 export function NextGatheringCard() {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
@@ -48,12 +47,12 @@ export function NextGatheringCard() {
   const [isPaused, setIsPaused] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const [pledgeAmount, setPledgeAmount] = useState("");
-  const [responseText, setResponseText] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pledgeOpen, setPledgeOpen] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/church-settings/`)
@@ -72,30 +71,12 @@ export function NextGatheringCard() {
       .then((response) => (response.ok ? response.json() : []))
       .then((data: Announcement[]) => {
         if (!Array.isArray(data)) return;
-        // Slides play everything the church has published — nothing is
-        // marked handled here, so the same announcement still offers its
-        // actions on the announcements page and in popups.
         setAnnouncements(data);
       })
       .catch(() => undefined);
   }, []);
 
-  const gathering = useMemo(() => {
-    const definitions = [
-      { day: 3, name: "Midweek Vespers", time: settings?.midweek_vespers_time || "Wednesday · 8:00 PM – 9:00 PM", range: clockRange(settings?.midweek_vespers_time, [20, 0], [21, 0]), online: true },
-      { day: 5, name: "Friday Vespers", time: settings?.friday_vespers_time || "Friday · 5:30 PM – 6:30 PM", range: clockRange(settings?.friday_vespers_time, [17, 30], [18, 30]), online: false },
-      { day: 6, name: "Sabbath program", time: settings?.sabbath_time || "Saturday · 8:00 AM – 4:00 PM", range: clockRange(settings?.sabbath_time, [8, 0], [16, 0]), online: false },
-    ];
-    const candidates: Gathering[] = [];
-    for (let week = -1; week <= 1; week += 1) definitions.forEach((definition) => {
-      const date = new Date(now); const difference = definition.day - now.getDay() + week * 7; date.setDate(now.getDate() + difference); date.setHours(definition.range[0][0], definition.range[0][1], 0, 0);
-      const end = new Date(date); end.setHours(definition.range[1][0], definition.range[1][1], 0, 0); if (end <= date) end.setDate(end.getDate() + 1);
-      candidates.push({ day: definition.day, hour: definition.range[0][0], minute: definition.range[0][1], endHour: definition.range[1][0], endMinute: definition.range[1][1], name: definition.name, time: definition.time, online: definition.online, active: now >= date && now < end, date });
-    });
-    const active = candidates.find((candidate) => candidate.active);
-    if (active) return active;
-    return candidates.filter((candidate) => candidate.date > now).sort((a, b) => a.date.getTime() - b.date.getTime())[0] || candidates[0];
-  }, [now, settings]);
+  const gathering = useMemo(() => nextGathering(settings, now), [settings, now]);
 
   // Slide 0 is always the gathering; the announcements follow it.
   const slideCount = 1 + announcements.length;
@@ -109,24 +90,28 @@ export function NextGatheringCard() {
     return () => window.clearInterval(timer);
   }, [canRotate, isPaused, isInteracting, slideCount]);
 
-  const mapsUrl = settings?.latitude && settings.longitude ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}` : null;
+  const mapsUrl = settings?.latitude && settings.longitude
+    ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
+    : null;
   const liveHref = gathering.active && settings?.live_service_active && settings.live_service_link ? settings.live_service_link : null;
   const actionHref = liveHref || (gathering.online ? settings?.midweek_vespers_link : mapsUrl);
-  const gatheringLabel = gathering.active ? (gathering.name === "Sabbath program" ? "Sabbath program is ongoing" : `${gathering.name} is ongoing`) : (gathering.name === "Sabbath program" ? "Sabbath programs begin soon" : `${gathering.name} begins soon`);
   const joinOpen = gathering.online && gathering.active && Boolean(actionHref);
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
 
-  // The landing card plays announcements as slides — they are read, not
-  // acted on here, so there is no dismiss; the announcements page is where a
-  // member responds or gives.
+  // A new slide starts with its pledge field closed.
+  useEffect(() => {
+    setPledgeOpen(false);
+    setPledgeAmount("");
+    setStatusMessage("");
+    setSuccessMessage("");
+  }, [current?.id]);
 
-  async function handleActionSubmit(event: FormEvent) {
+  async function handlePledgeSubmit(event: FormEvent) {
     event.preventDefault();
     if (!current) return;
     setSubmitting(true);
     setStatusMessage("");
-    setSuccessMessage("");
 
     try {
       const token = localStorage.getItem("access_token");
@@ -139,7 +124,7 @@ export function NextGatheringCard() {
         body: JSON.stringify({
           action_type: actionType,
           pledge_amount: pledgeAmount ? parseFloat(pledgeAmount) : null,
-          response_text: responseText,
+          response_text: "",
           respondent_name: name,
           respondent_phone: phone,
         }),
@@ -147,17 +132,17 @@ export function NextGatheringCard() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || "Unable to submit action.");
+        throw new Error(error.detail || "Unable to record your pledge.");
       }
 
-      setSuccessMessage("Thank you! Your action has been recorded.");
+      setSuccessMessage("Thank you! Your pledge has been recorded.");
       setPledgeAmount("");
-      setResponseText("");
       setName("");
       setPhone("");
 
       setTimeout(() => {
         setSuccessMessage("");
+        setPledgeOpen(false);
         setSlide((prev) => (prev + 1) % slideCount);
         setIsInteracting(false);
       }, 1400);
@@ -218,7 +203,7 @@ export function NextGatheringCard() {
       </div>
 
       <div className="mt-4">
-        <h2 className="text-3xl font-semibold">{current ? current.title : gatheringLabel}</h2>
+        <h2 className="text-3xl font-semibold">{current ? current.title : gatheringLabel(gathering, now)}</h2>
         {current ? (
           <>
             <p className="mt-3 text-base leading-7 text-[#3d5148]">{current.text}</p>
@@ -232,79 +217,94 @@ export function NextGatheringCard() {
         )}
       </div>
 
-      <div className="mt-auto border-t border-[#c1d0c4] pt-8">
-        {current ? (
-          successMessage ? (
+      <div className="mt-auto">
+        {current && successMessage ? (
+          <div className="border-t border-[#c1d0c4] pt-6">
             <div className="rounded-xl bg-white/70 p-3 text-center text-sm font-semibold text-[#3d5148]">{successMessage}</div>
-          ) : (
-            <form onSubmit={handleActionSubmit} className="space-y-3">
-              {isContributionAction && (
+          </div>
+        ) : current && isContributionAction ? (
+          <div className="border-t border-[#c1d0c4] pt-6">
+            {/* The giving actions, always one row, left to right: Pledge,
+                In-kind, Give Money. The order is a commitment: deliberate
+                giving first, then goods, then money. */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {pledgeOpen ? (
+                <span aria-hidden className="rounded-full border border-dashed border-[#c1d0c4] px-2 py-2.5 text-center text-xs text-[#8a968d] sm:text-sm" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setPledgeOpen(true); setIsInteracting(true); }}
+                  className="rounded-full border border-[#a9bcae] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                >
+                  Pledge
+                </button>
+              )}
+              <Link
+                href="/support/in-kind"
+                className="rounded-full border border-[#a9bcae] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+              >
+                In-kind
+              </Link>
+              <Link
+                href={`/give?purpose=${encodeURIComponent(current.title)}`}
+                className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+              >
+                Give Money
+              </Link>
+            </div>
+            <p className="mt-2 text-center text-xs text-[#617068]">towards {current.title}</p>
+
+            {pledgeOpen && (
+              <form onSubmit={handlePledgeSubmit} className="mt-3 space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Contribution Amount (KES)</label>
+                  <label className="block text-xs font-semibold text-[#26352f]">Pledge Amount (KES)</label>
                   <input
                     type="number"
                     min="1"
                     placeholder="e.g. 5000"
                     value={pledgeAmount}
-                    onChange={(event) => { setIsInteracting(true); setPledgeAmount(event.target.value); }}
+                    onChange={(event) => setPledgeAmount(event.target.value)}
                     className="mt-1 w-full rounded-xl border border-[#c1d0c4] bg-white px-3 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
                   />
                 </div>
-              )}
-
-              {actionType === "respond" && (
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">{current.action_prompt || "Your Response"}</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Write your response..."
-                    value={responseText}
-                    onChange={(event) => { setIsInteracting(true); setResponseText(event.target.value); }}
-                    className="mt-1 w-full rounded-xl border border-[#c1d0c4] bg-white px-3 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
-                  />
-                </div>
-              )}
-
-              {(isContributionAction || actionType === "respond") && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="text"
                     placeholder="Your Name (optional)"
                     value={name}
-                    onChange={(event) => { setIsInteracting(true); setName(event.target.value); }}
+                    onChange={(event) => setName(event.target.value)}
                     className="rounded-xl border border-[#c1d0c4] bg-white px-3 py-2 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                   />
                   <input
                     type="tel"
                     placeholder="Phone Number (optional)"
                     value={phone}
-                    onChange={(event) => { setIsInteracting(true); setPhone(event.target.value); }}
+                    onChange={(event) => setPhone(event.target.value)}
                     className="rounded-xl border border-[#c1d0c4] bg-white px-3 py-2 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                   />
                 </div>
-              )}
-
-              {statusMessage && <p className="text-xs text-red-700">{statusMessage}</p>}
-
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[#96552e] disabled:opacity-60"
-                >
-                  {submitting ? "Submitting..." : isContributionAction ? "Submit Contribution Action" : actionType === "respond" ? "Send Response" : "Done"}
-                </button>
-                <Link
-                  href="/announcements"
-                  className="rounded-full border border-[#a9bcae] px-4 py-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
-                >
-                  See all announcements
-                </Link>
-              </div>
-            </form>
-          )
-        ) : (
-          <>
+                {statusMessage && <p className="text-xs text-red-700">{statusMessage}</p>}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={submitting || !pledgeAmount}
+                    className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white transition hover:bg-[#96552e] disabled:opacity-60"
+                  >
+                    {submitting ? "Submitting..." : "Record pledge"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPledgeOpen(false); setStatusMessage(""); }}
+                    className="text-xs font-semibold text-[#617068] hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : !current ? (
+          <div className="border-t border-[#c1d0c4] pt-6">
             <p className="text-sm text-[#617068]">{gathering.date.toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric" })}</p>
             {liveHref ? (
               <Link href={liveHref} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#b36b3c] hover:underline">
@@ -319,8 +319,8 @@ export function NextGatheringCard() {
             ) : (
               <Link href={mapsUrl || "/calendar"} target={mapsUrl ? "_blank" : undefined} rel={mapsUrl ? "noreferrer" : undefined} className="mt-4 inline-block text-sm font-semibold text-[#b36b3c] hover:underline">View location &rarr;</Link>
             )}
-          </>
-        )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

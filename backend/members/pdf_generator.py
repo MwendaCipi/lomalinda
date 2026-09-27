@@ -1103,7 +1103,6 @@ def generate_contribution_thermal_receipt_pdf(
     c.setFillColor(dark)
 
     # ── Header ──
-    line_out("SEVENTH-DAY ADVENTIST CHURCH", "Helvetica-Bold", 9, "center", gap=2)
     line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
     line_out("OFFICIAL GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
     dashed()
@@ -1215,7 +1214,6 @@ def generate_in_kind_thermal_receipt_pdf(
     c.setFillColor(dark)
 
     # ── Header ──
-    line_out("SEVENTH-DAY ADVENTIST CHURCH", "Helvetica-Bold", 9, "center", gap=2)
     line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
     line_out("IN-KIND GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
     dashed()
