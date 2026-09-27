@@ -1,9 +1,10 @@
 import io
 from decimal import Decimal
 from datetime import datetime
+from django.utils import timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.units import cm
+from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -1040,3 +1041,117 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     buffer.seek(0)
     return buffer.getvalue()
 
+
+
+def generate_contribution_thermal_receipt_pdf(
+    church_name,
+    donor_name,
+    contributions,
+    issued_at=None,
+):
+    """A thermal-style receipt for one giving (one payment, maybe several lines).
+
+    Printers call this size 80 mm: about three inches of paper. The layout is
+    what a POS printer would emit — narrow, monospaced-aligned amounts, a
+    dashed divider — but it is an ordinary PDF, so it also reads perfectly on
+    a phone and prints correctly on any paper.
+
+    `contributions` are the rows that share one payment: normally a single
+    line, or several when a giver split one gift across accounts. Split
+    lines print itemised with a total; a single line prints like the simple
+    receipts a treasurer's book keeps.
+    """
+    issued_at = issued_at or timezone.now()
+    receipt_no = ""
+    for row in contributions:
+        receipt_no = row.mpesa_receipt_number or row.paystack_reference or receipt_no
+        if receipt_no:
+            break
+
+    WIDTH = 80 * mm
+    margin = 6 * mm
+    content_width = WIDTH - 2 * margin
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(WIDTH, 200 * mm))
+    y = 200 * mm - margin
+
+    def line_out(text, font="Helvetica", size=8, align="left", gap=3):
+        nonlocal y
+        c.setFont(font, size)
+        if align == "center":
+            c.drawCentredString(WIDTH / 2, y, text)
+        elif align == "right":
+            c.drawRightString(WIDTH - margin, y, text)
+        else:
+            c.drawString(margin, y, text)
+        y -= size + gap
+
+    def dashed():
+        nonlocal y
+        c.setFont("Courier", 8)
+        c.drawString(margin, y, "-" * 46)
+        y -= 11
+
+    dark = colors.HexColor("#26352f")
+    c.setFillColor(dark)
+
+    # ── Header ──
+    line_out("SEVENTH-DAY ADVENTIST CHURCH", "Helvetica-Bold", 9, "center", gap=2)
+    line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
+    line_out("OFFICIAL GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
+    dashed()
+
+    # ── Payment facts ──
+    first = contributions[0]
+    line_out(f"Received from: {(donor_name or first.donor_name or 'Friend')[:38]}")
+    if first.phone_number:
+        line_out(f"Phone: {first.phone_number}")
+    date_str = (first.paid_at or first.created_at).strftime("%d %b %Y %H:%M")
+    line_out(f"Date: {date_str}")
+    method = (first.payment_method or "mpesa").replace("_", " ").upper()
+    line_out(f"Method: {method}")
+    if receipt_no:
+        line_out(f"Receipt: {receipt_no}")
+    dashed()
+
+    # ── Lines ──
+    if len(contributions) > 1:
+        for row in contributions:
+            amount = f"{row.currency} {row.amount:,.2f}"
+            label = (row.purpose or "Giving")[:26]
+            c.setFont("Helvetica", 8)
+            c.drawString(margin, y, label)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawRightString(WIDTH - margin, y, amount)
+            y -= 12
+        y -= 2
+        dashed()
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(margin, y, "TOTAL")
+        c.drawRightString(WIDTH - margin, y, f"{first.currency} {sum(r.amount for r in contributions):,.2f}")
+        y -= 14
+    else:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawRightString(WIDTH - margin, y - 4, f"{first.currency} {first.amount:,.2f}")
+        y -= 22
+        c.setFont("Helvetica", 8)
+        c.drawString(margin, y, f"For: {(first.purpose or 'Giving')[:34]}")
+        y -= 12
+        if first.item_description:
+            c.setFont("Helvetica", 7)
+            c.drawString(margin, y, f"({first.item_description[:40]})")
+            y -= 12
+
+    dashed()
+
+    # ── Footer ──
+    line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
+    line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out("This receipt is system generated.", "Helvetica", 6.5, "center", gap=0)
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()

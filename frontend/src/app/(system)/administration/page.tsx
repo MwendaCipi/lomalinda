@@ -242,7 +242,7 @@ function AdministrationContent() {
           }}
           onSelectTab={(tab) => {
             setActiveTab(tab);
-            router.push(`/administration?tab=${tab}`, { scroll: false });
+            router.replace(`/administration?tab=${tab}`, { scroll: false });
           }}
         />
 
@@ -266,7 +266,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("users");
-                          router.push("/administration?tab=users", { scroll: false });
+                          router.replace("/administration?tab=users", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -281,7 +281,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("leaders");
-                          router.push("/administration?tab=leaders", { scroll: false });
+                          router.replace("/administration?tab=leaders", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -296,7 +296,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("transfers");
-                          router.push("/administration?tab=transfers", { scroll: false });
+                          router.replace("/administration?tab=transfers", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -311,7 +311,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("board");
-                          router.push("/administration?tab=board", { scroll: false });
+                          router.replace("/administration?tab=board", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -326,7 +326,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("business");
-                          router.push("/administration?tab=business", { scroll: false });
+                          router.replace("/administration?tab=business", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -344,7 +344,7 @@ function AdministrationContent() {
                     <div
                       onClick={() => {
                         setActiveTab("announcements");
-                        router.push("/administration?tab=announcements", { scroll: false });
+                        router.replace("/administration?tab=announcements", { scroll: false });
                       }}
                       className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
@@ -361,7 +361,7 @@ function AdministrationContent() {
                     <div
                       onClick={() => {
                         setActiveTab("requests");
-                        router.push("/administration?tab=requests", { scroll: false });
+                        router.replace("/administration?tab=requests", { scroll: false });
                       }}
                       className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
@@ -394,7 +394,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("accounts");
-                          router.push("/administration?tab=accounts", { scroll: false });
+                          router.replace("/administration?tab=accounts", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -433,7 +433,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("expenditures");
-                          router.push("/administration?tab=expenditures", { scroll: false });
+                          router.replace("/administration?tab=expenditures", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -448,7 +448,7 @@ function AdministrationContent() {
                       <div
                         onClick={() => {
                           setActiveTab("refunds");
-                          router.push("/administration?tab=refunds", { scroll: false });
+                          router.replace("/administration?tab=refunds", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                       >
@@ -467,7 +467,7 @@ function AdministrationContent() {
                     <div
                       onClick={() => {
                         setActiveTab("inventory");
-                        router.push("/administration?tab=inventory", { scroll: false });
+                        router.replace("/administration?tab=inventory", { scroll: false });
                       }}
                       className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
@@ -484,7 +484,7 @@ function AdministrationContent() {
                     <div
                       onClick={() => {
                         setActiveTab("settings");
-                        router.push("/administration?tab=settings", { scroll: false });
+                        router.replace("/administration?tab=settings", { scroll: false });
                       }}
                       className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >
@@ -504,7 +504,7 @@ function AdministrationContent() {
                     <div
                       onClick={() => {
                         setActiveTab("dept-amm-members");
-                        router.push("/administration?tab=dept-amm-members", { scroll: false });
+                        router.replace("/administration?tab=dept-amm-members", { scroll: false });
                       }}
                       className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
                     >

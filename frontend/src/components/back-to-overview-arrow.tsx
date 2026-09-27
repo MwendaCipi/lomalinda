@@ -15,7 +15,7 @@ export function BackToOverviewArrow() {
     <button
       type="button"
       aria-label="Back to overview"
-      onClick={() => router.push("/administration?tab=overview", { scroll: false })}
+      onClick={() => router.replace("/administration?tab=overview", { scroll: false })}
       className="lg:hidden -ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-[#26352f] transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
     >
       <ArrowLeft className="h-5 w-5" aria-hidden="true" />

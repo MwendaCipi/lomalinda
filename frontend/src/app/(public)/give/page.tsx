@@ -232,6 +232,30 @@ function GivePageContent() {
   // Totals count money actually given; failed attempts stay visible but never inflate the sum.
   const givingTotal = filteredGivings.reduce((sum, g) => ((g.status || "").toLowerCase() === "completed" ? sum + Number(g.amount || 0) : sum), 0);
 
+  /** Download the server-rendered thermal receipt for one giving. The PDF
+   *  arrives as a blob so the browser's download sheet opens on mobile too. */
+  const handleDownloadReceipt = async (g: MyGiving) => {
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/contributions/${g.id}/receipt/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not generate the receipt.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Giving_Receipt_${(g.mpesa_receipt_number || g.id)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showAlert("Receipt Error", error instanceof Error ? error.message : "Could not generate the receipt.", "error");
+    }
+  };
+
   const fmtGivingDate = (g: MyGiving) => {
     const raw = g.paid_at || g.created_at;
     return raw
@@ -690,6 +714,18 @@ function GivePageContent() {
                               <td className="py-3 pr-4 text-[#617068]">{methodLabel(g.payment_method)}</td>
                               <td className="py-3 pr-4 font-mono text-[#617068]">{g.mpesa_receipt_number || "—"}</td>
                               <td className="py-3 pr-4 text-right font-semibold text-[#26352f]">KES {Number(g.amount || 0).toLocaleString()}</td>
+                              <td className="py-3 pr-2 text-right">
+                                {(g.status || "").toLowerCase() === "completed" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadReceipt(g)}
+                                    title="Download receipt"
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                                  >
+                                    🧾 Receipt
+                                  </button>
+                                )}
+                              </td>
                               <td className="py-3">{statusBadge(g.status)}</td>
                             </tr>
                           ))
@@ -713,7 +749,19 @@ function GivePageContent() {
                             {statusBadge(g.status)}
                           </div>
                           <p className="text-xs text-[#617068]">{fmtGivingDate(g)} · {methodLabel(g.payment_method)}</p>
-                          <p className="text-sm font-bold text-[#b36b3c]">KES {Number(g.amount || 0).toLocaleString()}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-bold text-[#b36b3c]">KES {Number(g.amount || 0).toLocaleString()}</p>
+                            {(g.status || "").toLowerCase() === "completed" && (
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadReceipt(g)}
+                                title="Download receipt"
+                                className="inline-flex items-center gap-1 rounded-lg border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                              >
+                                🧾 Receipt
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}

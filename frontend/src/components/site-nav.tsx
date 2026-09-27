@@ -70,11 +70,15 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   const pathname = normalizePath(usePathname());
   const router = useRouter();
 
-  // On the two surfaces that are read by scrolling — the dashboard and the
-  // announcements feed — the tab bar steps out of the way on the way down and
-  // comes straight back on any upward movement, so a long read gets the whole
-  // screen without stranding anyone. Elsewhere the bar stays put.
-  const navHidesOnScroll = pathname === "/dashboard" || pathname.startsWith("/announcements");
+  // On the surfaces that are read by scrolling — the dashboard, the
+  // announcements feed and the live reports board — the tab bar steps out of
+  // the way on the way down and comes straight back on any upward movement,
+  // so a long read gets the whole screen without stranding anyone. Elsewhere
+  // the bar stays put.
+  const navHidesOnScroll =
+    pathname === "/dashboard" ||
+    pathname.startsWith("/announcements") ||
+    pathname === "/support/reports";
   const [navHidden, setNavHidden] = useState(false);
 
   useEffect(() => {

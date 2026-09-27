@@ -247,28 +247,6 @@ function GiveInKindPageContent() {
     win.print();
   };
 
-  const handleExportCsv = async () => {
-    const all = await fetchAllFiltered();
-    if (all.length === 0) {
-      showAlert("Nothing to Export", "No in-kind gifts match the current filters.", "info");
-      return;
-    }
-    const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-    const lines = [
-      ["#", "Date", "Donor", "Account", "Items", "Notes"].join(","),
-      ...all.map((r, i) =>
-        [String(i + 1), fmtReportDate(r), r.donor_display || "Anonymous", r.purpose || "", (r.items_list || []).join("; "), r.notes || ""].map(esc).join(",")
-      ),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `in-kind-report-${fromDate}-to-${toDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <div className="flex">
@@ -336,41 +314,50 @@ function GiveInKindPageContent() {
                   </div>
                 ) : (
                 <>
-                <div className="flex flex-col gap-2 border-b border-[#dfdbd1] px-5 py-3 md:flex-row md:items-center md:justify-end">
-                  <input
-                    type="date"
-                    value={fromDate}
-                    max={toDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    title="From date"
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  />
-                  <span className="text-xs text-[#617068]">→</span>
-                  <input
-                    type="date"
-                    value={toDate}
-                    min={fromDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    title="To date"
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  />
-                  <select
-                    value={purposeFilter}
-                    onChange={(e) => setPurposeFilter(e.target.value)}
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
-                  >
-                    <option value="all">All purposes</option>
-                    {reportPurposes.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={reportSearch}
-                    onChange={(e) => setReportSearch(e.target.value)}
-                    className="min-w-[120px] flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  />
+                {/* Same two-row shape as the money-giving page: the date span
+                    on one row, the compact purpose filter beside the search
+                    on the next — every control on one line per row, mobile
+                    included. */}
+                <div className="flex flex-col gap-2 border-b border-[#dfdbd1] px-5 py-3 md:flex-row md:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <input
+                      type="date"
+                      value={fromDate}
+                      max={toDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      title="From date"
+                      className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    />
+                    <span className="shrink-0 text-xs text-[#617068]">→</span>
+                    <input
+                      type="date"
+                      value={toDate}
+                      min={fromDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      title="To date"
+                      className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <select
+                      value={purposeFilter}
+                      onChange={(e) => setPurposeFilter(e.target.value)}
+                      aria-label="Filter by purpose"
+                      className="h-9 w-[42%] max-w-[180px] shrink-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2 py-2 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+                    >
+                      <option value="all">All purposes</option>
+                      {reportPurposes.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={reportSearch}
+                      onChange={(e) => setReportSearch(e.target.value)}
+                      className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="max-h-[70vh] overflow-y-auto overscroll-contain custom-table-scrollbar px-5 py-3">
@@ -466,19 +453,18 @@ function GiveInKindPageContent() {
                     </div>
                     <button
                       type="button"
-                      onClick={handleExportCsv}
+                      onClick={handlePrintReport}
                       disabled={serverCount === 0}
                       className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] disabled:opacity-50 sm:flex-none"
                     >
-                      Export CSV
+                      🖨️ Print Report
                     </button>
                     <button
                       type="button"
-                      onClick={handlePrintReport}
-                      disabled={serverCount === 0}
-                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50 sm:flex-none"
+                      onClick={() => setShowGiveModal(true)}
+                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] sm:flex-none"
                     >
-                      🖨️ Print Report
+                      Give Now
                     </button>
                   </div>
                 </div>

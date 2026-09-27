@@ -611,7 +611,13 @@ export function AnnouncementManager({
                     type="date"
                     required
                     value={form.event_date_from}
-                    onChange={(e) => setForm({ ...form, event_date_from: e.target.value })}
+                    onChange={(e) => {
+                      // Picking the start also sets the end to it — most
+                      // events are one day, and the officer widens the end
+                      // only when the event truly spans days. It also keeps
+                      // end >= start no matter how the start moves.
+                      setForm({ ...form, event_date_from: e.target.value, event_date_to: e.target.value });
+                    }}
                     className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
                   />
                 </label>

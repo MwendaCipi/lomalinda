@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
+import uuid
 from unittest.mock import patch
 from urllib.parse import unquote
 
@@ -6338,3 +6339,85 @@ class DepartmentBudgetTests(APITestCase):
         res_del = self.client.delete(f'/api/members/departments/amm/budgets/{budget_id}/')
         self.assertEqual(res_del.status_code, status.HTTP_200_OK)
         self.assertFalse(DepartmentBudget.objects.filter(pk=budget_id).exists())
+
+
+class MemberThermalReceiptTests(APITestCase):
+    """Every giving row carries a Receipt button; the PDF it serves is the
+    member's own (or an office holder's), and a split gift prints as one
+    receipt with every line itemised."""
+
+    def setUp(self):
+        self.giver = User.objects.create_user('receipt.giver', 'receipt.giver@example.com', 'StrongPass#2026', first_name='Gideon', last_name='Giver')
+        MemberProfile.objects.create(user=self.giver, role='member', roles='member')
+        self.stranger = User.objects.create_user('receipt.stranger', 'receipt.stranger@example.com', 'StrongPass#2026', first_name='Sally', last_name='Stranger')
+        MemberProfile.objects.create(user=self.stranger, role='member', roles='member')
+        self.treasurer = User.objects.create_user('receipt.treasurer', 'receipt.treasurer@example.com', 'StrongPass#2026', first_name='Tessa', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_member_downloads_their_own_receipt(self):
+        row = Contribution.objects.create(
+            member=self.giver, amount=Decimal('500'), purpose='Tithe',
+            payment_method='mpesa', status='completed', mpesa_receipt_number='SGH7XK2M1P',
+        )
+        self._auth(self.giver)
+        res = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res['Content-Type'], 'application/pdf')
+        self.assertTrue(res.content.startswith(b'%PDF'))
+        # The receipt is exactly 80 mm wide — the thermal-printer width.
+        self.assertIn('/MediaBox [ 0 0 226.77', res.content.decode('latin-1'))
+
+    def test_split_gift_receipt_covers_every_line(self):
+        group = uuid.uuid4()
+        a = Contribution.objects.create(
+            member=self.giver, amount=Decimal('2000'), purpose='Tithe',
+            payment_method='mpesa', status='completed', mpesa_receipt_number='SPLIT01', payment_group=group,
+        )
+        b = Contribution.objects.create(
+            member=self.giver, amount=Decimal('1000'), purpose='Local Church Budget',
+            payment_method='mpesa', status='completed', mpesa_receipt_number='SPLIT01', payment_group=group,
+        )
+        self._auth(self.giver)
+        res = self.client.get(f'/api/members/contributions/{b.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # The page stream is compressed, so decode and inflate it before
+        # asserting that both split lines made it onto the receipt.
+        import zlib, re, base64
+        match = re.search(rb'stream\r?\n(.*?)endstream', res.content, re.S)
+        self.assertIsNotNone(match)
+        raw = match.group(1).strip()
+        if b'ASCII85Decode' in res.content:
+            raw = base64.a85decode(raw, adobe=True)
+        text = zlib.decompress(raw).decode('latin-1')
+        self.assertIn('Tithe', text)
+        self.assertIn('Local Church Budget', text)
+
+    def test_stranger_gets_not_found(self):
+        row = Contribution.objects.create(
+            member=self.giver, amount=Decimal('300'), purpose='Combined Offering',
+            payment_method='mpesa', status='completed',
+        )
+        self._auth(self.stranger)
+        res = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_treasurer_can_pull_any_receipt(self):
+        row = Contribution.objects.create(
+            member=self.giver, amount=Decimal('700'), purpose='Camp Expenses',
+            payment_method='mpesa', status='completed',
+        )
+        self._auth(self.treasurer)
+        res = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_uncompleted_giving_has_no_receipt(self):
+        row = Contribution.objects.create(
+            member=self.giver, amount=Decimal('900'), purpose='Tithe',
+            payment_method='mpesa', status='failed',
+        )
+        self._auth(self.giver)
+        res = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

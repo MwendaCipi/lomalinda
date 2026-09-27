@@ -2127,6 +2127,55 @@ class MyContributionsView(generics.ListAPIView):
         return Contribution.objects.filter(member=self.request.user, status__in=statuses)
 
 
+class MemberThermalReceiptView(APIView):
+    """A thermal-style PDF receipt for one giving, downloaded by its owner.
+
+    The URL names a contribution row; the receipt covers the whole payment —
+    when a giver split one gift across accounts, every line sharing the
+    payment group prints itemised with a total, the way the treasurer's
+    ledger keeps it. Only the giver (or an office holder) may fetch it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        row = Contribution.objects.filter(pk=pk).select_related('member', 'campaign').first()
+        if row is None or row.status != 'completed':
+            # A failed or pending payment never became money, so it has no
+            # receipt to give — for anyone.
+            return Response({'detail': 'Giving not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = getattr(request.user, 'member_profile', None)
+        is_office = bool(profile and profile.has_role('admin', 'treasurer', 'elder'))
+        if row.member_id != request.user.id and not is_office:
+            return Response({'detail': 'This receipt belongs to another giver.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # One payment may be several ledger lines (a split gift): every line
+        # of the group appears on the one receipt.
+        if row.payment_group:
+            lines = list(
+                Contribution.objects.filter(payment_group=row.payment_group, status='completed').order_by('id')
+            )
+        else:
+            lines = [row]
+        lines = [r for r in lines if r.status == 'completed'] or [row]
+
+        donor = row.member or request.user
+        donor_name = f"{donor.first_name} {donor.last_name}".strip() or row.donor_name or donor.username
+        church_setting = ChurchSettings.objects.first()
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+
+        pdf_bytes = generate_contribution_thermal_receipt_pdf(
+            church_name=church_name,
+            donor_name=donor_name,
+            contributions=lines,
+        )
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        stamp = (row.paid_at or row.created_at).strftime('%Y%m%d')
+        response['Content-Disposition'] = f'attachment; filename="Giving_Receipt_{stamp}_{row.pk}.pdf"'
+        return response
+
+
 def ensure_giver_profile(donor_name, phone_number, donor_email):
     """
     Ensures that a giver exists as a User with a MemberProfile (account_type='friend' if new).
@@ -5376,6 +5425,7 @@ from .pdf_generator import (
     generate_reconciliation_pdf,
     generate_member_giving_statement_pdf,
     generate_business_meeting_pdf,
+    generate_contribution_thermal_receipt_pdf,
 )
 
 class ReconciliationPdfView(APIView):
