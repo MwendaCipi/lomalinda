@@ -970,7 +970,9 @@ class ChurchSettings(models.Model):
     # replacing both values (existing subscriptions keep working only while
     # the private key is stable, so rotation means everyone re-enables).
     vapid_public_key = models.CharField(max_length=200, blank=True)
-    vapid_private_key = models.CharField(max_length=200, blank=True)
+    # A PKCS8 PEM runs ~240-260 characters — well past 200, which the first
+    # cut of this field learned the hard way.
+    vapid_private_key = models.CharField(max_length=500, blank=True)
     bank_name = models.CharField(max_length=160, default='KCB Bank Kenya', blank=True)
     bank_account_name = models.CharField(max_length=160, default='SDA Church Main Account', blank=True)
     bank_account_number = models.CharField(max_length=80, default='1122334455', blank=True)
