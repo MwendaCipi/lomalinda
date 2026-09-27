@@ -197,13 +197,8 @@ export function MemberHome() {
 
   return (
     <main className="dashboard-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      {/* The week's announcements slide by above the greeting: the church's
-          news leads, and when nothing is published the next gathering stands
-          in. A "See more" opens the full feed in Fellowship. */}
-      <DashboardAnnouncements />
-
-      {/* Hero — the greeting, kept to its own height so the church's news
-          and the member's tools sit above the fold. */}
+      {/* Hero — the greeting leads, kept to its own height so the church's
+          news and the member's tools sit above the fold. */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-5 text-white shadow-md sm:px-8 sm:py-6">
         {/* The greeting is meant to read as one line on a phone as well as on a
             wide screen, so the size follows the viewport between the two ends
@@ -212,6 +207,13 @@ export function MemberHome() {
           {greeting}, {firstName}.
         </h1>
       </section>
+
+      {/* The week's announcements slide by below the greeting: when nothing
+          is published the next gathering stands in, and a "See more" opens
+          the full feed in Fellowship. */}
+      <div className="mt-4">
+        <DashboardAnnouncements />
+      </div>
 
       {loading ? (
         <p className="mt-8 text-center text-sm text-[#617068]">Loading your dashboard…</p>
