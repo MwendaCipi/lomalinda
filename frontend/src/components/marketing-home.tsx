@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { NextGatheringCard } from "@/components/next-gathering-card";
 import { ChurchGallery } from "@/components/church-gallery";
 import { ClarionHero } from "@/components/clarion-hero";
@@ -71,6 +73,15 @@ const footerColumns = [
 ];
 
 export function MarketingHome() {
+  // A signed-in member who lands on the public home page — opening the app
+  // or backing out after signing in — is swapped over to their dashboard
+  // with a history replace, so pressing back repeatedly exits the app
+  // instead of replaying the marketing page.
+  const router = useRouter();
+  useEffect(() => {
+    if (localStorage.getItem("access_token")) router.replace("/dashboard");
+  }, [router]);
+
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <section id="top" className="mx-auto max-w-6xl px-6 pb-14 pt-6 sm:pt-10 lg:px-8 lg:pt-14">

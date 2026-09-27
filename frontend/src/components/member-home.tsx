@@ -4,10 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
   BookOpen,
   CalendarClock,
-  ChevronRight,
   ClipboardList,
   HandHeart,
   Megaphone,
@@ -20,11 +18,21 @@ import {
 } from "lucide-react";
 import { roleLabel } from "@/components/roles-combobox";
 import { showAlert } from "@/lib/alerts";
-import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { NextGatheringCard } from "@/components/next-gathering-card";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { GroupedBarChart } from "@/components/mini-charts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+// The clarion call's fallback copy — the same standing welcome the public
+// site opens with when settings carry no custom text.
+const CLARION_DEFAULT_LINES = [
+  "A place to belong.",
+  "A faith to share.",
+  "A hope that transforms lives.",
+];
+const CLARION_DEFAULT_SUBTEXT =
+  "Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.";
 
 type Me = {
   first_name: string;
@@ -34,18 +42,6 @@ type Me = {
   role?: string;
 };
 
-type Announcement = {
-  id: number;
-  title: string;
-  text: string;
-  detail?: string;
-  href?: string;
-  attachment?: string | null;
-  attachment_name?: string | null;
-  attachment_size?: number | null;
-  created_at: string;
-};
-
 type Contribution = {
   id: number;
   amount: string;
@@ -53,13 +49,6 @@ type Contribution = {
   created_at: string;
   paid_at?: string;
   status?: string;
-};
-
-type Notification = {
-  id: number;
-  title: string;
-  message: string;
-  created_at: string;
 };
 
 type ProfileChange = {
@@ -100,9 +89,8 @@ function fmtCompactKes(value: number) {
 export function MemberHome() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [clarion, setClarion] = useState<{ heading?: string; subtext?: string } | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [encouragement, setEncouragement] = useState("");
@@ -124,11 +112,6 @@ export function MemberHome() {
       })
       .catch(() => router.replace("/login?next=/dashboard"));
 
-    fetch(`${API_URL}/api/members/announcements/`, { headers })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => setAnnouncements(Array.isArray(data) ? data.slice(0, 4) : []))
-      .catch(() => setAnnouncements([]));
-
     fetch(`${API_URL}/api/members/contributions/`, { headers })
       .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => {
@@ -136,11 +119,6 @@ export function MemberHome() {
         setContributions(rows);
       })
       .catch(() => setContributions([]));
-
-    fetch(`${API_URL}/api/members/notifications/`, { headers })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => setNotifications(Array.isArray(data) ? data.slice(0, 5) : []))
-      .catch(() => setNotifications([]));
 
     // A proposed profile edit waits here for the member's own yes or no.
     fetch(`${API_URL}/api/members/me/profile-changes/`, { headers })
@@ -153,7 +131,12 @@ export function MemberHome() {
     // Public read: it is greeting copy, not private data.
     fetch(`${API_URL}/api/members/church-settings/`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setEncouragement(data?.dashboard_encouragement_line || ""))
+      .then((data) => {
+        setEncouragement(data?.dashboard_encouragement_line || "");
+        // The clarion call is the same copy the public site greets visitors
+        // with — the dashboard reuses it under the greeting.
+        setClarion({ heading: data?.clarion_call_heading || "", subtext: data?.clarion_call_subtext || "" });
+      })
       .catch(() => {});
   }, [router]);
 
@@ -207,6 +190,13 @@ export function MemberHome() {
   const completed = contributions.filter((c) => (c.status || "completed") === "completed");
   const encouragementLine = encouragement.trim();
 
+  // The clarion call: the same copy the public site opens with — settings
+  // fall back to the standing defaults exactly as the website does.
+  const clarionHeadingLines = (clarion?.heading || "").trim()
+    ? (clarion?.heading || "").trim().split("\n").map((line) => line.trim()).filter(Boolean)
+    : CLARION_DEFAULT_LINES;
+  const clarionSubtext = (clarion?.subtext || "").trim() || CLARION_DEFAULT_SUBTEXT;
+
   const FIELD_LABELS: Record<string, string> = {
     first_name: "First name",
     last_name: "Last name",
@@ -246,38 +236,38 @@ export function MemberHome() {
 
   return (
     <main className="dashboard-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      {/* Hero — a greeting, who you are, and the church's line of encouragement.
-          Money lives in the panels below: this card is where a member is greeted,
-          not where their giving is totalled. */}
+      {/* Hero — a greeting and the church's clarion call: the same standing
+          welcome the public site opens with, so members hear the same call a
+          visitor hears. Money and tools live in the panels below; roles are
+          not badges here — leadership shortcuts surface themselves instead. */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#26352f] via-[#2c4038] to-[#26352f] px-6 py-7 text-white shadow-md sm:px-8">
         {/* The greeting is meant to read as one line on a phone as well as on a
             wide screen, so the size follows the viewport between the two ends
-            instead of switching at a breakpoint and wrapping in between.
-            On a wide screen the member's roles ride that same line, pushed to
-            the panel's right edge; on a phone they drop underneath it. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-          <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
-            {greeting}, {firstName}.
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">
-            {roles.map((r) => (
-              <span
-                key={r}
-                className={`rounded-full px-3 py-1 text-[11px] font-bold capitalize ${
-                  r === "member" ? "bg-white/10 text-white/80" : "bg-[#f1c89e] text-[#26352f]"
-                }`}
-              >
-                {roleLabel(r)}
-              </span>
-            ))}
-          </div>
+            instead of switching at a breakpoint and wrapping in between. */}
+        <h1 className="text-[clamp(1.3rem,6.2vw,2.25rem)] font-bold leading-tight tracking-tight">
+          {greeting}, {firstName}.
+        </h1>
+        <div className="mt-4 border-t border-white/15 pt-4">
+          {clarionHeadingLines.map((line, idx) => (
+            <p key={idx} className="text-base font-semibold leading-snug text-[#f1c89e] sm:text-lg">
+              {line}
+            </p>
+          ))}
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/75 sm:text-sm">{clarionSubtext}</p>
+          {encouragementLine && (
+            <p className="mt-3 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
+              {encouragementLine}
+            </p>
+          )}
         </div>
-        {encouragementLine && (
-          <p className="mt-3 max-w-full text-sm font-medium leading-snug text-[#f1c89e] line-clamp-2 sm:text-base">
-            {encouragementLine}
-          </p>
-        )}
       </section>
+
+      {/* The week's card — the same next-gathering + announcements card the
+          public site shows, rotating below the greeting so the church speaks
+          with one voice to members and visitors alike. */}
+      <div className="mt-6">
+        <NextGatheringCard />
+      </div>
 
       {loading ? (
         <p className="mt-8 text-center text-sm text-[#617068]">Loading your dashboard…</p>
@@ -387,113 +377,49 @@ export function MemberHome() {
             </section>
           )}
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            {/* Announcements */}
-            <section className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-                  <Megaphone className="h-4 w-4 text-[#b36b3c]" /> Announcements
-                </h2>
-                <Link href="/announcements" className="text-xs font-semibold text-[#b36b3c] hover:underline">
-                  View all →
-                </Link>
-              </div>
-              <div className="mt-4 divide-y divide-[#eeeae2]">
-                {announcements.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-[#617068]">No announcements right now.</p>
-                ) : (
-                  announcements.map((a) => (
-                    <Link key={a.id} href={a.href || "/announcements"} className="block py-3 group">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <h3 className="text-sm font-semibold text-[#26352f] group-hover:text-[#b36b3c]">{a.title}</h3>
-                        <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(a.created_at)}</span>
-                      </div>
-                      {a.text && <p className="mt-1 line-clamp-2 text-xs text-[#617068]">{a.text}</p>}
-                      <AnnouncementAttachment
-                        attachment={a.attachment}
-                        name={a.attachment_name}
-                        size={a.attachment_size}
-                        linked={false}
-                        compact
-                        className="mt-2"
-                      />
-                    </Link>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <div className="grid gap-6">
-              {/* Recent giving */}
-              <section className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-                    <Receipt className="h-4 w-4 text-[#b36b3c]" /> Recent Giving
-                  </h2>
-                  <Link href="/member" className="text-xs font-semibold text-[#b36b3c] hover:underline">
-                    History →
-                  </Link>
-                </div>
-                {completed.length > 0 && (
-                  <div className="mt-4 rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-3">
-                    <p className="text-[11px] font-semibold text-[#26352f]">Your giving, last 6 months</p>
-                    <div className="mt-2">
-                      <GroupedBarChart
-                        groups={monthlyGiving(completed).map((bucket) => ({
-                          label: bucket.label,
-                          values: [bucket.total],
-                        }))}
-                        series={[{ label: "My giving", color: "#5f8067" }]}
-                        formatValue={fmtCompactKes}
-                        height={150}
-                        emptyLabel="No giving recorded in the last 6 months."
-                      />
-                    </div>
-                  </div>
-                )}
-                <div className="mt-4 divide-y divide-[#eeeae2]">
-                  {completed.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-[#617068]">No giving recorded yet.</p>
-                  ) : (
-                    completed.slice(0, 4).map((c) => (
-                      <div key={c.id} className="flex items-baseline justify-between gap-3 py-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#26352f]">{fmtAmount(c.amount)}</p>
-                          <p className="text-[11px] text-[#617068]">{c.purpose}</p>
-                        </div>
-                        <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(c.paid_at || c.created_at)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-
-              {/* Notifications */}
-              <section className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-                    <Bell className="h-4 w-4 text-[#b36b3c]" /> Notifications
-                  </h2>
-                  <ChevronRight className="h-4 w-4 text-[#c9c5bb]" />
-                </div>
-                <div className="mt-4 divide-y divide-[#eeeae2]">
-                  {notifications.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-[#617068]">You're all caught up.</p>
-                  ) : (
-                    notifications.map((n) => (
-                      <div key={n.id} className="py-3">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <p className="text-sm font-semibold text-[#26352f]">{n.title}</p>
-                          <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(n.created_at)}</span>
-                        </div>
-                        {n.message && <p className="mt-1 line-clamp-2 text-xs text-[#617068]">{n.message}</p>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
+          {/* Recent giving */}
+          <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
+                <Receipt className="h-4 w-4 text-[#b36b3c]" /> Recent Giving
+              </h2>
+              <Link href="/member" className="text-xs font-semibold text-[#b36b3c] hover:underline">
+                History →
+              </Link>
             </div>
-          </div>
+            {completed.length > 0 && (
+              <div className="mt-4 rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-3">
+                <p className="text-[11px] font-semibold text-[#26352f]">Your giving, last 6 months</p>
+                <div className="mt-2">
+                  <GroupedBarChart
+                    groups={monthlyGiving(completed).map((bucket) => ({
+                      label: bucket.label,
+                      values: [bucket.total],
+                    }))}
+                    series={[{ label: "My giving", color: "#5f8067" }]}
+                    formatValue={fmtCompactKes}
+                    height={150}
+                    emptyLabel="No giving recorded in the last 6 months."
+                  />
+                </div>
+              </div>
+            )}
+            <div className="mt-4 divide-y divide-[#eeeae2]">
+              {completed.length === 0 ? (
+                <p className="py-6 text-center text-xs text-[#617068]">No giving recorded yet.</p>
+              ) : (
+                completed.slice(0, 4).map((c) => (
+                  <div key={c.id} className="flex items-baseline justify-between gap-3 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#26352f]">{fmtAmount(c.amount)}</p>
+                      <p className="text-[11px] text-[#617068]">{c.purpose}</p>
+                    </div>
+                    <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(c.paid_at || c.created_at)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
         </>
       )}
     </main>

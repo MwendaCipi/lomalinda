@@ -1161,3 +1161,96 @@ def generate_contribution_thermal_receipt_pdf(
     c.save()
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generate_in_kind_thermal_receipt_pdf(
+    church_name,
+    donor_name,
+    phone_number,
+    purpose,
+    notes,
+    received_on,
+    items,
+    issued_at=None,
+):
+    """A thermal-style receipt for one in-kind gift — goods, not money.
+
+    Same 80 mm layout as the money receipt, but the lines are the donated
+    items rather than account amounts: there is no currency to total, so
+    each item simply lists, and the purpose names what the gift was for.
+    """
+    issued_at = issued_at or timezone.now()
+
+    WIDTH = 80 * mm
+    margin = 6 * mm
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(WIDTH, 200 * mm))
+    y = 200 * mm - margin
+
+    def line_out(text, font="Helvetica", size=8, align="left", gap=3):
+        nonlocal y
+        c.setFont(font, size)
+        if align == "center":
+            c.drawCentredString(WIDTH / 2, y, text)
+        elif align == "right":
+            c.drawRightString(WIDTH - margin, y, text)
+        else:
+            c.drawString(margin, y, text)
+        y -= size + gap
+
+    def dashed():
+        # The dotted rule trick from the money receipt: drawn as a setDash
+        # line spanning margin to margin, never a counted string of dashes.
+        nonlocal y
+        c.saveState()
+        c.setStrokeColor(dark)
+        c.setLineWidth(0.7)
+        c.setDash(1, 2)
+        c.line(margin, y + 3, WIDTH - margin, y + 3)
+        c.restoreState()
+        y -= 11
+
+    dark = colors.HexColor("#26352f")
+    c.setFillColor(dark)
+
+    # ── Header ──
+    line_out("SEVENTH-DAY ADVENTIST CHURCH", "Helvetica-Bold", 9, "center", gap=2)
+    line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
+    line_out("IN-KIND GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
+    dashed()
+
+    # ── Gift facts ──
+    line_out(f"Received from: {(donor_name or 'Friend')[:38]}")
+    if phone_number:
+        line_out(f"Phone: {phone_number}")
+    line_out(f"Received on: {received_on.strftime('%d %b %Y')}")
+    line_out(f"For: {(purpose or 'In-Kind Giving')[:34]}")
+    dashed()
+
+    # ── Itemised lines ──
+    for item in items:
+        label = item[:40]
+        c.setFont("Helvetica", 8)
+        c.drawString(margin, y, f"- {label}")
+        y -= 12
+
+    if notes:
+        y -= 2
+        c.setFont("Helvetica-Oblique", 7)
+        c.drawString(margin, y, f"Notes: {notes[:40]}")
+        y -= 12
+
+    y -= 2
+    dashed()
+
+    # ── Footer ──
+    line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
+    line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out("This receipt is system generated.", "Helvetica", 6.5, "center", gap=0)
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()

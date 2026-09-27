@@ -3996,6 +3996,45 @@ class InKindContributionView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class InKindThermalReceiptView(APIView):
+    """A thermal-style PDF receipt for one in-kind gift, downloaded by its owner.
+
+    There is no money to total, so the receipt itemises the donated goods —
+    one line per item — with the purpose naming what the gift was for. Only
+    the giver (or an office holder) may fetch it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        gift = InKindContribution.objects.filter(pk=pk).first()
+        if gift is None:
+            return Response({'detail': 'In-kind gift not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = getattr(request.user, 'member_profile', None)
+        is_office = bool(profile and profile.has_role('admin', 'treasurer', 'elder'))
+        if gift.member_id != request.user.id and not is_office:
+            return Response({'detail': 'This receipt belongs to another giver.'}, status=status.HTTP_404_NOT_FOUND)
+
+        items = [line.strip() for line in (gift.items or '').splitlines() if line.strip()] or ['In-kind gift']
+        church_setting = ChurchSettings.objects.first()
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+
+        pdf_bytes = generate_in_kind_thermal_receipt_pdf(
+            church_name=church_name,
+            donor_name=gift.donor_name or (f"{request.user.first_name} {request.user.last_name}".strip() if gift.member_id else 'Friend'),
+            phone_number=gift.phone_number,
+            purpose=gift.purpose,
+            notes=gift.notes,
+            received_on=gift.received_on,
+            items=items,
+        )
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        stamp = gift.received_on.strftime('%Y%m%d')
+        response['Content-Disposition'] = f'attachment; filename="InKind_Receipt_{stamp}_{gift.pk}.pdf"'
+        return response
+
+
 def giving_account_options():
     """The accounts the giving form offers, in the church's priority order.
 
@@ -5426,6 +5465,7 @@ from .pdf_generator import (
     generate_member_giving_statement_pdf,
     generate_business_meeting_pdf,
     generate_contribution_thermal_receipt_pdf,
+    generate_in_kind_thermal_receipt_pdf,
 )
 
 class ReconciliationPdfView(APIView):

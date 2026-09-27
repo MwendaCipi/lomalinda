@@ -6421,3 +6421,86 @@ class MemberThermalReceiptTests(APITestCase):
         self._auth(self.giver)
         res = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class InKindThermalReceiptTests(APITestCase):
+    """Every in-kind row carries a Receipt button; the PDF it serves is the
+    giver's own (or an office holder's), and the donated items print as the
+    receipt's lines."""
+
+    def setUp(self):
+        self.giver = User.objects.create_user('inkind.receipt.giver', 'inkind.giver@example.com', 'StrongPass#2026', first_name='Gideon', last_name='Giver')
+        MemberProfile.objects.create(user=self.giver, role='member', roles='member')
+        self.stranger = User.objects.create_user('inkind.receipt.stranger', 'inkind.stranger@example.com', 'StrongPass#2026', first_name='Sally', last_name='Stranger')
+        MemberProfile.objects.create(user=self.stranger, role='member', roles='member')
+        self.treasurer = User.objects.create_user('inkind.receipt.treasurer', 'inkind.treasurer@example.com', 'StrongPass#2026', first_name='Tessa', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def _gift(self, **kwargs):
+        from .models import InKindContribution
+
+        base = dict(
+            member=self.giver,
+            donor_name='Gideon Giver',
+            items='2 bags of maize\n1 crate of soda\nA pair of blankets',
+            purpose='Welfare & Charity',
+            notes='For the widows fund',
+        )
+        base.update(kwargs)
+        return InKindContribution.objects.create(**base)
+
+    def test_giver_downloads_their_own_receipt(self):
+        gift = self._gift()
+        self._auth(self.giver)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res['Content-Type'], 'application/pdf')
+        self.assertTrue(res.content.startswith(b'%PDF'))
+        # Thermal width — 80 mm, same as the money receipt.
+        self.assertIn('/MediaBox [ 0 0 226.77', res.content.decode('latin-1'))
+
+    def test_items_print_as_receipt_lines(self):
+        gift = self._gift()
+        self._auth(self.giver)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        # ReportLab encodes streams as ASCII85-then-Flate; decode the chain
+        # and assert the donated items are really drawn on the receipt.
+        import base64
+        import re
+        import zlib
+        text = b''
+        for match in re.finditer(rb'stream\r?\n(.*?)endstream', res.content, re.DOTALL):
+            try:
+                text += zlib.decompress(base64.a85decode(match.group(1).strip(), adobe=True))
+            except (ValueError, zlib.error):
+                continue
+        self.assertIn(b'2 bags of maize', text)
+        self.assertIn(b'1 crate of soda', text)
+        self.assertIn(b'A pair of blankets', text)
+        self.assertIn(b'Welfare', text)
+
+    def test_stranger_gets_404(self):
+        gift = self._gift()
+        self._auth(self.stranger)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_treasurer_may_fetch_any_receipt(self):
+        gift = self._gift()
+        self._auth(self.treasurer)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_receipt_without_member_is_office_or_404(self):
+        # A gift recorded without a linked account (e.g. by the clerk at the
+        # desk) has no owner; only an office holder may receipt it.
+        gift = self._gift(member=None, donor_name='Walk-in Friend')
+        self._auth(self.treasurer)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self._auth(self.stranger)
+        res = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

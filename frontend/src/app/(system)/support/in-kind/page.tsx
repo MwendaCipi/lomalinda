@@ -247,6 +247,29 @@ function GiveInKindPageContent() {
     win.print();
   };
 
+  // The thermal receipt is drawn server-side and downloaded as a blob, the
+  // same way the money-giving receipts are — works in the PWA on phones.
+  async function handleDownloadReceipt(r: InKindRecord) {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/in-kind/${r.id}/receipt/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Receipt unavailable.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `InKind_Receipt_${r.received_on}_${r.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      showAlert("Receipt Unavailable", "We could not generate the receipt for this gift.", "error");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <div className="flex">
@@ -372,14 +395,15 @@ function GiveInKindPageContent() {
                           <th className="pb-3 font-bold">Account</th>
                           <th className="pb-3 font-bold">Items</th>
                           <th className="pb-3 font-bold">Notes</th>
+                          <th className="pb-3 text-right font-bold">Receipt</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#eeeae2]">
                         {loadingRecords ? (
-                          <tr><td colSpan={6} className="py-8 text-center text-xs text-[#617068]">Loading records…</td></tr>
+                          <tr><td colSpan={7} className="py-8 text-center text-xs text-[#617068]">Loading records…</td></tr>
                         ) : records.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center">
+                            <td colSpan={7} className="py-8 text-center">
                               <p className="text-xs font-semibold text-[#26352f]">No in-kind gifts in this period</p>
                               <p className="mt-1 text-[11px] text-[#617068]">Adjust the dates above or tap Give Now.</p>
                             </td>
@@ -393,6 +417,16 @@ function GiveInKindPageContent() {
                               <td className="py-3 text-[#617068]">{r.purpose || "—"}</td>
                               <td className="py-3 text-[#617068]">{(r.items_list || []).join(" • ")}</td>
                               <td className="py-3 text-[#617068]">{r.notes || "—"}</td>
+                              <td className="py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadReceipt(r)}
+                                  className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                                  title="Download receipt"
+                                >
+                                  🧾 Receipt
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -419,6 +453,15 @@ function GiveInKindPageContent() {
                           <p className="text-xs text-[#617068]">{(r.items_list || []).join(" • ")}</p>
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-[#b36b3c]">{r.purpose}</p>
                           {r.notes && <p className="text-[11px] text-[#617068] italic">{r.notes}</p>}
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadReceipt(r)}
+                              className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                            >
+                              🧾 Receipt
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}

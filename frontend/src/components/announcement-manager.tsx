@@ -123,6 +123,52 @@ function channelsLabel(sharing?: string): string {
     .join(", ");
 }
 
+/** Live tally for a closed-response opinion poll.
+ *
+ * Every member's pick is stored verbatim as `response_choice`, so the tally
+ * groups responses by exactly the options the officer offered. Each option
+ * gets a row with a share bar and its count; the leader is highlighted. An
+ * option with no picks still appears — its empty bar tells the officer the
+ * question was seen and declined, not forgotten.
+ */
+function PollTally({ item }: { item: Announcement }) {
+  const options = (item.response_options || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const picks = (item.responses ?? []).filter((r) => r.response_choice);
+  if (item.announcement_type !== "opinion" || item.response_mode !== "closed" || options.length === 0) return null;
+  const total = picks.length;
+  const counts = new Map<string, number>();
+  picks.forEach((r) => counts.set(r.response_choice as string, (counts.get(r.response_choice as string) ?? 0) + 1));
+  // The leading option follows the order the officer declared: a tie is
+  // broken by whoever was listed first, so the highlight is stable.
+  const best = total > 0 ? Math.max(...counts.values()) : 0;
+  const leader = total > 0 ? (options.find((option) => (counts.get(option) ?? 0) === best) ?? null) : null;
+  return (
+    <div className="mt-1 rounded-xl border border-[#eeeae2] bg-[#f7f4ee] p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+        {total === 0 ? "No responses yet" : `${total} response${total === 1 ? "" : "s"}`}
+      </p>
+      <div className="mt-1.5 space-y-1.5">
+        {options.map((option) => {
+          const count = counts.get(option) ?? 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          const isLeader = total > 0 && option === leader;
+          return (
+            <div key={option}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={`min-w-0 truncate text-[11px] ${isLeader ? "font-bold text-[#3d5148]" : "text-[#415047]"}`}>{option}</span>
+                <span className={`shrink-0 text-[10px] ${isLeader ? "font-bold text-[#3d5148]" : "text-[#617068]"}`}>{count} · {pct}%</span>
+              </div>
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[#dfdbd1]">
+                <div className={`h-full rounded-full ${isLeader ? "bg-[#5f8067]" : "bg-[#b36b3c]/60"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AnnouncementManager({
   presetAudience,
   /** Communicate mode: render only the compose modal, open from the start,
@@ -192,8 +238,8 @@ export function AnnouncementManager({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function fetchAnnouncements() {
-    setLoadingList(true);
+  function fetchAnnouncements(options?: { silent?: boolean }) {
+    if (!options?.silent) setLoadingList(true);
     const token = localStorage.getItem("access_token");
     fetch(`${API_URL}/api/members/announcements/?include_expired=true&include_unpublished=true&include_scheduled=true`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -201,12 +247,20 @@ export function AnnouncementManager({
       .then((res) => (res.ok ? res.json() : []))
       .then((data: Announcement[]) => setAnnouncements(Array.isArray(data) ? data : []))
       .catch(() => setAnnouncements([]))
-      .finally(() => setLoadingList(false));
+      .finally(() => {
+        if (!options?.silent) setLoadingList(false);
+      });
   }
 
   useEffect(() => {
     const timer = window.setTimeout(fetchAnnouncements, 0);
-    return () => window.clearTimeout(timer);
+    // Live tallies: silent refetch every 30s — no spinner flicker — so poll
+    // counts on the cards move as members answer.
+    const poll = window.setInterval(() => fetchAnnouncements({ silent: true }), 30000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(poll);
+    };
   }, []);
 
   useEffect(() => {
@@ -867,6 +921,7 @@ export function AnnouncementManager({
               {eventLabel(item) && (
                 <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
               )}
+              <PollTally item={item} />
               {item.href && (
                 <p className="text-[10px]">
                   <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">

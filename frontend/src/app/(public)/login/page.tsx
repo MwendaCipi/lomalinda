@@ -43,7 +43,10 @@ function LoginContent() {
 
       // Manually created accounts must replace the shared initial password before
       // entering the app; preserve the destination they originally requested.
-      router.push(destinationAfterSignIn(data, nextParam));
+      // Replace (not push): the signed-in session's history starts at the
+      // destination, so back never replays the sign-in form or the page
+      // that led to it.
+      router.replace(destinationAfterSignIn(data, nextParam));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unable to connect to the server.";
       setMessage(errorMsg);
