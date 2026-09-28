@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { X } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -25,7 +26,7 @@ export function triggerPwaInstall() {
   } else if (typeof window !== "undefined") {
     showAlert(
       "Install the app",
-      "Chrome / Edge on Desktop: click the Install icon (💻) in the address bar.\n\nSafari on iPhone / Mac: tap Share → Add to Home Screen.",
+      "Chrome / Edge on Desktop: click the Install icon in the address bar.\n\nSafari on iPhone / Mac: tap Share, then Add to Home Screen.",
       "info"
     );
   }
@@ -89,10 +90,10 @@ export function PwaRegister() {
   if (!showMobileBanner) return null;
 
   return (
-    <div className="fixed bottom-[68px] md:bottom-4 left-4 right-4 z-[100] mx-auto max-w-md rounded-2xl border border-[#c9c5bb] bg-[#26352f] p-3.5 text-white shadow-2xl">
+    <div className="fixed bottom-[68px] md:bottom-4 left-4 right-4 z-[100] mx-auto max-w-md rounded-2xl border border-sand-mute bg-bark p-3.5 text-white shadow-2xl">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#b36b3c] font-bold text-white text-xs">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ember font-bold text-white text-xs">
             SDA
           </div>
           <div className="min-w-0">
@@ -104,7 +105,7 @@ export function PwaRegister() {
           <button
             type="button"
             onClick={handleInstall}
-            className="rounded-xl bg-[#b36b3c] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#96552e]"
+            className="rounded-xl bg-ember px-3 py-1.5 text-xs font-bold text-white transition hover:bg-ember-dark"
           >
             Install
           </button>
@@ -114,7 +115,7 @@ export function PwaRegister() {
             className="p-1 text-xs text-white/60 hover:text-white"
             aria-label="Dismiss banner"
           >
-            ✕
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
       </div>

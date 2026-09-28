@@ -116,20 +116,20 @@ export function DashboardAnnouncements() {
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsInteracting(false);
       }}
-      className="relative rounded-3xl border border-[#dfdbd1] bg-white px-6 py-5 shadow-sm sm:px-8"
+      className="relative rounded-3xl border border-sand-line bg-white px-6 py-5 shadow-sm sm:px-8"
     >
       {/* The whole card opens the Fellowship feed. The overlay sits under the
           controls, so the arrows and action buttons keep working on top. */}
       <Link
         href="/announcements"
         aria-label="Open announcements"
-        className="absolute inset-0 rounded-3xl transition hover:bg-[#faf7f0]/60"
+        className="absolute inset-0 rounded-3xl transition hover:bg-sand-veil/60"
         style={{ zIndex: 0 }}
       />
 
       <div className="relative" style={{ zIndex: 1 }}>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#b36b3c]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-ember">
             {current ? "Announcement" : "Next gathering"}
             {announcements.length > 1 ? ` · ${index} of ${announcements.length}` : ""}
           </p>
@@ -138,7 +138,7 @@ export function DashboardAnnouncements() {
               <button
                 type="button"
                 onClick={() => setSlide((prev) => (prev - 1 + slideCount) % slideCount)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-[#dfdbd1] text-sm text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
                 aria-label="Previous"
               >
                 &larr;
@@ -150,14 +150,14 @@ export function DashboardAnnouncements() {
                     type="button"
                     onClick={() => setSlide(dot)}
                     aria-label={dot === 0 ? "Next gathering" : `Announcement ${dot}`}
-                    className={`h-1.5 rounded-full transition-all ${dot === index ? "w-4 bg-[#b36b3c]" : "w-1.5 bg-[#dfdbd1]"}`}
+                    className={`h-1.5 rounded-full transition-all ${dot === index ? "w-4 bg-ember" : "w-1.5 bg-sand-line"}`}
                   />
                 ))}
               </div>
               <button
                 type="button"
                 onClick={() => setSlide((prev) => (prev + 1) % slideCount)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-[#dfdbd1] text-sm text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
                 aria-label="Next"
               >
                 &rarr;
@@ -172,13 +172,13 @@ export function DashboardAnnouncements() {
             panels below never jump as the slides turn. The action row sits
             tight under the text so the extra line costs no height. */}
         <div className="mt-2.5">
-          <h2 className="line-clamp-1 text-lg font-bold leading-snug text-[#26352f] sm:text-xl">
+          <h2 className="line-clamp-1 text-lg font-bold leading-snug text-bark sm:text-xl">
             {current ? current.title : gatheringLabel(gathering, now)}
           </h2>
-          <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-[#415047]">
+          <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
             {current ? current.text : `${gathering.time} · ${gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}`}
           </p>
-          <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-[#617068]">
+          <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
             {current?.detail || ""}
           </p>
         </div>
@@ -193,20 +193,20 @@ export function DashboardAnnouncements() {
                 <button
                   type="button"
                   onClick={() => { if (current) setPledgeTarget(pledgeTargetFor(current)); }}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                 >
                   Pledge
                 </button>
                 <button
                   type="button"
                   onClick={() => setInKindOpen(true)}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                 >
                   In-kind
                 </button>
                 <Link
                   href={giveMoneyHref}
-                  className="rounded-full bg-[#3d7146] px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-[#335e3a]"
+                  className="rounded-full bg-sage-strong px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-sage-shade"
                 >
                   Give Money
                 </Link>
@@ -216,7 +216,7 @@ export function DashboardAnnouncements() {
           {isOpinion && (
             <Link
               href="/announcements"
-              className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white transition hover:bg-[#96552e]"
+              className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
             >
               Give input
             </Link>
@@ -226,7 +226,7 @@ export function DashboardAnnouncements() {
               href={current.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white transition hover:bg-[#96552e]"
+              className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
             >
               {platformLabel(current.href)}
             </a>
@@ -234,7 +234,7 @@ export function DashboardAnnouncements() {
           {!current && (
             <Link
               href="/calendar"
-              className="text-sm font-semibold text-[#b36b3c] transition hover:underline"
+              className="text-sm font-semibold text-ember transition hover:underline"
             >
               View calendar &rarr;
             </Link>

@@ -130,7 +130,7 @@ function inventoryStateBadge(item: InventoryItem) {
           ? "bg-amber-100 text-amber-800"
           : item.state === "damaged"
             ? "bg-red-100 text-red-800"
-            : "bg-[#ede8dc] text-[#617068]";
+            : "bg-sand-grain text-moss";
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${tone}`}>
       {item.state === "good" && <CheckCircle2 className="h-3 w-3" />}
@@ -143,11 +143,11 @@ function inventoryStateBadge(item: InventoryItem) {
 
 function custodyCell(item: InventoryItem) {
   if (!item.assigned_to) {
-    return <span className="text-[#a1a1a1]">In Store</span>;
+    return <span className="text-graydim">In Store</span>;
   }
   return (
     <div>
-      <p className="font-semibold text-[#26352f]">{item.assigned_to}</p>
+      <p className="font-semibold text-bark">{item.assigned_to}</p>
       {item.checked_out_at && (
         <p className="text-[10px]">Since {new Date(item.checked_out_at).toLocaleDateString()}</p>
       )}
@@ -358,13 +358,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* ── INVENTORY: fixed filters on top, scrolling rows, fixed actions below ── */}
       {activeTab === "inventory" && (
         <>
-          <div className="shrink-0 border-b border-[#dfdbd1] bg-white px-5 py-3 sm:px-6">
+          <div className="shrink-0 border-b border-sand-line bg-white px-5 py-3 sm:px-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <BackToOverviewArrow />
-                <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
-                <h2 className="text-sm font-bold text-[#26352f]">Property Inventory</h2>
-                <span className="text-[11px] text-[#617068]">
+                <Boxes className="h-4 w-4 shrink-0 text-ember" />
+                <h2 className="text-sm font-bold text-bark">Property Inventory</h2>
+                <span className="text-[11px] text-moss">
                   {inventory.length} {inventory.length === 1 ? "item" : "items"} registered
                 </span>
               </div>
@@ -372,7 +372,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+                  className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
                   aria-label="Property category filter"
                 >
                   <option value="all">All categories</option>
@@ -383,7 +383,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <select
                   value={stateFilter}
                   onChange={(e) => setStateFilter(e.target.value)}
-                  className="min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+                  className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
                   aria-label="Property condition filter"
                 >
                   <option value="all">All conditions</option>
@@ -393,13 +393,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 </select>
                 <DensityToggle dense={dense} onToggle={toggleDensity} />
                 <div className="relative min-w-0 sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
                   <input
                     type="text"
                     placeholder="Search item, tag number, room..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] py-2.5 pl-9 pr-3 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="w-full rounded-xl border border-sand-line bg-sand py-2.5 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
                   />
                 </div>
               </div>
@@ -426,31 +426,31 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               tableEmpty={inventoryEmpty}
               cardsEmpty={inventory.length === 0 ? "No property items registered yet." : "No property items match these filters."}
               renderRow={(item) => (
-                <tr key={item.id} className="hover:bg-[#f7f4ee]">
-                  <td className={rowPad + " font-mono font-bold text-[#b36b3c]"}>{item.tag_number || "—"}</td>
+                <tr key={item.id} className="hover:bg-sand">
+                  <td className={rowPad + " font-mono font-bold text-ember"}>{item.tag_number || "—"}</td>
                   <td className={rowPad}>
-                    <p className="font-bold text-[#26352f]">{item.name}</p>
-                    {item.notes && !dense && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
+                    <p className="font-bold text-bark">{item.name}</p>
+                    {item.notes && !dense && <p className="text-[11px] italic text-moss">{item.notes}</p>}
                   </td>
                   <td className={rowPad}>
-                    <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
+                    <span className="rounded-md bg-sand-grain px-2 py-0.5 text-[10px] font-bold text-bark">
                       {item.category_display}
                     </span>
                   </td>
-                  <td className={rowPad + " text-[#617068]"}>{item.location || "—"}</td>
-                  <td className={rowPad + " text-center font-bold text-[#26352f]"}>{item.quantity}</td>
+                  <td className={rowPad + " text-moss"}>{item.location || "—"}</td>
+                  <td className={rowPad + " text-center font-bold text-bark"}>{item.quantity}</td>
                   <td className={rowPad}>{inventoryStateBadge(item)}</td>
-                  <td className={rowPad + " text-[#617068]"}>{custodyCell(item)}</td>
+                  <td className={rowPad + " text-moss"}>{custodyCell(item)}</td>
                   <td className={rowPad + " text-right"}>
                     <div className="relative inline-block" data-action-menu>
                       <button
                         onClick={(e) => toggleActionMenu(item.id, e.currentTarget)}
-                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                        className="rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
                       >
                         ⋯ Actions
                       </button>
                       {openActionMenuId === item.id && (
-                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
+                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-sand-line bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                           <button
                             onClick={() => {
                               setSelectedItem(item);
@@ -458,9 +458,9 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                               setShowMovementModal(true);
                               setOpenActionMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            <ArrowRightLeft className="h-3.5 w-3.5 text-[#b36b3c]" />
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-ember" />
                             Item Movement
                           </button>
                         </div>
@@ -470,31 +470,31 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 </tr>
               )}
               renderCard={(item) => (
-                <div key={item.id} className={`rounded-2xl border border-[#dfdbd1] bg-white shadow-sm space-y-2 ${dense ? "p-3" : "p-4"}`}>
+                <div key={item.id} className={`rounded-2xl border border-sand-line bg-white shadow-sm space-y-2 ${dense ? "p-3" : "p-4"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-mono text-[11px] font-bold text-[#b36b3c]">{item.tag_number || "No tag"}</p>
-                      <h3 className="font-bold text-sm text-[#26352f]">{item.name}</h3>
+                      <p className="font-mono text-[11px] font-bold text-ember">{item.tag_number || "No tag"}</p>
+                      <h3 className="font-bold text-sm text-bark">{item.name}</h3>
                     </div>
                     <div className="shrink-0">{inventoryStateBadge(item)}</div>
                   </div>
-                  <div className="grid grid-cols-2 gap-1 text-xs text-[#617068]">
-                    <p><span className="font-semibold text-[#26352f]">Category:</span> {item.category_display}</p>
-                    <p><span className="font-semibold text-[#26352f]">Qty:</span> {item.quantity}</p>
-                    <p className="col-span-2"><span className="font-semibold text-[#26352f]">Location:</span> {item.location || "—"}</p>
-                    <p className="col-span-2"><span className="font-semibold text-[#26352f]">Custody:</span> {custodyCell(item)}</p>
+                  <div className="grid grid-cols-2 gap-1 text-xs text-moss">
+                    <p><span className="font-semibold text-bark">Category:</span> {item.category_display}</p>
+                    <p><span className="font-semibold text-bark">Qty:</span> {item.quantity}</p>
+                    <p className="col-span-2"><span className="font-semibold text-bark">Location:</span> {item.location || "—"}</p>
+                    <p className="col-span-2"><span className="font-semibold text-bark">Custody:</span> {custodyCell(item)}</p>
                   </div>
-                  {item.notes && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
-                  <div className="flex flex-wrap gap-2 border-t border-[#dfdbd1]/60 pt-2">
+                  {item.notes && <p className="text-[11px] italic text-moss">{item.notes}</p>}
+                  <div className="flex flex-wrap gap-2 border-t border-sand-line/60 pt-2">
                     <button
                       onClick={() => {
                         setSelectedItem(item);
                         setMovementForm(emptyMovementForm);
                         setShowMovementModal(true);
                       }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]"
+                      className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark hover:bg-sand"
                     >
-                      <ArrowRightLeft className="h-3 w-3 text-[#b36b3c]" />
+                      <ArrowRightLeft className="h-3 w-3 text-ember" />
                       Item Movement
                     </button>
                   </div>
@@ -504,14 +504,14 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           </div>
 
           {/* ── Bottom bar: count + primary action, like every other table page ── */}
-          <div className="shrink-0 border-t border-[#dfdbd1] bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p className="hidden text-[11px] text-[#617068] sm:block">
+          <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="hidden text-[11px] text-moss sm:block">
               {filteredInventory.length} of {inventory.length} {inventory.length === 1 ? "item" : "items"} shown
             </p>
             <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
               <button
                 onClick={() => { setNewItem(emptyItemForm); setShowAddModal(true); }}
-                className="flex-1 sm:flex-none rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+                className="flex-1 sm:flex-none rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember"
               >
                 + Add Church Property
               </button>
@@ -525,12 +525,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-base font-bold text-[#26352f]">Deacon &amp; Deaconess Duty Rota</h2>
-              <p className="text-xs text-[#617068]">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
+              <h2 className="text-base font-bold text-bark">Deacon &amp; Deaconess Duty Rota</h2>
+              <p className="text-xs text-moss">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
             </div>
             <button
               onClick={() => setShowAddRotaModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-[#1a2420]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-bark-950"
             >
               <Plus className="h-4 w-4" />
               Schedule Duty Rota
@@ -538,30 +538,30 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           </div>
 
           {rota.length === 0 ? (
-            <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
               No duty rota has been scheduled yet.
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {rota.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-                    <span className="rounded-full bg-[#f4f1ea] px-2.5 py-0.5 text-[10px] font-bold text-[#b36b3c]">
+                <div key={item.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-sand-line pb-3">
+                    <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
                       {item.dutyType}
                     </span>
-                    <span className="text-[11px] font-bold text-[#26352f]">{item.date}</span>
+                    <span className="text-[11px] font-bold text-bark">{item.date}</span>
                   </div>
-                  <h3 className="font-bold text-sm text-[#26352f]">{item.title}</h3>
-                  <p className="text-xs text-[#617068] flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-[#b36b3c]" />
+                  <h3 className="font-bold text-sm text-bark">{item.title}</h3>
+                  <p className="text-xs text-moss flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-ember" />
                     {item.shift}
                   </p>
 
                   <div>
-                    <p className="text-[11px] font-bold text-[#26352f] mb-1">Assigned Officers:</p>
+                    <p className="text-[11px] font-bold text-bark mb-1">Assigned Officers:</p>
                     <div className="flex flex-wrap gap-1">
                       {item.assignedTeam.map((member, idx) => (
-                        <span key={idx} className="rounded-lg border border-[#dfdbd1] bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#26352f]">
+                        <span key={idx} className="rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark">
                           {member}
                         </span>
                       ))}
@@ -580,11 +580,11 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           <div className="flex items-center gap-1">
             <BackToOverviewArrow />
             <div>
-              <h2 className="text-base font-bold text-[#26352f]">Deaconate Board Roster</h2>
-              <p className="text-xs text-[#617068]">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
+              <h2 className="text-base font-bold text-bark">Deaconate Board Roster</h2>
+              <p className="text-xs text-moss">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
             </div>
           </div>
-          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+          <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
             No deaconate members have been recorded yet.
           </div>
         </div>
@@ -596,11 +596,11 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           <div className="flex items-center gap-1">
             <BackToOverviewArrow />
             <div>
-              <h2 className="text-base font-bold text-[#26352f]">Deaconate Ordinances &amp; Event Schedule</h2>
-              <p className="text-xs text-[#617068]">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
+              <h2 className="text-base font-bold text-bark">Deaconate Ordinances &amp; Event Schedule</h2>
+              <p className="text-xs text-moss">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
             </div>
           </div>
-          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-8 text-center text-xs text-[#617068] shadow-sm">
+          <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
             No deaconate events have been recorded yet.
           </div>
         </div>
@@ -609,43 +609,43 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* MODAL: ADD PROPERTY ITEM */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="font-bold text-base text-[#26352f]">Register Church Property</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-[#617068] hover:text-[#26352f]">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">Register Church Property</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={registerItem} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#26352f]">Property Name *</label>
+                <label className="font-bold text-bark">Property Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Sony Projector 4K"
                   value={newItem.name}
                   onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#26352f]">Tag / Serial No.</label>
+                  <label className="font-bold text-bark">Tag / Serial No.</label>
                   <input
                     type="text"
                     placeholder="AV-PRJ-01"
                     value={newItem.tagNo}
                     onChange={(e) => setNewItem({ ...newItem, tagNo: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#26352f]">Category</label>
+                  <label className="font-bold text-bark">Category</label>
                   <select
                     value={newItem.category}
                     onChange={(e) => setNewItem({ ...newItem, category: e.target.value as InventoryCategory })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
                   >
                     {INVENTORY_CATEGORIES.map((category) => (
                       <option key={category.value} value={category.value}>{category.label}</option>
@@ -656,33 +656,33 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#26352f]">Room / Location</label>
+                  <label className="font-bold text-bark">Room / Location</label>
                   <input
                     type="text"
                     placeholder="Sanctuary PA Booth"
                     value={newItem.location}
                     onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#26352f]">Quantity</label>
+                  <label className="font-bold text-bark">Quantity</label>
                   <input
                     type="number"
                     min={1}
                     value={newItem.quantity}
                     onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Condition / Initial State</label>
+                <label className="font-bold text-bark">Condition / Initial State</label>
                 <select
                   value={newItem.state}
                   onChange={(e) => setNewItem({ ...newItem, state: e.target.value as InventoryState })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
                 >
                   {INVENTORY_STATES.map((state) => (
                     <option key={state.value} value={state.value}>{state.label}</option>
@@ -691,13 +691,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Notes / Inspection Remarks</label>
+                <label className="font-bold text-bark">Notes / Inspection Remarks</label>
                 <textarea
                   rows={2}
                   placeholder="Additional details..."
                   value={newItem.notes}
                   onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
@@ -705,14 +705,14 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="rounded-xl border border-[#dfdbd1] px-4 py-2 text-xs font-bold text-[#26352f]"
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                  className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
                 >
                   {saving ? "Saving..." : "Save Property Item"}
                 </button>
@@ -725,26 +725,26 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* MODAL: ITEM MOVEMENT */}
       {showMovementModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 className="font-bold text-base text-[#26352f]">Log Item Movement &amp; State</h3>
-                <p className="text-xs text-[#b36b3c] font-semibold">
+                <h3 className="font-bold text-base text-bark">Log Item Movement &amp; State</h3>
+                <p className="text-xs text-ember font-semibold">
                   {selectedItem.name}{selectedItem.tag_number ? ` (${selectedItem.tag_number})` : ""}
                 </p>
               </div>
-              <button onClick={() => setShowMovementModal(false)} className="text-[#617068] hover:text-[#26352f]">
+              <button onClick={() => setShowMovementModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={recordMovement} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#26352f]">Action Type</label>
+                <label className="font-bold text-bark">Action Type</label>
                 <select
                   value={movementForm.action}
                   onChange={(e) => setMovementForm({ ...movementForm, action: e.target.value as MovementAction })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
                 >
                   <option value="check_out">Check Out for Event/Department</option>
                   <option value="check_in">Check In to Store</option>
@@ -753,35 +753,35 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Officer / Person Responsible *</label>
+                <label className="font-bold text-bark">Officer / Person Responsible *</label>
                 <input
                   type="text"
                   required
                   placeholder="Deacon Name or Department"
                   value={movementForm.movedBy}
                   onChange={(e) => setMovementForm({ ...movementForm, movedBy: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Destination / Location</label>
+                <label className="font-bold text-bark">Destination / Location</label>
                 <input
                   type="text"
                   placeholder="e.g. Youth Room / Fellowship Hall"
                   value={movementForm.destination}
                   onChange={(e) => setMovementForm({ ...movementForm, destination: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
               {movementForm.action === "state_change" && (
                 <div>
-                  <label className="font-bold text-[#26352f]">New State</label>
+                  <label className="font-bold text-bark">New State</label>
                   <select
                     value={movementForm.stateChange}
                     onChange={(e) => setMovementForm({ ...movementForm, stateChange: e.target.value as InventoryState })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
                   >
                     {INVENTORY_STATES.map((state) => (
                       <option key={state.value} value={state.value}>{state.label}</option>
@@ -791,13 +791,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               )}
 
               <div>
-                <label className="font-bold text-[#26352f]">Movement Notes</label>
+                <label className="font-bold text-bark">Movement Notes</label>
                 <textarea
                   rows={2}
                   placeholder="Notes on movement or physical condition..."
                   value={movementForm.notes}
                   onChange={(e) => setMovementForm({ ...movementForm, notes: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
@@ -805,14 +805,14 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <button
                   type="button"
                   onClick={() => setShowMovementModal(false)}
-                  className="rounded-xl border border-[#dfdbd1] px-4 py-2 text-xs font-bold text-[#26352f]"
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                  className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
                 >
                   {saving ? "Recording..." : "Record Log"}
                 </button>
@@ -825,43 +825,43 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {/* MODAL: ADD DUTY ROTA */}
       {showAddRotaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="font-bold text-base text-[#26352f]">Schedule Duty Rota</h3>
-              <button onClick={() => setShowAddRotaModal(false)} className="text-[#617068] hover:text-[#26352f]">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">Schedule Duty Rota</h3>
+              <button onClick={() => setShowAddRotaModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={scheduleRota} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#26352f]">Duty Title *</label>
+                <label className="font-bold text-bark">Duty Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Main Sanctuary Ushering Team A"
                   value={newRota.title}
                   onChange={(e) => setNewRota({ ...newRota, title: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#26352f]">Date *</label>
+                  <label className="font-bold text-bark">Date *</label>
                   <input
                     type="date"
                     required
                     value={newRota.date}
                     onChange={(e) => setNewRota({ ...newRota, date: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#26352f]">Duty Type</label>
+                  <label className="font-bold text-bark">Duty Type</label>
                   <select
                     value={newRota.dutyType}
                     onChange={(e) => setNewRota({ ...newRota, dutyType: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-semibold text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
                   >
                     <option value="Ushering">Ushering</option>
                     <option value="Communion Setup">Communion Setup</option>
@@ -873,24 +873,24 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Shift / Time</label>
+                <label className="font-bold text-bark">Shift / Time</label>
                 <input
                   type="text"
                   placeholder="08:30 AM - 01:00 PM"
                   value={newRota.shift}
                   onChange={(e) => setNewRota({ ...newRota, shift: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Assigned Officers (Comma-separated)</label>
+                <label className="font-bold text-bark">Assigned Officers (Comma-separated)</label>
                 <input
                   type="text"
                   placeholder="Deacon David, Deaconess Sarah"
                   value={newRota.assignedTeam}
                   onChange={(e) => setNewRota({ ...newRota, assignedTeam: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
@@ -898,11 +898,11 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <button
                   type="button"
                   onClick={() => setShowAddRotaModal(false)}
-                  className="rounded-xl border border-[#dfdbd1] px-4 py-2 text-xs font-bold text-[#26352f]"
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow">
+                <button type="submit" className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow">
                   Save Duty Rota
                 </button>
               </div>

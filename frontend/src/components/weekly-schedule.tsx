@@ -53,32 +53,32 @@ export function WeeklySchedule() {
   ];
 
   return (
-    <section id="calendar" className="border-y border-[#dfdbd1] bg-white/60 px-6 py-16 lg:px-8 lg:py-20">
+    <section id="calendar" className="border-y border-sand-line bg-white/60 px-6 py-16 lg:px-8 lg:py-20">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Weekly calendar</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Weekly calendar</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Connect &amp; worship with us</h2>
           </div>
-          <Link href="/calendar" className="text-sm font-semibold text-[#b36b3c] hover:underline">
+          <Link href="/calendar" className="text-sm font-semibold text-ember hover:underline">
             See all Sabbaths &rarr;
           </Link>
         </div>
 
-        <div className="mt-10 grid gap-8 border-t border-[#dfdbd1] md:grid-cols-3 md:gap-0 md:divide-x md:divide-[#dfdbd1]">
+        <div className="mt-10 grid gap-8 border-t border-sand-line md:grid-cols-3 md:gap-0 md:divide-x md:divide-sand-line">
           {gatherings.map((gathering) => (
             <article key={gathering.name} className="pt-6 md:px-7 md:first:pl-0 md:last:pr-0">
-              <p className="text-sm font-semibold text-[#b36b3c]">{gathering.day}</p>
+              <p className="text-sm font-semibold text-ember">{gathering.day}</p>
               <h3 className="mt-3 text-xl font-semibold">{gathering.name}</h3>
-              <p className="mt-2 text-sm font-medium text-[#26352f]">{gathering.time}</p>
-              <p className="mt-1 text-sm text-[#617068]">{gathering.place}</p>
+              <p className="mt-2 text-sm font-medium text-bark">{gathering.time}</p>
+              <p className="mt-1 text-sm text-moss">{gathering.place}</p>
             </article>
           ))}
         </div>
 
-        <p className="mt-8 text-sm text-[#617068]">
+        <p className="mt-8 text-sm text-moss">
           Visiting for the first time? Everything you need — programmes, times and what to expect — is on the{" "}
-          <Link href="/calendar" className="font-semibold text-[#b36b3c] hover:underline">
+          <Link href="/calendar" className="font-semibold text-ember hover:underline">
             church calendar
           </Link>
           .

@@ -2,6 +2,24 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import {
+  Baby,
+  Check,
+  CreditCard,
+  Crown,
+  IdCard,
+  Megaphone,
+  Music,
+  Pause,
+  Pencil,
+  Play,
+  Receipt,
+  User,
+  Users,
+  X,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
@@ -50,13 +68,13 @@ interface ChurchUser {
 }
 
 export const AVAILABLE_GROUPS = [
-  { key: "all_members", label: "All Members (Entire Congregation)", icon: "👥" },
-  { key: "choir", label: "Choir Ministry", icon: "🎵" },
-  { key: "youth", label: "Youth Ministries", icon: "⚡" },
-  { key: "children", label: "Children Ministry", icon: "👶" },
-  { key: "men", label: "Adventist Men Ministries", icon: "👨" },
-  { key: "women", label: "Adventist Women Ministries", icon: "👩" },
-  { key: "leaders", label: "Church Leaders & Elders", icon: "👔" },
+  { key: "all_members", label: "All Members (Entire Congregation)", icon: Users },
+  { key: "choir", label: "Choir Ministry", icon: Music },
+  { key: "youth", label: "Youth Ministries", icon: Zap },
+  { key: "children", label: "Children Ministry", icon: Baby },
+  { key: "men", label: "Adventist Men Ministries", icon: User },
+  { key: "women", label: "Adventist Women Ministries", icon: User },
+  { key: "leaders", label: "Church Leaders & Elders", icon: Crown },
 ];
 
 type CampaignMode = "admin" | "member";
@@ -540,11 +558,11 @@ export function CampaignManagement({
 
   if (loading) {
     return (
-      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
           {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 flex items-center justify-center">
-            <p className="text-sm font-semibold text-[#617068]">Loading Fund Drives...</p>
+            <p className="text-sm font-semibold text-moss">Loading Fund Drives...</p>
           </div>
         </div>
       </main>
@@ -553,12 +571,12 @@ export function CampaignManagement({
 
   if (isOfficial === false) {
     return (
-      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
           {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 p-8 text-center">
-            <h1 className="text-2xl font-bold text-[#26352f]">Access Restricted</h1>
-            <p className="mt-2 text-sm text-[#617068]">
+            <h1 className="text-2xl font-bold text-bark">Access Restricted</h1>
+            <p className="mt-2 text-sm text-moss">
               {isAdminMode
                 ? "Managing fund drives is restricted to authorized church officials and finance managers."
                 : "Please log in to view the church's active fund drives."}
@@ -570,29 +588,29 @@ export function CampaignManagement({
   }
 
   return (
-    <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
       <div className="flex h-full md:overflow-hidden">
         {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
 
-        <div className="flex-1 min-w-0 w-full h-full bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
+        <div className="flex-1 min-w-0 w-full h-full bg-white p-5 sm:p-8 lg:p-10 border-b border-sand-line space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
           {/* Phones carry no admin sidebar, so this page gives its own way back. */}
           {isAdminMode && (
             <Link
               href="/administration"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] transition hover:text-[#26352f] lg:hidden"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-ember transition hover:text-bark lg:hidden"
             >
               &larr; Back to administration
             </Link>
           )}
 
           {/* Top Banner / Header */}
-          <div className="border-b border-[#dfdbd1] pb-6">
+          <div className="border-b border-sand-line pb-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                   Fund Drives {isAdminMode && "& Goal Management"}
                 </h1>
-                <p className="mt-2 text-sm text-[#617068]">
+                <p className="mt-2 text-sm text-moss">
                   {isAdminMode
                     ? "Drives are opened from a treasury account's Promote action; manage targets, dates and broadcasts here."
                     : "Follow the church's active fund drives, see progress toward each goal, and support a cause."}
@@ -605,7 +623,7 @@ export function CampaignManagement({
                   placeholder="Search by drive or account..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-64"
+                  className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-64"
                   aria-label="Search fund drives"
                 />
               </div>
@@ -624,14 +642,14 @@ export function CampaignManagement({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="create-campaign-title"
-                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
               >
-                <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+                <div className="flex items-center justify-between border-b border-sand-line pb-4">
                   <div>
-                    <h2 id="create-campaign-title" className="text-xl font-bold text-[#26352f]">
+                    <h2 id="create-campaign-title" className="text-xl font-bold text-bark">
                       {editingCampaign ? "Edit Fund Drive" : "New Fund Drive"}
                     </h2>
-                    <p className="mt-1 text-xs text-[#617068]">
+                    <p className="mt-1 text-xs text-moss">
                       {editingCampaign
                         ? "Update the drive's details, account reference, target goal, and dates."
                         : "Set fund drive details, account reference, target goal, and member broadcast options."}
@@ -641,16 +659,16 @@ export function CampaignManagement({
                     type="button"
                     disabled={isSubmitting}
                     onClick={resetAndCloseModal}
-                    className="rounded-full p-2 text-xl leading-none text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                    className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
                     aria-label="Close modal"
                   >
-                    ✕
+                    <X size={18} aria-hidden="true" />
                   </button>
                 </div>
 
                 <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="mt-6 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block text-xs font-semibold text-[#26352f]">
+                    <label className="block text-xs font-semibold text-bark">
                       Fund Drive Name *
                       <input
                         required
@@ -658,24 +676,24 @@ export function CampaignManagement({
                         placeholder="e.g. 2026 Church Building Expansion"
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
                       />
                     </label>
 
-                    <label className="block text-xs font-semibold text-[#26352f]">
+                    <label className="block text-xs font-semibold text-bark">
                       Account Reference / Title
                       <input
                         type="text"
                         placeholder="e.g. BUILDING FUND (Default: Drive Name)"
                         value={form.account_name}
                         onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
                       />
                     </label>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <label className="block text-xs font-semibold text-[#26352f]">
+                    <label className="block text-xs font-semibold text-bark">
                       Target Goal (KES) *
                       <input
                         required
@@ -685,103 +703,103 @@ export function CampaignManagement({
                         placeholder="e.g. 500000"
                         value={form.target_amount}
                         onChange={(e) => setForm({ ...form, target_amount: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs font-bold text-[#5f8067] outline-none focus:border-[#b36b3c] focus:bg-white"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember focus:bg-white"
                       />
                     </label>
 
-                    <label className="block text-xs font-semibold text-[#26352f]">
+                    <label className="block text-xs font-semibold text-bark">
                       Start Date *
                       <input
                         required
                         type="date"
                         value={form.start_date}
                         onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
                       />
                     </label>
 
-                    <label className="block text-xs font-semibold text-[#26352f]">
-                      End Date <span className="font-normal text-[#617068]">(Optional)</span>
+                    <label className="block text-xs font-semibold text-bark">
+                      End Date <span className="font-normal text-moss">(Optional)</span>
                       <input
                         type="date"
                         value={form.end_date}
                         onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
                       />
                     </label>
                   </div>
 
                   {/* Attachment (flyer / poster) */}
-                  <label className="block text-xs font-semibold text-[#26352f]">
-                    Attachment <span className="font-normal text-[#617068]">(Optional — shown with the drive's announcement and attached to its emails)</span>
+                  <label className="block text-xs font-semibold text-bark">
+                    Attachment <span className="font-normal text-moss">(Optional — shown with the drive's announcement and attached to its emails)</span>
                     <input
                       type="file"
                       accept="image/*,.pdf,.doc,.docx"
                       onChange={(e) => setDriveAttachment(e.target.files?.[0] ?? null)}
-                      className="mt-1 block w-full cursor-pointer rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3 py-2 text-xs text-[#26352f] file:mr-3 file:rounded-lg file:border-0 file:bg-[#26352f] file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
+                      className="mt-1 block w-full cursor-pointer rounded-xl border border-sand-line bg-sand-plate px-3 py-2 text-xs text-bark file:mr-3 file:rounded-lg file:border-0 file:bg-bark file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
                     />
                   </label>
 
                   {/* Personal invitations: when off, members share only the drive's
                       general link; when on, the office can issue personal ones. */}
-                  <label className="flex items-start gap-2.5 text-xs font-medium text-[#26352f] cursor-pointer">
+                  <label className="flex items-start gap-2.5 text-xs font-medium text-bark cursor-pointer">
                     <input
                       type="checkbox"
                       checked={form.allow_personal_invitations}
                       onChange={(e) => setForm({ ...form, allow_personal_invitations: e.target.checked })}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#5f8067]"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
                     />
                     <span>
                       Allow personal invitations
-                      <span className="block text-[11px] font-normal text-[#617068]">
+                      <span className="block text-[11px] font-normal text-moss">
                         Members get personal invite links they can share, and the drive tracks who gave through each invite. Leave unchecked to share one general link only.
                       </span>
                     </span>
                   </label>
 
                   {/* Broadcast Message Options */}
-                  <div className="rounded-2xl bg-[#faf9f5] p-4 ring-1 ring-[#dfdbd1] space-y-3">
-                    <label className="block text-xs font-bold text-[#26352f]">
-                      Member Announcement Broadcast <span className="font-normal text-[#617068]">(Optional)</span>
+                  <div className="rounded-2xl bg-sand-card p-4 ring-1 ring-sand-line space-y-3">
+                    <label className="block text-xs font-bold text-bark">
+                      Member Announcement Broadcast <span className="font-normal text-moss">(Optional)</span>
                     </label>
                     <textarea
                       rows={2}
                       placeholder="Write an encouragement message to broadcast to members regarding this drive..."
                       value={form.member_message}
                       onChange={(e) => setForm({ ...form, member_message: e.target.value })}
-                      className="w-full rounded-xl border border-[#dfdbd1] bg-white px-3.5 py-2 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                      className="w-full rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs text-bark outline-none focus:border-ember"
                     />
 
                     {form.member_message && (
-                      <div className="space-y-3 pt-2 border-t border-[#dfdbd1]/60">
-                        <label className="flex items-center gap-2.5 text-xs font-medium text-[#26352f] cursor-pointer">
+                      <div className="space-y-3 pt-2 border-t border-sand-line/60">
+                        <label className="flex items-center gap-2.5 text-xs font-medium text-bark cursor-pointer">
                           <input
                             type="checkbox"
                             checked={form.schedule_message}
                             onChange={(e) => setForm({ ...form, schedule_message: e.target.checked })}
-                            className="h-4 w-4 rounded accent-[#5f8067]"
+                            className="h-4 w-4 rounded accent-sage"
                           />
                           <span>Schedule broadcast message for later</span>
                         </label>
 
                         {form.schedule_message && (
                           <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                            <label className="block text-xs font-semibold text-[#26352f]">
+                            <label className="block text-xs font-semibold text-bark">
                               Broadcast Date &amp; Time
                               <input
                                 type="datetime-local"
                                 value={form.scheduled_at}
                                 onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })}
-                                className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                                className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs outline-none focus:border-ember"
                               />
                             </label>
 
-                            <label className="block text-xs font-semibold text-[#26352f]">
+                            <label className="block text-xs font-semibold text-bark">
                               Broadcast Frequency
                               <select
                                 value={form.message_frequency}
                                 onChange={(e) => setForm({ ...form, message_frequency: e.target.value })}
-                                className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                                className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs outline-none focus:border-ember"
                               >
                                 <option value="once">One-time broadcast</option>
                                 <option value="weekly">Weekly (Every Sabbath reminder)</option>
@@ -795,19 +813,19 @@ export function CampaignManagement({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+                  <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                     <button
                       type="button"
                       disabled={isSubmitting}
                       onClick={resetAndCloseModal}
-                      className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c]"
+                      className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="rounded-full bg-[#5f8067] px-6 py-2.5 text-xs font-bold text-white transition hover:bg-[#4d6d55] disabled:opacity-60 shadow-sm"
+                      className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep disabled:opacity-60 shadow-sm"
                     >
                       {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : "Create Drive"}
                     </button>
@@ -828,14 +846,14 @@ export function CampaignManagement({
               <div
                 role="dialog"
                 aria-modal="true"
-                className="max-h-[90vh] w-full max-w-xl overflow-visible rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+                className="max-h-[90vh] w-full max-w-xl overflow-visible rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
               >
-                <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+                <div className="flex items-center justify-between border-b border-sand-line pb-4">
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c]">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-ember">
                       Issue Personal Invites
                     </span>
-                    <h2 className="text-xl font-bold text-[#26352f]">
+                    <h2 className="text-xl font-bold text-bark">
                       {issuingCampaign.title || issuingCampaign.name}
                     </h2>
                   </div>
@@ -843,26 +861,26 @@ export function CampaignManagement({
                     type="button"
                     disabled={issuingCards}
                     onClick={() => setIssuingCampaign(null)}
-                    className="rounded-full p-2 text-xl leading-none text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                    className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
                     aria-label="Close modal"
                   >
-                    ✕
+                    <X size={18} aria-hidden="true" />
                   </button>
                 </div>
 
                 <form onSubmit={handleIssueCardsSubmit} className="mt-6 space-y-6">
                   {/* Combobox Recipient Selector */}
                   <div className="relative space-y-2">
-                    <label className="block text-xs font-bold text-[#26352f]">
+                    <label className="block text-xs font-bold text-bark">
                       Select Invite Recipients (Groups &amp; Members) *
                     </label>
-                    <p className="text-[11px] text-[#617068]">
+                    <p className="text-[11px] text-moss">
                       Groups come first (beginning with &quot;All Members&quot;). You can also select individual church members.
                     </p>
 
                     {/* Combobox Input Container with selected text boxes/chips */}
                     <div
-                      className="min-h-[48px] w-full rounded-2xl border border-[#c9c5bb] bg-[#faf9f5] p-2 flex flex-wrap items-center gap-1.5 focus-within:border-[#b36b3c] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#b36b3c]/20 transition cursor-text"
+                      className="min-h-[48px] w-full rounded-2xl border border-sand-mute bg-sand-card p-2 flex flex-wrap items-center gap-1.5 focus-within:border-ember focus-within:bg-white focus-within:ring-2 focus-within:ring-ember/20 transition cursor-text"
                       onClick={() => setIsDropdownOpen(true)}
                     >
                       {/* Group Chips */}
@@ -871,9 +889,9 @@ export function CampaignManagement({
                         return (
                           <span
                             key={gKey}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#26352f] text-white px-2.5 py-1 text-xs font-semibold shadow-xs"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-bark text-white px-2.5 py-1 text-xs font-semibold shadow-xs"
                           >
-                            <span>{grpObj?.icon || "👥"}</span>
+                            <span>{grpObj ? <grpObj.icon size={13} aria-hidden="true" /> : <Users size={13} aria-hidden="true" />}</span>
                             <span>{grpObj?.label || gKey}</span>
                             <button
                               type="button"
@@ -883,7 +901,7 @@ export function CampaignManagement({
                               }}
                               className="hover:text-rose-300 font-bold ml-1"
                             >
-                              ✕
+                              <X size={14} aria-hidden="true" />
                             </button>
                           </span>
                         );
@@ -896,9 +914,9 @@ export function CampaignManagement({
                         return (
                           <span
                             key={mId}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#5f8067] text-white px-2.5 py-1 text-xs font-semibold shadow-xs"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-sage text-white px-2.5 py-1 text-xs font-semibold shadow-xs"
                           >
-                            <span>👤</span>
+                            <User size={13} aria-hidden="true" />
                             <span>{nameStr}</span>
                             <button
                               type="button"
@@ -908,7 +926,7 @@ export function CampaignManagement({
                               }}
                               className="hover:text-rose-300 font-bold ml-1"
                             >
-                              ✕
+                              <X size={14} aria-hidden="true" />
                             </button>
                           </span>
                         );
@@ -924,16 +942,16 @@ export function CampaignManagement({
                         }}
                         onFocus={() => setIsDropdownOpen(true)}
                         placeholder={selectedGroups.length === 0 && selectedMemberIds.length === 0 ? "Click or type to search groups & members..." : "Add recipients..."}
-                        className="flex-1 min-w-[140px] bg-transparent text-xs text-[#26352f] outline-none p-1 placeholder:text-[#8b9790]"
+                        className="flex-1 min-w-[140px] bg-transparent text-xs text-bark outline-none p-1 placeholder:text-moss-faint"
                       />
                     </div>
 
                     {/* Combobox Dropdown Popover List */}
                     {isDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-64 overflow-y-auto rounded-2xl bg-white border border-[#dfdbd1] shadow-2xl p-2 z-50 divide-y divide-[#dfdbd1]/60">
+                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-64 overflow-y-auto rounded-2xl bg-white border border-sand-line shadow-2xl p-2 z-50 divide-y divide-sand-line/60">
                         {/* GROUPS SECTION (FIRST, BEGINNING WITH ALL) */}
                         <div className="pb-2">
-                          <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c]">
+                          <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-ember">
                             Church Groups (Beginning with All)
                           </p>
                           {AVAILABLE_GROUPS.filter((g) =>
@@ -952,14 +970,14 @@ export function CampaignManagement({
                                   }
                                 }}
                                 className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                                  isSelected ? "bg-[#26352f]/10 text-[#26352f]" : "hover:bg-[#f7f4ee] text-[#26352f]"
+                                  isSelected ? "bg-bark/10 text-bark" : "hover:bg-sand text-bark"
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5">
-                                  <span className="text-sm">{g.icon}</span>
+                                  <g.icon size={14} aria-hidden="true" />
                                   <span>{g.label}</span>
                                 </div>
-                                {isSelected && <span className="text-[#5f8067] font-bold">✓ Selected</span>}
+                                {isSelected && <span className="inline-flex items-center gap-1 text-sage font-bold"><Check size={12} aria-hidden="true" /> Selected</span>}
                               </button>
                             );
                           })}
@@ -967,7 +985,7 @@ export function CampaignManagement({
 
                         {/* INDIVIDUAL MEMBERS SECTION (SECOND) */}
                         <div className="pt-2">
-                          <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+                          <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-moss">
                             Individual Members ({allUsers.length})
                           </p>
                           {allUsers
@@ -992,17 +1010,17 @@ export function CampaignManagement({
                                     }
                                   }}
                                   className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between transition ${
-                                    isSelected ? "bg-[#5f8067]/10 text-[#26352f]" : "hover:bg-[#f7f4ee] text-[#26352f]"
+                                    isSelected ? "bg-sage/10 text-bark" : "hover:bg-sand text-bark"
                                   }`}
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span>👤</span>
+                                    <User size={14} aria-hidden="true" />
                                     <div>
-                                      <span className="font-semibold text-[#26352f]">{nameStr}</span>
-                                      <span className="text-[11px] text-[#617068] ml-2">@{u.username}</span>
+                                      <span className="font-semibold text-bark">{nameStr}</span>
+                                      <span className="text-[11px] text-moss ml-2">@{u.username}</span>
                                     </div>
                                   </div>
-                                  {isSelected && <span className="text-[#5f8067] font-bold">✓ Selected</span>}
+                                  {isSelected && <span className="inline-flex items-center gap-1 text-sage font-bold"><Check size={12} aria-hidden="true" /> Selected</span>}
                                 </button>
                               );
                             })}
@@ -1012,7 +1030,7 @@ export function CampaignManagement({
                           <button
                             type="button"
                             onClick={() => setIsDropdownOpen(false)}
-                            className="text-xs font-bold text-[#b36b3c] hover:underline px-3"
+                            className="text-xs font-bold text-ember hover:underline px-3"
                           >
                             Done selecting
                           </button>
@@ -1021,19 +1039,19 @@ export function CampaignManagement({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+                  <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                     <button
                       type="button"
                       disabled={issuingCards}
                       onClick={() => setIssuingCampaign(null)}
-                      className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c]"
+                      className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={issuingCards}
-                      className="rounded-full bg-[#5f8067] px-6 py-2.5 text-xs font-bold text-white transition hover:bg-[#4d6d55] disabled:opacity-60 shadow-sm"
+                      className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep disabled:opacity-60 shadow-sm"
                     >
                       {issuingCards ? "Issuing Invites..." : "Issue Invites Now"}
                     </button>
@@ -1060,13 +1078,13 @@ export function CampaignManagement({
 
           {/* Existing Campaigns List */}
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-[#26352f]">
+            <h2 className="text-xl font-bold text-bark">
               {isAdminMode ? `All Fund Drives (${filteredCampaigns.length})` : `Active Fund Drives (${filteredCampaigns.length})`}
             </h2>
 
             {filteredCampaigns.length === 0 ? (
-              <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-[#dfdbd1]">
-                <p className="text-sm text-[#617068]">
+              <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-sand-line">
+                <p className="text-sm text-moss">
                   {search.trim()
                     ? `No fund drives match "${search.trim()}".`
                     : isAdminMode
@@ -1093,54 +1111,54 @@ export function CampaignManagement({
                     { label: "Actions", className: "px-5 py-3.5 text-right" },
                   ]}
                   loadingLabel=""
-                  tableWrapperClassName="overflow-hidden overflow-x-auto custom-table-scrollbar rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"
+                  tableWrapperClassName="overflow-hidden overflow-x-auto custom-table-scrollbar rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
                   tableClassName="w-full text-left border-collapse"
                   headClassName=""
-                  headRowClassName="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] font-bold uppercase tracking-wider text-[#617068]"
+                  headRowClassName="border-b border-sand-line bg-sand-card text-[11px] font-bold uppercase tracking-wider text-moss"
                   headCellClassName=""
-                  bodyClassName="divide-y divide-[#dfdbd1] text-xs"
+                  bodyClassName="divide-y divide-sand-line text-xs"
                   cardsClassName="grid gap-4"
                   renderRow={(c) => (
-                          <tr key={c.id} className="transition hover:bg-[#fcfbf9]">
+                          <tr key={c.id} className="transition hover:bg-sand-plate">
                             <td className={`px-5 ${rowDrive} align-middle`}>
                               <Link
                                 href={`/support/campaigns/${c.id}`}
                                 className="group block"
                               >
-                                <div className="font-bold text-[#26352f] group-hover:text-[#b36b3c] transition-colors text-sm">
+                                <div className="font-bold text-bark group-hover:text-ember transition-colors text-sm">
                                   {c.title || c.name}
                                 </div>
                               </Link>
                             </td>
                             <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap`}>
-                              <code className="rounded-md bg-[#f7f4ee] px-2 py-1 font-mono text-xs font-bold text-[#b36b3c] border border-[#dfdbd1]">
+                              <code className="rounded-md bg-sand px-2 py-1 font-mono text-xs font-bold text-ember border border-sand-line">
                                 {c.account_name || c.name}
                               </code>
                             </td>
                             <td className={`px-4 ${rowDrive} align-middle min-w-[180px]`}>
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-[#5f8067]">
+                                  <span className="font-bold text-sage">
                                     KES {Number(c.total_raised).toLocaleString()}
                                   </span>
-                                  <span className="text-[11px] text-[#617068]">
+                                  <span className="text-[11px] text-moss">
                                     {c.percentage_raised}% of {Number(c.target_amount).toLocaleString()}
                                   </span>
                                 </div>
-                                <div className="h-2 w-full overflow-hidden rounded-full bg-[#e6e2d8]">
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-sand-sheen">
                                   <div
-                                    className="h-full rounded-full bg-[#5f8067]"
+                                    className="h-full rounded-full bg-sage"
                                     style={{ width: `${Math.min(100, c.percentage_raised)}%` }}
                                   />
                                 </div>
-                                <div className="text-[10px] text-[#617068]">
+                                <div className="text-[10px] text-moss">
                                   {c.donor_count || 0} donor{(c.donor_count || 0) === 1 ? "" : "s"}
                                 </div>
                               </div>
                             </td>
-                            <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap text-xs text-[#617068]`}>
+                            <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap text-xs text-moss`}>
                               <div>
-                                <span className="font-medium text-[#26352f]">{c.start_date}</span>
+                                <span className="font-medium text-bark">{c.start_date}</span>
                               </div>
                               <div className="text-[11px]">
                                 {c.end_date ? `to ${c.end_date}` : "(Ongoing)"}
@@ -1148,8 +1166,8 @@ export function CampaignManagement({
                             </td>
                             {isAdminMode && (
                               <td className={`px-3 ${rowDrive} align-middle text-center whitespace-nowrap`}>
-                                <span className="inline-flex items-center gap-1 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-xs font-semibold text-[#26352f] border border-[#dfdbd1]">
-                                  🎴 {c.assigned_cards_count || 0}
+                                <span className="inline-flex items-center gap-1 rounded-full bg-sand px-2.5 py-1 text-xs font-semibold text-bark border border-sand-line">
+                                  <IdCard size={13} className="inline" aria-hidden="true" /> {c.assigned_cards_count || 0}
                                 </span>
                               </td>
                             )}
@@ -1157,8 +1175,8 @@ export function CampaignManagement({
                               <span
                                 className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
                                   c.is_active
-                                    ? "bg-[#e8f3ec] text-[#2d5d39]"
-                                    : "bg-[#f3e8e8] text-[#8c2e2e]"
+                                    ? "bg-mist-soft text-sage-bright"
+                                    : "bg-alert-film text-brick"
                                 }`}
                               >
                                 {c.is_active ? "Active" : "Ended"}
@@ -1169,7 +1187,7 @@ export function CampaignManagement({
                                 <button
                                   type="button"
                                   onClick={(e) => toggleActionsMenu(c.id, e)}
-                                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] shadow-sm hover:bg-[#f7f4ee] hover:border-[#b36b3c] transition-colors focus:outline-none"
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark shadow-sm hover:bg-sand hover:border-ember transition-colors focus:outline-none"
                                 >
                                   <span>Actions</span>
                                   <svg className={`w-3.5 h-3.5 transition-transform ${openActionsId === c.id ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1184,7 +1202,7 @@ export function CampaignManagement({
                                       onClick={closeActionsMenu}
                                     />
                                     <div
-                                      className="fixed z-40 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-[#dfdbd1] space-y-1 text-left"
+                                      className="fixed z-40 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-sand-line space-y-1 text-left"
                                       style={
                                         actionsMenuPos.dropUp
                                           ? { right: actionsMenuPos.right, bottom: actionsMenuPos.bottom }
@@ -1194,9 +1212,9 @@ export function CampaignManagement({
                                       <Link
                                         href={`/support/campaigns/${c.id}`}
                                         onClick={closeActionsMenu}
-                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] hover:text-[#b36b3c] transition-colors"
+                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
                                       >
-                                        💳 View Card &rarr;
+                                        <CreditCard size={13} className="inline" aria-hidden="true" /> View Card
                                       </Link>
 
                                       {isAdminMode && canEdit && (
@@ -1207,9 +1225,9 @@ export function CampaignManagement({
                                               closeActionsMenu();
                                               handleOpenEdit(c);
                                             }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
                                           >
-                                            ✏️ Edit Drive
+                                            <Pencil size={13} className="inline" aria-hidden="true" /> Edit Drive
                                           </button>
 
                                           <button
@@ -1218,9 +1236,9 @@ export function CampaignManagement({
                                               closeActionsMenu();
                                               setReceiptCampaign(c);
                                             }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition-colors"
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
                                           >
-                                            🧾 Add Receipt
+                                            <Receipt size={13} className="inline" aria-hidden="true" /> Add Receipt
                                           </button>
 
                                           <button
@@ -1229,9 +1247,9 @@ export function CampaignManagement({
                                               closeActionsMenu();
                                               handleOpenIssueCards(c);
                                             }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#b36b3c] hover:bg-[#f7f4ee] transition-colors"
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
                                           >
-                                            🎴 {c.allow_personal_invitations ? "+ Issue Invites" : "+ General Link"}
+                                            <IdCard size={13} className="inline" aria-hidden="true" /> {c.allow_personal_invitations ? "+ Issue Invites" : "+ General Link"}
                                           </button>
 
                                           <button
@@ -1241,9 +1259,9 @@ export function CampaignManagement({
                                               handleBroadcastMessage(c.id, c.title || c.name);
                                             }}
                                             disabled={broadcastingId === c.id}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#5f8067] hover:bg-[#f7f4ee] disabled:opacity-50 transition-colors"
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand disabled:opacity-50 transition-colors"
                                           >
-                                            📢 {broadcastingId === c.id ? "Sending..." : "Message Members"}
+                                            <Megaphone size={13} className="inline" aria-hidden="true" /> {broadcastingId === c.id ? "Sending..." : "Message Members"}
                                           </button>
 
                                           <button
@@ -1258,7 +1276,7 @@ export function CampaignManagement({
                                                 : "text-emerald-700 hover:bg-emerald-50"
                                             }`}
                                           >
-                                            {c.is_active ? "⏸️ End Fund Drive" : "▶️ Reactivate Drive"}
+                                            {c.is_active ? <><Pause size={13} className="inline" aria-hidden="true" /> End Fund Drive</> : <><Play size={13} className="inline" aria-hidden="true" /> Reactivate Drive</>}
                                           </button>
                                         </>
                                       )}
@@ -1275,22 +1293,22 @@ export function CampaignManagement({
                     <Link
                       key={c.id}
                       href={`/support/campaigns/${c.id}`}
-                      className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-[#dfdbd1] transition hover:-translate-y-0.5 hover:ring-[#b36b3c]/50 space-y-3"
+                      className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line transition hover:-translate-y-0.5 hover:ring-ember/50 space-y-3"
                     >
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-[#e8f3ec] text-[#2d5d39]" : "bg-[#f3e8e8] text-[#8c2e2e]"}`}>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-mist-soft text-sage-bright" : "bg-alert-film text-brick"}`}>
                             {c.is_active ? "Active" : "Ended"}
                           </span>
                           {isAdminMode && (
-                            <span className="text-xs text-[#617068]">Invites: <strong className="text-[#26352f]">{c.assigned_cards_count || 0}</strong></span>
+                            <span className="text-xs text-moss">Invites: <strong className="text-bark">{c.assigned_cards_count || 0}</strong></span>
                           )}
                         </div>
 
                         <div>
-                          <h3 className="text-lg font-bold text-[#26352f]">{c.title || c.name}</h3>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#617068]">
-                            <code className="font-mono font-bold text-[#b36b3c]">{c.account_name || c.name}</code>
+                          <h3 className="text-lg font-bold text-bark">{c.title || c.name}</h3>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-moss">
+                            <code className="font-mono font-bold text-ember">{c.account_name || c.name}</code>
                             <span>&bull;</span>
                             <span>{c.start_date} {c.end_date ? `to ${c.end_date}` : "(Ongoing)"}</span>
                           </div>
@@ -1298,13 +1316,13 @@ export function CampaignManagement({
 
                         {/* Progress details */}
                         <div>
-                          <div className="flex justify-between text-xs font-medium text-[#26352f]">
+                          <div className="flex justify-between text-xs font-medium text-bark">
                             <span>KES {Number(c.total_raised).toLocaleString()} raised</span>
                             <span>{c.percentage_raised}% of KES {Number(c.target_amount).toLocaleString()}</span>
                           </div>
-                          <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-[#e6e2d8]">
+                          <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-sand-sheen">
                             <div
-                              className="h-full rounded-full bg-[#5f8067]"
+                              className="h-full rounded-full bg-sage"
                               style={{ width: `${Math.min(100, c.percentage_raised)}%` }}
                             />
                           </div>
@@ -1312,7 +1330,7 @@ export function CampaignManagement({
                       </div>
 
                       {/* The one action: open the drive page. */}
-                      <span className="flex items-center justify-center rounded-xl bg-[#26352f] px-4 py-2.5 text-xs font-semibold text-white transition group-hover:bg-[#b36b3c]">
+                      <span className="flex items-center justify-center rounded-xl bg-bark px-4 py-2.5 text-xs font-semibold text-white transition group-hover:bg-ember">
                         Open Drive
                       </span>
                     </Link>

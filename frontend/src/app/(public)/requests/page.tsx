@@ -14,33 +14,33 @@ export default function RequestsPage() {
   }, []);
 
   return (
-    <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+    <main className={signedIn ? "h-full min-h-0 bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
       {/* Signed in, this page is the Requests hub the tab opens — the cards
           are the point, so a phone gets the compact hub heading and the
           marketing hero returns from lg up, where the sidebar makes room. */}
       <section className={signedIn ? "px-5 pt-5 lg:hidden" : "px-6 pt-14 lg:px-8"}>
         <div className="max-w-5xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Care &amp; ministry support</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Requests &amp; Care</h1>
-          <p className="mt-2 text-sm leading-6 text-[#617068]">
+          <p className="mt-2 text-sm leading-6 text-moss">
             Prayer, visitation, dedication and membership — open the one you need.
           </p>
         </div>
       </section>
       <section className={signedIn ? "hidden px-5 py-5 sm:px-8 lg:block lg:px-10" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Care &amp; ministry support</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Care &amp; ministry support</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Requests &amp; Care</h1>
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-[#617068]">
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
             We are here to walk with you through prayer, pastoral visitation, child dedication, and
             membership. Tell us what you need and the right person will follow up.
           </p>
         </div>
       </section>
 
-      <section className={signedIn ? "hidden border-t border-[#dfdbd1] bg-white px-5 py-8 sm:px-8 lg:block lg:px-10" : "px-6 py-12 lg:px-8 lg:py-14"}>
-        <div className={signedIn ? "max-w-5xl rounded-[1.5rem] bg-[#26352f] px-6 py-8 text-white shadow-sm sm:px-8" : "mx-auto max-w-6xl rounded-[2rem] bg-[#26352f] px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12"}>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">How we can help</p>
+      <section className={signedIn ? "hidden border-t border-sand-line bg-white px-5 py-8 sm:px-8 lg:block lg:px-10" : "px-6 py-12 lg:px-8 lg:py-14"}>
+        <div className={signedIn ? "max-w-5xl rounded-[1.5rem] bg-bark px-6 py-8 text-white shadow-sm sm:px-8" : "mx-auto max-w-6xl rounded-[2rem] bg-bark px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12"}>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">How we can help</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">How can we support you today?</h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
             Submit a prayer request, book a pastoral or home visit, arrange a child dedication, or apply to join
@@ -49,7 +49,7 @@ export default function RequestsPage() {
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
               href="/community/prayer-visitation"
-              className="rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+              className="rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-ember-dark"
             >
               Prayer &amp; visitation requests
             </Link>
@@ -70,7 +70,7 @@ export default function RequestsPage() {
         title="Every request, in one place"
         description="Prayer, visitation, dedication and membership — open the one you need and we will take it from there."
         links={requestsAndCareLinks}
-        className={signedIn ? "lg:hidden" : "border-t border-[#dfdbd1] bg-white/60"}
+        className={signedIn ? "lg:hidden" : "border-t border-sand-line bg-white/60"}
       />
     </main>
   );

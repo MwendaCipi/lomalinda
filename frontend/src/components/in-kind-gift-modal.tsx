@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -119,23 +120,23 @@ export function InKindGiftModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="in-kind-gift-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
-            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">
+            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">
               In-Kind Giving
             </p>
-            <h3 id="in-kind-gift-title" className="text-lg font-bold text-[#26352f]">Give in kind</h3>
+            <h3 id="in-kind-gift-title" className="text-lg font-bold text-bark">Give in kind</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             aria-label="Close"
-            className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
+            className="text-xl leading-none text-moss hover:text-bark"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -145,8 +146,8 @@ export function InKindGiftModal({
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
-              Items donated <span className="text-[#617068]">({itemCount} item{itemCount === 1 ? "" : "s"})</span> *
+            <label className="block text-xs font-semibold text-bark">
+              Items donated <span className="text-moss">({itemCount} item{itemCount === 1 ? "" : "s"})</span> *
             </label>
             <textarea
               required
@@ -154,18 +155,18 @@ export function InKindGiftModal({
               value={items}
               onChange={(event) => setItems(event.target.value)}
               placeholder={"One item per row, e.g.\n2 bags of maize flour\n1 carton of cooking oil\n50 exercise books"}
-              className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-3 text-sm focus:border-ember focus:outline-none"
             />
-            <p className="mt-1 text-[11px] text-[#617068]">Write each item on its own line.</p>
+            <p className="mt-1 text-[11px] text-moss">Write each item on its own line.</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Account</label>
+              <label className="block text-xs font-semibold text-bark">Account</label>
               <select
                 value={purpose}
                 onChange={(event) => setPurpose(event.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
               >
                 {accounts.map((account) => (
                   <option key={account}>{account}</option>
@@ -173,32 +174,32 @@ export function InKindGiftModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Your name</label>
+              <label className="block text-xs font-semibold text-bark">Your name</label>
               <input
                 type="text"
                 value={donorName}
                 onChange={(event) => setDonorName(event.target.value)}
                 placeholder="Leave blank to give anonymously"
-                className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">Notes (optional)</label>
+            <label className="block text-xs font-semibold text-bark">Notes (optional)</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Anything the stewardship team should know"
-              className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={submitting || itemCount === 0}
-            className="w-full rounded-xl bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-60"
+            className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
           >
             {submitting ? "Recording…" : "Record In-Kind Gift"}
           </button>

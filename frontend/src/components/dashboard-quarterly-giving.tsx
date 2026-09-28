@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { brand } from "@/lib/brand";
 import { TrendingUp } from "lucide-react";
 import { GroupedBarChart } from "@/components/mini-charts";
 
@@ -19,7 +20,7 @@ type Analytics = {
   monthly: MonthPoint[];
 };
 
-const INCOME_COLOR = "#5f8067";
+const INCOME_COLOR = brand.sage;
 
 const fmtAmount = (value: number) =>
   `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -83,11 +84,11 @@ export function DashboardQuarterlyGiving() {
   const hasAnyGiving = quarters.some((quarter) => quarter.months.some((month) => month.income > 0));
 
   return (
-    <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-        <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Quarterly giving
+    <section className="mt-6 rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+      <h2 className="flex items-center gap-2 text-base font-bold text-bark">
+        <TrendingUp className="h-4 w-4 text-ember" /> Quarterly giving
       </h2>
-      <p className="mt-1 text-[11px] text-[#617068]">
+      <p className="mt-1 text-[11px] text-moss">
         The year's quarters, oldest first — real receipts only, completed gifts.
       </p>
 
@@ -95,10 +96,10 @@ export function DashboardQuarterlyGiving() {
         {quarters.map((quarter) => {
           const total = quarter.months.reduce((sum, month) => sum + month.income, 0);
           return (
-            <div key={quarter.label} className="rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-4 sm:mt-4 first:sm:mt-0">
+            <div key={quarter.label} className="rounded-xl border border-sand-deep bg-sand-card p-4 sm:mt-4 first:sm:mt-0">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm font-semibold text-[#26352f]">{quarter.label}</p>
-                <p className="text-sm font-bold text-[#26352f]">{fmtAmount(total)}</p>
+                <p className="text-sm font-semibold text-bark">{quarter.label}</p>
+                <p className="text-sm font-bold text-bark">{fmtAmount(total)}</p>
               </div>
               <div className="mt-3">
                 {quarter.months.length > 0 ? (
@@ -110,14 +111,14 @@ export function DashboardQuarterlyGiving() {
                     emptyLabel={`No giving recorded in ${quarter.label} yet.`}
                   />
                 ) : (
-                  <p className="text-[11px] text-[#617068]">No giving recorded in this quarter yet.</p>
+                  <p className="text-[11px] text-moss">No giving recorded in this quarter yet.</p>
                 )}
               </div>
             </div>
           );
         })}
         {!hasAnyGiving && (
-          <p className="text-[11px] text-[#617068]">
+          <p className="text-[11px] text-moss">
             No giving recorded this year yet — the quarters fill in as offerings are received.
           </p>
         )}

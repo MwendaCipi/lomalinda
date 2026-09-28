@@ -59,12 +59,12 @@ export default function ChildrenLessonsPage() {
   }, [opening]);
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <section className="px-6 pt-10 lg:px-8">
         <div className="max-w-4xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Study Materials</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Children&apos;s Lesson Guides</h1>
-          <p className="mt-2 hidden text-sm leading-6 text-[#617068] sm:block">
+          <p className="mt-2 hidden text-sm leading-6 text-moss sm:block">
             One guide per age group. Open a division to read its current lesson — student edition.
           </p>
         </div>
@@ -78,25 +78,25 @@ export default function ChildrenLessonsPage() {
                 key={d.key}
                 type="button"
                 onClick={() => openDivision(d.key)}
-                className="group flex items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                className="group flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
               >
                 <span
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#26352f]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-bark"
                   aria-hidden="true"
                 >
                   <Shapes className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-[#26352f]">{d.label}</span>
-                    <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148]">{d.ages}</span>
+                    <span className="text-sm font-bold text-bark">{d.label}</span>
+                    <span className="rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold text-moss-dark">{d.ages}</span>
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{d.description}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-moss">{d.description}</span>
                 </span>
                 {opening === d.key ? (
-                  <span className="shrink-0 text-xs font-semibold text-[#b36b3c]">Opening…</span>
+                  <span className="shrink-0 text-xs font-semibold text-ember">Opening…</span>
                 ) : (
-                  <ExternalLink className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" />
+                  <ExternalLink className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />
                 )}
               </button>
             ))}

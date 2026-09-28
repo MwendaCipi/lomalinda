@@ -35,11 +35,11 @@ const hymnals: {
 
 export default function HymnalPage() {
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <section className="px-6 pt-14 lg:px-8">
         <div className="max-w-6xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Hymnals</h1>
-          <p className="mt-3 hidden max-w-2xl text-base leading-8 text-[#617068] sm:block">
+          <p className="mt-3 hidden max-w-2xl text-base leading-8 text-moss sm:block">
             Worship hymnals in English and Swahili for personal, family, and church praise.
           </p>
         </div>
@@ -53,28 +53,28 @@ export default function HymnalPage() {
             <a
               key={item.id}
               href={item.href}
-              className="group flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c] hover:shadow-md sm:p-4"
+              className="group flex flex-col justify-between rounded-2xl border border-sand-line bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-ember hover:shadow-md sm:p-4"
             >
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f7f4ee] text-[#26352f] sm:h-9 sm:w-9"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sand text-bark sm:h-9 sm:w-9"
                     aria-hidden="true"
                   >
                     <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </span>
-                  <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[9px] font-semibold text-[#b36b3c] sm:px-2.5 sm:text-[10px]">
+                  <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[9px] font-semibold text-ember sm:px-2.5 sm:text-[10px]">
                     {item.badge}
                   </span>
                 </div>
-                <h2 className="mt-2 text-[13px] font-semibold tracking-tight transition-colors group-hover:text-[#b36b3c] sm:mt-2.5 sm:text-base">
+                <h2 className="mt-2 text-[13px] font-semibold tracking-tight transition-colors group-hover:text-ember sm:mt-2.5 sm:text-base">
                   {item.title}
                 </h2>
-                <p className="mt-1 text-[10px] leading-4 text-[#617068] sm:text-[11px] sm:leading-5">{item.description}</p>
+                <p className="mt-1 text-[10px] leading-4 text-moss sm:text-[11px] sm:leading-5">{item.description}</p>
               </div>
 
-              <div className="mt-2.5 border-t border-[#dfdbd1] pt-2 sm:mt-3 sm:pt-2.5">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#26352f] px-3 py-1 text-[10px] font-semibold text-white transition group-hover:bg-[#b36b3c] sm:px-3.5 sm:py-1.5 sm:text-[11px]">
+              <div className="mt-2.5 border-t border-sand-line pt-2 sm:mt-3 sm:pt-2.5">
+                <span className="inline-flex items-center gap-2 rounded-full bg-bark px-3 py-1 text-[10px] font-semibold text-white transition group-hover:bg-ember sm:px-3.5 sm:py-1.5 sm:text-[11px]">
                   <span>{item.button}</span>
                   <span>&rarr;</span>
                 </span>
@@ -93,7 +93,7 @@ export default function HymnalPage() {
         description="Lessons, mission readings, Scripture and the Spirit of Prophecy."
         links={materialSectionLinks}
         activeKey="hymnals"
-        className="hidden border-t border-[#dfdbd1] bg-white/60 lg:block"
+        className="hidden border-t border-sand-line bg-white/60 lg:block"
       />
     </main>
   );

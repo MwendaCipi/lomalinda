@@ -71,25 +71,25 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-10 text-[#26352f]">
-      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">First sign-in</p>
+    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-10 text-bark">
+      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ember">First sign-in</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Change your password</h1>
-        <p className="mt-3 text-sm leading-6 text-[#617068]">
+        <p className="mt-3 text-sm leading-6 text-moss">
           Your account was created with an initial password. Choose a private password before continuing.
         </p>
         <form onSubmit={submit} className="mt-6 space-y-4">
           {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}
           <label className="block text-sm font-medium">
             New password
-            <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]" />
+            <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 outline-none focus:border-ember" />
           </label>
           <label className="block text-sm font-medium">
             Confirm new password
-            <input type="password" required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]" />
+            <input type="password" required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 outline-none focus:border-ember" />
           </label>
           <PasswordRules password={password} />
-          <button type="submit" disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60">
+          <button type="submit" disabled={loading} className="w-full rounded-full bg-bark px-5 py-3 font-medium text-white disabled:opacity-60">
             {loading ? "Saving…" : "Save new password"}
           </button>
         </form>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check, ClipboardList, Plus, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -235,14 +236,14 @@ export function TransferManagement() {
   };
 
   return (
-    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-6">
+    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#dfdbd1] pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-sand-line pb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
+          <h2 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
             Membership Transfers
           </h2>
-          <p className="mt-1 text-sm text-[#617068]">
+          <p className="mt-1 text-sm text-moss">
             Manage incoming &amp; outgoing membership transfer requests or add a manual transfer.
           </p>
         </div>
@@ -252,16 +253,16 @@ export function TransferManagement() {
             resetForm();
             setIsModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e2a25] active:scale-95"
+          className="inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900 active:scale-95"
         >
-          <span>➕</span>
+          <Plus size={14} aria-hidden="true" />
           <span>Add Membership Transfer</span>
         </button>
       </div>
 
       {/* Loading state */}
       {loading && (
-        <div className="py-12 text-center text-sm font-semibold text-[#617068]">
+        <div className="py-12 text-center text-sm font-semibold text-moss">
           Loading membership transfers...
         </div>
       )}
@@ -275,11 +276,11 @@ export function TransferManagement() {
 
       {/* Empty State */}
       {!loading && !error && transfers.length === 0 && (
-        <div className="rounded-3xl border border-dashed border-[#dfdbd1] bg-[#faf9f5] p-12 text-center">
-          <span className="text-4xl">📋</span>
-          <h3 className="mt-3 text-base font-bold text-[#26352f]">No membership transfer records</h3>
-          <p className="mt-1 text-xs text-[#617068]">
-            Click <span className="font-semibold text-[#26352f]">&quot;+ Add Membership Transfer&quot;</span> to manually add a member transfer.
+        <div className="rounded-3xl border border-dashed border-sand-line bg-sand-card p-12 text-center">
+          <ClipboardList size={36} className="text-moss-faint" aria-hidden="true" />
+          <h3 className="mt-3 text-base font-bold text-bark">No membership transfer records</h3>
+          <p className="mt-1 text-xs text-moss">
+            Click <span className="font-semibold text-bark">&quot;+ Add Membership Transfer&quot;</span> to manually add a member transfer.
           </p>
           <button
             type="button"
@@ -287,9 +288,9 @@ export function TransferManagement() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e2a25]"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900"
           >
-            <span>➕</span>
+            <Plus size={14} aria-hidden="true" />
             <span>Add Membership Transfer</span>
           </button>
         </div>
@@ -301,11 +302,11 @@ export function TransferManagement() {
           {transfers.map((t) => (
             <div
               key={t.id}
-              className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-xs transition hover:border-[#b36b3c]"
+              className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-sand-line bg-white p-5 shadow-xs transition hover:border-ember"
             >
               <div className="space-y-1.5 max-w-xl">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold text-base text-[#26352f]">{t.member_name}</span>
+                  <span className="font-bold text-base text-bark">{t.member_name}</span>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide border ${
                       t.transfer_type === "incoming"
@@ -324,28 +325,28 @@ export function TransferManagement() {
                   </span>
                 </div>
 
-                <p className="text-xs font-medium text-[#617068]">
+                <p className="text-xs font-medium text-moss">
                   {t.transfer_type === "incoming" ? "Previous Church:" : "Destination Church:"}{" "}
-                  <span className="font-semibold text-[#26352f]">{t.other_church}</span>
+                  <span className="font-semibold text-bark">{t.other_church}</span>
                 </p>
 
                 {(t.phone_number || t.email) && (
-                  <p className="text-xs text-[#617068]">
+                  <p className="text-xs text-moss">
                     Contact: {[t.phone_number, t.email].filter(Boolean).join(" • ")}
                   </p>
                 )}
 
                 {t.transfer_type === "outgoing" && t.remain_friend != null && (
-                  <p className="text-xs text-[#617068]">
+                  <p className="text-xs text-moss">
                     Wants to remain a friend of the church:{" "}
-                    <span className={`font-bold ${t.remain_friend ? "text-[#2d5d39]" : "text-red-700"}`}>
+                    <span className={`font-bold ${t.remain_friend ? "text-sage-bright" : "text-red-700"}`}>
                       {t.remain_friend ? "Yes" : "No"}
                     </span>
                   </p>
                 )}
 
                 {t.reason && (
-                  <p className="text-xs italic text-[#415047] bg-[#f7f4ee] p-2.5 rounded-xl mt-1">
+                  <p className="text-xs italic text-moss-mid bg-sand p-2.5 rounded-xl mt-1">
                     &quot;{t.reason}&quot;
                   </p>
                 )}
@@ -360,7 +361,7 @@ export function TransferManagement() {
                     onClick={() => handleReviewTransfer(t.id, "approved")}
                     className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                   >
-                    {reviewingId === t.id ? "Processing..." : "✓ Approve"}
+                    {reviewingId === t.id ? "Processing..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
                   </button>
                   <button
                     type="button"
@@ -368,16 +369,16 @@ export function TransferManagement() {
                     onClick={() => handleReviewTransfer(t.id, "cancelled")}
                     className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                   >
-                    ✕ Reject
+                    <X size={12} className="inline" aria-hidden="true" /> Reject
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 self-center">
-                  <label className="text-xs font-semibold text-[#617068]">Status:</label>
+                  <label className="text-xs font-semibold text-moss">Status:</label>
                   <select
                     value={t.status}
                     onChange={(e) => handleUpdateStatus(t.id, e.target.value)}
-                    className="rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-1.5 text-xs font-semibold text-[#26352f] outline-none transition focus:border-[#26352f]"
+                    className="rounded-xl border border-sand-line bg-sand px-3 py-1.5 text-xs font-semibold text-bark outline-none transition focus:border-bark"
                   >
                     <option value="pending">Pending</option>
                     <option value="under_review">Under Review</option>
@@ -395,18 +396,18 @@ export function TransferManagement() {
       {/* Modal Overlay for Adding Membership Transfer */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-2xl scrollbar-thin">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl scrollbar-thin">
+            <div className="flex items-center justify-between border-b border-sand-line pb-4">
               <div>
-                <h3 className="text-lg font-extrabold text-[#26352f]">Add Membership Transfer</h3>
-                <p className="text-xs text-[#617068]">Record a transfer for a member who has not requested online.</p>
+                <h3 className="text-lg font-extrabold text-bark">Add Membership Transfer</h3>
+                <p className="text-xs text-moss">Record a transfer for a member who has not requested online.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-full p-1.5 text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                className="rounded-full p-1.5 text-moss transition hover:bg-sand hover:text-bark"
               >
-                ✕
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -418,7 +419,7 @@ export function TransferManagement() {
               )}
 
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">
+                <label className="block text-xs font-bold text-bark">
                   Member Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -427,19 +428,19 @@ export function TransferManagement() {
                   value={memberName}
                   onChange={(e) => setMemberName(e.target.value)}
                   placeholder="e.g. John Doe"
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">
+                  <label className="block text-xs font-bold text-bark">
                     Transfer Type <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={transferType}
                     onChange={(e) => setTransferType(e.target.value as any)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                   >
                     <option value="incoming">Incoming Transfer (Joining Us)</option>
                     <option value="outgoing">Outgoing Transfer (Leaving Us)</option>
@@ -447,7 +448,7 @@ export function TransferManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">
+                  <label className="block text-xs font-bold text-bark">
                     {transferType === "incoming" ? "Previous Church Name *" : "Destination Church Name *"}
                   </label>
                   <input
@@ -456,12 +457,12 @@ export function TransferManagement() {
                     value={otherChurch}
                     onChange={(e) => setOtherChurch(e.target.value)}
                     placeholder={transferType === "incoming" ? "e.g. Central SDA Church" : "e.g. New Life SDA Church"}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Phone Number (optional)</label>
+                  <label className="block text-xs font-bold text-bark">Phone Number (optional)</label>
                   <input
                     type="tel"
                     value={phoneNumber}
@@ -480,12 +481,12 @@ export function TransferManagement() {
                       }
                     }}
                     placeholder="e.g. 0712345678"
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Email Address (optional)</label>
+                  <label className="block text-xs font-bold text-bark">Email Address (optional)</label>
                   <input
                     type="email"
                     value={email}
@@ -496,17 +497,17 @@ export function TransferManagement() {
                       }
                     }}
                     placeholder="e.g. member@example.com"
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Status</label>
+                <label className="block text-xs font-bold text-bark">Status</label>
                 <select
                   value={statusVal}
                   onChange={(e) => setStatusVal(e.target.value as any)}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2.5 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs font-medium text-bark outline-none transition focus:border-bark"
                 >
                   <option value="pending">Pending</option>
                   <option value="under_review">Under Review</option>
@@ -516,29 +517,29 @@ export function TransferManagement() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Reason / Details (optional)</label>
+                <label className="block text-xs font-bold text-bark">Reason / Details (optional)</label>
                 <textarea
                   rows={2}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Reason for transfer or additional background information..."
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-3 text-xs font-medium text-[#26352f] outline-none transition focus:border-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand p-3 text-xs font-medium text-bark outline-none transition focus:border-bark"
                 />
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl border border-[#dfdbd1] bg-white px-4 py-2.5 text-xs font-bold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                  className="rounded-xl border border-sand-line bg-white px-4 py-2.5 text-xs font-bold text-bark transition hover:bg-sand"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-[#26352f] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e2a25] disabled:opacity-50"
+                  className="rounded-xl bg-bark px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900 disabled:opacity-50"
                 >
                   {submitting ? "Saving..." : "Save Transfer Record"}
                 </button>

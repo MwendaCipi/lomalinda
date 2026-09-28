@@ -60,12 +60,12 @@ function CalendarPageContent() {
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <section className="px-6 pt-14 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Church life</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
-          <p className="mt-4 max-w-2xl text-base leading-8 text-[#617068]">
+          <p className="mt-4 max-w-2xl text-base leading-8 text-moss">
             Sabbaths, vespers, programmes and special events across the church year.
           </p>
         </div>
@@ -78,7 +78,7 @@ function CalendarPageContent() {
             <select
               value={selectedYear}
               onChange={(event) => setSelectedYear(Number(event.target.value))}
-              className="mt-2 block w-full rounded-lg border border-[#cfc9bd] bg-white px-3 py-2 font-normal"
+              className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal"
             >
               {years.map((year) => (
                 <option key={year} value={year}>
@@ -92,7 +92,7 @@ function CalendarPageContent() {
             <select
               value={selectedMonth}
               onChange={(event) => setSelectedMonth(event.target.value)}
-              className="mt-2 block w-full rounded-lg border border-[#cfc9bd] bg-white px-3 py-2 font-normal"
+              className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal"
             >
               <option value="all">All months</option>
               {monthNames.map((month, index) => (
@@ -109,13 +109,13 @@ function CalendarPageContent() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Event, department, or date"
-                className="mt-2 block w-full rounded-lg border border-[#cfc9bd] bg-white px-3 py-2 font-normal outline-none focus:border-[#b36b3c]"
+                className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal outline-none focus:border-ember"
               />
             </label>
             <button
               type="button"
               onClick={() => window.print()}
-              className="shrink-0 rounded-lg bg-[#b36b3c] px-4 py-2 text-sm font-semibold text-white hover:bg-[#96552e]"
+              className="shrink-0 rounded-lg bg-ember px-4 py-2 text-sm font-semibold text-white hover:bg-ember-dark"
             >
               Print Calendar
             </button>
@@ -123,9 +123,9 @@ function CalendarPageContent() {
         </div>
 
         {/* PC Desktop Table View (visible on md and up) */}
-        <div className="hidden md:block mt-3 overflow-x-auto custom-table-scrollbar rounded-xl border border-[#dfdbd1] bg-white">
+        <div className="hidden md:block mt-3 overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead className="border-b border-[#dfdbd1] bg-[#eef2ed] text-xs uppercase tracking-[0.12em] text-[#617068]">
+            <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
               <tr>
                 <th className="px-5 py-4 font-semibold">Date</th>
                 <th className="px-5 py-4 font-semibold">Event</th>
@@ -134,12 +134,12 @@ function CalendarPageContent() {
                 <th className="px-5 py-4 font-semibold">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#e9e5dd]">
+            <tbody className="divide-y divide-sand-wash">
               {rows.map((row) => {
                 const actionKey = `${row.date}-${row.event.name}`;
                 return (
-                  <tr key={actionKey} className="hover:bg-[#fcfbf9]">
-                    <td className="whitespace-nowrap px-5 py-4 text-[#617068]">
+                  <tr key={actionKey} className="hover:bg-sand-plate">
+                    <td className="whitespace-nowrap px-5 py-4 text-moss">
                       {new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", {
                         weekday: "short",
                         month: "short",
@@ -148,25 +148,25 @@ function CalendarPageContent() {
                       })}
                     </td>
                     <td className="px-5 py-4 font-semibold">{row.event.name}</td>
-                    <td className="whitespace-nowrap px-5 py-4 text-[#617068]">{row.event.time || "-"}</td>
-                    <td className="px-5 py-4 text-[#617068]">{row.event.department || "-"}</td>
+                    <td className="whitespace-nowrap px-5 py-4 text-moss">{row.event.time || "-"}</td>
+                    <td className="px-5 py-4 text-moss">{row.event.department || "-"}</td>
                     <td data-calendar-action-menu className="relative px-5 py-4">
                       <button
                         type="button"
                         aria-expanded={openActions === actionKey}
                         onClick={() => setOpenActions(openActions === actionKey ? null : actionKey)}
-                        className="rounded-lg border border-[#c9c5bb] px-3 py-2 text-sm font-semibold text-[#26352f] hover:border-[#b36b3c]"
+                        className="rounded-lg border border-sand-mute px-3 py-2 text-sm font-semibold text-bark hover:border-ember"
                       >
                         Actions <span aria-hidden="true">v</span>
                       </button>
                       {openActions === actionKey && (
-                        <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg">
+                        <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
                           {row.event.kind === "online" && row.event.meeting_link && (
                             <a
                               href={row.event.meeting_link}
                               target="_blank"
                               rel="noreferrer"
-                              className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
+                              className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                             >
                               Join meeting
                             </a>
@@ -176,7 +176,7 @@ function CalendarPageContent() {
                               href={row.event.location_link}
                               target="_blank"
                               rel="noreferrer"
-                              className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
+                              className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                             >
                               Open map
                             </a>
@@ -184,21 +184,21 @@ function CalendarPageContent() {
                           <Link
                             href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.event.department || row.event.name))}`}
                             onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
+                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
                             Give support
                           </Link>
                           <a
                             href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
                             onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
+                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
                             Contact department
                           </a>
                           <a
                             href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.event.name}`)}`}
                             onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f7f4ee]"
+                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
                             Give suggestion
                           </a>
@@ -208,7 +208,7 @@ function CalendarPageContent() {
                               setOpenActions(null);
                               openProgram(row);
                             }}
-                            className="block w-full text-left rounded-lg px-3 py-2 text-sm font-semibold text-[#b36b3c] hover:bg-[#f7f4ee]"
+                            className="block w-full text-left rounded-lg px-3 py-2 text-sm font-semibold text-ember hover:bg-sand"
                           >
                             View Sabbath program
                           </button>
@@ -233,30 +233,30 @@ function CalendarPageContent() {
               year: "numeric",
             });
             return (
-              <div key={actionKey} className="rounded-2xl bg-white p-5 border border-[#dfdbd1] shadow-sm space-y-3">
+              <div key={actionKey} className="rounded-2xl bg-white p-5 border border-sand-line shadow-sm space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="text-xs font-semibold text-[#b36b3c]">{dateStr}</span>
-                    <h3 className="font-bold text-base text-[#26352f] mt-0.5">{row.event.name}</h3>
+                    <span className="text-xs font-semibold text-ember">{dateStr}</span>
+                    <h3 className="font-bold text-base text-bark mt-0.5">{row.event.name}</h3>
                   </div>
                   {row.event.department && (
-                    <span className="rounded-full bg-[#eef2ed] px-2.5 py-1 text-[10px] font-bold text-[#3d5148] shrink-0">
+                    <span className="rounded-full bg-mist-select px-2.5 py-1 text-[10px] font-bold text-moss-dark shrink-0">
                       {row.event.department}
                     </span>
                   )}
                 </div>
 
                 {row.event.time && (
-                  <p className="text-xs text-[#617068]">
-                    <span className="font-semibold text-[#26352f]">Time:</span> {row.event.time}
+                  <p className="text-xs text-moss">
+                    <span className="font-semibold text-bark">Time:</span> {row.event.time}
                   </p>
                 )}
 
-                <div data-calendar-action-menu className="relative pt-3 border-t border-[#dfdbd1]/60 flex items-center justify-between">
+                <div data-calendar-action-menu className="relative pt-3 border-t border-sand-line/60 flex items-center justify-between">
                   <button
                     type="button"
                     onClick={() => openProgram(row)}
-                    className="text-xs font-bold text-[#b36b3c] hover:underline"
+                    className="text-xs font-bold text-ember hover:underline"
                   >
                     View Sabbath Program &rarr;
                   </button>
@@ -266,18 +266,18 @@ function CalendarPageContent() {
                       type="button"
                       aria-expanded={openActions === actionKey}
                       onClick={() => setOpenActions(openActions === actionKey ? null : actionKey)}
-                      className="rounded-lg border border-[#c9c5bb] px-3 py-1.5 text-xs font-semibold text-[#26352f] hover:border-[#b36b3c]"
+                      className="rounded-lg border border-sand-mute px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
                     >
                       Actions ▾
                     </button>
                     {openActions === actionKey && (
-                      <div className="absolute right-0 bottom-full mb-1.5 z-20 w-48 rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg">
+                      <div className="absolute right-0 bottom-full mb-1.5 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
                         {row.event.kind === "online" && row.event.meeting_link && (
                           <a
                             href={row.event.meeting_link}
                             target="_blank"
                             rel="noreferrer"
-                            className="block rounded-lg px-3 py-2 text-xs hover:bg-[#f7f4ee]"
+                            className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                           >
                             Join meeting
                           </a>
@@ -287,7 +287,7 @@ function CalendarPageContent() {
                             href={row.event.location_link}
                             target="_blank"
                             rel="noreferrer"
-                            className="block rounded-lg px-3 py-2 text-xs hover:bg-[#f7f4ee]"
+                            className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                           >
                             Open map
                           </a>
@@ -295,14 +295,14 @@ function CalendarPageContent() {
                         <Link
                           href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.event.department || row.event.name))}`}
                           onClick={() => setOpenActions(null)}
-                          className="block rounded-lg px-3 py-2 text-xs hover:bg-[#f7f4ee]"
+                          className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                         >
                           Give support
                         </Link>
                         <a
                           href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
                           onClick={() => setOpenActions(null)}
-                          className="block rounded-lg px-3 py-2 text-xs hover:bg-[#f7f4ee]"
+                          className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                         >
                           Contact department
                         </a>
@@ -316,12 +316,12 @@ function CalendarPageContent() {
         </div>
 
         {loaded && rows.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-[#617068]">
+          <p className="px-5 py-10 text-center text-sm text-moss">
             No calendar entries match your filters.
           </p>
         )}
-        {!loaded && <p className="mt-8 text-sm text-[#617068]">Loading the church calendar...</p>}
-        <p className="mt-4 text-xs text-[#617068]">
+        {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
+        <p className="mt-4 text-xs text-moss">
           Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}.
         </p>
       </div>
@@ -333,7 +333,7 @@ function CalendarPageContent() {
         description="Announcements, the church year, and the order of service for this Sabbath."
         links={newsAndEventsLinks}
         activeKey="calendar"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="border-t border-sand-line bg-white/60"
       />
 
       <SabbathProgramModal program={activeProgram} onClose={() => setActiveProgram(null)} />
@@ -342,6 +342,6 @@ function CalendarPageContent() {
 }
 
 export default function CalendarPage() {
-  return <Suspense fallback={<main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">Loading calendar...</main>}><CalendarPageContent /></Suspense>;
+  return <Suspense fallback={<main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">Loading calendar...</main>}><CalendarPageContent /></Suspense>;
 }
 

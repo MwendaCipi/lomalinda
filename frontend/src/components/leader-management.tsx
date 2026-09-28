@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS, refreshRoleRegister } from "./roles-combobox";
+import { brand } from "@/lib/brand";
+import { X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad } from "@/lib/table-density";
 
@@ -136,12 +138,12 @@ export function LeaderManagement() {
   <head>
     <title>Church Leaders</title>
     <style>
-      body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #26352f; }
+      body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: ${brand.bark}; }
       h1 { font-size: 18px; margin: 0 0 4px; }
-      p.meta { font-size: 11px; color: #617068; margin: 0 0 16px; }
+      p.meta { font-size: 11px; color: ${brand.moss}; margin: 0 0 16px; }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { border: 1px solid #dfdbd1; padding: 8px 10px; text-align: left; }
-      th { background: #f7f4ee; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; color: #b36b3c; }
+      th, td { border: 1px solid ${brand.sandLine}; padding: 8px 10px; text-align: left; }
+      th { background: ${brand.sand}; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; color: ${brand.ember}; }
     </style>
   </head>
   <body>
@@ -189,11 +191,11 @@ export function LeaderManagement() {
   };
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10 pb-3 sm:pb-3 lg:pb-3">
+    <section className="flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden border-b border-sand-line bg-white p-6 sm:p-8 lg:p-10 pb-3 sm:pb-3 lg:pb-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#26352f]">Church Leaders</h2>
-          <p className="mt-1 text-xs text-[#617068]">
+          <h2 className="text-2xl font-bold text-bark">Church Leaders</h2>
+          <p className="mt-1 text-xs text-moss">
             Set, change, or unset leadership roles for church members to grant administrative rights.
           </p>
         </div>
@@ -202,7 +204,7 @@ export function LeaderManagement() {
           placeholder="Filter by name, username, email or role..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-72 lg:w-96 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+          className="w-full sm:w-72 lg:w-96 rounded-xl border border-sand-line bg-sand px-4 py-2 text-xs focus:border-ember focus:outline-none"
         />
       </div>
 
@@ -210,7 +212,7 @@ export function LeaderManagement() {
         <div
           className={`rounded-2xl p-4 text-xs font-semibold ${
             message.type === "success"
-              ? "bg-[#eef2ed] text-[#3d5148]"
+              ? "bg-mist-select text-moss-dark"
               : "bg-red-50 text-red-700"
           }`}
         >
@@ -234,30 +236,30 @@ export function LeaderManagement() {
         tableClassName="w-full text-left text-xs table-fixed"
         loadingLabel="Loading member leadership records..."
         tableEmpty="No members found matching your search."
-        stateClassName="py-4 text-center text-[#617068]"
+        stateClassName="py-4 text-center text-moss"
         tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
         cardsClassName="custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2"
-        cardsStateClassName="py-8 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]"
+        cardsStateClassName="py-8 text-center text-xs text-moss bg-white rounded-xl p-4 border border-sand-line"
         renderCard={(m, idx) => (
-            <div key={m.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-3">
-              <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
+            <div key={m.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-semibold text-[#617068]">#{idx + 1}</span>
-                  <h3 className="font-bold text-sm text-[#26352f]">
+                  <span className="font-mono text-xs font-semibold text-moss">#{idx + 1}</span>
+                  <h3 className="font-bold text-sm text-bark">
                     {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}
                   </h3>
                 </div>
-                <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[10px] font-bold capitalize text-[#3d5148]">
+                <span className="rounded-full bg-mist-select px-2.5 py-0.5 text-[10px] font-bold capitalize text-moss-dark">
                   {formatRoles(m.roles || [m.role || "member"])}
                 </span>
               </div>
 
-              <div className="text-xs text-[#617068]">
-                Contact: <strong className="text-[#26352f]">{m.phone_number || m.email || "—"}</strong>
+              <div className="text-xs text-moss">
+                Contact: <strong className="text-bark">{m.phone_number || m.email || "—"}</strong>
               </div>
 
-              <div className="pt-2 border-t border-[#eeeae2] flex items-center justify-between gap-2">
-                <label className="text-xs font-medium text-[#617068]">Role(s):</label>
+              <div className="pt-2 border-t border-sand-soft flex items-center justify-between gap-2">
+                <label className="text-xs font-medium text-moss">Role(s):</label>
                 <RolesCombobox
                   selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                   onChange={(newRoles, newAssistants) => handleRolesChange(m.id, newRoles, newAssistants)}
@@ -272,16 +274,16 @@ export function LeaderManagement() {
             </div>
           )}
         renderRow={(m, idx) => (
-                <tr key={m.id} className="hover:bg-[#f7f4ee]">
-                  <td className={`${rowPad} font-medium text-[#617068]`}>
+                <tr key={m.id} className="hover:bg-sand">
+                  <td className={`${rowPad} font-medium text-moss`}>
                     {idx + 1}
                   </td>
-                  <td className={`${rowPad} font-semibold text-[#26352f]`}>
+                  <td className={`${rowPad} font-semibold text-bark`}>
                     {m.first_name || m.last_name
                       ? `${m.first_name} ${m.last_name}`.trim()
                       : m.username}
                   </td>
-                  <td className={`${rowPad} text-[#617068]`}>
+                  <td className={`${rowPad} text-moss`}>
                     {m.phone_number || m.email || "—"}
                   </td>
                   <td className={`${rowPad} pr-2`}>
@@ -303,10 +305,10 @@ export function LeaderManagement() {
 
       {/* Actions: Print & Add Leader — pulled tight against the list above
           (-mt-2) so the buttons sit close to the records without a dead band */}
-      <div className="-mt-2 flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-2">
+      <div className="-mt-2 flex items-center justify-end gap-3 border-t border-sand-line pt-2">
         <button
           onClick={handlePrint}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#dfdbd1] bg-white px-4 py-2.5 text-xs font-semibold text-[#26352f] shadow-sm hover:bg-[#f7f4ee] transition-colors"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-sand-line bg-white px-4 py-2.5 text-xs font-semibold text-bark shadow-sm hover:bg-sand transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -320,7 +322,7 @@ export function LeaderManagement() {
             setModalSelectedRoles(["elder"]);
             setIsModalOpen(true);
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#96552c] transition-colors"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-ember px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-ember-deep transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -332,11 +334,11 @@ export function LeaderManagement() {
       {/* Add Leader Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl border border-[#dfdbd1] space-y-5 my-8">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl border border-sand-line space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 className="text-lg font-bold text-[#26352f]">Add Church Leader</h3>
-                <p className="text-xs text-[#617068]">
+                <h3 className="text-lg font-bold text-bark">Add Church Leader</h3>
+                <p className="text-xs text-moss">
                   Search a church member and assign them a leadership role.
                 </p>
               </div>
@@ -344,14 +346,14 @@ export function LeaderManagement() {
                 onClick={() => setIsModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600 text-lg font-bold"
               >
-                ✕
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
             <form onSubmit={handleModalSubmit} className="space-y-4">
               {/* Step 1: Member Search & Select */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-[#26352f]">
+                <label className="block text-xs font-semibold text-bark">
                   1. Search & Select Member
                 </label>
                 <input
@@ -359,16 +361,16 @@ export function LeaderManagement() {
                   placeholder="Type to search active church members..."
                   value={modalSearch}
                   onChange={(e) => setModalSearch(e.target.value)}
-                  className="w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
                 />
 
-                <div className="max-h-48 overflow-y-auto rounded-xl border border-[#dfdbd1] divide-y divide-[#dfdbd1]">
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-sand-line divide-y divide-sand-line">
                   {modalSearch.trim() === "" ? (
-                    <div className="p-3 text-center text-xs text-[#617068]">
+                    <div className="p-3 text-center text-xs text-moss">
                       Start typing to search church members.
                     </div>
                   ) : modalFilteredMembers.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-[#617068]">
+                    <div className="p-3 text-center text-xs text-moss">
                       No members match your search criteria.
                     </div>
                   ) : (
@@ -381,13 +383,13 @@ export function LeaderManagement() {
                           onClick={() => setSelectedMember(m)}
                           className={`p-3 text-xs cursor-pointer transition-colors flex items-center justify-between ${
                             isSelected
-                              ? "bg-[#eef2ed] border-l-4 border-[#b36b3c]"
-                              : "hover:bg-[#f7f4ee]"
+                              ? "bg-mist-select border-l-4 border-ember"
+                              : "hover:bg-sand"
                           }`}
                         >
                           <div>
-                            <div className="font-semibold text-[#26352f]">{nameStr}</div>
-                            <div className="text-[10px] text-[#617068]">
+                            <div className="font-semibold text-bark">{nameStr}</div>
+                            <div className="text-[10px] text-moss">
                               @{m.username} {m.email ? `• ${m.email}` : ""} {m.phone_number ? `• ${m.phone_number}` : ""}
                             </div>
                           </div>
@@ -400,7 +402,7 @@ export function LeaderManagement() {
                   )}
                 </div>
                 {selectedMember && (
-                  <p className="text-[11px] text-[#3d5148] font-medium">
+                  <p className="text-[11px] text-moss-dark font-medium">
                     Selected: <span className="font-bold">{selectedMember.first_name} {selectedMember.last_name} (@{selectedMember.username})</span>
                   </p>
                 )}
@@ -408,10 +410,10 @@ export function LeaderManagement() {
 
               {/* Step 2: Role Selection (multi-select) */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#26352f]">
+                <label className="block text-xs font-semibold text-bark">
                   2. Select Leadership Role(s)
                 </label>
-                <p className="text-[10px] text-[#617068]">
+                <p className="text-[10px] text-moss">
                   Tick every role to assign. Roles are added to any the member already holds.
                 </p>
                 <RolesCombobox
@@ -428,18 +430,18 @@ export function LeaderManagement() {
               </div>
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl border border-[#dfdbd1] px-4 py-2 text-xs font-semibold text-[#617068] hover:bg-gray-50"
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-semibold text-moss hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!selectedMember || modalSelectedRoles.length === 0 || submittingModal}
-                  className="rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#96552c] disabled:opacity-50 transition-colors"
+                  className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-ember-deep disabled:opacity-50 transition-colors"
                 >
                   {submittingModal ? "Assigning Role..." : "Assign Role & Notify Member"}
                 </button>

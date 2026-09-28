@@ -9,7 +9,6 @@ import {
   Home,
   BookOpen,
   CircleDollarSign,
-  Church,
   Info,
   Bell,
   User as UserIcon,
@@ -29,10 +28,17 @@ import { AccessibilityMenu } from "./accessibility-menu";
 import { triggerPwaInstall } from "./pwa-register";
 import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import Swal from "sweetalert2";
 import { normalizePath } from "@/lib/paths";
 import { clearSession } from "@/lib/auth";
 import { collapseToHome, trackAppHistory } from "@/lib/app-history";
+import {
+  useHeaderData,
+  resetHeaderSession,
+  patchCachedMe,
+  markCachedNotificationsRead,
+} from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const staffRoles = [
@@ -47,24 +53,6 @@ const staffRoles = [
   "chaplaincy",
   "treasurer"
 ];
-
-interface AnnouncementItem {
-  id: number;
-  title: string;
-  text?: string;
-  detail?: string;
-  created_at?: string;
-}
-
-/** A server-pushed notification (e.g. a join request waiting for the office). */
-interface ChurchNotificationItem {
-  id: number;
-  title: string;
-  message: string;
-  link?: string;
-  read: boolean;
-  created_at: string;
-}
 
 export function SiteNav({ navigationLocked = false }: { navigationLocked?: boolean } = {}) {
   // Normalised once, here: the build's trailing slash makes every exact-path
@@ -109,26 +97,35 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     return () => window.removeEventListener("scroll", onScroll);
   }, [navHidesOnScroll]);
 
-  const [userState, setUserState] = useState<{
-    isLoggedIn: boolean;
-    role: string;
-    roles: string[];
-    username: string;
-    name: string;
-    email: string;
-  }>({
-    isLoggedIn: false,
-    role: "",
-    roles: [],
-    username: "",
-    name: "",
-    email: "",
-  });
-
-  const [notifications, setNotifications] = useState<AnnouncementItem[]>([]);
-  const [serverNotifications, setServerNotifications] = useState<ChurchNotificationItem[]>([]);
+  // Profile, announcements and personal notifications come from the cached
+  // header hook: the header paints from cache on every navigation and only
+  // revalidates in the background once its copy has expired. (Was: four
+  // fetches per route change, with the name and badges flashing empty.)
+  const {
+    me,
+    hasToken,
+    announcements: notifications,
+    notifications: serverNotifications,
+  } = useHeaderData();
   const [pushState, setPushState] = useState<PushSupport | null>(null);
-  const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
+
+  // `hasToken` keeps the signed-in chrome up from the first paint (the old
+  // code optimistically flipped on mount and flipped back if /me/ answered
+  // null); `me` fills in the identity fields once it arrives.
+  const isLoggedIn = hasToken;
+  const userState = {
+    isLoggedIn,
+    role: me?.role ?? "",
+    roles: me?.roles ?? [],
+    username: me?.username ?? "",
+    name: me?.name ?? "",
+    email: me?.email ?? "",
+  };
+
+  // The member's announcement channel preferences ride along in the cached
+  // profile — the same /me/ call, not a second one.
+  const announcePrefs = me ? { email: me.announce_email, push: me.announce_push } : null;
+
   const pushPromptShown = useRef(false);
   const [readNotificationIds, setReadNotificationIds] = useState<number[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -150,125 +147,28 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     }
   }, []);
 
-  // Load user data on route change
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("access_token");
-      if (token) {
-        // Flip the brand link to the dashboard immediately on mount, so the
-        // first click never races the profile fetch below.
-        setUserState((prev) => ({ ...prev, isLoggedIn: true }));
-        fetch(`${API_URL}/api/members/me/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data) {
-              const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
-              setUserState({
-                isLoggedIn: true,
-                role: data.role || "member",
-                roles: Array.isArray(data.roles) && data.roles.length > 0 ? data.roles : [data.role || "member"],
-                username: data.username || "Member",
-                name: fullName || data.username || "Member",
-                email: data.email || "",
-              });
-            } else {
-              setUserState({
-                isLoggedIn: false,
-                role: "",
-                roles: [],
-                username: "",
-                name: "",
-                email: "",
-              });
-            }
-          })
-          .catch(() => {
-            setUserState({
-              isLoggedIn: false,
-              role: "",
-              roles: [],
-              username: "",
-              name: "",
-              email: "",
-            });
-          });
-      } else {
-        setUserState({
-          isLoggedIn: false,
-          role: "",
-          roles: [],
-          username: "",
-          name: "",
-          email: "",
-        });
-      }
-    }
-  }, [pathname]);
-
-  // Load announcements / notifications
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    fetch(`${API_URL}/api/members/announcements/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => {
-        if (Array.isArray(data)) {
-          setNotifications(data.slice(0, 5));
-        }
-      })
-      .catch(() => setNotifications([]));
-  }, [pathname]);
-
-  // Load personal notifications (requests waiting on this office holder).
-  // Anonymous visitors get nothing — the bell simply shows announcements.
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) {
-      setServerNotifications([]);
-      return;
-    }
-    fetch(`${API_URL}/api/members/notifications/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => {
-        setServerNotifications(Array.isArray(data) ? data.slice(0, 8) : []);
-      })
-      .catch(() => setServerNotifications([]));
-  }, [pathname]);
-
   // Whether this device can take browser notifications (and whether they're
-  // on), plus the member's announcement channel preferences. Only asked once
-  // signed in — the bell gains its toggles for signed-in users.
+  // on). Only asked once per sign-in — the bell gains its toggles for
+  // signed-in users. The announcement channel preferences ride along in the
+  // cached profile; there is no per-navigation request here any more. A stale
+  // reading while signed out is harmless: every consumer of pushState also
+  // guards on isLoggedIn.
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) {
-      setPushState(null);
-      setAnnouncePrefs(null);
-      return;
-    }
+    if (!userState.isLoggedIn) return;
     getPushState().then(setPushState).catch(() => setPushState(null));
-    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
-      })
-      .catch(() => setAnnouncePrefs(null));
-  }, [pathname, userState.isLoggedIn]);
+  }, [userState.isLoggedIn]);
 
   const updateAnnouncePref = (field: "email" | "push", value: boolean) => {
     if (!announcePrefs) return;
-    const apiField = field === "email" ? "announce_email" : "announce_push";
-    setAnnouncePrefs({ ...announcePrefs, [field]: value });
+    // Write through to the cached profile, so every mounted header sees the
+    // toggle at once and nothing re-fetches to learn what we just set.
+    patchCachedMe(field === "email" ? { announce_email: value } : { announce_push: value });
     const token = localStorage.getItem("access_token");
     if (!token) return;
     fetch(`${API_URL}/api/members/me/`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ [apiField]: value }),
+      body: JSON.stringify({ [field === "email" ? "announce_email" : "announce_push"]: value }),
     }).catch(() => {});
   };
 
@@ -296,11 +196,11 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
         showCancelButton: true,
         showDenyButton: true,
         confirmButtonText: "Turn on",
-        confirmButtonColor: "#b36b3c",
+        confirmButtonColor: brand.ember,
         denyButtonText: "Don't ask again",
-        denyButtonColor: "#6b7280",
+        denyButtonColor: brand.grayui,
         cancelButtonText: "Not now",
-        cancelButtonColor: "#26352f",
+        cancelButtonColor: brand.bark,
         // The permission request must ride the click's user gesture, so the
         // enable happens inside preConfirm rather than after the dialog.
         preConfirm: () => enablePush(),
@@ -361,9 +261,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     if (unread.length === 0) return;
     const token = localStorage.getItem("access_token");
     if (!token) return;
-    // Optimistic flip so the dot clears at once; a failed POST just means the
-    // dot returns on the next load — never worth blocking the popover for.
-    setServerNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    // Optimistic flip so the dot clears at once — written through to the
+    // shared cache, so every mounted header sees it; a failed POST just means
+    // the dot returns on the next load — never worth blocking the popover for.
+    markCachedNotificationsRead(unread.map((n) => n.id));
     fetch(`${API_URL}/api/members/notifications/`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -441,14 +342,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       // revealed (the give page writes that key when the eye is opened).
       clearSession();
     }
-    setUserState({
-      isLoggedIn: false,
-      role: "",
-      roles: [],
-      username: "",
-      name: "",
-      email: "",
-    });
+    // The cached header dies with the session: the next person on this device
+    // never inherits the previous member's name, roles or bell badges.
+    resetHeaderSession();
+    setPushState(null);
     setShowUserMenu(false);
     router.push("/login");
     router.refresh();
@@ -538,7 +435,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   return (
     <>
       {/* Top 100% Full-Width Header Bar */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-[#26352f] border-b border-white/10 shadow-md text-white px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-bark border-b border-white/10 shadow-md text-white px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Left: the logo with the navigation immediately after it — one group,
             so the links hug the logo instead of centering in the bar. */}
         <div className="flex min-w-0 items-center gap-3 lg:gap-5">
@@ -572,7 +469,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
               className={`rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium transition ${
                 item.active
                   ? "bg-white/15 text-white font-semibold shadow-xs"
-                  : "text-white/80 hover:bg-white/10 hover:text-[#f1c89e]"
+                  : "text-white/80 hover:bg-white/10 hover:text-gold"
               }`}
             >
               {item.label}
@@ -599,7 +496,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
               <Bell className="w-4.5 h-4.5" />
               {hasUnread && (
                 <span
-                  className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#b36b3c] px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[#26352f]"
+                  className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white ring-2 ring-bark"
                   aria-label={`${unreadCount > 9 ? "9+" : unreadCount} unread notifications`}
                 >
                   {unreadCount > 9 ? "9+" : unreadCount}
@@ -609,12 +506,12 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
 
             {/* Notification Popover Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl border border-[#dfdbd1] shadow-2xl p-4 z-50 text-slate-900 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl border border-sand-line shadow-2xl p-4 z-50 text-slate-900 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-[#26352f]">Notifications</span>
+                    <span className="font-bold text-sm text-bark">Notifications</span>
                     {notifications.length + serverNotifications.length > 0 && (
-                      <span className="text-[10px] bg-[#26352f]/10 text-[#26352f] font-bold px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] bg-bark/10 text-bark font-bold px-2 py-0.5 rounded-full">
                         {notifications.length + serverNotifications.length}
                       </span>
                     )}
@@ -639,16 +536,16 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                             setShowNotifications(false);
                             if (n.link) router.push(n.link);
                           }}
-                          className={`w-full text-left bg-[#f7f4ee] p-2.5 rounded-xl border transition flex items-start gap-2.5 ${
-                            n.read ? "border-slate-200/70 hover:bg-slate-100/70" : "border-[#b36b3c]/40 ring-1 ring-[#b36b3c]/20"
+                          className={`w-full text-left bg-sand p-2.5 rounded-xl border transition flex items-start gap-2.5 ${
+                            n.read ? "border-slate-200/70 hover:bg-slate-100/70" : "border-ember/40 ring-1 ring-ember/20"
                           }`}
                         >
-                          <Inbox className="w-4 h-4 text-[#b36b3c] shrink-0 mt-0.5" />
+                          <Inbox className="w-4 h-4 text-ember shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <strong className="text-xs text-[#26352f] block truncate">{n.title}</strong>
+                            <strong className="text-xs text-bark block truncate">{n.title}</strong>
                             <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{n.message}</p>
                           </div>
-                          {!n.read && <span className="h-2 w-2 rounded-full bg-[#b36b3c] shrink-0 mt-1.5" />}
+                          {!n.read && <span className="h-2 w-2 rounded-full bg-ember shrink-0 mt-1.5" />}
                         </button>
                       ))}
                     </div>
@@ -666,9 +563,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                         key={ann.id}
                         className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 hover:bg-slate-100/70 transition flex items-start gap-2.5"
                       >
-                        <CheckCircle2 className="w-4 h-4 text-[#b36b3c] shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-ember shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
-                          <strong className="text-xs text-[#26352f] block truncate">
+                          <strong className="text-xs text-bark block truncate">
                             {ann.title}
                           </strong>
                           <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">
@@ -691,33 +588,33 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                       onClick={handleToggleDeviceNotifications}
                       className={`flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
                         pushState.enabled
-                          ? "border-[#dfdbd1] bg-white text-[#617068] hover:bg-[#f7f4ee]"
-                          : "border-[#b36b3c] bg-[#b36b3c] text-white hover:bg-[#96552e]"
+                          ? "border-sand-line bg-white text-moss hover:bg-sand"
+                          : "border-ember bg-ember text-white hover:bg-ember-dark"
                       }`}
                     >
                       {pushState.enabled ? "Turn off notifications" : "Turn on notifications"}
                     </button>
                   )}
                   {announcePrefs && (
-                    <div className="rounded-xl bg-[#f7f4ee] p-2.5 space-y-1.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#617068]">Announcements reach me by</p>
-                      <label className="flex items-center justify-between text-xs text-[#26352f] cursor-pointer">
+                    <div className="rounded-xl bg-sand p-2.5 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Announcements reach me by</p>
+                      <label className="flex items-center justify-between text-xs text-bark cursor-pointer">
                         <span>Email</span>
                         <input
                           type="checkbox"
                           checked={announcePrefs.email}
                           onChange={(e) => updateAnnouncePref("email", e.target.checked)}
-                          className="h-3.5 w-3.5 accent-[#5f8067]"
+                          className="h-3.5 w-3.5 accent-sage"
                         />
                       </label>
                       {pushState?.supported && (
-                        <label className="flex items-center justify-between text-xs text-[#26352f] cursor-pointer">
+                        <label className="flex items-center justify-between text-xs text-bark cursor-pointer">
                           <span>Notifications</span>
                           <input
                             type="checkbox"
                             checked={announcePrefs.push}
                             onChange={(e) => updateAnnouncePref("push", e.target.checked)}
-                            className="h-3.5 w-3.5 accent-[#5f8067]"
+                            className="h-3.5 w-3.5 accent-sage"
                           />
                         </label>
                       )}
@@ -727,7 +624,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                   <Link
                     href="/announcements"
                     onClick={() => setShowNotifications(false)}
-                    className="block text-center text-xs font-semibold text-[#b36b3c] hover:underline"
+                    className="block text-center text-xs font-semibold text-ember hover:underline"
                   >
                     View All Announcements &rarr;
                   </Link>
@@ -741,7 +638,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
             {!userState.isLoggedIn && (
               <Link
                 href="/login"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-[#f1c89e] px-3 py-2 text-xs font-bold text-[#26352f] transition-colors hover:bg-white"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-gold px-3 py-2 text-xs font-bold text-bark transition-colors hover:bg-white"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Sign in</span>
@@ -758,7 +655,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                 className="flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-2.5 py-1.5 transition-colors focus:outline-none"
                 title={`Signed in as ${userState.name || userState.username}`}
               >
-                <div className="h-6 w-6 rounded-full bg-[#b36b3c] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                <div className="h-6 w-6 rounded-full bg-ember text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                   {userState.name
                     ? userState.name.charAt(0).toUpperCase()
                     : userState.username.charAt(0).toUpperCase()}
@@ -784,22 +681,22 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
 
             {/* User Menu Popover Dropdown */}
             {showUserMenu && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-[#dfdbd1] shadow-2xl p-4 z-50 text-slate-900 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-sand-line shadow-2xl p-4 z-50 text-slate-900 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
                 {userState.isLoggedIn ? (
                   <>
                     {/* User Summary Header */}
                     <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-                      <div className="w-10 h-10 rounded-full bg-[#b36b3c] text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-ember text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
                         {userState.name
                           ? userState.name.charAt(0).toUpperCase()
                           : userState.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-[#26352f] text-sm truncate">
+                        <h4 className="font-bold text-bark text-sm truncate">
                           {userState.name}
                         </h4>
                         <p className="text-xs text-slate-500 truncate">{userState.email || `@${userState.username}`}</p>
-                        <span className="inline-block mt-1 text-[9px] bg-[#26352f]/10 text-[#26352f] font-semibold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
+                        <span className="inline-block mt-1 text-[9px] bg-bark/10 text-bark font-semibold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
                           {userState.role}
                         </span>
                       </div>
@@ -859,10 +756,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                         <Link
                           href="/administration"
                           onClick={() => setShowUserMenu(false)}
-                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#26352f] hover:bg-[#26352f]/10 transition"
+                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-bark hover:bg-bark/10 transition"
                         >
                           <div className="flex items-center gap-2.5">
-                            <ShieldCheck className="w-4 h-4 text-[#26352f]" />
+                            <ShieldCheck className="w-4 h-4 text-bark" />
                             <span>Admin Portal</span>
                           </div>
                           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -877,10 +774,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                         className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
                       >
                         <div className="flex items-center gap-2.5">
-                          <Download className="w-4 h-4 text-[#b36b3c]" />
+                          <Download className="w-4 h-4 text-ember" />
                           <span>Install App</span>
                         </div>
-                        <span className="text-[10px] font-bold text-[#b36b3c] bg-[#b36b3c]/10 px-1.5 py-0.5 rounded">PWA</span>
+                        <span className="text-[10px] font-bold text-ember bg-ember/10 px-1.5 py-0.5 rounded">PWA</span>
                       </button>
                     </div>
 
@@ -899,7 +796,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                 ) : (
                   <>
                     <div className="pb-2 border-b border-slate-100">
-                      <h4 className="font-bold text-[#26352f] text-sm">Member Portal</h4>
+                      <h4 className="font-bold text-bark text-sm">Member Portal</h4>
                       <p className="text-xs text-slate-500">Sign in to access your member account and giving history.</p>
                     </div>
 
@@ -907,7 +804,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                       <Link
                         href="/login"
                         onClick={() => setShowUserMenu(false)}
-                        className="w-full flex items-center justify-center gap-2 bg-[#26352f] hover:bg-[#1c2924] text-white py-2 px-3 rounded-xl text-xs font-semibold transition"
+                        className="w-full flex items-center justify-center gap-2 bg-bark hover:bg-bark-hover text-white py-2 px-3 rounded-xl text-xs font-semibold transition"
                       >
                         <LogIn className="w-4 h-4" />
                         <span>Sign In</span>
@@ -916,7 +813,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                       <Link
                         href="/create-account"
                         onClick={() => setShowUserMenu(false)}
-                        className="w-full flex items-center justify-center gap-2 border border-[#b36b3c] text-[#b36b3c] hover:bg-[#b36b3c]/10 py-2 px-3 rounded-xl text-xs font-semibold transition"
+                        className="w-full flex items-center justify-center gap-2 border border-ember text-ember hover:bg-ember/10 py-2 px-3 rounded-xl text-xs font-semibold transition"
                       >
                         <UserPlus className="w-4 h-4" />
                         <span>Create Account</span>
@@ -930,7 +827,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                         }}
                         className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 hover:bg-slate-50 py-2 px-3 rounded-xl text-xs font-semibold transition mt-2"
                       >
-                        <Download className="w-4 h-4 text-[#b36b3c]" />
+                        <Download className="w-4 h-4 text-ember" />
                         <span>Install Desktop/Mobile App</span>
                       </button>
                     </div>
@@ -949,7 +846,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       <nav
         hidden={navigationLocked}
         aria-hidden={navHidden}
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#26352f]/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 flex justify-around items-center shadow-lg text-white pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bark/95 backdrop-blur-md border-t border-white/15 px-1.5 py-1.5 flex justify-around items-center shadow-lg text-white pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
           navHidden ? "translate-y-full pointer-events-none" : "translate-y-0"
         }`}
         aria-label="Mobile Bottom Navigation"
@@ -971,7 +868,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
             >
               <Icon
                 className={`w-5 h-5 mb-0.5 transition-colors ${
-                  isActive ? "text-[#f1c89e]" : "text-white/80"
+                  isActive ? "text-gold" : "text-white/80"
                 }`}
               />
               <span className="text-[10px] tracking-tight leading-none truncate max-w-[52px]">

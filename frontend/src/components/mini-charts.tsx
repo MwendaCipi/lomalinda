@@ -9,6 +9,8 @@
  * carries a <title>, which is the tooltip and the accessible name at once.
  */
 
+import { brand, compositionColors } from "@/lib/brand";
+
 export type ChartSeries = {
   label: string;
   color: string;
@@ -20,8 +22,8 @@ export type ChartGroup = {
   values: number[];
 };
 
-const AXIS_TEXT = "#617068";
-const GRID_LINE = "#eeeae2";
+const AXIS_TEXT = brand.moss;
+const GRID_LINE = brand.sandSoft;
 
 type GroupedBarChartProps = {
   groups: ChartGroup[];
@@ -50,7 +52,7 @@ export function GroupedBarChart({
   const max = Math.max(0, ...values);
   if (groups.length === 0 || max <= 0) {
     return (
-      <p className="rounded-xl bg-[#faf9f5] px-4 py-8 text-center text-xs text-[#617068]">{emptyLabel}</p>
+      <p className="rounded-xl bg-sand-card px-4 py-8 text-center text-xs text-moss">{emptyLabel}</p>
     );
   }
 
@@ -100,7 +102,7 @@ export function GroupedBarChart({
                     width={Math.max(1, barWidth - 1)}
                     height={barHeight}
                     rx={2}
-                    fill={series[seriesIndex]?.color ?? "#26352f"}
+                    fill={series[seriesIndex]?.color ?? brand.bark}
                   >
                     <title>{`${group.label} — ${series[seriesIndex]?.label ?? ""}: ${formatValue(value)}`}</title>
                   </rect>
@@ -124,7 +126,7 @@ export function GroupedBarChart({
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
         {series.map((entry) => (
-          <span key={entry.label} className="flex items-center gap-1.5 text-[11px] font-semibold text-[#617068]">
+          <span key={entry.label} className="flex items-center gap-1.5 text-[11px] font-semibold text-moss">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
             {entry.label}
           </span>
@@ -160,7 +162,7 @@ export function TrendLineChart({
   const values = points.flatMap((point) => point.values);
   const max = Math.max(0, ...values);
   if (points.length === 0 || max <= 0) {
-    return <p className="rounded-xl bg-[#faf9f5] px-4 py-8 text-center text-xs text-[#617068]">{emptyLabel}</p>;
+    return <p className="rounded-xl bg-sand-card px-4 py-8 text-center text-xs text-moss">{emptyLabel}</p>;
   }
 
   const plotWidth = VB_WIDTH - PAD_LEFT - PAD_RIGHT;
@@ -228,7 +230,7 @@ export function TrendLineChart({
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
         {series.map((entry) => (
-          <span key={entry.label} className="flex items-center gap-1.5 text-[11px] font-semibold text-[#617068]">
+          <span key={entry.label} className="flex items-center gap-1.5 text-[11px] font-semibold text-moss">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
             {entry.label}
           </span>
@@ -238,7 +240,7 @@ export function TrendLineChart({
   );
 }
 
-const COMPOSITION_COLORS = ["#26352f", "#5f8067", "#b36b3c", "#8a7a5c", "#4d6d55", "#96552c"];
+const COMPOSITION_COLORS = compositionColors;
 
 type CompositionBarProps = {
   items: { label: string; total: number; count?: number }[];
@@ -251,7 +253,7 @@ export function CompositionBar({ items, formatValue, emptyLabel = "Nothing to sh
   const positive = items.filter((item) => item.total > 0);
   const total = positive.reduce((sum, item) => sum + item.total, 0);
   if (positive.length === 0 || total <= 0) {
-    return <p className="rounded-xl bg-[#faf9f5] px-4 py-6 text-center text-xs text-[#617068]">{emptyLabel}</p>;
+    return <p className="rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">{emptyLabel}</p>;
   }
 
   const share = (value: number) => (value / total) * 100;
@@ -259,7 +261,7 @@ export function CompositionBar({ items, formatValue, emptyLabel = "Nothing to sh
   return (
     <div>
       <div
-        className="flex h-3 w-full overflow-hidden rounded-full bg-[#f2efe8]"
+        className="flex h-3 w-full overflow-hidden rounded-full bg-sand-light"
         role="img"
         aria-label={positive
           .map((item) => `${item.label}: ${formatValue(item.total)} (${share(item.total).toFixed(0)}%)`)
@@ -277,16 +279,16 @@ export function CompositionBar({ items, formatValue, emptyLabel = "Nothing to sh
       <ul className="mt-3 space-y-2">
         {positive.map((item, index) => (
           <li key={item.label} className="flex items-center justify-between gap-3 text-xs">
-            <span className="flex min-w-0 items-center gap-2 text-[#617068]">
+            <span className="flex min-w-0 items-center gap-2 text-moss">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: COMPOSITION_COLORS[index % COMPOSITION_COLORS.length] }}
               />
-              <span className="truncate font-semibold text-[#26352f]">{item.label}</span>
+              <span className="truncate font-semibold text-bark">{item.label}</span>
               {typeof item.count === "number" && <span className="shrink-0">{item.count}</span>}
             </span>
-            <span className="shrink-0 font-bold text-[#26352f]">
-              {formatValue(item.total)} <span className="font-semibold text-[#617068]">{share(item.total).toFixed(0)}%</span>
+            <span className="shrink-0 font-bold text-bark">
+              {formatValue(item.total)} <span className="font-semibold text-moss">{share(item.total).toFixed(0)}%</span>
             </span>
           </li>
         ))}
@@ -308,7 +310,7 @@ export function DonutChart({ items, centerLabel, centerValue, emptyLabel = "Noth
   const positive = items.filter((item) => item.value > 0);
   const total = positive.reduce((sum, item) => sum + item.value, 0);
   if (positive.length === 0 || total <= 0) {
-    return <p className="rounded-xl bg-[#faf9f5] px-4 py-6 text-center text-xs text-[#617068]">{emptyLabel}</p>;
+    return <p className="rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">{emptyLabel}</p>;
   }
 
   const radius = 15.915; // circumference = 100, so a stroke dash is a percentage
@@ -325,7 +327,7 @@ export function DonutChart({ items, centerLabel, centerValue, emptyLabel = "Noth
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
       <svg viewBox="0 0 42 42" className="h-36 w-36 shrink-0 -rotate-0" role="img" aria-label={positive.map((i) => `${i.label}: ${i.value.toFixed(0)}%`).join(", ")}>
         {/* The neutral remainder — the part not yet given of the whole. */}
-        <circle cx="21" cy="21" r={radius} fill="none" stroke="#eeeae2" strokeWidth="5" />
+        <circle cx="21" cy="21" r={radius} fill="none" stroke={brand.sandSoft} strokeWidth="5" />
         {segments.map((seg) => (
           <circle
             key={seg.label}
@@ -341,21 +343,21 @@ export function DonutChart({ items, centerLabel, centerValue, emptyLabel = "Noth
             <title>{`${seg.label}: ${seg.share.toFixed(1)}%`}</title>
           </circle>
         ))}
-        <text x="21" y="20" textAnchor="middle" dominantBaseline="middle" className="fill-[#26352f]" style={{ fontSize: 5, fontWeight: 700 }}>
+        <text x="21" y="20" textAnchor="middle" dominantBaseline="middle" className="fill-bark" style={{ fontSize: 5, fontWeight: 700 }}>
           {centerValue}
         </text>
-        <text x="21" y="26.5" textAnchor="middle" dominantBaseline="middle" className="fill-[#617068]" style={{ fontSize: 2.6 }}>
+        <text x="21" y="26.5" textAnchor="middle" dominantBaseline="middle" className="fill-moss" style={{ fontSize: 2.6 }}>
           {centerLabel}
         </text>
       </svg>
       <ul className="w-full space-y-2">
         {segments.map((seg) => (
           <li key={seg.label} className="flex items-center justify-between gap-3 text-xs">
-            <span className="flex min-w-0 items-center gap-2 text-[#617068]">
+            <span className="flex min-w-0 items-center gap-2 text-moss">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: seg.color }} />
-              <span className="truncate font-semibold text-[#26352f]">{seg.label}</span>
+              <span className="truncate font-semibold text-bark">{seg.label}</span>
             </span>
-            <span className="shrink-0 font-bold text-[#26352f]">{seg.share.toFixed(0)}%</span>
+            <span className="shrink-0 font-bold text-bark">{seg.share.toFixed(0)}%</span>
           </li>
         ))}
       </ul>
@@ -377,7 +379,7 @@ export function HorizontalBars({
   items,
   formatValue,
   emptyLabel = "Nothing recorded for this period yet.",
-  color = "#b36b3c",
+  color = brand.ember,
   limit,
 }: HorizontalBarsProps) {
   const ranked = [...items].sort((a, b) => b.value - a.value);
@@ -387,7 +389,7 @@ export function HorizontalBars({
 
   if (shown.length === 0 || max <= 0) {
     return (
-      <p className="rounded-xl bg-[#faf9f5] px-4 py-8 text-center text-xs text-[#617068]">{emptyLabel}</p>
+      <p className="rounded-xl bg-sand-card px-4 py-8 text-center text-xs text-moss">{emptyLabel}</p>
     );
   }
 
@@ -396,11 +398,11 @@ export function HorizontalBars({
       {shown.map((item) => (
         <li key={item.label}>
           <div className="flex items-baseline justify-between gap-3">
-            <span className="truncate text-xs font-semibold text-[#26352f]">{item.label}</span>
-            <span className="shrink-0 text-xs font-bold text-[#26352f]">{formatValue(item.value)}</span>
+            <span className="truncate text-xs font-semibold text-bark">{item.label}</span>
+            <span className="shrink-0 text-xs font-bold text-bark">{formatValue(item.value)}</span>
           </div>
           <div
-            className="mt-1 h-2 w-full overflow-hidden rounded-full bg-[#f2efe8]"
+            className="mt-1 h-2 w-full overflow-hidden rounded-full bg-sand-light"
             role="img"
             aria-label={`${item.label}: ${formatValue(item.value)}`}
           >
@@ -412,7 +414,7 @@ export function HorizontalBars({
         </li>
       ))}
       {hidden > 0 && (
-        <li className="pt-1 text-[11px] text-[#617068]">
+        <li className="pt-1 text-[11px] text-moss">
           +{hidden} more not shown
         </li>
       )}

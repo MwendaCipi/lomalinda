@@ -95,19 +95,19 @@ function LoginContent() {
   // second sign-in prompt, and no half-drawn page while /me answers.
   if (takingYouIn) {
     return (
-      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#617068]">
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-8 text-moss">
         <p className="text-sm">Taking you in…</p>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#26352f]">
-      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-8 text-bark">
+      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back</h1>
-        <p className="mt-2 text-sm text-[#617068]">Sign in to your SDA Loma Linda account.</p>
+        <p className="mt-2 text-sm text-moss">Sign in to your SDA Loma Linda account.</p>
         {justCreated && (
-          <p className="mt-4 rounded-xl bg-[#eef2ed] p-3 text-xs text-[#3d5148] sm:text-sm">
+          <p className="mt-4 rounded-xl bg-mist-select p-3 text-xs text-moss-dark sm:text-sm">
             Your account is ready. Sign in with the username and password you just chose.
           </p>
         )}
@@ -115,7 +115,7 @@ function LoginContent() {
           <label className="block text-sm font-medium">
             Username
             <input
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 outline-none focus:border-ember"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
@@ -129,24 +129,24 @@ function LoginContent() {
             Password
             <input
               type="password"
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 outline-none focus:border-ember"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
             />
           </label>
-          <button disabled={loading} className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60">
+          <button disabled={loading} className="w-full rounded-full bg-bark px-5 py-3 font-medium text-white disabled:opacity-60">
             {loading ? "Please wait..." : "Sign in"}
           </button>
           <div className="text-center pt-1">
-            <Link href="/forgot-password" className="text-xs font-semibold text-[#b36b3c] hover:underline sm:text-sm">
+            <Link href="/forgot-password" className="text-xs font-semibold text-ember hover:underline sm:text-sm">
               Forgot password?
             </Link>
           </div>
         </form>
-        {message && <p className="mt-4 rounded-xl bg-[#f7f4ee] p-3 text-xs text-[#617068] sm:text-sm">{message}</p>}
-        <p className="mt-6 border-t border-[#dfdbd1] pt-5 text-center text-xs leading-5 text-[#617068] sm:text-sm">
-          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one here</Link>.
+        {message && <p className="mt-4 rounded-xl bg-sand p-3 text-xs text-moss sm:text-sm">{message}</p>}
+        <p className="mt-6 border-t border-sand-line pt-5 text-center text-xs leading-5 text-moss sm:text-sm">
+          Need an account? <Link href="/create-account" className="font-semibold text-ember hover:underline">Create one here</Link>.
         </p>
       </section>
     </main>

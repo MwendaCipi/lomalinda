@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { Check, Eye, EyeOff, RotateCw, SlidersHorizontal, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Landmark, Printer, Receipt, RotateCw, SlidersHorizontal, X } from "lucide-react";
+import { brand } from "@/lib/brand";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -88,7 +89,7 @@ const statusBadge = (s: string) => {
   const v = (s || "").toLowerCase();
   const styles =
     v === "completed"
-      ? "bg-[#eef2ed] text-[#3d7146]"
+      ? "bg-mist-select text-sage-strong"
       : v === "failed" || v === "cancelled"
         ? "bg-red-50 text-red-700"
         : "bg-amber-50 text-amber-700";
@@ -274,11 +275,11 @@ function GivePageContent() {
     const win = window.open("", "_blank", "width=900,height=650");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head><title>My Giving Report</title><style>
-      body{font-family:ui-sans-serif,system-ui,sans-serif;color:#26352f;padding:32px;}
-      h1{font-size:20px;margin:0 0 4px;} p{color:#617068;font-size:12px;margin:0 0 20px;}
+      body{font-family:ui-sans-serif,system-ui,sans-serif;color:${brand.bark};padding:32px;}
+      h1{font-size:20px;margin:0 0 4px;} p{color:${brand.moss};font-size:12px;margin:0 0 20px;}
       table{width:100%;border-collapse:collapse;font-size:12px;}
-      th{text-align:left;border-bottom:2px solid #b36b3c;padding:8px 6px;text-transform:uppercase;font-size:10px;letter-spacing:.05em;color:#b36b3c;}
-      td{border-bottom:1px solid #eeeae2;padding:8px 6px;}
+      th{text-align:left;border-bottom:2px solid ${brand.ember};padding:8px 6px;text-transform:uppercase;font-size:10px;letter-spacing:.05em;color:${brand.ember};}
+      td{border-bottom:1px solid ${brand.sandSoft};padding:8px 6px;}
       .total{margin-top:16px;text-align:right;font-weight:700;}
     </style></head><body>
       <h1>My Giving Report</h1>
@@ -550,7 +551,7 @@ function GivePageContent() {
   else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
-    <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+    <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
       {/* No bottom padding while signed in: the pinned footer bar meets the
           mobile tab bar directly (the shell already reserves the bar height). */}
       <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 pb-0 pt-3 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
@@ -562,11 +563,11 @@ function GivePageContent() {
 
             {/* ── My Givings (signed-in members) ── */}
             {signedIn && (
-              <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#dfdbd1]"}>
-                <div className="shrink-0 space-y-3 border-b border-[#dfdbd1] px-5 py-4">
+              <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"}>
+                <div className="shrink-0 space-y-3 border-b border-sand-line px-5 py-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
-                      <h2 className="text-lg font-bold text-[#26352f]">My Givings</h2>
+                      <h2 className="text-lg font-bold text-bark">My Givings</h2>
                       {/* The record starts hidden; the eye reveals it. Show the
                           crossed eye while hidden, matching the state — not
                           the action. */}
@@ -582,7 +583,7 @@ function GivePageContent() {
                         aria-pressed={givingsVisible}
                         aria-label={givingsVisible ? "Hide my givings" : "Show my givings"}
                         title={givingsVisible ? "Hide my givings" : "Show my givings"}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
                       >
                         {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </button>
@@ -594,7 +595,7 @@ function GivePageContent() {
                       type="button"
                       onClick={() => loadMyGivings()}
                       title="Refresh my givings"
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3.5 py-2 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
                     >
                       <RotateCw className={`h-3.5 w-3.5 ${loadingGivings ? "animate-spin" : ""}`} />
                       Refresh
@@ -602,9 +603,9 @@ function GivePageContent() {
                   </div>
                   <div className={signedIn ? `flex flex-col gap-2 md:flex-row md:items-center ${givingsVisible ? "" : "hidden"}` : "flex flex-col gap-2 md:flex-row md:items-center"}>
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
-                      <span className="shrink-0 text-xs text-[#617068]">→</span>
-                      <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                      <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
+                      <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
+                      <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
                     </div>
                     <div className="relative flex min-w-0 flex-1 items-center gap-2">
                       {/* Mobile: the three statuses live behind one compact Filters button; the segmented control stays for desktop. */}
@@ -616,15 +617,15 @@ function GivePageContent() {
                           aria-label="Filter by status"
                           className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition ${
                             givingStatusFilter === "successful"
-                              ? "border-[#dfdbd1] bg-[#f7f4ee] text-[#617068]"
-                              : "border-[#26352f] bg-[#26352f] text-white shadow-sm"
+                              ? "border-sand-line bg-sand text-moss"
+                              : "border-bark bg-bark text-white shadow-sm"
                           }`}
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
                           {givingStatusFilter === "successful" ? "Filter" : givingStatusFilter === "failed" ? "Failed" : "All"}
                         </button>
                         {showStatusFilterMenu && (
-                          <div className="absolute z-20 mt-2 w-36 overflow-hidden rounded-xl border border-[#dfdbd1] bg-white shadow-lg">
+                          <div className="absolute z-20 mt-2 w-36 overflow-hidden rounded-xl border border-sand-line bg-white shadow-lg">
                             {(["successful", "failed", "all"] as const).map((key) => (
                               <button
                                 key={key}
@@ -635,19 +636,19 @@ function GivePageContent() {
                                 }}
                                 className={`flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold transition ${
                                   givingStatusFilter === key
-                                    ? "bg-[#eef2ed] text-[#26352f]"
-                                    : "text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                                    ? "bg-mist-select text-bark"
+                                    : "text-moss hover:bg-sand hover:text-bark"
                                 }`}
                               >
                                 <span className="capitalize">{key}</span>
-                                {givingStatusFilter === key && <Check className="h-3.5 w-3.5 text-[#b36b3c]" />}
+                                {givingStatusFilter === key && <Check className="h-3.5 w-3.5 text-ember" />}
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
                       {/* Desktop: full segmented control. */}
-                      <div className="hidden h-9 shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 md:flex" role="group" aria-label="Filter by status">
+                      <div className="hidden h-9 shrink-0 items-center rounded-xl border border-sand-line bg-sand p-0.5 md:flex" role="group" aria-label="Filter by status">
                         {(["successful", "failed", "all"] as const).map((key) => (
                           <button
                             key={key}
@@ -655,26 +656,26 @@ function GivePageContent() {
                             onClick={() => setGivingStatusFilter(key)}
                             className={`h-8 rounded-lg px-2.5 text-[11px] font-semibold capitalize transition ${
                               givingStatusFilter === key
-                                ? "bg-[#26352f] text-white shadow-sm"
-                                : "text-[#617068] hover:text-[#26352f]"
+                                ? "bg-bark text-white shadow-sm"
+                                : "text-moss hover:text-bark"
                             }`}
                           >
                             {key}
                           </button>
                         ))}
                       </div>
-                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                     </div>
                   </div>
                 </div>
 
                 {signedIn && !givingsVisible ? (
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 py-3">
-                    <p className="text-xs text-[#617068]">Your giving record is hidden. Tap the eye beside “My Givings” to show it.</p>
+                    <p className="text-xs text-moss">Your giving record is hidden. Tap the eye beside “My Givings” to show it.</p>
                     <button
                       type="button"
                       onClick={() => setShowGiveModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#b36b3c] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#96552c]"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep"
                     >
                       Give Now
                     </button>
@@ -684,8 +685,8 @@ function GivePageContent() {
                   {/* Desktop table */}
                   <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
                     <table className="w-full text-left text-xs">
-                      <thead className="border-b border-[#dfdbd1]">
-                        <tr className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                      <thead className="border-b border-sand-line">
+                        <tr className="text-[11px] font-bold uppercase tracking-wider text-ember">
                           <th className="pb-3 pr-4 font-bold w-8">#</th>
                           <th className="pb-3 pr-4 font-bold">Date</th>
                           <th className="pb-3 pr-4 font-bold">Account</th>
@@ -695,34 +696,34 @@ function GivePageContent() {
                           <th className="pb-3 font-bold">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#eeeae2]">
+                      <tbody className="divide-y divide-sand-soft">
                         {loadingGivings ? (
-                          <tr><td colSpan={7} className="py-8 text-center text-xs text-[#617068]">Loading your givings...</td></tr>
+                          <tr><td colSpan={7} className="py-8 text-center text-xs text-moss">Loading your givings...</td></tr>
                         ) : filteredGivings.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="py-8 text-center">
-                              <p className="text-xs font-semibold text-[#26352f]">No givings in this period</p>
-                              <p className="mt-1 text-[11px] text-[#617068]">Adjust the dates above or tap Give Now.</p>
+                              <p className="text-xs font-semibold text-bark">No givings in this period</p>
+                              <p className="mt-1 text-[11px] text-moss">Adjust the dates above or tap Give Now.</p>
                             </td>
                           </tr>
                         ) : (
                           filteredGivings.map((g, idx) => (
-                            <tr key={g.id} className="hover:bg-[#f7f4ee]">
-                              <td className="py-3 pr-4 text-[#617068] w-8">{idx + 1}</td>
-                              <td className="py-3 pr-4 text-[#617068]">{fmtGivingDate(g)}</td>
-                              <td className="py-3 pr-4 font-semibold text-[#26352f]">{g.purpose || "—"}</td>
-                              <td className="py-3 pr-4 text-[#617068]">{methodLabel(g.payment_method)}</td>
-                              <td className="py-3 pr-4 font-mono text-[#617068]">{g.mpesa_receipt_number || "—"}</td>
-                              <td className="py-3 pr-4 text-right font-semibold text-[#26352f]">KES {Number(g.amount || 0).toLocaleString()}</td>
+                            <tr key={g.id} className="hover:bg-sand">
+                              <td className="py-3 pr-4 text-moss w-8">{idx + 1}</td>
+                              <td className="py-3 pr-4 text-moss">{fmtGivingDate(g)}</td>
+                              <td className="py-3 pr-4 font-semibold text-bark">{g.purpose || "—"}</td>
+                              <td className="py-3 pr-4 text-moss">{methodLabel(g.payment_method)}</td>
+                              <td className="py-3 pr-4 font-mono text-moss">{g.mpesa_receipt_number || "—"}</td>
+                              <td className="py-3 pr-4 text-right font-semibold text-bark">KES {Number(g.amount || 0).toLocaleString()}</td>
                               <td className="py-3 pr-2 text-right">
                                 {(g.status || "").toLowerCase() === "completed" && (
                                   <button
                                     type="button"
                                     onClick={() => handleDownloadReceipt(g)}
                                     title="Download receipt"
-                                    className="inline-flex items-center gap-1 rounded-lg border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                                    className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                                   >
-                                    🧾 Receipt
+                                    <Receipt size={10} className="inline" aria-hidden="true" /> Receipt
                                   </button>
                                 )}
                               </td>
@@ -738,27 +739,27 @@ function GivePageContent() {
                   {/* Mobile cards scroll inside the card between the pinned filters and the pinned footer. */}
                   <div className={signedIn ? "custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2 md:hidden" : "grid gap-3 md:hidden"}>
                     {loadingGivings ? (
-                      <div className="py-8 text-center text-xs text-[#617068]">Loading your givings...</div>
+                      <div className="py-8 text-center text-xs text-moss">Loading your givings...</div>
                     ) : filteredGivings.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-[#617068]">No givings in this period.</div>
+                      <div className="py-8 text-center text-xs text-moss">No givings in this period.</div>
                     ) : (
                       filteredGivings.map((g) => (
-                        <div key={g.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
+                        <div key={g.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-2">
                           <div className="flex items-start justify-between gap-2">
-                            <h3 className="font-bold text-sm text-[#26352f]">{g.purpose || "—"}</h3>
+                            <h3 className="font-bold text-sm text-bark">{g.purpose || "—"}</h3>
                             {statusBadge(g.status)}
                           </div>
-                          <p className="text-xs text-[#617068]">{fmtGivingDate(g)} · {methodLabel(g.payment_method)}</p>
+                          <p className="text-xs text-moss">{fmtGivingDate(g)} · {methodLabel(g.payment_method)}</p>
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-bold text-[#b36b3c]">KES {Number(g.amount || 0).toLocaleString()}</p>
+                            <p className="text-sm font-bold text-ember">KES {Number(g.amount || 0).toLocaleString()}</p>
                             {(g.status || "").toLowerCase() === "completed" && (
                               <button
                                 type="button"
                                 onClick={() => handleDownloadReceipt(g)}
                                 title="Download receipt"
-                                className="inline-flex items-center gap-1 rounded-lg border border-[#dfdbd1] bg-[#f7f4ee] px-2.5 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                                className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                               >
-                                🧾 Receipt
+                                <Receipt size={10} className="inline" aria-hidden="true" /> Receipt
                               </button>
                             )}
                           </div>
@@ -772,10 +773,10 @@ function GivePageContent() {
                 {/* Footer actions — hidden with the record: the count and
                     total would leak the giving it conceals. */}
                 {givingsVisible && (
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#dfdbd1] px-5 py-3">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <p className="text-[11px] text-[#617068]">{fromDate} → {toDate}</p>
-                    <p className="text-[11px] font-semibold text-[#26352f]">
+                    <p className="text-[11px] text-moss">{fromDate} <ArrowRight size={10} className="inline" aria-hidden="true" /> {toDate}</p>
+                    <p className="text-[11px] font-semibold text-bark">
                       {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
                     </p>
                   </div>
@@ -784,14 +785,14 @@ function GivePageContent() {
                     <button
                       type="button"
                       onClick={handlePrintMyReport}
-                      className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] sm:flex-none"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand sm:flex-none"
                     >
-                      🖨️ Print My Report
+                      <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowGiveModal(true)}
-                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#b36b3c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c] sm:flex-none"
+                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
                     >
                       Give Now
                     </button>
@@ -811,7 +812,7 @@ function GivePageContent() {
         description="Beyond tithes and offerings: in-kind gifts, fund drives, the church budget and the treasury's published figures."
         links={stewardshipLinks}
         activeKey="give"
-        className="public-section-nav border-t border-[#dfdbd1] bg-white/60"
+        className="public-section-nav border-t border-sand-line bg-white/60"
       />
 
       {/* ── Give Now modal ── */}
@@ -821,21 +822,21 @@ function GivePageContent() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="give-modal-title"
-            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
           >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
                 {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">Money Giving</p>
-                <h3 id="give-modal-title" className="text-lg font-bold text-[#26352f]">Give Now</h3>
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Money Giving</p>
+                <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowGiveModal(false)}
                 disabled={loading}
-                className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
+                className="text-xl leading-none text-moss hover:text-bark"
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
 
@@ -845,7 +846,7 @@ function GivePageContent() {
               className="mt-5 space-y-5"
             >
               {message && (
-                <div className="rounded-2xl bg-[#f7f4ee] border border-[#dfdbd1] p-4 text-xs font-semibold text-[#26352f]">
+                <div className="rounded-2xl bg-sand border border-sand-line p-4 text-xs font-semibold text-bark">
                   {message}
                 </div>
               )}
@@ -856,16 +857,16 @@ function GivePageContent() {
                   Only a member whose account has no email sees a field — the
                   one thing they alone can fix. */}
               {signedIn && !accountEmail.trim() && (
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Email for receipts <span className="font-normal text-[#617068]">(optional)</span>
+                <label className="block text-sm font-medium text-bark">
+                  Email for receipts <span className="font-normal text-moss">(optional)</span>
                   <input
                     type="email"
                     value={donorEmail}
                     onChange={(event) => setDonorEmail(event.target.value)}
                     placeholder="you@example.com"
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                   />
-                  <span className="mt-1 block text-[11px] font-normal text-[#617068]">
+                  <span className="mt-1 block text-[11px] font-normal text-moss">
                     Saved to your account so a receipt can reach you by email. Leave it out and your receipt goes by SMS to the phone you give with.
                   </span>
                 </label>
@@ -875,12 +876,12 @@ function GivePageContent() {
                   M-Pesa prompt goes to — and only then which accounts it
                   goes to. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block self-start text-sm font-medium text-[#26352f]">
+                <label className="block self-start text-sm font-medium text-bark">
                   Method of Giving
                   <select
                     value={methodOfGiving}
                     onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
                   >
                     <option value="mpesa">M-Pesa</option>
                     <option value="bank_transfer">Bank-to-Bank</option>
@@ -888,7 +889,7 @@ function GivePageContent() {
                 </label>
 
                 {methodOfGiving === "mpesa" && (
-                  <label className="block self-start text-sm font-medium text-[#26352f]">
+                  <label className="block self-start text-sm font-medium text-bark">
                     Phone number
                     <input
                       type="tel"
@@ -901,12 +902,12 @@ function GivePageContent() {
                       value={phoneNumber}
                       onFocus={liftAboveKeyboard}
                       onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                      className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                      className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                     />
                   </label>
                 )}
 
-                <div className="block self-start text-sm font-medium text-[#26352f]">
+                <div className="block self-start text-sm font-medium text-bark">
                   <span>Giving accounts</span>
                   <div className="relative mt-2" ref={accountPickerRef}>
                     <button
@@ -914,32 +915,32 @@ function GivePageContent() {
                       onClick={() => setShowAccountPicker((open) => !open)}
                       aria-expanded={showAccountPicker}
                       aria-label="Choose giving accounts"
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-mute bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-ember focus:border-ember"
                     >
-                      <span className={`min-w-0 truncate ${selectedAccounts.length ? "text-[#26352f]" : "text-[#8a948d]"}`}>
+                      <span className={`min-w-0 truncate ${selectedAccounts.length ? "text-bark" : "text-moss-faint2"}`}>
                         {accountPickerLabel}
                       </span>
-                      <span className="shrink-0 text-[10px] text-[#617068]">▼</span>
+                      <ChevronDown size={10} className="shrink-0 text-moss" aria-hidden="true" />
                     </button>
 
                     {showAccountPicker && (
                       /* Opens upward: the fields that follow (amounts, M-Pesa
                          details, the submit button) sit under this row and the
                          list used to cover them. */
-                      <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-xl">
+                      <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
                         <div className="max-h-56 overflow-y-auto p-2">
                           {purposes.map((item) => {
                             const checked = selectedAccounts.includes(item.label);
                             return (
                               <label
                                 key={`${item.id}-${item.label}`}
-                                className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
+                                className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-sand ${checked ? "bg-mist-select font-semibold text-bark" : "text-moss-dark"}`}
                               >
                                 <input
                                   type="checkbox"
                                   checked={checked}
                                   onChange={() => toggleAccount(item.label)}
-                                  className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
+                                  className="h-4 w-4 shrink-0 rounded border-sand-mute text-sage-strong focus:ring-sage-strong"
                                 />
                                 <span className="min-w-0 flex-1 truncate pr-1">{item.label}</span>
                               </label>
@@ -948,16 +949,16 @@ function GivePageContent() {
                         </div>
                         {/* The instruction and the way out sit at the foot of
                             the list, where the eye lands after ticking. */}
-                        <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] bg-white px-2.5 py-1.5">
+                        <div className="flex items-center justify-between gap-2 border-t border-sand-line bg-white px-2.5 py-1.5">
                           {/* The phrase wraps rather than ellipsizing: on a phone
                               the Done button leaves it just short of one line. */}
-                          <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-[#b36b3c]">
+                          <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ember">
                             Select the account(s) to give to
                           </p>
                           <button
                             type="button"
                             onClick={() => setShowAccountPicker(false)}
-                            className="shrink-0 rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                            className="shrink-0 rounded-lg bg-bark px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-bark-900"
                           >
                             Done
                           </button>
@@ -972,11 +973,11 @@ function GivePageContent() {
                   share the row, on phones as well as wide screens. */}
               {selectedAccounts.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-[#26352f]">Amount per account (KES)</p>
+                  <p className="text-sm font-medium text-bark">Amount per account (KES)</p>
                   {selectedAccounts.map((account) => (
                     <div
                       key={account}
-                      className="flex items-center gap-2 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/60 px-3 py-2"
+                      className="flex items-center gap-2 rounded-xl border border-sand-line bg-sand/60 px-3 py-2"
                     >
                       {/* One tap takes the account off the gift — placed at
                           the row's left so it never crowds the amount field. */}
@@ -985,11 +986,11 @@ function GivePageContent() {
                         onClick={() => toggleAccount(account)}
                         aria-label={`Remove ${account}`}
                         title={`Remove ${account}`}
-                        className="shrink-0 rounded-full p-1 text-[#8a948d] transition hover:bg-[#f2efe8] hover:text-[#96552c]"
+                        className="shrink-0 rounded-full p-1 text-moss-faint2 transition hover:bg-sand-light hover:text-ember-deep"
                       >
                         <X className="h-4 w-4" />
                       </button>
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#26352f] sm:text-sm">
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-bark sm:text-sm">
                         {account}
                       </span>
                       <input
@@ -1004,13 +1005,13 @@ function GivePageContent() {
                         onChange={(event) =>
                           setAccountAmounts((current) => ({ ...current, [account]: event.target.value }))
                         }
-                        className="w-24 shrink-0 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-[#b36b3c] sm:w-32"
+                        className="w-24 shrink-0 rounded-lg border border-sand-mute bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-ember sm:w-32"
                       />
                     </div>
                   ))}
                   <div className="flex items-center justify-between px-1 pt-1 text-sm">
-                    <span className="font-medium text-[#617068]">Total</span>
-                    <span className="font-bold text-[#26352f]">KES {allocationTotal.toLocaleString()}</span>
+                    <span className="font-medium text-moss">Total</span>
+                    <span className="font-bold text-bark">KES {allocationTotal.toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -1022,20 +1023,20 @@ function GivePageContent() {
               {methodOfGiving === "bank_transfer" && (
                 <div className="space-y-4">
                   {/* Bank Account Info Card */}
-                  <div className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] p-4 text-xs space-y-2">
-                    <p className="font-bold text-[#26352f] text-sm flex items-center gap-2">
-                      <span>🏦</span> Church Bank Account Details
+                  <div className="rounded-2xl border border-sand-line bg-sand p-4 text-xs space-y-2">
+                    <p className="font-bold text-bark text-sm flex items-center gap-2">
+                      <Landmark size={14} aria-hidden="true" /> Church Bank Account Details
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#3d5148] pt-1">
-                      <div><span className="font-semibold text-[#26352f]">Bank:</span> {churchBankDetails.bank_name}</div>
-                      <div><span className="font-semibold text-[#26352f]">Account Name:</span> {churchBankDetails.bank_account_name}</div>
-                      <div><span className="font-semibold text-[#26352f]">Account No:</span> {churchBankDetails.bank_account_number}</div>
-                      <div><span className="font-semibold text-[#26352f]">Branch / Swift:</span> {churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-moss-dark pt-1">
+                      <div><span className="font-semibold text-bark">Bank:</span> {churchBankDetails.bank_name}</div>
+                      <div><span className="font-semibold text-bark">Account Name:</span> {churchBankDetails.bank_account_name}</div>
+                      <div><span className="font-semibold text-bark">Account No:</span> {churchBankDetails.bank_account_number}</div>
+                      <div><span className="font-semibold text-bark">Branch / Swift:</span> {churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
-                    <label className="block text-sm font-medium text-[#26352f]">
+                    <label className="block text-sm font-medium text-bark">
                       Bank Deposit / Ref Number
                       <input
                         type="text"
@@ -1043,31 +1044,31 @@ function GivePageContent() {
                         placeholder="e.g. DEP-9012 or KCB-8812"
                         value={bankRefNumber}
                         onChange={(event) => setBankRefNumber(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                        className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                       />
                     </label>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-[#26352f]">
+                    <label className="block text-sm font-medium text-bark">
                       Your Bank Name
                       <input
                         type="text"
                         placeholder="e.g. Equity Bank, KCB, Absa, Co-op"
                         value={senderBankName}
                         onChange={(event) => setSenderBankName(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                        className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                       />
                     </label>
 
-                    <label className="block text-sm font-medium text-[#26352f]">
+                    <label className="block text-sm font-medium text-bark">
                       Transfer Date
                       <input
                         type="date"
                         required
                         value={transferDate}
                         onChange={(event) => setTransferDate(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                        className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                       />
                     </label>
                   </div>
@@ -1076,10 +1077,10 @@ function GivePageContent() {
               {/* Sticky on phones: with several accounts the rows push the button
                   down, so it stays reachable at the foot of the modal instead of
                   scrolling out of sight. */}
-              <div className="sticky bottom-0 -mx-6 mt-6 border-t border-[#dfdbd1] bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+              <div className="sticky bottom-0 -mx-6 mt-6 border-t border-sand-line bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                 <button
                   disabled={loading}
-                  className="w-full rounded-full bg-[#3d7146] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#305a38] disabled:opacity-60 sm:text-base"
+                  className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
                 >
                   {submitButtonText}
                 </button>
@@ -1097,7 +1098,7 @@ export default function GivePage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-white px-6 py-16 text-center text-[#617068]">
+        <main className="min-h-screen bg-white px-6 py-16 text-center text-moss">
           Loading giving options...
         </main>
       }

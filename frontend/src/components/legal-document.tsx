@@ -48,12 +48,12 @@ export function LegalDocument({ field, children }: { field: LegalField; children
 
   if (churchText) {
     return (
-      <div className="space-y-4 text-sm leading-7 text-[#617068]">
+      <div className="space-y-4 text-sm leading-7 text-moss">
         {churchText.split(/\n{2,}/).map((paragraph, index) => {
           const text = paragraph.trim();
           if (looksLikeHeading(text)) {
             return (
-              <h2 key={index} className="pt-2 text-xl font-semibold text-[#26352f]">
+              <h2 key={index} className="pt-2 text-xl font-semibold text-bark">
                 {text}
               </h2>
             );

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Lock } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
 
 export type RoleOption = {
@@ -296,10 +298,10 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
         disabled={disabled}
         onClick={() => setIsOpen((open) => !open)}
         title={current.help}
-        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs font-medium text-bark transition hover:border-ember focus:border-ember focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <span>{current.label}</span>
-        <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`h-3 w-3 shrink-0 text-moss transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -309,7 +311,7 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
         panelRef={panelRef}
         open={isOpen}
         minW={208}
-        panelClassName="rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg"
+        panelClassName="rounded-xl border border-sand-line bg-white py-1 shadow-lg"
       >
         <div role="listbox">
           {ACCOUNT_TYPE_OPTIONS.map((option) => (
@@ -324,11 +326,11 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
                 if (option.value !== value) onChange(option.value);
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
-                option.value === value ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148] hover:bg-[#f7f4ee]"
+                option.value === value ? "bg-mist-select font-semibold text-bark" : "text-moss-dark hover:bg-sand"
               }`}
             >
               <span className="flex-1">{option.label}</span>
-              {option.value === value && <span className="text-[#b36b3c]">✓</span>}
+              {option.value === value && <Check size={14} className="text-ember" aria-hidden="true" />}
             </button>
           ))}
         </div>
@@ -494,7 +496,7 @@ export function RolesCombobox({
         showCancelButton: true,
         confirmButtonText: "Save changes",
         cancelButtonText: "Keep editing",
-        confirmButtonColor: "#b36b3c",
+        confirmButtonColor: brand.ember,
       }
     );
     if (!result.isConfirmed) return;
@@ -508,7 +510,7 @@ export function RolesCombobox({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen((o) => !o)}
-        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs font-medium text-bark transition hover:border-ember focus:border-ember focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
         title={orderRolesBySeniority(selected)
           .map((code) => roleDisplayLabel(code, assistants))
           .join(", ")}
@@ -524,7 +526,7 @@ export function RolesCombobox({
               : roleDisplayLabel(selected[0], assistants)
             : "Select access"}
         </span>
-        <svg className={`h-3 w-3 shrink-0 text-[#617068] transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`h-3 w-3 shrink-0 text-moss transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -534,7 +536,7 @@ export function RolesCombobox({
         panelRef={panelRef}
         open={isOpen}
         minW={288}
-        panelClassName="rounded-xl border border-[#dfdbd1] bg-white shadow-lg overflow-hidden"
+        panelClassName="rounded-xl border border-sand-line bg-white shadow-lg overflow-hidden"
       >
         <div
           role="listbox"
@@ -543,7 +545,7 @@ export function RolesCombobox({
         >
           {/* Roles are shared; the second column marks assistants where the
               role takes one. */}
-          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#f0ece3] bg-white px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#617068]">
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-sand-paper bg-white px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-moss">
             <span className="flex-1">Role</span>
             {showAssistants && <span className="w-16 shrink-0 text-center">Assistant</span>}
           </div>
@@ -571,7 +573,7 @@ export function RolesCombobox({
             return (
               <div
                 key={r.value}
-                className={`flex items-center gap-2 pr-2 ${checked ? "bg-[#eef2ed]" : "hover:bg-[#f7f4ee]"}`}
+                className={`flex items-center gap-2 pr-2 ${checked ? "bg-mist-select" : "hover:bg-sand"}`}
               >
                 <button
                   type="button"
@@ -582,12 +584,12 @@ export function RolesCombobox({
                   title={roleTitle}
                   onClick={() => toggle(r.value)}
                   className={`flex flex-1 items-center gap-2.5 px-3 py-1.5 text-left text-xs transition ${
-                    checked ? "font-semibold text-[#26352f]" : "text-[#3d5148]"
+                    checked ? "font-semibold text-bark" : "text-moss-dark"
                   } ${locked ? "cursor-not-allowed opacity-60" : ""}`}
                 >
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
-                      checked ? "border-[#b36b3c] bg-[#b36b3c] text-white" : "border-[#c9c5bb] bg-white"
+                      checked ? "border-ember bg-ember text-white" : "border-sand-mute bg-white"
                     }`}
                   >
                     {checked && (
@@ -599,13 +601,13 @@ export function RolesCombobox({
                   <span className="flex flex-1 flex-wrap items-center gap-1.5">
                     <span>{r.label}</span>
                     {r.system && (
-                      <span className="rounded bg-[#f0e6dc] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#96552c]">
+                      <span className="rounded bg-gold-blush px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-ember-deep">
                         system
                       </span>
                     )}
-                    {locked && <span className="text-[10px]">🔒</span>}
+                    {locked && <Lock size={11} className="text-moss-faint" aria-hidden="true" />}
                     {heldElsewhere && (
-                      <span className="text-[10px] font-normal text-[#617068]">
+                      <span className="text-[10px] font-normal text-moss">
                         · {holderCount} holder{holderCount === 1 ? "" : "s"}
                       </span>
                     )}
@@ -620,7 +622,7 @@ export function RolesCombobox({
                       disabled={!canAssist}
                       title={assistantTitle}
                       onChange={() => toggleAssistant(r.value)}
-                      className="h-3.5 w-3.5 accent-[#b36b3c] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="h-3.5 w-3.5 accent-ember disabled:cursor-not-allowed disabled:opacity-40"
                     />
                   )}
                 </span>
@@ -629,14 +631,14 @@ export function RolesCombobox({
           })}
           {/* Done confirms the draft — through the confirmation dialog when
               anything actually changed. */}
-          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-[#f0ece3] bg-white px-3 py-2">
-            <span className="text-[10px] text-[#617068]">
+          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-sand-paper bg-white px-3 py-2">
+            <span className="text-[10px] text-moss">
               {draftRoles.length} role{draftRoles.length === 1 ? "" : "s"} selected
             </span>
             <button
               type="button"
               onClick={applyDraft}
-              className="rounded-xl bg-[#26352f] px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]"
+              className="rounded-xl bg-bark px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-ember"
             >
               Done
             </button>

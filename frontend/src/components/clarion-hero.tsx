@@ -50,19 +50,19 @@ export function ClarionHero() {
           </span>
         ))}
       </h1>
-      <p className="hero-line mt-5 text-base leading-7 text-[#617068] sm:mt-7 sm:text-lg sm:leading-8">
+      <p className="hero-line mt-5 text-base leading-7 text-moss sm:mt-7 sm:text-lg sm:leading-8">
         {subtext}
       </p>
       <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-9 sm:grid-cols-2 sm:gap-4 sm:max-w-xl">
         <Link
           href="#contact"
-          className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base"
+          className="flex items-center justify-center rounded-full border border-sand-mute bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-bark hover:bg-sand-tint sm:py-3.5 sm:text-base"
         >
           Location &amp; Contacts
         </Link>
         <Link
           href="/calendar"
-          className="flex items-center justify-center rounded-full border border-[#c9c5bb] bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-[#26352f] hover:bg-[#eae6de] sm:py-3.5 sm:text-base"
+          className="flex items-center justify-center rounded-full border border-sand-mute bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-bark hover:bg-sand-tint sm:py-3.5 sm:text-base"
         >
           See Our Calendar
         </Link>

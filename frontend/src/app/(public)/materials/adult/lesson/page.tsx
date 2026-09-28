@@ -13,7 +13,7 @@ export default function AdultLessonPage() {
   }, []);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f7f4ee] p-6 text-center text-sm font-semibold text-[#617068]">
+    <main className="min-h-screen flex items-center justify-center bg-sand p-6 text-center text-sm font-semibold text-moss">
       Opening Adult Lesson Guide...
     </main>
   );

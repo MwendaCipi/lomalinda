@@ -166,18 +166,18 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
       <div
-        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-[#dfdbd1]"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+        <div className="flex items-center justify-between border-b border-sand-line pb-4">
           <div>
-            <h2 className="text-xl font-semibold text-[#26352f]">Add Receipt</h2>
-            <p className="mt-0.5 text-xs text-[#617068]">Record a manual payment or contribution for treasury reconciliation.</p>
+            <h2 className="text-xl font-semibold text-bark">Add Receipt</h2>
+            <p className="mt-0.5 text-xs text-moss">Record a manual payment or contribution for treasury reconciliation.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f]"
+            className="rounded-lg p-1 text-moss hover:bg-sand hover:text-bark"
           >
             <X className="h-5 w-5" />
           </button>
@@ -185,12 +185,12 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
 
         <form onSubmit={handleSubmit} className="mt-4 grid gap-4 sm:grid-cols-2">
           {/* Method of Giving */}
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Method of Giving
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
             >
               <option value="cash">Cash</option>
               <option value="mpesa">M-Pesa</option>
@@ -200,19 +200,19 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
           </label>
 
           {/* Receipt Date */}
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Receipt Date
             <input
               type="date"
               required
               value={cashForm.received_on}
               onChange={(e) => setCashForm({ ...cashForm, received_on: e.target.value })}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
             />
           </label>
 
           {/* Giving Purpose */}
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Giving Purpose
             {otherPurposes ? (
               <input
@@ -220,7 +220,7 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
                 placeholder="Enter custom purpose..."
                 value={customPurpose}
                 onChange={(e) => setCustomPurpose(e.target.value)}
-                className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+                className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
               />
             ) : (
             <select
@@ -235,7 +235,7 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
                   setCashForm({ ...cashForm, purpose: e.target.value });
                 }
               }}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
             >
                 {purposes.map((p) => (
                   <option key={p} value={p}>
@@ -248,7 +248,7 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
           </label>
 
           {/* Amount */}
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Amount (KES)
             <input
               required
@@ -257,23 +257,23 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
               type="number"
               value={cashForm.amount}
               onChange={(e) => setCashForm({ ...cashForm, amount: e.target.value })}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
               placeholder="0.00"
             />
           </label>
 
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Giver Full Name
             <input
               required
               value={cashForm.donor_name}
               onChange={(e) => setCashForm({ ...cashForm, donor_name: e.target.value })}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
               placeholder="e.g. Jane Doe"
             />
           </label>
 
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Phone (optional)
             <input
               type="tel"
@@ -284,23 +284,23 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
               placeholder="07XXXXXXXX"
               value={cashForm.giver_phone}
               onChange={(e) => setCashForm({ ...cashForm, giver_phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
             />
           </label>
 
-          <label className="text-sm font-medium text-[#26352f]">
+          <label className="text-sm font-medium text-bark">
             Email (optional)
             <input
               type="email"
               placeholder="giver@example.com"
               value={cashForm.giver_email}
               onChange={(e) => setCashForm({ ...cashForm, giver_email: e.target.value })}
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
             />
           </label>
 
-          <div className="rounded-xl bg-[#f4f7f4] px-3 py-2 text-xs text-[#617068] sm:col-span-2">
-            <p className="font-semibold text-[#26352f]">Send receipt through</p>
+          <div className="rounded-xl bg-mist px-3 py-2 text-xs text-moss sm:col-span-2">
+            <p className="font-semibold text-bark">Send receipt through</p>
             <div className="mt-2 flex gap-5">
               <label className="flex items-center gap-2"><input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Email</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} /> SMS</label>
@@ -309,14 +309,14 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
           </div>
 
           {/* Receipt Notes Textarea */}
-          <label className="text-sm font-medium text-[#26352f] sm:col-span-2">
+          <label className="text-sm font-medium text-bark sm:col-span-2">
             <div className="flex items-center justify-between pb-1">
               <span>Receipt Notes</span>
               {isCustomMessage && (
                 <button
                   type="button"
                   onClick={() => setIsCustomMessage(false)}
-                  className="text-xs font-semibold text-[#b36b3c] hover:underline"
+                  className="text-xs font-semibold text-ember hover:underline"
                 >
                   Reset default
                 </button>
@@ -330,21 +330,21 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
                 setIsCustomMessage(true);
               }}
               placeholder="Thank you, {name}, for contributing {amount} towards {purpose}. May God bless you abundantly!"
-              className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-sm outline-none focus:border-[#b36b3c] leading-relaxed"
+              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember leading-relaxed"
             />
           </label>
 
-          <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-[#dfdbd1]">
+          <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-sand-line">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-[#c9c5bb] px-5 py-2 text-sm font-semibold text-[#617068] hover:bg-[#f7f4ee]"
+              className="rounded-full border border-sand-mute px-5 py-2 text-sm font-semibold text-moss hover:bg-sand"
             >
               Cancel
             </button>
             <button
               disabled={saving}
-              className="rounded-full bg-[#b36b3c] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
+              className="rounded-full bg-ember px-6 py-2 text-sm font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
             >
               {saving ? "Saving..." : "Send Receipt"}
             </button>

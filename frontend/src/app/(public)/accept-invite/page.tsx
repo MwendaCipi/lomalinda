@@ -11,7 +11,7 @@ import { passwordProblems } from "@/lib/validation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 const inputClass =
-  "mt-1.5 w-full rounded-xl border px-4 py-2.5 outline-none focus:border-[#b36b3c] border-[#c9c5bb]";
+  "mt-1.5 w-full rounded-xl border px-4 py-2.5 outline-none focus:border-ember border-sand-mute";
 
 function fieldClass(hasError: boolean) {
   return hasError ? `${inputClass} border-red-400 bg-red-50/40` : inputClass;
@@ -214,19 +214,19 @@ function AcceptInviteContent() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-[#f7f4ee] px-6 py-10 text-[#26352f] sm:items-center">
-      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b36b3c]">Invitation</p>
+    <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-sand px-6 py-10 text-bark sm:items-center">
+      <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ember">Invitation</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
           {firstName ? `${firstName}, create your account` : "Create your account"}
         </h1>
-        {email && !linkError && <p className="mt-2 text-xs text-[#617068]">Invitation email: {email}</p>}
+        {email && !linkError && <p className="mt-2 text-xs text-moss">Invitation email: {email}</p>}
 
-        {loading && !linkError && <p className="mt-6 text-sm text-[#617068]">Checking your invitation…</p>}
+        {loading && !linkError && <p className="mt-6 text-sm text-moss">Checking your invitation…</p>}
 
         {!loading && codeEntry && (
           <form onSubmit={submitCode} noValidate className="mt-6 space-y-4">
-            <p className="text-sm leading-6 text-[#617068]">
+            <p className="text-sm leading-6 text-moss">
               Your invitation email carries a link and the code below it. The link opens in some mail apps and not
               others, so if it will not open, type the code here instead.
             </p>
@@ -254,7 +254,7 @@ function AcceptInviteContent() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60"
+              className="w-full rounded-full bg-bark px-5 py-3 font-medium text-white disabled:opacity-60"
             >
               {submitting ? "Checking the code…" : "Continue"}
             </button>
@@ -382,7 +382,7 @@ function AcceptInviteContent() {
               <FieldError message={fieldErrors.confirmPassword} />
             </label>
             <PasswordRules password={password} />
-            <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
+            <label className="flex items-start gap-3 text-xs leading-5 text-moss">
               <input
                 type="checkbox"
                 checked={privacyAccepted && termsAccepted}
@@ -393,33 +393,33 @@ function AcceptInviteContent() {
                   setTermsAccepted(agreed);
                   setFieldErrors((current) => ({ ...current, privacy: "", terms: "" }));
                 }}
-                className="mt-1 h-4 w-4 accent-[#5f8067]"
+                className="mt-1 h-4 w-4 accent-sage"
               />
               <span>
-                I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</Link> and <Link href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</Link>.
+                I agree to the <Link href="/privacy" target="_blank" className="font-semibold text-ember hover:underline">Privacy Policy</Link> and <Link href="/terms" target="_blank" className="font-semibold text-ember hover:underline">Terms of Use</Link>.
               </span>
             </label>
             <FieldError message={fieldErrors.privacy || fieldErrors.terms} />
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60"
+              className="w-full rounded-full bg-bark px-5 py-3 font-medium text-white disabled:opacity-60"
             >
               {submitting ? "Creating your account…" : "Create account"}
             </button>
           </form>
         )}
 
-        {linkError && <p className="mt-6 rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{linkError}</p>}
+        {linkError && <p className="mt-6 rounded-xl bg-sand p-4 text-sm text-moss">{linkError}</p>}
         {(linkError || !loading) && (
-          <p className="mt-6 border-t border-[#dfdbd1] pt-5 text-center text-xs text-[#617068] sm:text-sm">
+          <p className="mt-6 border-t border-sand-line pt-5 text-center text-xs text-moss sm:text-sm">
             Already set up?{" "}
-            <Link href="/login" className="font-semibold text-[#b36b3c] hover:underline">
+            <Link href="/login" className="font-semibold text-ember hover:underline">
               Sign in
             </Link>
             .{" "}
             {(linkError || codeEntry) && (
-              <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">
+              <Link href="/create-account" className="font-semibold text-ember hover:underline">
                 Or create your own account
               </Link>
             )}
@@ -434,7 +434,7 @@ export default function AcceptInvitePage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-[calc(100vh-73px)] bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+        <main className="min-h-[calc(100vh-73px)] bg-sand px-6 py-16 text-center text-moss">
           Checking your invitation…
         </main>
       }

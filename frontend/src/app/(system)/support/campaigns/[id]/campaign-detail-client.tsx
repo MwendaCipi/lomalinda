@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { brand, pieColors, ministryColors } from "@/lib/brand";
 import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { Check, Copy, IdCard, X } from "lucide-react";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { DonutChart } from "@/components/mini-charts";
 import { stewardshipLinks } from "@/config/site-sections";
@@ -54,8 +56,8 @@ interface CardAssignment {
 
 const fmtKES = (value: number) => `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-const PIE_COLORS = ["#2d5d39", "#5f8067", "#9a741c", "#b36b3c", "#4d6d55"];
-const MINISTRY_COLORS = ["#2d5d39", "#5f8067", "#9a741c", "#b36b3c", "#8a7a5c", "#4d6d55", "#96552c", "#617068"];
+const PIE_COLORS = pieColors;
+const MINISTRY_COLORS = ministryColors;
 
 export default function CampaignDetailClient() {
   const params = useParams();
@@ -218,9 +220,9 @@ export default function CampaignDetailClient() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <main className="min-h-screen bg-sand text-bark">
         <div className="px-6 py-16 text-center">
-          <p className="text-sm font-medium text-[#617068]">Loading fund drive details...</p>
+          <p className="text-sm font-medium text-moss">Loading fund drive details...</p>
         </div>
       </main>
     );
@@ -228,12 +230,12 @@ export default function CampaignDetailClient() {
 
   if (error || !campaign) {
     return (
-      <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+      <main className="min-h-screen bg-sand text-bark">
         <div className="px-6 py-16">
-          <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-[#dfdbd1]">
+          <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-sand-line">
             <h1 className="text-2xl font-semibold">Fund Drive Not Found</h1>
-            <p className="mt-2 text-sm text-[#617068]">{error || "The requested fund drive could not be found."}</p>
-            <Link href="/support/campaigns" className="mt-6 inline-block rounded-full bg-[#5f8067] px-6 py-2.5 font-medium text-white">
+            <p className="mt-2 text-sm text-moss">{error || "The requested fund drive could not be found."}</p>
+            <Link href="/support/campaigns" className="mt-6 inline-block rounded-full bg-sage px-6 py-2.5 font-medium text-white">
               Return to Fund Drives
             </Link>
           </div>
@@ -249,9 +251,9 @@ export default function CampaignDetailClient() {
   // the neutral part of the ring.
   const pieItems = breakdown
     ? [
-        { label: "My contribution", value: breakdown.my_amount, color: "#2d5d39" },
-        { label: "My invitees", value: breakdown.invitees_amount, color: "#9a741c" },
-        { label: "Others", value: breakdown.others_amount, color: "#5f8067" },
+        { label: "My contribution", value: breakdown.my_amount, color: brand.sageBright },
+        { label: "My invitees", value: breakdown.invitees_amount, color: brand.goldDeep },
+        { label: "Others", value: breakdown.others_amount, color: brand.sage },
       ]
     : [];
 
@@ -262,7 +264,7 @@ export default function CampaignDetailClient() {
   // everyone gets the giving sidebar, office holders included. The Leader
   // Portal keeps its own navigation; admin work on drives lives there.
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <div className="flex min-h-screen">
         <SupportSidebar />
         <div className="min-w-0 flex-1">
@@ -271,46 +273,46 @@ export default function CampaignDetailClient() {
           <div className="flex items-center justify-between">
             <Link
               href="/support/campaigns"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#617068] transition hover:text-[#b36b3c]"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-ember"
             >
               <span>&larr;</span>
               <span>All Fund Drives</span>
             </Link>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${campaign.is_active ? "bg-[#e8f3ec] text-[#2d5d39]" : "bg-[#f3e8e8] text-[#8c2e2e]"}`}>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${campaign.is_active ? "bg-mist-soft text-sage-bright" : "bg-alert-film text-brick"}`}>
               {campaign.is_active ? "Active Fund Drive" : "Fund Drive Ended"}
             </span>
           </div>
 
           {/* Personalised link banner */}
           {cardAssignment && (
-            <div className="flex items-center justify-between rounded-2xl bg-[#e8f3ec] p-4 text-[#2d5d39] ring-1 ring-[#5f8067]/30">
+            <div className="flex items-center justify-between rounded-2xl bg-mist-soft p-4 text-sage-bright ring-1 ring-sage/30">
               <div className="flex items-center gap-3">
-                <span className="text-xl">🎴</span>
+                <IdCard size={18} aria-hidden="true" />
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider">Personal Invite Link</p>
                   <p className="text-sm font-semibold">
-                    Issued to: <strong className="text-[#26352f]">{cardAssignment.member_name}</strong> ({cardAssignment.group_name})
+                    Issued to: <strong className="text-bark">{cardAssignment.member_name}</strong> ({cardAssignment.group_name})
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <span className="block text-[11px] text-[#4a7256]">Raised via this link</span>
+                <span className="block text-[11px] text-sage-mid">Raised via this link</span>
                 <span className="text-sm font-bold">KES {Number(cardAssignment.total_raised).toLocaleString()}</span>
               </div>
             </div>
           )}
 
           {/* 1. The drive itself */}
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
-            <h1 className="text-xl font-bold tracking-tight text-[#26352f] sm:text-2xl">{campaign.title || campaign.name}</h1>
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
+            <h1 className="text-xl font-bold tracking-tight text-bark sm:text-2xl">{campaign.title || campaign.name}</h1>
             {campaign.description ? (
-              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-[#4a5851]">{campaign.description}</p>
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-moss-soft">{campaign.description}</p>
             ) : (
-              <p className="mt-3 text-sm italic text-[#617068]">The office has not written a description for this drive yet.</p>
+              <p className="mt-3 text-sm italic text-moss">The office has not written a description for this drive yet.</p>
             )}
             {campaign.account_name && (
-              <p className="mt-3 text-xs text-[#617068]">
-                Account reference: <code className="rounded-md bg-[#f7f4ee] px-2 py-0.5 font-mono font-bold text-[#b36b3c] ring-1 ring-[#dfdbd1]">{campaign.account_name}</code>
+              <p className="mt-3 text-xs text-moss">
+                Account reference: <code className="rounded-md bg-sand px-2 py-0.5 font-mono font-bold text-ember ring-1 ring-sand-line">{campaign.account_name}</code>
               </p>
             )}
 
@@ -318,7 +320,7 @@ export default function CampaignDetailClient() {
               <button
                 type="button"
                 onClick={() => setShowSupportModal(true)}
-                className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-8 text-sm font-medium text-white transition hover:bg-[#4d6d55] sm:w-auto"
+                className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep sm:w-auto"
               >
                 Support this Drive
               </button>
@@ -326,17 +328,17 @@ export default function CampaignDetailClient() {
           </div>
 
           {/* 2. Fund drive progress */}
-          <div className="rounded-3xl bg-[#faf9f5] p-6 sm:p-8 ring-1 ring-[#dfdbd1]">
+          <div className="rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#617068]">Fund Drive Progress</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-moss">Fund Drive Progress</span>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-[#26352f] sm:text-3xl">{fmtKES(campaign.total_raised)}</span>
-                  <span className="text-sm text-[#617068]">raised of {fmtKES(campaign.target_amount)} goal</span>
+                  <span className="text-2xl font-bold text-bark sm:text-3xl">{fmtKES(campaign.total_raised)}</span>
+                  <span className="text-sm text-moss">raised of {fmtKES(campaign.target_amount)} goal</span>
                 </div>
                 {deficit > 0 && (
-                  <p className="mt-1 text-sm font-semibold text-[#b36b3c]">
-                    Deficit: {fmtKES(deficit)} <span className="font-normal text-[#617068]">still needed</span>
+                  <p className="mt-1 text-sm font-semibold text-ember">
+                    Deficit: {fmtKES(deficit)} <span className="font-normal text-moss">still needed</span>
                   </p>
                 )}
               </div>
@@ -345,48 +347,48 @@ export default function CampaignDetailClient() {
                 <button
                   type="button"
                   onClick={() => setShowDonors((open) => !open)}
-                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-[#dfdbd1] transition hover:ring-[#b36b3c]"
+                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line transition hover:ring-ember"
                 >
-                  <span className="block text-xs text-[#617068]">Percentage</span>
-                  <span className="text-lg font-bold text-[#5f8067]">{campaign.percentage_raised}%</span>
+                  <span className="block text-xs text-moss">Percentage</span>
+                  <span className="text-lg font-bold text-sage">{campaign.percentage_raised}%</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowDonors((open) => !open)}
-                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-[#dfdbd1] transition hover:ring-[#b36b3c]"
+                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line transition hover:ring-ember"
                 >
-                  <span className="block text-xs text-[#617068]">Donors</span>
-                  <span className="text-lg font-bold text-[#9a741c]">{campaign.donor_count}</span>
+                  <span className="block text-xs text-moss">Donors</span>
+                  <span className="text-lg font-bold text-gold-deep">{campaign.donor_count}</span>
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 h-4 w-full overflow-hidden rounded-full bg-[#e6e2d8]">
+            <div className="mt-4 h-4 w-full overflow-hidden rounded-full bg-sand-sheen">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#9a741c] via-[#5f8067] to-[#2d5d39] transition-all duration-700"
+                className="h-full rounded-full bg-gradient-to-r from-gold-deep via-sage to-sage-bright transition-all duration-700"
                 style={{ width: `${Math.min(100, campaign.percentage_raised)}%` }}
               />
             </div>
 
             {/* Donor list, revealed by the donor badge. */}
             {showDonors && (
-              <div className="mt-5 rounded-2xl border border-[#dfdbd1] bg-white p-4">
+              <div className="mt-5 rounded-2xl border border-sand-line bg-white p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#26352f]">Donors</h3>
-                  <button type="button" onClick={() => setShowDonors(false)} className="text-xs font-semibold text-[#617068] hover:text-[#b36b3c]">
+                  <h3 className="text-sm font-bold text-bark">Donors</h3>
+                  <button type="button" onClick={() => setShowDonors(false)} className="text-xs font-semibold text-moss hover:text-ember">
                     Hide
                   </button>
                 </div>
                 {(campaign.donors ?? []).length === 0 ? (
-                  <p className="mt-3 text-xs text-[#617068]">No completed gifts yet — be the first to give.</p>
+                  <p className="mt-3 text-xs text-moss">No completed gifts yet — be the first to give.</p>
                 ) : (
-                  <ul className="mt-3 divide-y divide-[#f2efe8]">
+                  <ul className="mt-3 divide-y divide-sand-light">
                     {(campaign.donors ?? []).map((d, i) => (
                       <li key={i} className="flex items-center justify-between py-2 text-sm">
-                        <span className="min-w-0 truncate font-medium text-[#26352f]">{d.name}</span>
+                        <span className="min-w-0 truncate font-medium text-bark">{d.name}</span>
                         <span className="ml-3 shrink-0 text-right">
-                          <span className="font-bold text-[#9a741c]">{fmtKES(d.amount)}</span>
-                          <span className="ml-2 text-[11px] text-[#617068]">
+                          <span className="font-bold text-gold-deep">{fmtKES(d.amount)}</span>
+                          <span className="ml-2 text-[11px] text-moss">
                             {d.gifts} gift{d.gifts === 1 ? "" : "s"}
                           </span>
                         </span>
@@ -412,49 +414,49 @@ export default function CampaignDetailClient() {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-[#dfdbd1] bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-sand-line bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-bark transition hover:bg-sand"
               >
-                <span className="truncate">{copySuccess ? "✓ Link Copied!" : "📋 Copy Link"}</span>
+                <span className="truncate inline-flex items-center gap-1.5">{copySuccess ? <><Check size={12} aria-hidden="true" /> Link Copied!</> : <><Copy size={12} aria-hidden="true" /> Copy Link</>}</span>
               </button>
             </div>
           </div>
 
           {/* 3. Contribution breakdown */}
           <div className="space-y-6">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
-              <h3 className="text-base font-bold text-[#26352f]">
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+              <h3 className="text-base font-bold text-bark">
                 {signedIn ? "My Contribution Breakdown" : "Contribution Breakdown"}
               </h3>
 
               {breakdown && signedIn ? (
                 <>
                   <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-[#faf9f5] p-3 ring-1 ring-[#dfdbd1]">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#617068]">My contribution</span>
-                      <span className="mt-0.5 block text-base font-bold text-[#2d5d39]">{fmtKES(breakdown.my_amount)}</span>
-                      <span className="text-[11px] text-[#617068]">{breakdown.my_gifts} gift{breakdown.my_gifts === 1 ? "" : "s"}</span>
+                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My contribution</span>
+                      <span className="mt-0.5 block text-base font-bold text-sage-bright">{fmtKES(breakdown.my_amount)}</span>
+                      <span className="text-[11px] text-moss">{breakdown.my_gifts} gift{breakdown.my_gifts === 1 ? "" : "s"}</span>
                     </div>
-                    <div className="rounded-2xl bg-[#faf9f5] p-3 ring-1 ring-[#dfdbd1]">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#617068]">My invitees</span>
-                      <span className="mt-0.5 block text-base font-bold text-[#9a741c]">{fmtKES(breakdown.invitees_amount)}</span>
-                      <span className="text-[11px] text-[#617068]">
+                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My invitees</span>
+                      <span className="mt-0.5 block text-base font-bold text-gold-deep">{fmtKES(breakdown.invitees_amount)}</span>
+                      <span className="text-[11px] text-moss">
                         {breakdown.invitees_gifts} gift{breakdown.invitees_gifts === 1 ? "" : "s"}
                         {breakdown.invitee_names.length > 0 && ` · ${breakdown.invitee_names.join(", ")}`}
                       </span>
                     </div>
-                    <div className="rounded-2xl bg-[#faf9f5] p-3 ring-1 ring-[#dfdbd1]">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#617068]">Others</span>
-                      <span className="mt-0.5 block text-base font-bold text-[#5f8067]">{fmtKES(breakdown.others_amount)}</span>
+                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Others</span>
+                      <span className="mt-0.5 block text-base font-bold text-sage">{fmtKES(breakdown.others_amount)}</span>
                     </div>
-                    <div className="rounded-2xl bg-[#faf9f5] p-3 ring-1 ring-[#dfdbd1]">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#617068]">Total raised</span>
-                      <span className="mt-0.5 block text-base font-bold text-[#26352f]">{fmtKES(breakdown.total_raised)}</span>
+                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Total raised</span>
+                      <span className="mt-0.5 block text-base font-bold text-bark">{fmtKES(breakdown.total_raised)}</span>
                     </div>
                   </div>
 
                   {/* Pie: me / invitees / others, remainder neutral. */}
                   <div className="mt-6">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#617068]">Share of the drive</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-moss">Share of the drive</p>
                     <div className="mt-3">
                       <DonutChart
                         items={pieItems}
@@ -466,7 +468,7 @@ export default function CampaignDetailClient() {
                   </div>
                 </>
               ) : (
-                <p className="mt-4 rounded-xl bg-[#faf9f5] px-4 py-6 text-center text-xs text-[#617068]">
+                <p className="mt-4 rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">
                   {signedIn
                     ? "No gifts recorded yet on this drive."
                     : "Sign in to see your own contribution and invitees in this breakdown."}
@@ -475,10 +477,10 @@ export default function CampaignDetailClient() {
             </div>
 
             {/* Ministry columns */}
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
-              <h3 className="text-base font-bold text-[#26352f]">Giving by Ministry</h3>
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+              <h3 className="text-base font-bold text-bark">Giving by Ministry</h3>
               {ministries.length === 0 ? (
-                <p className="mt-4 rounded-xl bg-[#faf9f5] px-4 py-6 text-center text-xs text-[#617068]">
+                <p className="mt-4 rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">
                   No completed gifts to chart yet.
                 </p>
               ) : (
@@ -486,10 +488,10 @@ export default function CampaignDetailClient() {
                   {ministries.map((m, i) => (
                     <li key={m.ministry}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-xs font-semibold text-[#26352f]">{m.ministry}</span>
-                        <span className="shrink-0 text-xs font-bold text-[#26352f]">{fmtKES(m.amount)}</span>
+                        <span className="truncate text-xs font-semibold text-bark">{m.ministry}</span>
+                        <span className="shrink-0 text-xs font-bold text-bark">{fmtKES(m.amount)}</span>
                       </div>
-                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-[#f2efe8]" role="img" aria-label={`${m.ministry}: ${fmtKES(m.amount)}`}>
+                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-sand-light" role="img" aria-label={`${m.ministry}: ${fmtKES(m.amount)}`}>
                         <div
                           className="h-full rounded-full"
                           style={{ width: `${Math.max(2, (m.amount / maxMinistry) * 100)}%`, backgroundColor: MINISTRY_COLORS[i % MINISTRY_COLORS.length] }}
@@ -503,16 +505,16 @@ export default function CampaignDetailClient() {
 
             {/* Ministry-group leaderboard, kept for drives issued by group. */}
             {campaign.top_fundraisers && campaign.top_fundraisers.length > 0 && (
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1]">
-                <h3 className="text-base font-bold text-[#26352f]">Top Fundraisers</h3>
+              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+                <h3 className="text-base font-bold text-bark">Top Fundraisers</h3>
                 <div className="mt-4 space-y-3">
                   {campaign.top_fundraisers.map((f, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm border-b border-[#faf9f5] pb-2">
+                    <div key={i} className="flex items-center justify-between text-sm border-b border-sand-card pb-2">
                       <div>
-                        <span className="font-semibold text-[#26352f]">{i + 1}. {f.name}</span>
-                        <span className="block text-[11px] text-[#617068]">{f.group}</span>
+                        <span className="font-semibold text-bark">{i + 1}. {f.name}</span>
+                        <span className="block text-[11px] text-moss">{f.group}</span>
                       </div>
-                      <span className="font-bold text-[#9a741c]">{fmtKES(f.amount)}</span>
+                      <span className="font-bold text-gold-deep">{fmtKES(f.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -529,24 +531,24 @@ export default function CampaignDetailClient() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="support-modal-title"
-            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1]"
+            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
           >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 id="support-modal-title" className="text-lg font-bold text-[#26352f]">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 id="support-modal-title" className="text-lg font-bold text-bark">
                 Support {campaign.title || campaign.name}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowSupportModal(false)}
-                className="rounded-full p-1.5 text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                className="rounded-full p-1.5 text-moss transition hover:bg-sand hover:text-bark"
                 aria-label="Close"
               >
-                ✕
+                <X size={14} aria-hidden="true" />
               </button>
             </div>
 
             {cardAssignment && (
-              <p className="mt-3 rounded-xl bg-[#e8f3ec] px-3 py-2 text-xs text-[#2d5d39]">
+              <p className="mt-3 rounded-xl bg-mist-soft px-3 py-2 text-xs text-sage-bright">
                 Credited to {cardAssignment.member_name}&apos;s invite ({cardAssignment.group_name}).
               </p>
             )}
@@ -554,18 +556,18 @@ export default function CampaignDetailClient() {
             <form onSubmit={handleDonate} className="mt-4 space-y-4">
               {/* Name: typed freely; signed-in givers arrive pre-filled. No
                   email is collected from visitors — receipts go by SMS. */}
-              <label className="block text-sm font-medium text-[#26352f]">
+              <label className="block text-sm font-medium text-bark">
                 Name
                 <input
                   type="text"
                   placeholder="Your name"
                   value={donorName}
                   onChange={(e) => setDonorName(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                 />
               </label>
 
-              <label className="block text-sm font-medium text-[#26352f]">
+              <label className="block text-sm font-medium text-bark">
                 M-Pesa Phone Number *
                 <input
                   type="tel"
@@ -577,11 +579,11 @@ export default function CampaignDetailClient() {
                   placeholder="e.g. 0712345678"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                 />
               </label>
 
-              <label className="block text-sm font-medium text-[#26352f]">
+              <label className="block text-sm font-medium text-bark">
                 Contribution Amount (KES) *
                 <input
                   type="number"
@@ -590,25 +592,25 @@ export default function CampaignDetailClient() {
                   placeholder="e.g. 1000"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                 />
               </label>
 
               {signedIn ? (
-                <label className="block text-sm font-medium text-[#26352f]">
-                  Email <span className="font-normal text-[#617068]">(optional — for your receipt)</span>
+                <label className="block text-sm font-medium text-bark">
+                  Email <span className="font-normal text-moss">(optional — for your receipt)</span>
                   <input
                     type="email"
                     value={donorEmail}
                     onChange={(e) => setDonorEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                   />
                 </label>
               ) : (
-                <p className="text-[11px] leading-relaxed text-[#617068]">
+                <p className="text-[11px] leading-relaxed text-moss">
                   Your receipt is sent by SMS.{" "}
-                  <Link href={`/login?next=/support/campaigns/${campaignId}`} className="font-semibold text-[#b36b3c] hover:underline">
+                  <Link href={`/login?next=/support/campaigns/${campaignId}`} className="font-semibold text-ember hover:underline">
                     Sign in
                   </Link>{" "}
                   to get it by email too.
@@ -618,7 +620,7 @@ export default function CampaignDetailClient() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#5f8067] px-8 font-medium text-white transition hover:bg-[#4d6d55] disabled:opacity-60 text-sm"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 font-medium text-white transition hover:bg-sage-deep disabled:opacity-60 text-sm"
               >
                 {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
               </button>
@@ -634,7 +636,7 @@ export default function CampaignDetailClient() {
         description="In-kind gifts, fund drives, the church budget and the treasury's published figures."
         links={stewardshipLinks}
         activeKey="campaigns"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="border-t border-sand-line bg-white/60"
       />
         </div>
       </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, Landmark, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { useHeaderData, patchCachedMe } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -81,7 +82,9 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
   const [accountEmail, setAccountEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
+  // Signed-in status and the account's email/phone come from the cached header
+  // hook — the modal never needs its own /me/ request to pre-fill the form.
+  const { me, hasToken: signedIn } = useHeaderData();
 
   const toggleAccount = (account: string) => {
     setSelectedAccounts((current) =>
@@ -98,22 +101,12 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
   }, [open, presetAccount]);
 
   useEffect(() => {
-    if (!open) return;
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      setSignedIn(true);
-      fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((me) => {
-          if (!me) return;
-          setAccountEmail(me.email || "");
-          // The phone the M-Pesa prompt goes to: pre-filled from the account
-          // when it is a Safaricom number, left empty otherwise.
-          setPhoneNumber((current) => (current ? current : safaricomPhoneOf(me.phone_number || "")));
-        })
-        .catch(() => {});
-    }
-  }, [open]);
+    if (!open || !me) return;
+    setAccountEmail((current) => current || me.email || "");
+    // The phone the M-Pesa prompt goes to: pre-filled from the account
+    // when it is a Safaricom number, left empty otherwise.
+    setPhoneNumber((current) => (current ? current : safaricomPhoneOf(me.phone_number || "")));
+  }, [open, me]);
 
   useEffect(() => {
     if (!open) return;
@@ -266,6 +259,8 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         }
         const saved = await saveResponse.json().catch(() => null);
         setAccountEmail(saved?.email ?? typedEmail);
+        // Keep the shared header cache in step with the saved address.
+        patchCachedMe({ email: saved?.email ?? typedEmail });
       }
 
       let descriptionPayload = "";
@@ -340,21 +335,21 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         role="dialog"
         aria-modal="true"
         aria-labelledby="give-modal-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
-            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">Money Giving</p>
-            <h3 id="give-modal-title" className="text-lg font-bold text-[#26352f]">Give Now</h3>
+            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Money Giving</p>
+            <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
+            className="text-xl leading-none text-moss hover:text-bark"
           >
-            ✕
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 
@@ -364,7 +359,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
           className="mt-5 space-y-5"
         >
           {message && (
-            <div className="rounded-2xl bg-[#f7f4ee] border border-[#dfdbd1] p-4 text-xs font-semibold text-[#26352f]">
+            <div className="rounded-2xl bg-sand border border-sand-line p-4 text-xs font-semibold text-bark">
               {message}
             </div>
           )}
@@ -375,16 +370,16 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
               the form asks for neither. Only a member whose account has no
               email sees a field — the one thing they alone can fix. */}
           {signedIn && !accountEmail.trim() && (
-            <label className="block text-sm font-medium text-[#26352f]">
-              Email for receipts <span className="font-normal text-[#617068]">(optional)</span>
+            <label className="block text-sm font-medium text-bark">
+              Email for receipts <span className="font-normal text-moss">(optional)</span>
               <input
                 type="email"
                 value={donorEmail}
                 onChange={(event) => setDonorEmail(event.target.value)}
                 placeholder="you@example.com"
-                className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
               />
-              <span className="mt-1 block text-[11px] font-normal text-[#617068]">
+              <span className="mt-1 block text-[11px] font-normal text-moss">
                 Saved to your account so a receipt can reach you by email. Leave it out and your receipt goes by SMS to the phone you give with.
               </span>
             </label>
@@ -393,12 +388,12 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
           {/* 2. How the money moves first — method, then the phone the
               M-Pesa prompt goes to — and only then which accounts it goes to. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className="block self-start text-sm font-medium text-[#26352f]">
+            <label className="block self-start text-sm font-medium text-bark">
               Method of Giving
               <select
                 value={methodOfGiving}
                 onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
-                className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
               >
                 <option value="mpesa">M-Pesa</option>
                 <option value="bank_transfer">Bank-to-Bank</option>
@@ -406,7 +401,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             </label>
 
             {methodOfGiving === "mpesa" && (
-              <label className="block self-start text-sm font-medium text-[#26352f]">
+              <label className="block self-start text-sm font-medium text-bark">
                 Phone number
                 <input
                   type="tel"
@@ -419,12 +414,12 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                   value={phoneNumber}
                   onFocus={liftAboveKeyboard}
                   onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                  className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                 />
               </label>
             )}
 
-            <div className="block self-start text-sm font-medium text-[#26352f]">
+            <div className="block self-start text-sm font-medium text-bark">
               <span>Giving accounts</span>
               <div className="relative mt-2" ref={accountPickerRef}>
                 <button
@@ -432,32 +427,32 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                   onClick={() => setShowAccountPicker((open) => !open)}
                   aria-expanded={showAccountPicker}
                   aria-label="Choose giving accounts"
-                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-mute bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-ember focus:border-ember"
                 >
-                  <span className={`min-w-0 truncate ${selectedAccounts.length ? "text-[#26352f]" : "text-[#8a948d]"}`}>
+                  <span className={`min-w-0 truncate ${selectedAccounts.length ? "text-bark" : "text-moss-faint2"}`}>
                     {accountPickerLabel}
                   </span>
-                  <span className="shrink-0 text-[10px] text-[#617068]">▼</span>
+                  <ChevronDown size={10} className="shrink-0 text-moss" aria-hidden="true" />
                 </button>
 
                 {showAccountPicker && (
                   /* Opens upward: the fields that follow (amounts, M-Pesa
                      details, the submit button) sit under this row and the
                      list used to cover them. */
-                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-xl">
+                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
                     <div className="max-h-56 overflow-y-auto p-2">
                       {purposes.map((item) => {
                         const checked = selectedAccounts.includes(item.label);
                         return (
                           <label
                             key={`${item.id}-${item.label}`}
-                            className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-[#f7f4ee] ${checked ? "bg-[#eef2ed] font-semibold text-[#26352f]" : "text-[#3d5148]"}`}
+                            className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-sand ${checked ? "bg-mist-select font-semibold text-bark" : "text-moss-dark"}`}
                           >
                             <input
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleAccount(item.label)}
-                              className="h-4 w-4 shrink-0 rounded border-[#c9c5bb] text-[#3d7146] focus:ring-[#3d7146]"
+                              className="h-4 w-4 shrink-0 rounded border-sand-mute text-sage-strong focus:ring-sage-strong"
                             />
                             <span className="min-w-0 flex-1 truncate pr-1">{item.label}</span>
                           </label>
@@ -466,16 +461,16 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                     </div>
                     {/* The instruction and the way out sit at the foot of
                         the list, where the eye lands after ticking. */}
-                    <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] bg-white px-2.5 py-1.5">
+                    <div className="flex items-center justify-between gap-2 border-t border-sand-line bg-white px-2.5 py-1.5">
                       {/* The phrase wraps rather than ellipsizing: on a phone
                           the Done button leaves it just short of one line. */}
-                      <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-[#b36b3c]">
+                      <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ember">
                         Select the account(s) to give to
                       </p>
                       <button
                         type="button"
                         onClick={() => setShowAccountPicker(false)}
-                        className="shrink-0 rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                        className="shrink-0 rounded-lg bg-bark px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-bark-900"
                       >
                         Done
                       </button>
@@ -490,11 +485,11 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
               share the row, on phones as well as wide screens. */}
           {selectedAccounts.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-[#26352f]">Amount per account (KES)</p>
+              <p className="text-sm font-medium text-bark">Amount per account (KES)</p>
               {selectedAccounts.map((account) => (
                 <div
                   key={account}
-                  className="flex items-center gap-2 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/60 px-3 py-2"
+                  className="flex items-center gap-2 rounded-xl border border-sand-line bg-sand/60 px-3 py-2"
                 >
                   {/* One tap takes the account off the gift — placed at
                       the row's left so it never crowds the amount field. */}
@@ -503,11 +498,11 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                     onClick={() => toggleAccount(account)}
                     aria-label={`Remove ${account}`}
                     title={`Remove ${account}`}
-                    className="shrink-0 rounded-full p-1 text-[#8a948d] transition hover:bg-[#f2efe8] hover:text-[#96552c]"
+                    className="shrink-0 rounded-full p-1 text-moss-faint2 transition hover:bg-sand-light hover:text-ember-deep"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#26352f] sm:text-sm">
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-bark sm:text-sm">
                     {account}
                   </span>
                   <input
@@ -522,13 +517,13 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                     onChange={(event) =>
                       setAccountAmounts((current) => ({ ...current, [account]: event.target.value }))
                     }
-                    className="w-24 shrink-0 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-[#b36b3c] sm:w-32"
+                    className="w-24 shrink-0 rounded-lg border border-sand-mute bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-ember sm:w-32"
                   />
                 </div>
               ))}
               <div className="flex items-center justify-between px-1 pt-1 text-sm">
-                <span className="font-medium text-[#617068]">Total</span>
-                <span className="font-bold text-[#26352f]">KES {allocationTotal.toLocaleString()}</span>
+                <span className="font-medium text-moss">Total</span>
+                <span className="font-bold text-bark">KES {allocationTotal.toLocaleString()}</span>
               </div>
             </div>
           )}
@@ -538,20 +533,20 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
           {methodOfGiving === "bank_transfer" && (
             <div className="space-y-4">
               {/* Bank Account Info Card */}
-              <div className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] p-4 text-xs space-y-2">
-                <p className="font-bold text-[#26352f] text-sm flex items-center gap-2">
-                  <span>🏦</span> Church Bank Account Details
+              <div className="rounded-2xl border border-sand-line bg-sand p-4 text-xs space-y-2">
+                <p className="font-bold text-bark text-sm flex items-center gap-2">
+                  <Landmark size={14} aria-hidden="true" /> Church Bank Account Details
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#3d5148] pt-1">
-                  <div><span className="font-semibold text-[#26352f]">Bank:</span> {churchBankDetails.bank_name}</div>
-                  <div><span className="font-semibold text-[#26352f]">Account Name:</span> {churchBankDetails.bank_account_name}</div>
-                  <div><span className="font-semibold text-[#26352f]">Account No:</span> {churchBankDetails.bank_account_number}</div>
-                  <div><span className="font-semibold text-[#26352f]">Branch / Swift:</span> {churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-moss-dark pt-1">
+                  <div><span className="font-semibold text-bark">Bank:</span> {churchBankDetails.bank_name}</div>
+                  <div><span className="font-semibold text-bark">Account Name:</span> {churchBankDetails.bank_account_name}</div>
+                  <div><span className="font-semibold text-bark">Account No:</span> {churchBankDetails.bank_account_number}</div>
+                  <div><span className="font-semibold text-bark">Branch / Swift:</span> {churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                <label className="block text-sm font-medium text-[#26352f]">
+                <label className="block text-sm font-medium text-bark">
                   Bank Deposit / Ref Number
                   <input
                     type="text"
@@ -559,31 +554,31 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
                     placeholder="e.g. DEP-9012 or KCB-8812"
                     value={bankRefNumber}
                     onChange={(event) => setBankRefNumber(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                   />
                 </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-[#26352f]">
+                <label className="block text-sm font-medium text-bark">
                   Your Bank Name
                   <input
                     type="text"
                     placeholder="e.g. Equity Bank, KCB, Absa, Co-op"
                     value={senderBankName}
                     onChange={(event) => setSenderBankName(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                   />
                 </label>
 
-                <label className="block text-sm font-medium text-[#26352f]">
+                <label className="block text-sm font-medium text-bark">
                   Transfer Date
                   <input
                     type="date"
                     required
                     value={transferDate}
                     onChange={(event) => setTransferDate(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 text-sm outline-none focus:border-[#b36b3c]"
+                    className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                   />
                 </label>
               </div>
@@ -592,10 +587,10 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
           {/* Sticky on phones: with several accounts the rows push the button
               down, so it stays reachable at the foot of the modal instead of
               scrolling out of sight. */}
-          <div className="sticky bottom-0 -mx-6 mt-6 border-t border-[#dfdbd1] bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+          <div className="sticky bottom-0 -mx-6 mt-6 border-t border-sand-line bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
             <button
               disabled={loading}
-              className="w-full rounded-full bg-[#3d7146] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#305a38] disabled:opacity-60 sm:text-base"
+              className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
             >
               {submitButtonText}
             </button>

@@ -51,13 +51,13 @@ function formatDateTime(value: string | null) {
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     pending: "bg-amber-50 text-amber-700 border-amber-200",
-    completed: "bg-[#eef2ed] text-[#3d7146] border-[#dce6da]",
-    failed: "bg-[#fdf2f2] text-[#b91c1c] border-[#fde8e8]",
+    completed: "bg-mist-select text-sage-strong border-sage-breathe",
+    failed: "bg-alert-wash text-alert border-alert-pale",
   };
   const label = status || "pending";
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[label] ?? "bg-[#f7f4ee] text-[#617068] border-[#dfdbd1]"}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[label] ?? "bg-sand text-moss border-sand-line"}`}
     >
       {label}
     </span>
@@ -180,8 +180,8 @@ export function MpesaRefundManager() {
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>
-            <h2 className="text-2xl font-bold text-[#26352f]">M-Pesa Refunds</h2>
-            <p className="mt-1 text-sm text-[#617068]">
+            <h2 className="text-2xl font-bold text-bark">M-Pesa Refunds</h2>
+            <p className="mt-1 text-sm text-moss">
               Refund completed M-Pesa contributions back to the member&apos;s phone and track each payout until Safaricom confirms it.
             </p>
           </div>
@@ -192,9 +192,9 @@ export function MpesaRefundManager() {
             await fetchData();
             setLoading(false);
           }}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-bold text-[#26352f] transition hover:bg-[#f7f4ee] sm:self-auto"
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:bg-sand sm:self-auto"
         >
-          <RefreshCw className={`h-3.5 w-3.5 text-[#b36b3c] ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 text-ember ${loading ? "animate-spin" : ""}`} />
           Refresh
         </button>
       </div>
@@ -203,8 +203,8 @@ export function MpesaRefundManager() {
         <div
           className={`flex items-start gap-2 rounded-2xl border p-4 text-xs font-semibold shadow-xs ${
             actionError
-              ? "border-[#fde8e8] bg-[#fdf2f2] text-[#b91c1c]"
-              : "border-[#c9c5bb] bg-white text-[#26352f]"
+              ? "border-alert-pale bg-alert-wash text-alert"
+              : "border-sand-mute bg-white text-bark"
           }`}
         >
           {actionError && <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />}
@@ -213,12 +213,12 @@ export function MpesaRefundManager() {
       )}
 
       {/* Refundable contributions — ledger-style container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] px-4 py-3 sm:px-5">
-          <h3 className="text-sm font-bold text-[#26352f]">Recent M-Pesa Contributions</h3>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
+        <div className="flex items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
+          <h3 className="text-sm font-bold text-bark">Recent M-Pesa Contributions</h3>
           <div className="flex items-center gap-2">
             <DensityToggle dense={dense} onToggle={toggleDensity} />
-            <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+            <span className="rounded-full bg-sand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
               {refundableCount} refundable
             </span>
           </div>
@@ -231,7 +231,7 @@ export function MpesaRefundManager() {
           rowKey={(c) => c.id}
           tableWrapperClassName="custom-table-scrollbar min-h-0 flex-1 overflow-auto"
           tableClassName="w-full text-left text-sm"
-          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+          headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm"
           headRowClassName=""
           headCellClassName=""
           headers={[
@@ -244,48 +244,48 @@ export function MpesaRefundManager() {
             { label: "Action", className: "px-4 py-3 text-center" },
           ]}
           loadingLabel="Loading contributions..."
-          stateClassName="px-4 py-12 text-center text-sm text-[#617068]"
+          stateClassName="px-4 py-12 text-center text-sm text-moss"
           tableEmpty="No completed M-Pesa contributions yet."
-          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsStateClassName="py-12 text-center text-sm text-moss"
           cardsEmpty={
             <>
-              <Receipt className="mx-auto h-10 w-10 text-[#617068]" />
-              <p className="mt-3 text-sm font-semibold text-[#26352f]">No completed M-Pesa contributions yet.</p>
+              <Receipt className="mx-auto h-10 w-10 text-moss" />
+              <p className="mt-3 text-sm font-semibold text-bark">No completed M-Pesa contributions yet.</p>
             </>
           }
           cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
           renderCard={(c) => (
-              <div key={c.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+              <div key={c.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">
-                      <Smartphone className="h-5 w-5 text-[#b36b3c]" />
+                      <Smartphone className="h-5 w-5 text-ember" />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="truncate text-sm font-bold text-[#26352f]">{c.donor_name}</h4>
-                      <p className="truncate text-[11px] text-[#617068]">{c.purpose}</p>
+                      <h4 className="truncate text-sm font-bold text-bark">{c.donor_name}</h4>
+                      <p className="truncate text-[11px] text-moss">{c.purpose}</p>
                     </div>
                   </div>
-                  <span className="shrink-0 text-sm font-bold text-[#26352f]">{formatKes(c.amount)}</span>
+                  <span className="shrink-0 text-sm font-bold text-bark">{formatKes(c.amount)}</span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-[#617068]">
+                <div className="flex items-center justify-between text-[11px] text-moss">
                   <span className="font-mono">{c.phone_number || "—"}</span>
                   <span>{formatDateTime(c.paid_at)}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-[#eeeae2] pt-2">
+                <div className="flex items-center justify-between border-t border-sand-soft pt-2">
                   {c.refund ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#617068]">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-moss">
                       Refunded <StatusPill status={c.refund_status} />
                     </span>
                   ) : (
-                    <span className="text-[11px] text-[#617068]">
+                    <span className="text-[11px] text-moss">
                       {c.mpesa_receipt_number ? `Receipt ${c.mpesa_receipt_number}` : "No receipt"}
                     </span>
                   )}
                   {!c.refund && (
                     <button
                       onClick={() => openRefundModal(c)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-[#fdf2f2] px-2.5 py-1 text-[11px] font-bold text-[#b91c1c] transition hover:bg-[#fde8e8]"
+                      className="inline-flex items-center gap-1 rounded-lg bg-alert-wash px-2.5 py-1 text-[11px] font-bold text-alert transition hover:bg-alert-pale"
                     >
                       <Undo2 className="h-3 w-3" />
                       <span>Refund</span>
@@ -295,28 +295,28 @@ export function MpesaRefundManager() {
               </div>
             )}
           renderRow={(c, idx) => (
-                  <tr key={c.id} className="transition hover:bg-[#faf7f2]">
-                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{idx + 1}</td>
+                  <tr key={c.id} className="transition hover:bg-sand-linen">
+                    <td className={`px-4 ${rowPad} text-xs text-moss`}>{idx + 1}</td>
                     <td className={`px-4 ${rowPad}`}>
-                      <p className="font-semibold text-[#26352f]">{c.donor_name}</p>
+                      <p className="font-semibold text-bark">{c.donor_name}</p>
                       {c.mpesa_receipt_number && (
-                        <p className="font-mono text-[11px] text-[#617068]">{c.mpesa_receipt_number}</p>
+                        <p className="font-mono text-[11px] text-moss">{c.mpesa_receipt_number}</p>
                       )}
                     </td>
-                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{c.purpose}</td>
-                    <td className={`px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{c.phone_number || "—"}</td>
-                    <td className={`px-4 ${rowPad} text-right font-bold text-[#26352f]`}>{formatKes(c.amount)}</td>
-                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{formatDateTime(c.paid_at)}</td>
+                    <td className={`px-4 ${rowPad} text-xs text-moss`}>{c.purpose}</td>
+                    <td className={`px-4 ${rowPad} font-mono text-xs text-moss`}>{c.phone_number || "—"}</td>
+                    <td className={`px-4 ${rowPad} text-right font-bold text-bark`}>{formatKes(c.amount)}</td>
+                    <td className={`px-4 ${rowPad} text-xs text-moss`}>{formatDateTime(c.paid_at)}</td>
                     <td className={`px-4 ${rowPad} text-center`}>
                       {c.refund ? (
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="text-[11px] font-semibold text-[#617068]">Refunded</span>
+                          <span className="text-[11px] font-semibold text-moss">Refunded</span>
                           <StatusPill status={c.refund_status} />
                         </span>
                       ) : (
                         <button
                           onClick={() => openRefundModal(c)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#fdf2f2] px-2.5 py-1.5 text-[11px] font-bold text-[#b91c1c] transition hover:bg-[#fde8e8]"
+                          className="inline-flex items-center gap-1 rounded-lg bg-alert-wash px-2.5 py-1.5 text-[11px] font-bold text-alert transition hover:bg-alert-pale"
                         >
                           <Undo2 className="h-3 w-3" />
                           <span>Refund</span>
@@ -329,21 +329,21 @@ export function MpesaRefundManager() {
       </div>
 
       {/* Refund History */}
-      <div className="flex min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] px-4 py-3 sm:px-5">
-          <h3 className="text-sm font-bold text-[#26352f]">Refund History</h3>
-          <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+      <div className="flex min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
+        <div className="flex items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
+          <h3 className="text-sm font-bold text-bark">Refund History</h3>
+          <span className="rounded-full bg-sand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
             {refunds.length} total
           </span>
         </div>
         <div className="custom-table-scrollbar max-h-72 overflow-y-auto">
           {refunds.length === 0 ? (
-            <div className="py-10 text-center text-sm text-[#617068]">
+            <div className="py-10 text-center text-sm text-moss">
               No refunds initiated yet.
             </div>
           ) : (
             <table className="w-full text-left text-sm">
-              <thead className="bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068]">
+              <thead className="bg-sand text-xs font-semibold uppercase tracking-wider text-moss">
                 <tr>
                   <th className="px-4 py-3">Donor</th>
                   <th className="px-4 py-3">Account</th>
@@ -354,28 +354,28 @@ export function MpesaRefundManager() {
                   <th className="px-4 py-3">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#eeeae2]">
+              <tbody className="divide-y divide-sand-soft">
                 {refunds.map((r) => (
-                  <tr key={r.id} className="transition hover:bg-[#faf7f2]">
+                  <tr key={r.id} className="transition hover:bg-sand-linen">
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-[#26352f]">{r.donor_name || "—"}</p>
+                      <p className="font-semibold text-bark">{r.donor_name || "—"}</p>
                       {r.outcome_description && (
-                        <p className="max-w-xs truncate text-[11px] text-[#617068]" title={r.outcome_description}>
+                        <p className="max-w-xs truncate text-[11px] text-moss" title={r.outcome_description}>
                           {r.outcome_description}
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[#617068]">{r.contribution_purpose || "—"}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[#617068]">{r.phone_number}</td>
-                    <td className="px-4 py-3 text-right font-bold text-[#26352f]">{formatKes(r.amount)}</td>
+                    <td className="px-4 py-3 text-xs text-moss">{r.contribution_purpose || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-moss">{r.phone_number}</td>
+                    <td className="px-4 py-3 text-right font-bold text-bark">{formatKes(r.amount)}</td>
                     <td className="px-4 py-3">
                       <StatusPill status={r.status} />
                       {r.transaction_id && (
-                        <p className="mt-1 font-mono text-[10px] text-[#617068]">{r.transaction_id}</p>
+                        <p className="mt-1 font-mono text-[10px] text-moss">{r.transaction_id}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[#617068]">{r.initiated_by_name || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-[#617068]">{formatDateTime(r.completed_at || r.created_at)}</td>
+                    <td className="px-4 py-3 text-xs text-moss">{r.initiated_by_name || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-moss">{formatDateTime(r.completed_at || r.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -389,66 +389,66 @@ export function MpesaRefundManager() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="animate-in fade-in zoom-in duration-150 w-full max-w-md space-y-5 rounded-3xl bg-white p-6 shadow-xl">
             <div>
-              <h3 className="text-xl font-bold text-[#26352f]">Confirm M-Pesa Refund</h3>
-              <p className="mt-1 text-xs text-[#617068]">
+              <h3 className="text-xl font-bold text-bark">Confirm M-Pesa Refund</h3>
+              <p className="mt-1 text-xs text-moss">
                 This pays the full contribution amount back to the member&apos;s phone via B2C. It cannot be undone once Safaricom accepts it.
               </p>
             </div>
 
-            <div className="space-y-2 rounded-2xl bg-[#faf7f2] p-4 text-xs">
+            <div className="space-y-2 rounded-2xl bg-sand-linen p-4 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[#617068]">Donor</span>
-                <span className="font-bold text-[#26352f]">{refundTarget.donor_name}</span>
+                <span className="text-moss">Donor</span>
+                <span className="font-bold text-bark">{refundTarget.donor_name}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#617068]">Account</span>
-                <span className="font-semibold text-[#26352f]">{refundTarget.purpose}</span>
+                <span className="text-moss">Account</span>
+                <span className="font-semibold text-bark">{refundTarget.purpose}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#617068]">Receipt</span>
-                <span className="font-mono text-[#26352f]">{refundTarget.mpesa_receipt_number || "—"}</span>
+                <span className="text-moss">Receipt</span>
+                <span className="font-mono text-bark">{refundTarget.mpesa_receipt_number || "—"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#617068]">Refund Phone</span>
-                <span className="font-mono font-bold text-[#26352f]">{refundTarget.phone_number || "—"}</span>
+                <span className="text-moss">Refund Phone</span>
+                <span className="font-mono font-bold text-bark">{refundTarget.phone_number || "—"}</span>
               </div>
-              <div className="flex items-center justify-between border-t border-[#eeeae2] pt-2">
-                <span className="text-[#617068]">Refund Amount</span>
-                <span className="text-base font-bold text-[#b91c1c]">{formatKes(refundTarget.amount)}</span>
+              <div className="flex items-center justify-between border-t border-sand-soft pt-2">
+                <span className="text-moss">Refund Amount</span>
+                <span className="text-base font-bold text-alert">{formatKes(refundTarget.amount)}</span>
               </div>
             </div>
 
             <form onSubmit={handleRefundSubmit} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Reason (required)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Reason (required)</label>
                 <textarea
                   rows={2}
                   required
                   placeholder="e.g. Duplicate contribution on 21/09/2026"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2 outline-none focus:border-ember"
                 />
               </div>
 
               {!refundTarget.phone_number && (
-                <p className="rounded-xl bg-[#fdf2f2] p-3 text-[11px] font-semibold text-[#b91c1c]">
+                <p className="rounded-xl bg-alert-wash p-3 text-[11px] font-semibold text-alert">
                   This contribution has no phone number on record — the refund will be rejected. Record the payer&apos;s number first.
                 </p>
               )}
 
-              <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-3">
+              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-3">
                 <button
                   type="button"
                   onClick={() => setRefundTarget(null)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                  className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || !refundTarget.phone_number}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-60"
+                  className="rounded-full bg-ember px-6 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-60"
                 >
                   {submitting ? "Submitting..." : "Initiate Refund"}
                 </button>

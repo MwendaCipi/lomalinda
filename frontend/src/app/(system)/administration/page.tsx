@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { Armchair, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
@@ -230,7 +230,7 @@ function AdministrationContent() {
 
   if (status === "loading") {
     return (
-      <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+      <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
         Loading {ADMIN_LOADING_LABELS[searchTab ?? ""] ?? "the administration workspace"}...
       </main>
     );
@@ -239,7 +239,7 @@ function AdministrationContent() {
   if (status === "denied") return null;
 
   return (
-    <main className="administration-workspace pinned-workspace min-h-screen md:h-[calc(100dvh-4rem)] bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="administration-workspace pinned-workspace min-h-screen md:h-[calc(100dvh-4rem)] bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {/* DESKTOP CONTEXTUAL SIDEBAR (Permanently Sticky on Desktop, Touching Header) */}
         <AdminSidebar
@@ -261,7 +261,7 @@ function AdministrationContent() {
 
         {/* MAIN WORKSPACE CONTENT */}
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
-          <div className="w-full h-full flex flex-col bg-white border-l border-[#dfdbd1] overflow-hidden">
+          <div className="w-full h-full flex flex-col bg-white border-l border-sand-line overflow-hidden">
             <div
               className={`flex-1 min-h-0 ${
                 tableContainedTabs.includes(activeTab)
@@ -279,7 +279,7 @@ function AdministrationContent() {
                   <div className="grid gap-5 sm:grid-cols-2">
                     {(isElder || isClerk || isAdmin) && (
                       <SectionHeadingCard
-                        icon="🪑"
+                        icon={<Armchair size={18} aria-hidden="true" />}
                         label="Elders' Desk"
                         description="Users, departments, meetings, announcements and requests."
                         onClick={() => setOverviewSection("elders")}
@@ -287,7 +287,7 @@ function AdministrationContent() {
                     )}
                     {isFinance && (
                       <SectionHeadingCard
-                        icon="🏦"
+                        icon={<Landmark size={18} aria-hidden="true" />}
                         label="Treasury & Finance"
                         description="Accounts, ledger, fund drives, expenditure and refunds."
                         onClick={() => setOverviewSection("finance")}
@@ -295,7 +295,7 @@ function AdministrationContent() {
                     )}
                     {isDeaconate && !isElderOnly && (
                       <SectionHeadingCard
-                        icon="📦"
+                        icon={<Package size={18} aria-hidden="true" />}
                         label="Deaconate Ministry"
                         description="Inventory, duty rota, team and ordinances calendar."
                         onClick={() => setOverviewSection("deaconate")}
@@ -308,7 +308,7 @@ function AdministrationContent() {
                   <button
                     type="button"
                     onClick={() => setOverviewSection(null)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember"
                   >
                     &larr; All sections
                   </button>
@@ -321,14 +321,14 @@ function AdministrationContent() {
                           setActiveTab("users");
                           router.replace("/administration?tab=users", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👥</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Users size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">User Management</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">View registered church members or add new member records.</span>
+                          <span className="block text-sm font-bold text-bark">User Management</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">View registered church members or add new member records.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <div
@@ -336,14 +336,14 @@ function AdministrationContent() {
                           setActiveTab("leaders");
                           router.replace("/administration?tab=leaders", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">👑</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Crown size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Church Departments</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Each department's leadership, roll and calendar, managed in one place.</span>
+                          <span className="block text-sm font-bold text-bark">Church Departments</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Each department's leadership, roll and calendar, managed in one place.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <div
@@ -351,14 +351,14 @@ function AdministrationContent() {
                           setActiveTab("transfers");
                           router.replace("/administration?tab=transfers", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📋</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><ClipboardList size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Membership Transfers</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Process incoming & outgoing church membership transfer requests.</span>
+                          <span className="block text-sm font-bold text-bark">Membership Transfers</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Process incoming & outgoing church membership transfer requests.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <div
@@ -366,14 +366,14 @@ function AdministrationContent() {
                           setActiveTab("board");
                           router.replace("/administration?tab=board", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🛡️</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><ShieldCheck size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Board Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Schedule board meetings, attach documents per agenda, record minutes, and invite board members.</span>
+                          <span className="block text-sm font-bold text-bark">Board Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Schedule board meetings, attach documents per agenda, record minutes, and invite board members.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <div
@@ -381,14 +381,14 @@ function AdministrationContent() {
                           setActiveTab("business");
                           router.replace("/administration?tab=business", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">💼</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Briefcase size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Business Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Manage business meeting schedules, agendas, supporting files, and minutes.</span>
+                          <span className="block text-sm font-bold text-bark">Business Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Manage business meeting schedules, agendas, supporting files, and minutes.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
                     </>
                   )}
@@ -399,14 +399,14 @@ function AdministrationContent() {
                         setActiveTab("announcements");
                         router.replace("/administration?tab=announcements", { scroll: false });
                       }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📢</span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Megaphone size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Announcements</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Publish Sabbath & weekly public announcements and track pledges.</span>
+                          <span className="block text-sm font-bold text-bark">Announcements</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Publish Sabbath & weekly public announcements and track pledges.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                     </div>
                   )}
 
@@ -416,26 +416,26 @@ function AdministrationContent() {
                         setActiveTab("requests");
                         router.replace("/administration?tab=requests", { scroll: false });
                       }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🙏</span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><HandHelping size={20} /></span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
-                            <span className="block text-sm font-bold text-[#26352f]">Received Requests</span>
+                            <span className="block text-sm font-bold text-bark">Received Requests</span>
                             {/* The phone hub is where a leader lands, so the count of
                                 unanswered requests travels with the card. */}
                             {pendingRequests.total > 0 && (
                               <span
                                 title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
-                                className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                                className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
                               >
                                 {pendingRequests.total}
                               </span>
                             )}
                           </span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Review join, prayer, visitation, dedication, and support requests.</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Review join, prayer, visitation, dedication, and support requests.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                     </div>
                   )}
 
@@ -449,38 +449,38 @@ function AdministrationContent() {
                           setActiveTab("accounts");
                           router.replace("/administration?tab=accounts", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🏦</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Landmark size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Treasury Accounts</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Set up church accounts, watch balances, and promote an account into a fund drive.</span>
+                          <span className="block text-sm font-bold text-bark">Treasury Accounts</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Set up church accounts, watch balances, and promote an account into a fund drive.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <Link
                         href="/administration/reconciliation"
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">⚖️</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Scale size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Contributions Ledger</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Record cash receipts and track all giving breakdown ledgers.</span>
+                          <span className="block text-sm font-bold text-bark">Contributions Ledger</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record cash receipts and track all giving breakdown ledgers.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </Link>
 
                       <Link
                         href="/administration/fund-drives"
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">💗</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Heart size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Fund Drives</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Manage the church's fund drives — targets, dates, receipts and member invites.</span>
+                          <span className="block text-sm font-bold text-bark">Fund Drives</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Manage the church's fund drives — targets, dates, receipts and member invites.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </Link>
 
                       <div
@@ -488,14 +488,14 @@ function AdministrationContent() {
                           setActiveTab("expenditures");
                           router.replace("/administration?tab=expenditures", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🧾</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Receipt size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Expenditure</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Record what the church spends, per account, and keep the books balanced.</span>
+                          <span className="block text-sm font-bold text-bark">Expenditure</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record what the church spends, per account, and keep the books balanced.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
                       <div
@@ -503,14 +503,14 @@ function AdministrationContent() {
                           setActiveTab("refunds");
                           router.replace("/administration?tab=refunds", { scroll: false });
                         }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">↩️</span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Undo2 size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">M-Pesa Refunds</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Return mistaken or duplicate giving through B2C payouts.</span>
+                          <span className="block text-sm font-bold text-bark">M-Pesa Refunds</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Return mistaken or duplicate giving through B2C payouts.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
                     </>
                   )}
@@ -523,14 +523,14 @@ function AdministrationContent() {
                         setActiveTab("inventory");
                         router.replace("/administration?tab=inventory", { scroll: false });
                       }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">📦</span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Package size={20} /></span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-[#26352f]">Deaconate Ministry</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Church property inventory, duty rota, deaconate roster and ordinances calendar.</span>
+                        <span className="block text-sm font-bold text-bark">Deaconate Ministry</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-moss">Church property inventory, duty rota, deaconate roster and ordinances calendar.</span>
                       </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                     </div>
                   ) : null}
 
@@ -540,14 +540,14 @@ function AdministrationContent() {
                         setActiveTab("settings");
                         router.replace("/administration?tab=settings", { scroll: false });
                       }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">⚙️</span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Settings size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#26352f]">Church Settings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Configure homepage clarion call message, church location, and church parameters.</span>
+                          <span className="block text-sm font-bold text-bark">Church Settings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Configure homepage clarion call message, church location, and church parameters.</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                     </div>
                   )}
 
@@ -560,14 +560,14 @@ function AdministrationContent() {
                         setActiveTab("dept-amm-members");
                         router.replace("/administration?tab=dept-amm-members", { scroll: false });
                       }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🤝</span>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Handshake size={20} /></span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-[#26352f]">Departments</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Leadership, members, calendars and budgets for every department and ministry.</span>
+                        <span className="block text-sm font-bold text-bark">Departments</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-moss">Leadership, members, calendars and budgets for every department and ministry.</span>
                       </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                     </div>
                   ) : null}
                 </div>
@@ -578,12 +578,12 @@ function AdministrationContent() {
 
             {/* Elders' Desk Church Clerk Approval Notice */}
             {["users", "leaders", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
-              <div className="mb-4 rounded-xl border border-[#e2d5b6] bg-[#fdfbf7] p-3.5 text-xs font-medium text-[#8c572b] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Elders&apos; Desk (Church Clerk Access):</span>
                   <span>You have rights to access and prepare updates across Elders&apos; Desk. Actions require Elder approval to persist.</span>
                 </div>
-                <span className="shrink-0 rounded-md bg-[#e2d5b6] px-2 py-0.5 text-[10px] font-bold text-[#5c3a1c]">Requires Elder Approval</span>
+                <span className="shrink-0 rounded-md bg-gold-sand px-2 py-0.5 text-[10px] font-bold text-gold-brown">Requires Elder Approval</span>
               </div>
             )}
 
@@ -697,7 +697,7 @@ function SectionHeadingCard({
   description,
   onClick,
 }: {
-  icon: string;
+  icon: ReactNode;
   label: string;
   description: string;
   onClick: () => void;
@@ -708,14 +708,14 @@ function SectionHeadingCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
-      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">{icon}</span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-2xl" aria-hidden="true">{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold text-[#26352f]">{label}</span>
-        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{description}</span>
+        <span className="block text-sm font-bold text-bark">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-moss">{description}</span>
       </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+      <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
     </div>
   );
 }
@@ -724,7 +724,7 @@ export default function AdministrationPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+        <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
           Loading Leader Portal...
         </main>
       }

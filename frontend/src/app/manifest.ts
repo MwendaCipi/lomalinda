@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { brand } from "@/lib/brand";
 
 export const dynamic = "force-static";
 
@@ -9,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya.",
     start_url: "/dashboard",
     display: "standalone",
-    background_color: "#f7f4ee",
-    theme_color: "#26352f",
+    background_color: brand.sand,
+    theme_color: brand.bark,
     icons: [
       {
         src: "/icons/meru/app-icon-192.png",

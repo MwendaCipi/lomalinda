@@ -10,7 +10,7 @@ import { passwordProblems } from "@/lib/validation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const inputClass = "mt-2 w-full rounded-xl border px-4 py-3 outline-none focus:border-[#b36b3c] border-[#c9c5bb]";
+const inputClass = "mt-2 w-full rounded-xl border px-4 py-3 outline-none focus:border-ember border-sand-mute";
 
 function fieldClass(hasError: boolean) {
   return hasError ? `${inputClass} border-red-400 bg-red-50/40` : inputClass;
@@ -98,8 +98,8 @@ function ResetPasswordContent() {
   }
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
-      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
+    <main className="flex min-h-screen items-start justify-center bg-sand px-6 pt-16 text-bark">
+      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-sand-line sm:p-10">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Choose a new password</h1>
         <form ref={formRef} onSubmit={submit} noValidate className="mt-8 space-y-5">
           {generalError && (
@@ -147,12 +147,12 @@ function ResetPasswordContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full bg-[#26352f] px-5 py-3.5 font-medium text-white disabled:opacity-60"
+            className="w-full rounded-full bg-bark px-5 py-3.5 font-medium text-white disabled:opacity-60"
           >
             {loading ? "Saving..." : "Reset password"}
           </button>
         </form>
-        <Link href="/login" className="mt-6 block text-center text-sm font-semibold text-[#b36b3c]">
+        <Link href="/login" className="mt-6 block text-center text-sm font-semibold text-ember">
           Back to sign in
         </Link>
       </section>
@@ -164,7 +164,7 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+        <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
           Loading password reset...
         </main>
       }

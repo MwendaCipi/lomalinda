@@ -2,6 +2,8 @@
 
 import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
 import { useEffect, useState } from "react";
+import { brand } from "@/lib/brand";
+import { ArrowRight } from "lucide-react";
 
 import "leaflet/dist/leaflet.css";
 
@@ -18,7 +20,7 @@ export default function ChurchLocation() {
     return (
       <div>
         <p className="text-sm leading-7 text-white/70">{settings?.address || "Loma Linda, Meru, Kenya"}</p>
-        <a href={`https://www.google.com/maps/search/?api=1&query=${query}`} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-[#f1c89e] hover:underline">
+        <a href={`https://www.google.com/maps/search/?api=1&query=${query}`} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-gold hover:underline">
           Open in Google Maps &rarr;
         </a>
       </div>
@@ -26,5 +28,5 @@ export default function ChurchLocation() {
   }
   const position: [number, number] = [Number(settings.latitude), Number(settings.longitude)];
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`;
-  return <div><div className="h-72 overflow-hidden rounded-xl border border-[#dfdbd1]"><MapContainer center={position} zoom={16} scrollWheelZoom={false} className="h-full w-full"><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><CircleMarker center={position} radius={10} pathOptions={{ color: "#b36b3c", fillColor: "#b36b3c", fillOpacity: 0.85 }}><Popup>{settings.church_name}<br />{settings.address}</Popup></CircleMarker></MapContainer></div><a href={mapsUrl} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-semibold text-[#b36b3c] hover:underline">Open in Google Maps →</a></div>;
+  return <div><div className="h-72 overflow-hidden rounded-xl border border-sand-line"><MapContainer center={position} zoom={16} scrollWheelZoom={false} className="h-full w-full"><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><CircleMarker center={position} radius={10} pathOptions={{ color: brand.ember, fillColor: brand.ember, fillOpacity: 0.85 }}><Popup>{settings.church_name}<br />{settings.address}</Popup></CircleMarker></MapContainer></div><a href={mapsUrl} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-semibold text-ember hover:underline">Open in Google Maps <ArrowRight size={12} className="inline" aria-hidden="true" /></a></div>;
 }

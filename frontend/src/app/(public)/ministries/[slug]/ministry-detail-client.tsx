@@ -30,27 +30,27 @@ export default function MinistryDetailClient() {
 
   if (!ministry)
     return (
-      <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#26352f]">
+      <main className="min-h-screen bg-sand px-6 py-16 text-center text-bark">
         <h1 className="text-3xl font-semibold">Ministry not found</h1>
-        <Link href="/ministries" className="mt-6 inline-block font-semibold text-[#b36b3c]">
+        <Link href="/ministries" className="mt-6 inline-block font-semibold text-ember">
           Back to ministries &rarr;
         </Link>
       </main>
     );
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12">
           <div className="space-y-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Ministry</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Ministry</p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{ministry.title}</h1>
-                <p className="mt-3 text-base leading-7 text-[#617068] sm:text-lg">{ministry.description}</p>
+                <p className="mt-3 text-base leading-7 text-moss sm:text-lg">{ministry.description}</p>
               </div>
               <Link
                 href={`/give?purpose=${encodeURIComponent(ministry.givingPurpose)}`}
-                className="inline-flex items-center justify-center rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#96552e]"
+                className="inline-flex items-center justify-center rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-ember-dark"
               >
                 Support this ministry
               </Link>
@@ -59,9 +59,9 @@ export default function MinistryDetailClient() {
             {ministry.sections && (
               <div className="grid gap-5 md:grid-cols-3">
                 {ministry.sections.map((section) => (
-                  <section id={section.id} key={section.title} className="scroll-mt-28 rounded-2xl border border-[#dfdbd1] bg-white p-6 sm:p-7">
+                  <section id={section.id} key={section.title} className="scroll-mt-28 rounded-2xl border border-sand-line bg-white p-6 sm:p-7">
                     <h2 className="text-lg font-semibold sm:text-xl">{section.title}</h2>
-                    <p className="mt-3 text-sm leading-6 text-[#617068]">{section.text}</p>
+                    <p className="mt-3 text-sm leading-6 text-moss">{section.text}</p>
                   </section>
                 ))}
               </div>
@@ -71,7 +71,7 @@ export default function MinistryDetailClient() {
               <section className="mt-8">
                 <h2 className="text-xl font-semibold sm:text-2xl">{ministry.title} calendar</h2>
                 <DepartmentCalendar department={ministry.department} events={events} loaded={loaded} />
-                <p className="mt-6 text-xs text-[#617068]">Showing events published for {year}.</p>
+                <p className="mt-6 text-xs text-moss">Showing events published for {year}.</p>
               </section>
             )}
           </div>
@@ -84,7 +84,7 @@ export default function MinistryDetailClient() {
         description="Each ministry has its own programme, leaders and calendar — open one to see what they do."
         links={ministrySectionLinks}
         activeKey={slug}
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="border-t border-sand-line bg-white/60"
       />
     </main>
   );

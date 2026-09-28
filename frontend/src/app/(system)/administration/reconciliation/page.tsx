@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, Fragment, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
@@ -353,8 +353,8 @@ export default function ReconciliationPage() {
   };
 
 
-  if (status === "loading") return <main className="min-h-screen bg-[#f7f4ee] p-10 text-center text-[#617068]">Loading reconciliation workspace…</main>;
-  if (status === "denied") return <main className="min-h-screen bg-[#f7f4ee] p-10"><div className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm"><h1 className="text-2xl font-semibold text-[#26352f]">Finance access required</h1><p className="mt-3 text-[#617068]">This workspace is available to treasurers, finance managers, church leaders, and administrators.</p><Link href="/administration" className="mt-6 inline-block font-semibold text-[#b36b3c]">Back to administration</Link></div></main>;
+  if (status === "loading") return <main className="min-h-screen bg-sand p-10 text-center text-moss">Loading reconciliation workspace…</main>;
+  if (status === "denied") return <main className="min-h-screen bg-sand p-10"><div className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm"><h1 className="text-2xl font-semibold text-bark">Finance access required</h1><p className="mt-3 text-moss">This workspace is available to treasurers, finance managers, church leaders, and administrators.</p><Link href="/administration" className="mt-6 inline-block font-semibold text-ember">Back to administration</Link></div></main>;
 
   const rawRows = summary?.purpose_breakdown || [];
   const displayedRows: PurposeRow[] = rawRows.filter((r) => Number(r.total || 0) > 0);
@@ -453,25 +453,25 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <main className="contributions-ledger-page pinned-workspace min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="contributions-ledger-page pinned-workspace min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <AdminSidebar />
         
         {/* SINGLE CARD TOUCHING MARGINS (ZERO MARGIN/PADDING) */}
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
-          <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-[#dfdbd1] overflow-hidden">
+          <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-sand-line overflow-hidden">
             
             {/* Header Controls (Flex-shrink-0) — the view's name sits beside the
                 controls on a wide screen; a phone drops it, since the toggle
                 below already says which view is open. */}
             <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <h1 className="hidden sm:block shrink-0 whitespace-nowrap text-sm font-semibold sm:text-base text-[#26352f]">
+              <h1 className="hidden sm:block shrink-0 whitespace-nowrap text-sm font-semibold sm:text-base text-bark">
                 {viewMode === "all_givings" ? "Individual Givings" : "Contributions Ledger"}
               </h1>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
                 {/* View Mode Switcher occupying full width */}
-                <div className="flex w-full flex-1 rounded-xl border border-[#c9c5bb] bg-[#f7f4ee] p-1">
+                <div className="flex w-full flex-1 rounded-xl border border-sand-mute bg-sand p-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -481,8 +481,8 @@ export default function ReconciliationPage() {
                     }}
                     className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "all_givings"
-                        ? "bg-[#26352f] text-white shadow-sm"
-                        : "text-[#617068] hover:text-[#26352f]"
+                        ? "bg-bark text-white shadow-sm"
+                        : "text-moss hover:text-bark"
                     }`}
                   >
                     Individual Givings
@@ -494,8 +494,8 @@ export default function ReconciliationPage() {
                     }}
                     className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "summary"
-                        ? "bg-white text-[#26352f] shadow-sm"
-                        : "text-[#617068] hover:text-[#26352f]"
+                        ? "bg-white text-bark shadow-sm"
+                        : "text-moss hover:text-bark"
                     }`}
                   >
                     Summary Breakdown
@@ -504,22 +504,22 @@ export default function ReconciliationPage() {
 
                 {/* Date pickers row occupying full width */}
                 <div className="flex w-full sm:w-auto items-center justify-between gap-2">
-                  <label className="flex-1 sm:flex-none text-xs font-medium text-[#617068] flex items-center justify-between gap-1">
+                  <label className="flex-1 sm:flex-none text-xs font-medium text-moss flex items-center justify-between gap-1">
                     <span>From</span>
                     <input
                       type="date"
                       value={fromDate}
                       onChange={(event) => changeFromDate(event.target.value)}
-                      className="w-full sm:w-auto rounded-xl border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
+                      className="w-full sm:w-auto rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
                     />
                   </label>
-                  <label className="flex-1 sm:flex-none text-xs font-medium text-[#617068] flex items-center justify-between gap-1">
+                  <label className="flex-1 sm:flex-none text-xs font-medium text-moss flex items-center justify-between gap-1">
                     <span>To</span>
                     <input
                       type="date"
                       value={toDate}
                       onChange={(event) => changeToDate(event.target.value)}
-                      className="w-full sm:w-auto rounded-xl border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
+                      className="w-full sm:w-auto rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
                     />
                   </label>
                 </div>
@@ -527,13 +527,13 @@ export default function ReconciliationPage() {
             </div>
 
             {message && (
-              <p className="shrink-0 mt-3 rounded-xl bg-[#f7f4ee] px-4 py-2.5 text-xs text-[#617068] border border-[#dfdbd1]">
+              <p className="shrink-0 mt-3 rounded-xl bg-sand px-4 py-2.5 text-xs text-moss border border-sand-line">
                 {message}
               </p>
             )}
 
             {/* MAIN CONTENT TABLE CONTAINER (Flex-1, Non-scrollable outer page, scrollable table rows, fixed totals) */}
-            <div className="flex-1 min-h-0 flex flex-col mt-3 overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
+            <div className="flex-1 min-h-0 flex flex-col mt-3 overflow-hidden rounded-xl border border-sand-line bg-white">
               
               {/* VIEW 1: SUMMARY BREAKDOWN TABLE VIEW */}
               {/* VIEW 1: SUMMARY BREAKDOWN TABLE VIEW */}
@@ -542,7 +542,7 @@ export default function ReconciliationPage() {
                   /* DEDICATED INDEPENDENT PURPOSE VIEW */
                   <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
                     {/* Top Header of Dedicated Purpose View */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-[#dfdbd1] bg-[#faf7f2] shrink-0">
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-sand-line bg-sand-linen shrink-0">
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
@@ -550,15 +550,15 @@ export default function ReconciliationPage() {
                             setExpandedPurpose(null);
                             setPurposeSearchQuery("");
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-sm"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
                         >
-                          <ArrowLeft className="h-4 w-4 text-[#b36b3c]" />
+                          <ArrowLeft className="h-4 w-4 text-ember" />
                           <span>Back to Summary</span>
                         </button>
                         <div>
-                          <h2 className="text-base font-bold text-[#26352f] flex items-center gap-2">
+                          <h2 className="text-base font-bold text-bark flex items-center gap-2">
                             <span>{expandedPurpose}</span>
-                            <span className="rounded-full bg-[#26352f] px-2.5 py-0.5 text-xs font-semibold text-white">
+                            <span className="rounded-full bg-bark px-2.5 py-0.5 text-xs font-semibold text-white">
                               {loadingPurpose === expandedPurpose
                                 ? "Loading..."
                                 : `${(purposeGivings[expandedPurpose] || []).filter((g) => {
@@ -572,7 +572,7 @@ export default function ReconciliationPage() {
                                   }).length} entries`}
                             </span>
                           </h2>
-                          <p className="text-xs text-[#617068]">
+                          <p className="text-xs text-moss">
                             Individual givings for {expandedPurpose} ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`})
                           </p>
                         </div>
@@ -584,7 +584,7 @@ export default function ReconciliationPage() {
                           placeholder="Search giver, receipt, mode..."
                           value={purposeSearchQuery}
                           onChange={(e) => setPurposeSearchQuery(e.target.value)}
-                          className="w-full rounded-xl border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
+                          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
                         />
                       </div>
                     </div>
@@ -613,30 +613,30 @@ export default function ReconciliationPage() {
                           {/* Mobile View */}
                           <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
                             {isLoading ? (
-                              <div className="py-12 text-center text-sm text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
+                              <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
                                 Loading givings for {expandedPurpose}...
                               </div>
                             ) : filteredList.length === 0 ? (
-                              <div className="py-12 text-center text-sm text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
+                              <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
                                 No individual givings found for {expandedPurpose} in this period.
                               </div>
                             ) : (
                               filteredList.map((g) => (
-                                <div key={g.id} className="rounded-xl bg-[#faf7f2] p-3.5 border border-[#dfdbd1] text-xs space-y-2">
+                                <div key={g.id} className="rounded-xl bg-sand-linen p-3.5 border border-sand-line text-xs space-y-2">
                                   <div className="flex items-center justify-between font-semibold">
-                                    <span className="text-[#26352f] text-sm">{g.donor_name}</span>
-                                    <span className="text-[#5f8067] font-bold text-sm">
+                                    <span className="text-bark text-sm">{g.donor_name}</span>
+                                    <span className="text-sage font-bold text-sm">
                                       {money(g.amount)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center justify-between text-[11px] text-[#617068]">
+                                  <div className="flex items-center justify-between text-[11px] text-moss">
                                     <span>{g.received_at ? new Date(g.received_at).toLocaleDateString() : "—"} · {g.payment_method}</span>
                                     <span>Receipt: {g.receipt_number || "—"}</span>
                                   </div>
-                                  <div className="flex items-center justify-between pt-2 border-t border-[#eeeae2]">
+                                  <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
                                     <div>
                                       {g.receipt_sent_at ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3d7146]">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Receipt sent
                                         </span>
@@ -645,7 +645,7 @@ export default function ReconciliationPage() {
                                           Receipt pending
                                         </span>
                                       ) : (
-                                        <span className="rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                        <span className="rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
                                           No email on file
                                         </span>
                                       )}
@@ -655,7 +655,7 @@ export default function ReconciliationPage() {
                                         <button
                                           type="button"
                                           onClick={() => setContactModalGiver(g)}
-                                          className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]"
+                                          className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-bark hover:bg-sand"
                                         >
                                           Contact
                                         </button>
@@ -664,7 +664,7 @@ export default function ReconciliationPage() {
                                         type="button"
                                         onClick={() => handleResendReceipt(g)}
                                         disabled={resendingId === g.id}
-                                        className="rounded-lg bg-[#b36b3c] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#96552e] disabled:opacity-60"
+                                        className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                       >
                                         {resendingId === g.id ? "Sending..." : "Resend"}
                                       </button>
@@ -678,7 +678,7 @@ export default function ReconciliationPage() {
                           {/* Desktop View */}
                           <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
                             <table className="w-full text-left text-sm">
-                              <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
+                              <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm">
                                 <tr>
                                   <th className="px-4 py-3 text-left w-12">#</th>
                                   <th className="px-4 py-3">Date</th>
@@ -690,39 +690,39 @@ export default function ReconciliationPage() {
                                   <th className="px-4 py-3 text-center">Actions</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#eeeae2]">
+                              <tbody className="divide-y divide-sand-soft">
                                 {isLoading ? (
                                   <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-[#617068]">
+                                    <td colSpan={8} className="px-4 py-12 text-center text-moss">
                                       Loading givings for {expandedPurpose}...
                                     </td>
                                   </tr>
                                 ) : filteredList.length === 0 ? (
                                   <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-[#617068]">
+                                    <td colSpan={8} className="px-4 py-12 text-center text-moss">
                                       No individual givings found for {expandedPurpose} in this period.
                                     </td>
                                   </tr>
                                 ) : (
                                   filteredList.map((g, gIdx) => (
-                                    <tr key={g.id} className="hover:bg-[#faf7f2]">
-                                      <td className={`px-4 ${rowPad} text-xs font-semibold font-mono text-[#617068]`}>{gIdx + 1}</td>
-                                      <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>
+                                    <tr key={g.id} className="hover:bg-sand-linen">
+                                      <td className={`px-4 ${rowPad} text-xs font-semibold font-mono text-moss`}>{gIdx + 1}</td>
+                                      <td className={`px-4 ${rowPad} text-xs text-moss`}>
                                         {g.received_at ? new Date(g.received_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                                       </td>
-                                      <td className={`px-4 ${rowPad} font-semibold text-[#26352f]`}>{g.donor_name}</td>
+                                      <td className={`px-4 ${rowPad} font-semibold text-bark`}>{g.donor_name}</td>
                                       <td className={`px-4 ${rowPad}`}>
-                                        <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#5f8067]">
+                                        <span className="rounded-full bg-mist-select px-2.5 py-0.5 text-xs font-semibold text-sage">
                                           {g.payment_method}
                                         </span>
                                       </td>
-                                      <td className={`px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{g.receipt_number || "—"}</td>
-                                      <td className={`px-4 ${rowPad} text-right font-semibold text-[#26352f]`}>
+                                      <td className={`px-4 ${rowPad} font-mono text-xs text-moss`}>{g.receipt_number || "—"}</td>
+                                      <td className={`px-4 ${rowPad} text-right font-semibold text-bark`}>
                                         {money(g.amount)}
                                       </td>
                                       <td className={`px-4 ${rowPad}`}>
                                         {g.receipt_sent_at ? (
-                                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#3d7146]">
+                                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-sage-strong">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Sent
                                           </span>
@@ -731,7 +731,7 @@ export default function ReconciliationPage() {
                                             Pending
                                           </span>
                                         ) : (
-                                          <span className="rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                          <span className="rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
                                             No email on file
                                           </span>
                                         )}
@@ -742,7 +742,7 @@ export default function ReconciliationPage() {
                                             <button
                                               type="button"
                                               onClick={() => setContactModalGiver(g)}
-                                              className="rounded-lg border border-[#c9c5bb] px-2.5 py-1 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee]"
+                                              className="rounded-lg border border-sand-mute px-2.5 py-1 text-xs font-semibold text-bark hover:bg-sand"
                                             >
                                               Contact
                                             </button>
@@ -751,7 +751,7 @@ export default function ReconciliationPage() {
                                             type="button"
                                             onClick={() => handleResendReceipt(g)}
                                             disabled={resendingId === g.id}
-                                            className="rounded-lg bg-[#b36b3c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#96552e] disabled:opacity-60"
+                                            className="rounded-lg bg-ember px-2.5 py-1 text-xs font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                           >
                                             {resendingId === g.id ? "Sending..." : "Resend"}
                                           </button>
@@ -765,22 +765,22 @@ export default function ReconciliationPage() {
                           </div>
 
                           {/* Sticky Footer for Dedicated Purpose View */}
-                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
+                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
                               <div className="flex items-center gap-4 text-xs sm:text-sm">
-                                <span className="text-xs text-[#617068]">
-                                  Showing <strong className="text-[#26352f]">{filteredList.length}</strong> of <strong className="text-[#26352f]">{rawList.length}</strong> entries
+                                <span className="text-xs text-moss">
+                                  Showing <strong className="text-bark">{filteredList.length}</strong> of <strong className="text-bark">{rawList.length}</strong> entries
                                 </span>
                                 <DensityToggle dense={dense} onToggle={toggleDensity} />
-                                <span className="font-bold text-[#26352f]">
-                                  {expandedPurpose} Total: <span className="text-[#b36b3c]">{money(purposeTotal)}</span>
+                                <span className="font-bold text-bark">
+                                  {expandedPurpose} Total: <span className="text-ember">{money(purposeTotal)}</span>
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setIsModalOpen(true)}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#b36b3c] px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] whitespace-nowrap"
+                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
                                 >
                                   <Plus className="h-4 w-4" />
                                   <span>Add Receipt</span>
@@ -788,17 +788,17 @@ export default function ReconciliationPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadBackendPdf(true, expandedPurpose)}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 sm:px-3.5 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-sm whitespace-nowrap"
+                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
                                 >
-                                  <Printer className="h-4 w-4 text-[#b36b3c]" />
+                                  <Printer className="h-4 w-4 text-ember" />
                                   <span>PDF Report</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={handleExportSpreadsheet}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-[#26352f] px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-[#1e2a25] transition shadow-sm whitespace-nowrap"
+                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
                                 >
-                                  <FileSpreadsheet className="h-4 w-4 text-[#88b393]" />
+                                  <FileSpreadsheet className="h-4 w-4 text-sage-light" />
                                   <span>Spreadsheet</span>
                                 </button>
                               </div>
@@ -814,7 +814,7 @@ export default function ReconciliationPage() {
                     {/* Mobile Cards View (visible on md:hidden) */}
                     <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
                       {displayedRows.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
+                        <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
                           No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).
                         </div>
                       ) : (
@@ -822,27 +822,27 @@ export default function ReconciliationPage() {
                           <div
                             key={row.purpose}
                             onClick={() => toggleExpandPurpose(row.purpose)}
-                            className="group cursor-pointer rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-3 transition hover:border-[#b36b3c]"
+                            className="group cursor-pointer rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3 transition hover:border-ember"
                           >
-                            <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
+                            <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-semibold text-[#617068]">#{idx + 1}</span>
-                                <h3 className="font-bold text-sm text-[#26352f] group-hover:text-[#b36b3c] transition">{row.purpose}</h3>
+                                <span className="font-mono text-xs font-semibold text-moss">#{idx + 1}</span>
+                                <h3 className="font-bold text-sm text-bark group-hover:text-ember transition">{row.purpose}</h3>
                               </div>
-                              <span className="font-bold text-sm text-[#b36b3c] bg-[#faf7f2] px-2.5 py-1 rounded-lg border border-[#dfdbd1]">
+                              <span className="font-bold text-sm text-ember bg-sand-linen px-2.5 py-1 rounded-lg border border-sand-line">
                                 {money(row.total)}
                               </span>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-2 text-xs text-[#617068]">
-                              <div>M-Pesa: <strong className="text-[#26352f]">{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</strong></div>
-                              <div>Bank-to-Bank: <strong className="text-[#26352f]">{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</strong></div>
-                              <div>Cheque: <strong className="text-[#26352f]">{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</strong></div>
-                              <div>Cash: <strong className="text-[#3d7146]">{Number(row.cash) > 0 ? money(row.cash) : "—"}</strong></div>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-moss">
+                              <div>M-Pesa: <strong className="text-bark">{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</strong></div>
+                              <div>Bank-to-Bank: <strong className="text-bark">{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</strong></div>
+                              <div>Cheque: <strong className="text-bark">{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</strong></div>
+                              <div>Cash: <strong className="text-sage-strong">{Number(row.cash) > 0 ? money(row.cash) : "—"}</strong></div>
                             </div>
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-[#b36b3c] pt-1">
-                              <span>View individual givings →</span>
-                              <ChevronRight className="h-4 w-4 text-[#b36b3c] group-hover:translate-x-0.5 transition" />
+                            <div className="flex items-center justify-between text-[11px] font-semibold text-ember pt-1">
+                              <span className="inline-flex items-center gap-1">View individual givings <ArrowRight size={11} aria-hidden="true" /></span>
+                              <ChevronRight className="h-4 w-4 text-ember group-hover:translate-x-0.5 transition" />
                             </div>
                           </div>
                         ))
@@ -852,7 +852,7 @@ export default function ReconciliationPage() {
                     {/* Desktop Table View (visible on md and up) */}
                     <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
                       <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm">
+                        <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm">
                           <tr>
                             <th className="px-4 py-3 text-left w-12">#</th>
                             <th className="px-4 py-3 w-56 shrink-0">Account</th>
@@ -863,10 +863,10 @@ export default function ReconciliationPage() {
                             <th className="px-4 py-3 text-right">Total</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#eeeae2]">
+                        <tbody className="divide-y divide-sand-soft">
                           {displayedRows.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-4 py-12 text-center text-[#617068]">
+                              <td colSpan={7} className="px-4 py-12 text-center text-moss">
                                 No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).
                               </td>
                             </tr>
@@ -875,22 +875,22 @@ export default function ReconciliationPage() {
                               <tr
                                 key={row.purpose}
                                 onClick={() => toggleExpandPurpose(row.purpose)}
-                                className="group cursor-pointer hover:bg-[#faf7f2] transition"
+                                className="group cursor-pointer hover:bg-sand-linen transition"
                               >
-                                <td className={`px-4 ${rowPad} text-xs font-semibold text-[#617068] font-mono`}>
+                                <td className={`px-4 ${rowPad} text-xs font-semibold text-moss font-mono`}>
                                   {idx + 1}
                                 </td>
-                                <td className={`px-4 ${rowPad} font-medium text-[#26352f] w-56 shrink-0 truncate`}>
+                                <td className={`px-4 ${rowPad} font-medium text-bark w-56 shrink-0 truncate`}>
                                   <div className="flex items-center justify-between gap-2 pr-2">
-                                    <span className="font-semibold text-[#26352f] group-hover:text-[#b36b3c] transition">{row.purpose}</span>
-                                    <ChevronRight className="h-4 w-4 text-[#617068] group-hover:text-[#b36b3c] group-hover:translate-x-0.5 transition shrink-0" />
+                                    <span className="font-semibold text-bark group-hover:text-ember transition">{row.purpose}</span>
+                                    <ChevronRight className="h-4 w-4 text-moss group-hover:text-ember group-hover:translate-x-0.5 transition shrink-0" />
                                   </div>
                                 </td>
-                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</td>
-                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</td>
-                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</td>
-                                <td className={`px-4 ${rowPad} text-right font-semibold text-[#3d7146]`}>{Number(row.cash) > 0 ? money(row.cash) : "—"}</td>
-                                <td className={`px-4 ${rowPad} text-right font-bold text-[#26352f]`}>{money(row.total)}</td>
+                                <td className={`px-4 ${rowPad} text-right text-moss`}>{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right text-moss`}>{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right text-moss`}>{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right font-semibold text-sage-strong`}>{Number(row.cash) > 0 ? money(row.cash) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right font-bold text-bark`}>{money(row.total)}</td>
                               </tr>
                             ))
                           )}
@@ -899,29 +899,29 @@ export default function ReconciliationPage() {
                     </div>
 
                     {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons — flush on the tab bar. The column totals belong to the table, so a phone (where the rows are cards) drops them and keeps the actions. */}
-                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f] overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
+                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
                       <table className="hidden w-full text-left text-sm md:table">
                         <tfoot>
                           <tr>
-                            <td className="px-4 py-2.5 text-xs text-[#617068] font-mono w-12">#</td>
+                            <td className="px-4 py-2.5 text-xs text-moss font-mono w-12">#</td>
                             <td className="px-4 py-2.5 text-base w-56 shrink-0">Total</td>
                             <td className="px-4 py-2.5 text-right">{money(totals.mpesa)}</td>
                             <td className="px-4 py-2.5 text-right">{money(totals.bank_transfer)}</td>
                             <td className="px-4 py-2.5 text-right">{money(totals.cheque)}</td>
-                            <td className="px-4 py-2.5 text-right text-[#3d7146]">{money(totals.cash)}</td>
-                            <td className="px-4 py-2.5 text-right text-base text-[#b36b3c]">{money(totals.total)}</td>
+                            <td className="px-4 py-2.5 text-right text-sage-strong">{money(totals.cash)}</td>
+                            <td className="px-4 py-2.5 text-right text-base text-ember">{money(totals.total)}</td>
                           </tr>
                         </tfoot>
                       </table>
-                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-[#dfdbd1]">
-                        <span className="text-xs font-semibold text-[#617068]">
-                          Total Rows Available: <strong className="text-[#26352f]">{displayedRows.length}</strong>
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-sand-line">
+                        <span className="text-xs font-semibold text-moss">
+                          Total Rows Available: <strong className="text-bark">{displayedRows.length}</strong>
                         </span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setIsModalOpen(true)}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#b36b3c] px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] whitespace-nowrap"
+                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
                           >
                             <Plus className="h-4 w-4" />
                             <span>Add Receipt</span>
@@ -929,17 +929,17 @@ export default function ReconciliationPage() {
                           <button
                             type="button"
                             onClick={() => handleDownloadBackendPdf(false)}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 sm:px-3.5 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-sm whitespace-nowrap"
+                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
                           >
-                            <Printer className="h-4 w-4 text-[#b36b3c]" />
+                            <Printer className="h-4 w-4 text-ember" />
                             <span>PDF Report</span>
                           </button>
                           <button
                             type="button"
                             onClick={handleExportSpreadsheet}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-[#26352f] px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-[#1e2a25] transition shadow-sm whitespace-nowrap"
+                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
                           >
-                            <FileSpreadsheet className="h-4 w-4 text-[#88b393]" />
+                            <FileSpreadsheet className="h-4 w-4 text-sage-light" />
                             <span>Spreadsheet</span>
                           </button>
                         </div>
@@ -961,48 +961,48 @@ export default function ReconciliationPage() {
                         {/* Mobile Cards View (visible on md:hidden) */}
                         <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
                           {isLoading ? (
-                            <div className="py-12 text-center text-sm text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
+                            <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
                               Loading member givings...
                             </div>
                           ) : listToDisplay.length === 0 ? (
-                            <div className="py-12 text-center text-sm text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]">
+                            <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
                               No individual member givings recorded for the selected date range.
                             </div>
                           ) : (
                             listToDisplay.map((giving, idx) => (
-                              <div key={giving.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-3">
-                                <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
+                              <div key={giving.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
                                   <div>
-                                    <div className="font-bold text-sm text-[#26352f]">{giving.donor_name}</div>
-                                    <div className="text-[11px] text-[#617068]">
+                                    <div className="font-bold text-sm text-bark">{giving.donor_name}</div>
+                                    <div className="text-[11px] text-moss">
                                       {giving.received_at ? new Date(giving.received_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="font-bold text-sm text-[#5f8067]">
+                                    <div className="font-bold text-sm text-sage">
                                       {money(giving.amount || 0)}
                                     </div>
-                                    <span className="inline-block rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-semibold text-[#5f8067]">
+                                    <span className="inline-block rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-semibold text-sage">
                                       {giving.payment_method}
                                     </span>
                                   </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                  <span className="rounded-lg bg-[#faf7f2] border border-[#dfdbd1] px-2 py-0.5 text-xs font-semibold text-[#b36b3c]">
+                                  <span className="rounded-lg bg-sand-linen border border-sand-line px-2 py-0.5 text-xs font-semibold text-ember">
                                     {giving.purpose}
                                   </span>
-                                  <span className="font-mono text-[11px] text-[#617068]">Receipt: {giving.receipt_number || "N/A"}</span>
+                                  <span className="font-mono text-[11px] text-moss">Receipt: {giving.receipt_number || "N/A"}</span>
                                 </div>
 
                                 {giving.item_description && (
-                                  <p className="text-xs text-[#617068] italic bg-[#faf7f2] p-2 rounded-lg border border-[#dfdbd1]">
+                                  <p className="text-xs text-moss italic bg-sand-linen p-2 rounded-lg border border-sand-line">
                                     Description: {giving.item_description}
                                   </p>
                                 )}
 
-                                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#eeeae2]">
-                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-[#5f8067]" : giving.giver_email ? "text-[#b36b3c]" : "text-[#617068]"}`}>
+                                <div className="flex items-center justify-between gap-2 pt-2 border-t border-sand-soft">
+                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : giving.giver_email ? "text-ember" : "text-moss"}`}>
                                     {giving.receipt_sent_at
                                       ? "Receipt sent"
                                       : giving.giver_email
@@ -1014,7 +1014,7 @@ export default function ReconciliationPage() {
                                       <button
                                         type="button"
                                         onClick={() => setContactModalGiver(giving)}
-                                        className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#26352f] hover:bg-[#f7f4ee]"
+                                        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-bark hover:bg-sand"
                                       >
                                         Contact
                                       </button>
@@ -1023,7 +1023,7 @@ export default function ReconciliationPage() {
                                       type="button"
                                       onClick={() => handleResendReceipt(giving)}
                                       disabled={resendingId === giving.id}
-                                      className="rounded-lg bg-[#b36b3c] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#96552e]"
+                                      className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark"
                                     >
                                       {resendingId === giving.id ? "Sending..." : "Resend Receipt"}
                                     </button>
@@ -1037,16 +1037,16 @@ export default function ReconciliationPage() {
                         {/* PC Desktop Table View (visible on md and up) */}
                         <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
                           {isLoading ? (
-                            <div className="py-16 text-center text-sm text-[#617068]">
+                            <div className="py-16 text-center text-sm text-moss">
                               Loading member givings...
                             </div>
                           ) : listToDisplay.length === 0 ? (
-                            <div className="py-16 text-center text-sm text-[#617068]">
+                            <div className="py-16 text-center text-sm text-moss">
                               No individual member givings recorded for the selected date range.
                             </div>
                           ) : (
                             <table className="w-full text-left text-xs">
-                              <thead className="sticky top-0 z-10 bg-[#f7f4ee] font-semibold text-[#617068] uppercase tracking-wider shadow-sm">
+                              <thead className="sticky top-0 z-10 bg-sand font-semibold text-moss uppercase tracking-wider shadow-sm">
                                 <tr>
                                   <th className="px-3 py-2.5 w-10">#</th>
                                   <th className="px-3 py-2.5 w-28 whitespace-nowrap">Date</th>
@@ -1059,11 +1059,11 @@ export default function ReconciliationPage() {
                                   <th className="px-3 py-2.5 text-center w-20">Actions</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#eeeae2] bg-white">
+                              <tbody className="divide-y divide-sand-soft bg-white">
                                 {listToDisplay.map((giving, idx) => (
-                                  <tr key={giving.id} className="hover:bg-[#fcfbf9]">
-                                    <td className="px-3 py-3 text-xs text-[#617068] font-mono font-semibold">{idx + 1}</td>
-                                    <td className="px-3 py-3 text-[#617068] whitespace-nowrap">
+                                  <tr key={giving.id} className="hover:bg-sand-plate">
+                                    <td className="px-3 py-3 text-xs text-moss font-mono font-semibold">{idx + 1}</td>
+                                    <td className="px-3 py-3 text-moss whitespace-nowrap">
                                       {giving.received_at
                                         ? new Date(giving.received_at).toLocaleDateString("en-KE", {
                                             day: "numeric",
@@ -1072,28 +1072,28 @@ export default function ReconciliationPage() {
                                           })
                                         : "—"}
                                     </td>
-                                    <td className="px-3 py-3 w-44 shrink-0 font-semibold text-[#26352f] truncate max-w-[170px]" title={giving.donor_name}>
+                                    <td className="px-3 py-3 w-44 shrink-0 font-semibold text-bark truncate max-w-[170px]" title={giving.donor_name}>
                                       {giving.donor_name}
                                     </td>
-                                    <td className="px-3 py-3 w-44 shrink-0 font-semibold text-[#26352f]">
-                                      <span className="inline-block rounded-lg bg-[#faf7f2] border border-[#dfdbd1] px-2 py-0.5 text-xs text-[#b36b3c] truncate max-w-[170px]" title={giving.purpose}>
+                                    <td className="px-3 py-3 w-44 shrink-0 font-semibold text-bark">
+                                      <span className="inline-block rounded-lg bg-sand-linen border border-sand-line px-2 py-0.5 text-xs text-ember truncate max-w-[170px]" title={giving.purpose}>
                                         {giving.purpose}
                                       </span>
                                     </td>
                                     <td className="px-3 py-3">
-                                      <span className="inline-block rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-[11px] font-semibold text-[#5f8067]">
+                                      <span className="inline-block rounded-full bg-mist-select px-2.5 py-0.5 text-[11px] font-semibold text-sage">
                                         {giving.payment_method}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-3 text-[#617068] font-mono text-[11px]">
+                                    <td className="px-3 py-3 text-moss font-mono text-[11px]">
                                       {giving.receipt_number || "—"}
                                     </td>
-                                    <td className="px-3 py-3 text-right font-semibold text-[#26352f]">
+                                    <td className="px-3 py-3 text-right font-semibold text-bark">
                                       {money(giving.amount)}
                                     </td>
                                     <td className="px-3 py-3">
                                       {giving.receipt_sent_at ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3d7146]">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Receipt sent
                                         </span>
@@ -1102,7 +1102,7 @@ export default function ReconciliationPage() {
                                           Pending
                                         </span>
                                       ) : (
-                                        <span className="inline-block rounded-full bg-[#f0ede6] px-2 py-0.5 text-[10px] font-semibold text-[#617068]">
+                                        <span className="inline-block rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
                                           No email on file
                                         </span>
                                       )}
@@ -1123,15 +1123,15 @@ export default function ReconciliationPage() {
                                               setActiveActionMenuId(giving.id);
                                             }
                                           }}
-                                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-sm"
+                                          className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
                                         >
                                           <span>Actions</span>
-                                          <ChevronDown className="h-3.5 w-3.5 text-[#617068]" />
+                                          <ChevronDown className="h-3.5 w-3.5 text-moss" />
                                         </button>
 
                                         {activeActionMenuId === giving.id && (
                                           <div
-                                            className={`absolute right-0 z-30 w-44 rounded-xl border border-[#dfdbd1] bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
+                                            className={`absolute right-0 z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
                                             onClick={(e) => e.stopPropagation()}
                                           >
                                             <button
@@ -1141,12 +1141,12 @@ export default function ReconciliationPage() {
                                                 setActiveActionMenuId(null);
                                                 handleResendReceipt(giving);
                                               }}
-                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition disabled:opacity-50"
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark hover:bg-sand transition disabled:opacity-50"
                                             >
                                               {resendingId === giving.id ? (
-                                                <RotateCw className="h-3.5 w-3.5 animate-spin text-[#b36b3c]" />
+                                                <RotateCw className="h-3.5 w-3.5 animate-spin text-ember" />
                                               ) : (
-                                                <Send className="h-3.5 w-3.5 text-[#b36b3c]" />
+                                                <Send className="h-3.5 w-3.5 text-ember" />
                                               )}
                                               <span>Resend Receipt</span>
                                             </button>
@@ -1157,9 +1157,9 @@ export default function ReconciliationPage() {
                                                 setActiveActionMenuId(null);
                                                 setContactModalGiver(giving);
                                               }}
-                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#5f8067] hover:bg-[#eef2ed] transition"
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition"
                                             >
-                                              <Phone className="h-3.5 w-3.5 text-[#5f8067]" />
+                                              <Phone className="h-3.5 w-3.5 text-sage" />
                                               <span>Contact Giver</span>
                                             </button>
                                           </div>
@@ -1174,16 +1174,16 @@ export default function ReconciliationPage() {
                         </div>
 
                         {/* Fixed Child Table Footer — sits flush on the tab bar. */}
-                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] px-4 py-2.5 font-semibold text-xs text-[#26352f] flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
-                          <span className="text-[#617068]">
-                            Total Rows Available: <strong className="text-[#26352f]">{listToDisplay.length}</strong> • <span className="font-bold text-[#b36b3c]">KES {money(displayTotal)}</span>
+                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-4 py-2.5 font-semibold text-xs text-bark flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
+                          <span className="text-moss">
+                            Total Rows Available: <strong className="text-bark">{listToDisplay.length}</strong> • <span className="font-bold text-ember">KES {money(displayTotal)}</span>
                           </span>
 
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => setIsModalOpen(true)}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#b36b3c] px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] whitespace-nowrap"
+                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
                             >
                               <Plus className="h-4 w-4" />
                               <span>Add Receipt</span>
@@ -1191,17 +1191,17 @@ export default function ReconciliationPage() {
                             <button
                               type="button"
                               onClick={() => handleDownloadBackendPdf(true)}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 sm:px-3.5 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-sm whitespace-nowrap"
+                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
                             >
-                              <Printer className="h-4 w-4 text-[#b36b3c]" />
+                              <Printer className="h-4 w-4 text-ember" />
                               <span>PDF Report</span>
                             </button>
                             <button
                               type="button"
                               onClick={handleExportSpreadsheet}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-[#26352f] px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-[#1e2a25] transition shadow-sm whitespace-nowrap"
+                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
                             >
-                              <FileSpreadsheet className="h-4 w-4 text-[#88b393]" />
+                              <FileSpreadsheet className="h-4 w-4 text-sage-light" />
                               <span>Spreadsheet</span>
                             </button>
                           </div>
@@ -1224,44 +1224,44 @@ export default function ReconciliationPage() {
           onClick={() => setContactModalGiver(null)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-[#dfdbd1]"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3 mb-4">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3 mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-[#26352f]">Contact Giver</h3>
-                <p className="text-xs text-[#617068] mt-0.5">{contactModalGiver.donor_name}</p>
+                <h3 className="text-lg font-semibold text-bark">Contact Giver</h3>
+                <p className="text-xs text-moss mt-0.5">{contactModalGiver.donor_name}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setContactModalGiver(null)}
-                className="rounded-lg p-1 text-[#617068] hover:bg-[#f7f4ee]"
+                className="rounded-lg p-1 text-moss hover:bg-sand"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="space-y-3">
-              <div className="rounded-xl bg-[#f7f4ee] p-3 text-xs space-y-1">
-                <p className="font-semibold text-[#26352f]">{contactModalGiver.purpose}</p>
-                <p className="text-[#617068]">Amount: <span className="font-bold text-[#26352f]">{money(contactModalGiver.amount)}</span></p>
-                <p className="text-[#617068]">Ref: {contactModalGiver.receipt_number}</p>
+              <div className="rounded-xl bg-sand p-3 text-xs space-y-1">
+                <p className="font-semibold text-bark">{contactModalGiver.purpose}</p>
+                <p className="text-moss">Amount: <span className="font-bold text-bark">{money(contactModalGiver.amount)}</span></p>
+                <p className="text-moss">Ref: {contactModalGiver.receipt_number}</p>
               </div>
 
               {contactModalGiver.giver_phone ? (
                 <div className="grid gap-2 pt-2">
                   <a
                     href={`tel:${contactModalGiver.giver_phone}`}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#5f8067] py-2.5 text-sm font-semibold text-white hover:bg-[#4d6d55] transition"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-sage py-2.5 text-sm font-semibold text-white hover:bg-sage-deep transition"
                   >
                     <Phone className="h-4 w-4" />
                     <span>Call ({contactModalGiver.giver_phone})</span>
                   </a>
                   <a
                     href={`sms:${contactModalGiver.giver_phone}`}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[#c9c5bb] py-2.5 text-sm font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition"
+                    className="flex items-center justify-center gap-2 rounded-xl border border-sand-mute py-2.5 text-sm font-semibold text-bark hover:bg-sand transition"
                   >
-                    <MessageSquare className="h-4 w-4 text-[#b36b3c]" />
+                    <MessageSquare className="h-4 w-4 text-ember" />
                     <span>Send SMS</span>
                   </a>
                 </div>
@@ -1274,23 +1274,23 @@ export default function ReconciliationPage() {
               {contactModalGiver.giver_email ? (
                 <a
                   href={`mailto:${contactModalGiver.giver_email}?subject=Giving%20Receipt%20-%20${encodeURIComponent(contactModalGiver.purpose)}`}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-[#c9c5bb] py-2.5 text-sm font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-sand-mute py-2.5 text-sm font-semibold text-bark hover:bg-sand transition"
                 >
-                  <Mail className="h-4 w-4 text-[#b36b3c]" />
+                  <Mail className="h-4 w-4 text-ember" />
                   <span>Email ({contactModalGiver.giver_email})</span>
                 </a>
               ) : (
-                <p className="text-xs text-[#617068] bg-[#f7f4ee] p-3 rounded-xl">
+                <p className="text-xs text-moss bg-sand p-3 rounded-xl">
                   No email address recorded for this giver.
                 </p>
               )}
             </div>
 
-            <div className="mt-5 pt-3 border-t border-[#dfdbd1]">
+            <div className="mt-5 pt-3 border-t border-sand-line">
               <button
                 type="button"
                 onClick={() => setContactModalGiver(null)}
-                className="w-full rounded-xl border border-[#c9c5bb] py-2 text-xs font-semibold text-[#617068] hover:bg-[#f7f4ee]"
+                className="w-full rounded-xl border border-sand-mute py-2 text-xs font-semibold text-moss hover:bg-sand"
               >
                 Close
               </button>

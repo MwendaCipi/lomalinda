@@ -5,6 +5,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-lea
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { showAlert } from "@/lib/alerts";
+import { Crosshair, Map, MapPin } from "lucide-react";
 
 // Default Leaflet icon fix for Next.js SSR
 const defaultIcon = L.icon({
@@ -92,8 +93,8 @@ export default function LocationMapPicker({
         <div className="flex items-center gap-2">
           {latitude && longitude ? (
             <div className="flex items-center gap-2 min-w-0">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2ed] px-2.5 py-1 text-xs font-semibold text-[#2d5d39] border border-[#c4d6c8]">
-                <span>📍 Location: {latitude.toFixed(5)}, {longitude.toFixed(5)}</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-mist-select px-2.5 py-1 text-xs font-semibold text-sage-bright border border-sage-mild">
+                <MapPin size={13} className="inline" aria-hidden="true" /> Location: {latitude.toFixed(5)}, {longitude.toFixed(5)}
               </span>
               {onClear && (
                 <button
@@ -106,13 +107,13 @@ export default function LocationMapPicker({
               )}
             </div>
           ) : showMap ? (
-            <span className="text-xs font-medium text-[#617068]">
+            <span className="text-xs font-medium text-moss">
               Tap on the map below to drop your location pin
             </span>
           ) : (
             // Phones show the two buttons themselves; the sentence explaining
             // them only earns its space on a wider screen.
-            <span className="hidden text-xs font-medium text-[#617068] sm:inline">
+            <span className="hidden text-xs font-medium text-moss sm:inline">
               Use My GPS Location or Show Map
             </span>
           )}
@@ -122,24 +123,24 @@ export default function LocationMapPicker({
             type="button"
             onClick={handleDetectGPS}
             disabled={detecting}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#b36b3c] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#b36b3c] transition hover:bg-[#b36b3c] hover:text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ember bg-white px-3.5 py-1.5 text-xs font-semibold text-ember transition hover:bg-ember hover:text-white disabled:opacity-50"
           >
-            <span>🎯</span>
+            <Crosshair size={26} aria-hidden="true" />
             <span>{detecting ? "Detecting GPS..." : "Use My GPS Location"}</span>
           </button>
           <button
             type="button"
             onClick={() => setShowMap(!showMap)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#26352f] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#26352f] transition hover:bg-[#26352f] hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-full border border-bark bg-white px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-bark hover:text-white"
           >
-            <span>🗺️</span>
+            <Map size={26} aria-hidden="true" />
             <span>{showMap ? "Hide Map" : "Show Map"}</span>
           </button>
         </div>
       </div>
 
       {showMap && (
-        <div className="h-64 overflow-hidden rounded-2xl border border-[#dfdbd1] shadow-sm">
+        <div className="h-64 overflow-hidden rounded-2xl border border-sand-line shadow-sm">
           <MapContainer center={position} zoom={15} scrollWheelZoom={false} className="h-full w-full">
             <ChangeView center={position} />
             <TileLayer

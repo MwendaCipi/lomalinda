@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
+import { Check, Handshake, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
@@ -108,18 +109,18 @@ const statusPillClass = (status: string) =>
       ? "bg-emerald-100 text-emerald-800"
       : status === "rejected" || status === "cancelled"
         ? "bg-rose-100 text-rose-800"
-        : "bg-[#f7f4ee] text-[#617068]";
+        : "bg-sand text-moss";
 
 /** The review-state filter: everything, still to answer, or already answered. */
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
-  join: { label: "Join requests", badge: "bg-[#b36b3c]/10 text-[#b36b3c]" },
-  prayer: { label: "Prayer requests", badge: "bg-[#f1c89e]/25 text-[#96552c]" },
-  visitation: { label: "Visitation", badge: "bg-[#5f8067]/10 text-[#2d5d39]" },
-  dedication: { label: "Child dedications", badge: "bg-[#26352f]/10 text-[#26352f]" },
-  welfare: { label: "Welfare & support", badge: "bg-[#9a741c]/10 text-[#7c5d16]" },
-  transfer: { label: "Membership transfers", badge: "bg-[#617068]/10 text-[#415047]" },
+  join: { label: "Join requests", badge: "bg-ember/10 text-ember" },
+  prayer: { label: "Prayer requests", badge: "bg-gold/25 text-ember-deep" },
+  visitation: { label: "Visitation", badge: "bg-sage/10 text-sage-bright" },
+  dedication: { label: "Child dedications", badge: "bg-bark/10 text-bark" },
+  welfare: { label: "Welfare & support", badge: "bg-gold-deep/10 text-gold-shadow" },
+  transfer: { label: "Membership transfers", badge: "bg-moss/10 text-moss-mid" },
 };
 
 const JOINING_MODE_LABELS: Record<string, string> = {
@@ -495,11 +496,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   // empty state for whichever layout is on screen.
   const requestsEmptyState = (
     <div>
-      <span className="text-4xl" aria-hidden="true">
-        🤝
-      </span>
-      <h3 className="mt-3 text-lg font-semibold text-[#26352f]">No requests found</h3>
-      <p className="mt-1 text-sm text-[#617068]">
+      <Handshake size={36} className="text-moss-faint" aria-hidden="true" />
+      <h3 className="mt-3 text-lg font-semibold text-bark">No requests found</h3>
+      <p className="mt-1 text-sm text-moss">
         {rows.length === 0
           ? "Join, prayer, visitation, dedication, welfare and transfer requests will appear here."
           : "Try a different search or clear the filter."}
@@ -558,15 +557,15 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>
-            <h2 className="text-2xl font-semibold text-[#26352f]">Received Requests</h2>
-            <p className="mt-0.5 text-sm text-[#617068]">
+            <h2 className="text-2xl font-semibold text-bark">Received Requests</h2>
+            <p className="mt-0.5 text-sm text-moss">
               Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
             </p>
           </div>
         </div>
         <button
           onClick={fetchAll}
-          className="shrink-0 rounded-full border border-[#c9c5bb] px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+          className="shrink-0 rounded-full border border-sand-mute px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand"
         >
           ↻ Refresh
         </button>
@@ -576,7 +575,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-0 flex-1 sm:max-w-sm">
           <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#617068]"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -588,7 +587,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, contact, details..."
-            className="w-full rounded-full border border-[#c9c5bb] bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#b36b3c]"
+            className="w-full rounded-full border border-sand-mute bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-ember"
           />
         </div>
 
@@ -598,12 +597,12 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             type="button"
             onClick={() => setStatusOpen((open) => !open)}
             aria-expanded={statusOpen}
-            className="inline-flex items-center gap-2 rounded-full border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember"
           >
-            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : statusFilter === "rejected" ? "bg-rose-500" : "bg-[#617068]"}`} viewBox="0 0 8 8" aria-hidden="true" />
+            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : statusFilter === "rejected" ? "bg-rose-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
             {activeStatusLabel}
-            <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{statusCount(statusFilter)}</span>
-            <svg className={`h-3 w-3 text-[#617068] transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{statusCount(statusFilter)}</span>
+            <svg className={`h-3 w-3 text-moss transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -611,9 +610,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           {statusOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-sand-line bg-white py-2 shadow-xl"
             >
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
                 Show by review state
               </p>
               {statusFilterOptions.map((option) => {
@@ -630,14 +629,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                       setStatusOpen(false);
                     }}
                     className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
-                      selected ? "bg-[#f7f4ee] font-semibold text-[#26352f]" : "text-[#415047] hover:bg-[#f7f4ee]"
+                      selected ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"
                     }`}
                   >
                     <span className="flex items-center gap-2">
-                      {selected && <span className="text-[#b36b3c]">✓</span>}
+                      {selected && <Check size={14} className="text-ember" aria-hidden="true" />}
                       <span className={selected ? "" : "pl-5"}>{option.label}</span>
                     </span>
-                    <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{count}</span>
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{count}</span>
                   </button>
                 );
               })}
@@ -650,16 +649,16 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             type="button"
             onClick={() => setFilterOpen((open) => !open)}
             aria-expanded={filterOpen}
-            className="inline-flex items-center gap-2 rounded-full border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember"
           >
-            <svg className="h-4 w-4 text-[#617068]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" />
             </svg>
             Filter
             {activeTab !== "all" && (
-              <span className="rounded-full bg-[#26352f] px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterLabel}</span>
+              <span className="rounded-full bg-bark px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterLabel}</span>
             )}
-            <svg className={`h-3 w-3 text-[#617068] transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`h-3 w-3 text-moss transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -667,9 +666,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           {filterOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-50 mt-2 max-h-80 w-64 overflow-y-auto rounded-2xl border border-[#dfdbd1] bg-white py-2 shadow-xl"
+              className="absolute right-0 z-50 mt-2 max-h-80 w-64 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl"
             >
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
                 Show requests by desk
               </p>
               {filterOptions.map((option) => {
@@ -686,14 +685,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                       setFilterOpen(false);
                     }}
                     className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
-                      selected ? "bg-[#f7f4ee] font-semibold text-[#26352f]" : "text-[#415047] hover:bg-[#f7f4ee]"
+                      selected ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"
                     }`}
                   >
                     <span className="flex items-center gap-2">
-                      {selected && <span className="text-[#b36b3c]">✓</span>}
+                      {selected && <Check size={14} className="text-ember" aria-hidden="true" />}
                       <span className={selected ? "" : "pl-5"}>{option.label}</span>
                     </span>
-                    <span className="rounded-full bg-[#f7f4ee] px-2 py-0.5 text-[10px] font-bold text-[#617068]">{count}</span>
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{count}</span>
                   </button>
                 );
               })}
@@ -704,7 +703,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
       {/* The metrics sit on the toolbar row's far right; the table beneath
           is the scrolling region. */}
-      <div className="flex shrink-0 items-center justify-end gap-2 pb-1 text-xs text-[#617068]">
+      <div className="flex shrink-0 items-center justify-end gap-2 pb-1 text-xs text-moss">
         <span className="text-right">
           {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
           {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
@@ -723,9 +722,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           rows={filteredRows}
           loading={loading}
           rowKey={(row) => row.key}
-          tableWrapperClassName="overflow-x-auto rounded-2xl border border-[#dfdbd1] bg-white"
+          tableWrapperClassName="overflow-x-auto rounded-2xl border border-sand-line bg-white"
           tableClassName="w-full min-w-[720px] text-left text-sm"
-          headClassName="border-b border-[#dfdbd1] bg-[#faf9f5] text-[11px] uppercase tracking-wide text-[#617068]"
+          headClassName="border-b border-sand-line bg-sand-card text-[11px] uppercase tracking-wide text-moss"
           headRowClassName=""
           headCellClassName="px-4 py-3 font-semibold"
           bodyClassName=""
@@ -745,15 +744,15 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           renderRow={(row) => (
             <tr
               data-request-row={row.key}
-              className={`border-b border-[#dfdbd1]/60 align-top last:border-0 ${
+              className={`border-b border-sand-line/60 align-top last:border-0 ${
                 highlightKey === row.key
-                  ? "bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
-                  : "hover:bg-[#faf9f5]"
+                  ? "bg-sand-bright ring-1 ring-inset ring-ember/40"
+                  : "hover:bg-sand-card"
               }`}
             >
               <td className={`max-w-[220px] px-4 ${rowPad}`}>
-                <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
-                {!dense && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>}
+                <p className="truncate font-semibold text-bark">{row.title}</p>
+                {!dense && <p className="mt-0.5 truncate text-xs text-moss">{row.contact}</p>}
               </td>
               <td className={`px-4 ${rowPad}`}>
                 <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
@@ -761,8 +760,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                 </span>
               </td>
               <td className={`max-w-[280px] px-4 ${rowPad}`}>
-                <p className="line-clamp-2 text-[#415047]">{row.summary}</p>
-                {row.meta && !dense && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
+                <p className="line-clamp-2 text-moss-mid">{row.summary}</p>
+                {row.meta && !dense && <p className="mt-0.5 truncate text-xs text-moss">{row.meta}</p>}
               </td>
               <td className={`px-4 ${rowPad}`}>
                 <span
@@ -771,7 +770,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                   {row.statusLabel}
                 </span>
               </td>
-              <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-[#617068]`}>{formatDate(row.created_at)}</td>
+              <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{formatDate(row.created_at)}</td>
               <td className={`px-4 ${rowPad}`}>
                 {row.reviewable && isElder && (
                   <div className="flex justify-end gap-2">
@@ -783,7 +782,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                           onClick={() => handleReviewJoin(row.join!.id, "approved")}
                           className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                         >
-                          {reviewingId === row.key ? "..." : "✓ Approve"}
+                          {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
                         </button>
                         <button
                           type="button"
@@ -791,7 +790,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                           onClick={() => handleReviewJoin(row.join!.id, "rejected")}
                           className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          ✕ Reject
+                          <X size={12} className="inline" aria-hidden="true" /> Reject
                         </button>
                       </>
                     )}
@@ -803,7 +802,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                           onClick={() => handleReviewTransfer(row.transferId!, "approved")}
                           className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                         >
-                          {reviewingId === row.key ? "..." : "✓ Approve"}
+                          {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
                         </button>
                         <button
                           type="button"
@@ -811,7 +810,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                           onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
                           className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          ✕ Reject
+                          <X size={12} className="inline" aria-hidden="true" /> Reject
                         </button>
                       </>
                     )}
@@ -825,26 +824,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               data-request-row={row.key}
               className={`space-y-2 rounded-2xl border bg-white shadow-sm ${dense ? "p-2.5" : "p-4"} ${
                 highlightKey === row.key
-                  ? "border-[#b36b3c]/40 bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
-                  : "border-[#dfdbd1]"
+                  ? "border-ember/40 bg-sand-bright ring-1 ring-inset ring-ember/40"
+                  : "border-sand-line"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-[#26352f]">{row.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
+                  <p className="truncate text-sm font-bold text-bark">{row.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-moss">{row.contact}</p>
                 </div>
                 <span className={`inline-block shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
                   {KIND_META[row.kind].label}
                 </span>
               </div>
-              <p className="line-clamp-3 text-xs text-[#415047]">{row.summary}</p>
-              {row.meta && <p className="truncate text-xs text-[#617068]">{row.meta}</p>}
-              <div className="flex items-center justify-between gap-2 border-t border-[#eeeae2] pt-2">
+              <p className="line-clamp-3 text-xs text-moss-mid">{row.summary}</p>
+              {row.meta && <p className="truncate text-xs text-moss">{row.meta}</p>}
+              <div className="flex items-center justify-between gap-2 border-t border-sand-soft pt-2">
                 <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPillClass(row.status)}`}>
                   {row.statusLabel}
                 </span>
-                <span className="text-[11px] text-[#617068]">{formatDate(row.created_at)}</span>
+                <span className="text-[11px] text-moss">{formatDate(row.created_at)}</span>
               </div>
               {row.reviewable && isElder && (
                 <div className="flex gap-2">
@@ -856,7 +855,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         onClick={() => handleReviewJoin(row.join!.id, "approved")}
                         className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                       >
-                        {reviewingId === row.key ? "..." : "✓ Approve"}
+                        {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
                       </button>
                       <button
                         type="button"
@@ -864,7 +863,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         onClick={() => handleReviewJoin(row.join!.id, "rejected")}
                         className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
-                        ✕ Reject
+                        <X size={12} className="inline" aria-hidden="true" /> Reject
                       </button>
                     </>
                   )}
@@ -876,7 +875,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         onClick={() => handleReviewTransfer(row.transferId!, "approved")}
                         className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                       >
-                        {reviewingId === row.key ? "..." : "✓ Approve"}
+                        {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
                       </button>
                       <button
                         type="button"
@@ -884,7 +883,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
                         className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
-                        ✕ Reject
+                        <X size={12} className="inline" aria-hidden="true" /> Reject
                       </button>
                     </>
                   )}
@@ -896,7 +895,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
       {/* Still verifying their email — a hint the old joins tab carried. */}
       {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join") && (
-        <p className="rounded-2xl bg-[#f7f4ee] p-4 text-xs italic text-[#415047]">
+        <p className="rounded-2xl bg-sand p-4 text-xs italic text-moss-mid">
           Requests marked <strong>Awaiting their email</strong> can be approved now — the account activates as soon as the person
           finishes signing up.
         </p>

@@ -65,13 +65,13 @@ export default function FellowshipHubPage() {
   const { dense, toggleDensity } = useTableDensity();
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="mx-auto h-full w-full max-w-3xl px-4 py-6 sm:px-8 md:overflow-y-auto custom-hover-scrollbar">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Fellowship &amp; Community</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Fellowship &amp; Community</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Fellowship</h1>
-            <p className="mt-2 text-sm leading-6 text-[#617068]">
+            <p className="mt-2 text-sm leading-6 text-moss">
               Where the church family gathers — open any of them.
             </p>
           </div>
@@ -85,18 +85,18 @@ export default function FellowshipHubPage() {
               <Link
                 key={card.href}
                 href={card.href}
-                className={`group flex items-center rounded-2xl border border-[#dfdbd1] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50 ${
+                className={`group flex items-center rounded-2xl border border-sand-line bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50 ${
                   dense ? "gap-3 p-3" : "gap-4 p-4"
                 }`}
               >
-                <span className={`flex shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-[#617068] transition group-hover:bg-[#b36b3c]/15 group-hover:text-[#b36b3c] ${dense ? "h-9 w-9" : "h-11 w-11"}`}>
+                <span className={`flex shrink-0 items-center justify-center rounded-xl bg-sand text-moss transition group-hover:bg-ember/15 group-hover:text-ember ${dense ? "h-9 w-9" : "h-11 w-11"}`}>
                   <Icon className={dense ? "h-4 w-4" : "h-5 w-5"} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-[#26352f]">{card.label}</span>
-                  {!dense && <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{card.description}</span>}
+                  <span className="block text-sm font-bold text-bark">{card.label}</span>
+                  {!dense && <span className="mt-0.5 block text-xs leading-5 text-moss">{card.description}</span>}
                 </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />
               </Link>
             );
           })}

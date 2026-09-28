@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Calendar, ChevronDown, ClipboardList, FileText, Mail, MapPin, Plus, ShieldCheck, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
@@ -285,14 +286,14 @@ export function BoardMeetingManager() {
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-line bg-white p-6 shadow-sm">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>
-            <h2 className="text-xl font-extrabold text-[#26352f] flex items-center gap-2">
-              <span>🛡️</span> Church Board Meetings
+            <h2 className="text-xl font-extrabold text-bark flex items-center gap-2">
+              <ShieldCheck size={18} aria-hidden="true" /> Church Board Meetings
             </h2>
-            <p className="mt-1 text-xs text-[#617068]">
+            <p className="mt-1 text-xs text-moss">
               Schedule church board meetings, attach agenda documents, record minutes, and notify board members.
             </p>
           </div>
@@ -300,16 +301,16 @@ export function BoardMeetingManager() {
         <button
           type="button"
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e2a25] active:scale-95"
+          className="inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900 active:scale-95"
         >
-          <span>➕</span>
+          <Plus size={14} aria-hidden="true" />
           <span>Schedule Board Meeting</span>
         </button>
       </div>
 
       {/* Loading state */}
       {loading && (
-        <div className="rounded-2xl border border-[#dfdbd1] bg-white p-12 text-center text-xs font-semibold text-[#617068]">
+        <div className="rounded-2xl border border-sand-line bg-white p-12 text-center text-xs font-semibold text-moss">
           Loading board meetings...
         </div>
       )}
@@ -323,20 +324,20 @@ export function BoardMeetingManager() {
 
       {/* Empty State */}
       {!loading && !error && meetings.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-[#dfdbd1] bg-white p-12 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#f7f4ee] text-2xl text-[#b36b3c]">
-            🛡️
+        <div className="rounded-2xl border border-dashed border-sand-line bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-sand text-2xl text-ember">
+            <ShieldCheck size={26} aria-hidden="true" />
           </div>
-          <h3 className="mt-4 text-base font-bold text-[#26352f]">No church board meetings scheduled yet</h3>
-          <p className="mt-1 text-xs text-[#617068]">
-            Click <span className="font-semibold text-[#26352f]">&quot;+ Schedule Board Meeting&quot;</span> to schedule a new meeting; agendas are added to it afterwards.
+          <h3 className="mt-4 text-base font-bold text-bark">No church board meetings scheduled yet</h3>
+          <p className="mt-1 text-xs text-moss">
+            Click <span className="font-semibold text-bark">&quot;+ Schedule Board Meeting&quot;</span> to schedule a new meeting; agendas are added to it afterwards.
           </p>
           <button
             type="button"
             onClick={openCreateModal}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e2a25]"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900"
           >
-            <span>➕</span>
+            <Plus size={14} aria-hidden="true" />
             <span>Schedule Board Meeting</span>
           </button>
         </div>
@@ -350,7 +351,7 @@ export function BoardMeetingManager() {
             return (
               <div
                 key={m.id}
-                className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm transition hover:border-[#b36b3c]"
+                className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm transition hover:border-ember"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -366,13 +367,13 @@ export function BoardMeetingManager() {
                       >
                         {m.status}
                       </span>
-                      <h3 className="text-base font-bold text-[#26352f]">{m.title}</h3>
+                      <h3 className="text-base font-bold text-bark">{m.title}</h3>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[#617068]">
-                      <span>📅 <strong>Date:</strong> {m.meeting_date}</span>
+                    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-moss">
+                      <span className="inline-flex items-center gap-1"><Calendar size={13} aria-hidden="true" /> <strong>Date:</strong> {m.meeting_date}</span>
                       <span>⏰ <strong>Time:</strong> {m.time_range || "—"}</span>
-                      <span>📍 <strong>Location:</strong> {m.location}</span>
-                      <span>📑 <strong>Agendas:</strong> {m.agendas?.length || 0}</span>
+                      <span className="inline-flex items-center gap-1"><MapPin size={13} aria-hidden="true" /> <strong>Location:</strong> {m.location}</span>
+                      <span className="inline-flex items-center gap-1"><ClipboardList size={13} aria-hidden="true" /> <strong>Agendas:</strong> {m.agendas?.length || 0}</span>
                     </div>
                   </div>
 
@@ -380,14 +381,14 @@ export function BoardMeetingManager() {
                     <button
                       type="button"
                       onClick={() => handleOpenAddAgendaModal(m)}
-                      className="rounded-xl border border-[#b36b3c] bg-white px-3 py-1.5 text-xs font-semibold text-[#b36b3c] hover:bg-[#faf7f2]"
+                      className="rounded-xl border border-ember bg-white px-3 py-1.5 text-xs font-semibold text-ember hover:bg-sand-linen"
                     >
                       + Add Agenda
                     </button>
                     <button
                       type="button"
                       onClick={() => setExpandedMeetingId(isExpanded ? null : m.id)}
-                      className="rounded-xl bg-[#f7f4ee] px-3.5 py-1.5 text-xs font-semibold text-[#26352f] hover:bg-[#dfdbd1]"
+                      className="rounded-xl bg-sand px-3.5 py-1.5 text-xs font-semibold text-bark hover:bg-sand-line"
                     >
                       {isExpanded ? "Hide Details" : "View Details & Agendas"}
                     </button>
@@ -395,13 +396,13 @@ export function BoardMeetingManager() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-5 pt-5 border-t border-[#dfdbd1] space-y-4">
+                  <div className="mt-5 pt-5 border-t border-sand-line space-y-4">
                     {m.agenda && (
                       <div>
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#617068]">
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-moss">
                           Meeting Overview / Summary
                         </h4>
-                        <p className="mt-1 text-xs leading-relaxed text-[#26352f] whitespace-pre-line">
+                        <p className="mt-1 text-xs leading-relaxed text-bark whitespace-pre-line">
                           {m.agenda}
                         </p>
                       </div>
@@ -409,35 +410,35 @@ export function BoardMeetingManager() {
 
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#617068]">
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-moss">
                           Board Agendas ({m.agendas?.length || 0})
                         </h4>
                       </div>
 
                       {(!m.agendas || m.agendas.length === 0) ? (
-                        <p className="text-xs italic text-[#617068]">No individual agenda items added yet.</p>
+                        <p className="text-xs italic text-moss">No individual agenda items added yet.</p>
                       ) : (
                         <div className="space-y-2">
                           {m.agendas.map((ag) => (
                             <div
                               key={ag.id}
-                              className="flex items-start justify-between rounded-xl border border-[#dfdbd1] bg-[#f7f4ee]/70 p-3"
+                              className="flex items-start justify-between rounded-xl border border-sand-line bg-sand/70 p-3"
                             >
                               <div>
-                                <p className="text-xs font-bold text-[#26352f]">
+                                <p className="text-xs font-bold text-bark">
                                   {ag.order}. {ag.title}
                                 </p>
                                 {ag.description && (
-                                  <p className="mt-1 text-xs text-[#617068]">{ag.description}</p>
+                                  <p className="mt-1 text-xs text-moss">{ag.description}</p>
                                 )}
                                 {ag.document_url && (
                                   <a
                                     href={ag.document_url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[#b36b3c] hover:underline"
+                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-ember hover:underline"
                                   >
-                                    📄 {ag.document_name || "Download Attached Agenda Document"}
+                                    <FileText size={13} className="inline" aria-hidden="true" /> {ag.document_name || "Download Attached Agenda Document"}
                                   </a>
                                 )}
                               </div>
@@ -457,11 +458,11 @@ export function BoardMeetingManager() {
                     </div>
 
                     {m.minutes && (
-                      <div className="rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-4">
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#b36b3c]">
+                      <div className="rounded-xl border border-sand-line bg-sand-linen p-4">
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-ember">
                           Recorded Board Minutes
                         </h4>
-                        <p className="mt-2 text-xs leading-relaxed text-[#26352f] whitespace-pre-line">
+                        <p className="mt-2 text-xs leading-relaxed text-bark whitespace-pre-line">
                           {m.minutes}
                         </p>
                       </div>
@@ -478,16 +479,16 @@ export function BoardMeetingManager() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+            <div className="flex items-center justify-between border-b border-sand-line pb-4">
               <div>
-                <h3 className="text-xl font-bold text-[#26352f]">Schedule Board Meeting</h3>
+                <h3 className="text-xl font-bold text-bark">Schedule Board Meeting</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
               >
-                ✕
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -500,25 +501,25 @@ export function BoardMeetingManager() {
             <form onSubmit={handleCreateMeeting} className="mt-5 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Board Meeting Title *</label>
+                  <label className="block text-xs font-bold text-bark">Board Meeting Title *</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Q3 Executive Board Meeting"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-4 py-2 text-xs font-semibold outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold outline-none focus:border-ember"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Meeting Date *</label>
+                  <label className="block text-xs font-bold text-bark">Meeting Date *</label>
                   <input
                     type="date"
                     required
                     value={meetingDate}
                     onChange={(e) => setMeetingDate(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3 py-2 text-xs outline-none focus:border-ember"
                   />
                 </div>
 
@@ -526,53 +527,53 @@ export function BoardMeetingManager() {
                     times reads as one line, not two fields. */}
                 <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#26352f]">Start Time *</label>
+                    <label className="block text-xs font-bold text-bark">Start Time *</label>
                     <input
                       type="time"
                       required
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-2.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                      className="mt-1 w-full rounded-xl border border-sand-mute px-2.5 py-2 text-xs outline-none focus:border-ember"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#26352f]">End Time *</label>
+                    <label className="block text-xs font-bold text-bark">End Time *</label>
                     <input
                       type="time"
                       required
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-2.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                      className="mt-1 w-full rounded-xl border border-sand-mute px-2.5 py-2 text-xs outline-none focus:border-ember"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#26352f]">Location</label>
+                  <label className="block text-xs font-bold text-bark">Location</label>
                   <input
                     type="text"
                     placeholder="e.g. Board Room / Main Sanctuary"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-4 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-4 py-2 text-xs outline-none focus:border-ember"
                   />
                 </div>
 
                 {/* Invitation Method Combo Box with Checkbox Pop-up */}
                 <div className="relative">
-                  <label className="block text-xs font-bold text-[#26352f]">
+                  <label className="block text-xs font-bold text-bark">
                     Invitation Method
                   </label>
                   <div className="relative mt-1">
                     <button
                       type="button"
                       onClick={() => setShowInvitationDropdown((prev) => !prev)}
-                      className="flex w-full items-center justify-between rounded-xl border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-medium text-[#26352f] outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                      className="flex w-full items-center justify-between rounded-xl border border-sand-mute bg-white px-4 py-2 text-xs font-medium text-bark outline-none transition hover:border-ember focus:border-ember"
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <span className="text-sm">📩</span>
-                        <span className="font-semibold text-[#26352f]">
+                        <Mail size={14} aria-hidden="true" />
+                        <span className="font-semibold text-bark">
                           {notifySms && notifyEmail
                             ? "SMS & Email Notifications"
                             : notifySms
@@ -582,47 +583,47 @@ export function BoardMeetingManager() {
                             : "None (No automatic invitations)"}
                         </span>
                       </div>
-                      <span className="text-[#617068] text-[10px]">▼</span>
+                      <ChevronDown size={10} className="text-moss" aria-hidden="true" />
                     </button>
 
                     {showInvitationDropdown && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                        <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-sand-line bg-white p-4 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                        <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-ember">
                           Automatic Board Member Invitation Channels
                         </div>
                         <div className="space-y-2.5">
-                          <label className="flex items-center gap-2.5 rounded-xl p-2.5 cursor-pointer hover:bg-[#f7f4ee] transition text-xs font-semibold text-[#26352f]">
+                          <label className="flex items-center gap-2.5 rounded-xl p-2.5 cursor-pointer hover:bg-sand transition text-xs font-semibold text-bark">
                             <input
                               type="checkbox"
                               checked={notifySms}
                               onChange={(e) => setNotifySms(e.target.checked)}
-                              className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
+                              className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
                             />
                             <div>
                               <div>SMS Notification</div>
-                              <div className="text-[10px] font-normal text-[#617068]">Send SMS invitation to all church board members</div>
+                              <div className="text-[10px] font-normal text-moss">Send SMS invitation to all church board members</div>
                             </div>
                           </label>
 
-                          <label className="flex items-center gap-2.5 rounded-xl p-2.5 cursor-pointer hover:bg-[#f7f4ee] transition text-xs font-semibold text-[#26352f]">
+                          <label className="flex items-center gap-2.5 rounded-xl p-2.5 cursor-pointer hover:bg-sand transition text-xs font-semibold text-bark">
                             <input
                               type="checkbox"
                               checked={notifyEmail}
                               onChange={(e) => setNotifyEmail(e.target.checked)}
-                              className="h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
+                              className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
                             />
                             <div>
                               <div>Email Notification</div>
-                              <div className="text-[10px] font-normal text-[#617068]">Send Email invitation to all church board members</div>
+                              <div className="text-[10px] font-normal text-moss">Send Email invitation to all church board members</div>
                             </div>
                           </label>
                         </div>
 
-                        <div className="mt-3 flex justify-end border-t border-[#dfdbd1] pt-2">
+                        <div className="mt-3 flex justify-end border-t border-sand-line pt-2">
                           <button
                             type="button"
                             onClick={() => setShowInvitationDropdown(false)}
-                            className="rounded-lg bg-[#26352f] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#1e2a25]"
+                            className="rounded-lg bg-bark px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-bark-900"
                           >
                             Done
                           </button>
@@ -635,19 +636,19 @@ export function BoardMeetingManager() {
 
               {/* Notification Message — full width, prefilled from church settings */}
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Notification Message</label>
+                <label className="block text-xs font-bold text-bark">Notification Message</label>
                 <textarea
                   rows={4}
                   value={notificationMessage}
                   onChange={(e) => setNotificationMessage(e.target.value)}
                   placeholder="The invitation message a board member receives..."
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-4 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-4 py-2 text-xs outline-none focus:border-ember"
                 />
-                <p className="mt-1 text-[11px] text-[#617068]">
+                <p className="mt-1 text-[11px] text-moss">
                   Placeholders filled per member:{" "}
                   {["{greeting}", "{name}", "{church}", "{title}", "{day}", "{date}", "{start_time}", "{end_time}", "{location}"]
                     .map((token) => (
-                      <code key={token} className="mr-1 rounded border border-[#dfdbd1] bg-[#f7f4ee] px-1 text-[10px] text-[#b36b3c]">
+                      <code key={token} className="mr-1 rounded border border-sand-line bg-sand px-1 text-[10px] text-ember">
                         {token}
                       </code>
                     ))}
@@ -657,18 +658,18 @@ export function BoardMeetingManager() {
               {/* One row of actions at every width: Cancel holds the left
                   edge, Submit the right. The agenda is not part of creating —
                   items are added one by one to the created meeting. */}
-              <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1] pt-4">
+              <div className="flex items-center justify-between gap-2 border-t border-sand-line pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-full border border-[#c9c5bb] px-4 py-2 text-xs font-semibold text-[#26352f] hover:bg-gray-100"
+                  className="rounded-full border border-sand-mute px-4 py-2 text-xs font-semibold text-bark hover:bg-gray-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-5 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
+                  className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-50"
                 >
                   {submitting ? "Scheduling..." : "Submit"}
                 </button>
@@ -682,14 +683,14 @@ export function BoardMeetingManager() {
       {isAgendaModalOpen && selectedMeeting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="text-base font-bold text-[#26352f]">Add Agenda to Board Meeting</h3>
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="text-base font-bold text-bark">Add Agenda to Board Meeting</h3>
               <button
                 type="button"
                 onClick={() => setIsAgendaModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                ✕
+                <X size={14} aria-hidden="true" />
               </button>
             </div>
 
@@ -701,49 +702,49 @@ export function BoardMeetingManager() {
 
             <form onSubmit={handleAddAgendaToMeeting} className="mt-4 space-y-3">
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Agenda Title *</label>
+                <label className="block text-xs font-bold text-bark">Agenda Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Financial Report Review"
                   value={agendaTitle}
                   onChange={(e) => setAgendaTitle(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2 text-xs outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Description (Optional)</label>
+                <label className="block text-xs font-bold text-bark">Description (Optional)</label>
                 <textarea
                   rows={2}
                   placeholder="Details regarding this agenda..."
                   value={agendaDescription}
                   onChange={(e) => setAgendaDescription(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 text-xs outline-none focus:border-[#b36b3c]"
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2 text-xs outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#26352f]">Agenda Document File</label>
+                <label className="block text-xs font-bold text-bark">Agenda Document File</label>
                 <input
                   type="file"
                   onChange={(e) => setAgendaFile(e.target.files?.[0] || null)}
-                  className="mt-1 w-full text-xs text-[#617068] file:mr-2 file:rounded-xl file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f]"
+                  className="mt-1 w-full text-xs text-moss file:mr-2 file:rounded-xl file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-bark"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-3">
+              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-3">
                 <button
                   type="button"
                   onClick={() => setIsAgendaModalOpen(false)}
-                  className="rounded-full border border-[#c9c5bb] px-4 py-1.5 text-xs font-semibold text-[#26352f]"
+                  className="rounded-full border border-sand-mute px-4 py-1.5 text-xs font-semibold text-bark"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={agendaSubmitting}
-                  className="rounded-full bg-[#b36b3c] px-5 py-1.5 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-50"
+                  className="rounded-full bg-ember px-5 py-1.5 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-50"
                 >
                   {agendaSubmitting ? "Uploading..." : "Save Agenda Item"}
                 </button>

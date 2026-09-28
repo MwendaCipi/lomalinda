@@ -121,14 +121,14 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   };
 
   return (
-    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-sand-line bg-sand-grain lg:block">
       <div className="h-full min-h-0 space-y-6 overflow-y-auto p-5 scrollbar-thin">
-        <div className="border-b border-[#dfdbd1] pb-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">
+        <div className="border-b border-sand-line pb-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-ember">
             Leader Portal
           </p>
-          <p className="mt-1 text-xs text-[#617068]">
-            Logged in as <span className="font-semibold text-[#26352f]">{profile?.username || "Staff"}</span>
+          <p className="mt-1 text-xs text-moss">
+            Logged in as <span className="font-semibold text-bark">{profile?.username || "Staff"}</span>
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
             this plus every other section, the clerk just this one. */}
         {(isElder || isClerk || isAdmin) && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Elders&apos; Desk
             </p>
             <nav className="mt-2 space-y-1">
@@ -146,8 +146,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("users")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "users" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -161,8 +161,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=users"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "users" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -179,8 +179,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("leaders")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "leaders" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -194,8 +194,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=leaders"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "leaders" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -212,8 +212,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("board")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "board" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -227,8 +227,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=board"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "board" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -245,8 +245,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("business")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "business" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -260,8 +260,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=business"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "business" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -278,8 +278,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("announcements")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "announcements" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -293,8 +293,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=announcements"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "announcements" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -311,8 +311,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("requests")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "requests" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -323,7 +323,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     {pendingRequests.total > 0 && (
                       <span
                         title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
-                        className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                        className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
                       >
                         {pendingRequests.total}
                       </span>
@@ -336,8 +336,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=requests"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "requests" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -348,7 +348,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     {pendingRequests.total > 0 && (
                       <span
                         title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
-                        className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                        className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
                       >
                         {pendingRequests.total}
                       </span>
@@ -365,8 +365,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     onClick={() => handleTabClick("settings")}
                     className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                       currentTab === "settings" && !isReconPage
-                        ? "bg-[#26352f] text-white shadow-sm"
-                        : "text-[#26352f] hover:bg-[#dfd9cb]"
+                        ? "bg-bark text-white shadow-sm"
+                        : "text-bark hover:bg-sand-hover"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -380,8 +380,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                     href="/administration?tab=settings"
                     className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                       currentTab === "settings" && !isReconPage
-                        ? "bg-[#26352f] text-white shadow-sm"
-                        : "text-[#26352f] hover:bg-[#dfd9cb]"
+                        ? "bg-bark text-white shadow-sm"
+                        : "text-bark hover:bg-sand-hover"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -400,7 +400,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
             sidebar is the Elders' Desk alone. */}
         {isFinance && !isElderOnly && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Treasury &amp; Finance
             </p>
             <nav className="mt-2 space-y-1">
@@ -410,12 +410,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("accounts")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "accounts" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Landmark className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+                    <Landmark className="h-4 w-4 shrink-0 text-ember" />
                     <span>Treasury Accounts</span>
                   </div>
                   {currentTab === "accounts" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -425,12 +425,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=accounts"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "accounts" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Landmark className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+                    <Landmark className="h-4 w-4 shrink-0 text-ember" />
                     <span>Treasury Accounts</span>
                   </div>
                   {currentTab === "accounts" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -440,11 +440,11 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
               <Link
                 href="/administration/fund-drives"
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                  isFundDrivesPage ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#dfd9cb]"
+                  isFundDrivesPage ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand-hover"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <HeartHandshake className="h-4 w-4 shrink-0 text-[#5f8067]" />
+                  <HeartHandshake className="h-4 w-4 shrink-0 text-sage" />
                   <span>Fund Drives</span>
                 </div>
                 {isFundDrivesPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -456,12 +456,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("expenditures")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "expenditures" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Receipt className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <Receipt className="h-4 w-4 shrink-0 text-alert" />
                     <span>Expenditure</span>
                   </div>
                   {currentTab === "expenditures" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -471,12 +471,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=expenditures"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "expenditures" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Receipt className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <Receipt className="h-4 w-4 shrink-0 text-alert" />
                     <span>Expenditure</span>
                   </div>
                   {currentTab === "expenditures" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -487,8 +487,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                 href="/administration/reconciliation"
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                   isReconPage
-                    ? "bg-[#26352f] text-white shadow-sm"
-                    : "text-[#26352f] hover:bg-[#dfd9cb]"
+                    ? "bg-bark text-white shadow-sm"
+                    : "text-bark hover:bg-sand-hover"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -504,12 +504,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("refunds")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "refunds" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Undo2 className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <Undo2 className="h-4 w-4 shrink-0 text-alert" />
                     <span>M-Pesa Refunds</span>
                   </div>
                   {currentTab === "refunds" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -519,12 +519,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=refunds"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "refunds" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Undo2 className="h-4 w-4 shrink-0 text-[#b91c1c]" />
+                    <Undo2 className="h-4 w-4 shrink-0 text-alert" />
                     <span>M-Pesa Refunds</span>
                   </div>
                   {currentTab === "refunds" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -537,7 +537,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Deaconate Section — deacons and admin; hidden from elders. */}
         {isDeaconate && !isElderOnly && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Deaconate Ministry
             </p>
             <nav className="mt-2 space-y-1">
@@ -547,12 +547,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("inventory")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "inventory" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+                    <Boxes className="h-4 w-4 shrink-0 text-ember" />
                     <span>Inventory</span>
                   </div>
                   {currentTab === "inventory" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -562,12 +562,12 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=inventory"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "inventory" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Boxes className="h-4 w-4 shrink-0 text-[#b36b3c]" />
+                    <Boxes className="h-4 w-4 shrink-0 text-ember" />
                     <span>Inventory</span>
                   </div>
                   {currentTab === "inventory" && !isReconPage && <ChevronRight className="h-3.5 w-3.5 font-bold" />}
@@ -580,8 +580,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("deaconate-rota")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-rota" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -595,8 +595,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=deaconate-rota"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-rota" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -613,8 +613,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("deaconate-members")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-members" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -628,8 +628,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=deaconate-members"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-members" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -646,8 +646,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   onClick={() => handleTabClick("deaconate-calendar")}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-calendar" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -661,8 +661,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
                   href="/administration?tab=deaconate-calendar"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
                     currentTab === "deaconate-calendar" && !isReconPage
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#dfd9cb]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand-hover"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -679,7 +679,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Department 1: Adventist Men (AMM) */}
         {hasAnyRole("men_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Adventist Men (AMM)
             </p>
             <nav className="mt-2 space-y-1">
@@ -693,7 +693,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Department 2: Adventist Women (AWM) */}
         {hasAnyRole("women_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Adventist Women (AWM)
             </p>
             <nav className="mt-2 space-y-1">
@@ -707,7 +707,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Department 3: Adventist Youth & Children */}
         {hasAnyRole("youth_leader", "children_ministry") && !isAdmin && !isElder && !isClerk && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Adventist Youth &amp; Children
             </p>
             <nav className="mt-2 space-y-1">
@@ -721,7 +721,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Department 4: Adventist Possibility Ministries (APM) */}
         {hasAnyRole("apm_leader") && !isAdmin && !isElder && !isClerk && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Adventist Possibility (APM)
             </p>
             <nav className="mt-2 space-y-1">
@@ -735,7 +735,7 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
         {/* Department 5: Chaplaincy Ministry */}
         {hasAnyRole("chaplaincy") && !isAdmin && !isElder && !isClerk && (
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-moss">
               Chaplaincy Ministry
             </p>
             <nav className="mt-2 space-y-1">
@@ -776,7 +776,7 @@ function DeptNavItem({
   );
   const chevron = active ? <ChevronRight className="h-3.5 w-3.5 font-bold" /> : null;
   const cls = `flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-    active ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#dfd9cb]"
+    active ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand-hover"
   }`;
   if (interactive) {
     return (

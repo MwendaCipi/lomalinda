@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ArrowLeftRight, Briefcase, Check, ChevronDown, Crown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
 import {
   accountTypeOf,
   accountTypeLabel,
@@ -16,6 +17,7 @@ import {
 } from "./roles-combobox";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
@@ -150,9 +152,9 @@ function AccountStatus({ member }: { member: MemberUser }) {
     return (
       <span
         title="This account can sign in"
-        className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#3d5148]"
+        className="inline-flex items-center gap-1.5 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss-dark"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-[#5f8067]" aria-hidden="true" />
+        <span className="h-1.5 w-1.5 rounded-full bg-sage" aria-hidden="true" />
         Active
       </span>
     );
@@ -164,9 +166,9 @@ function AccountStatus({ member }: { member: MemberUser }) {
     return (
       <span
         title={`An officer switched this account off on ${when}. The record, roles and history are intact, and Actions can switch it back on.`}
-        className="inline-flex items-center gap-1.5 rounded-full bg-[#efe3e3] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
+        className="inline-flex items-center gap-1.5 rounded-full bg-alert-veil px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-alert-shade"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-[#a05252]" aria-hidden="true" />
+        <span className="h-1.5 w-1.5 rounded-full bg-alert-soft" aria-hidden="true" />
         Inactive
       </span>
     );
@@ -174,9 +176,9 @@ function AccountStatus({ member }: { member: MemberUser }) {
   return (
     <span
       title="Waiting for leadership approval on the Requests desk — they cannot sign in yet"
-      className="inline-flex items-center gap-1.5 rounded-full bg-[#f7e3d2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
+      className="inline-flex items-center gap-1.5 rounded-full bg-gold-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ember-deep"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[#b36b3c]" aria-hidden="true" />
+      <span className="h-1.5 w-1.5 rounded-full bg-ember" aria-hidden="true" />
       Awaiting
     </span>
   );
@@ -207,7 +209,7 @@ function RoleCell({ member }: { member: MemberUser }) {
     .map((code) => roleDisplayLabel(code, assistants))
     .join(", ");
   return (
-    <span className="block truncate text-xs text-[#26352f]" title={full}>
+    <span className="block truncate text-xs text-bark" title={full}>
       {roleSummary(roles, assistants)}
     </span>
   );
@@ -224,7 +226,7 @@ function AccountTypeCell({ member }: { member: MemberUser }) {
   const value = accountTypeOf(member.account_type, member.is_disfellowshipped);
   const help = ACCOUNT_TYPE_OPTIONS.find((option) => option.value === value)?.help || "";
   const tone =
-    value === "ex_member" ? "text-[#8c3a3a]" : value === "member" ? "text-[#26352f]" : "text-[#617068]";
+    value === "ex_member" ? "text-alert-shade" : value === "member" ? "text-bark" : "text-moss";
   return (
     <span className={`block truncate text-xs font-medium ${tone}`} title={help}>
       {accountTypeLabel(value)}
@@ -248,8 +250,8 @@ const fmtDate = (value?: string | null) =>
 function ProfileField({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b9790]">{label}</p>
-      <p className="mt-0.5 text-xs text-[#26352f]">{value?.trim() ? value : "—"}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-moss-faint">{label}</p>
+      <p className="mt-0.5 text-xs text-bark">{value?.trim() ? value : "—"}</p>
     </div>
   );
 }
@@ -337,44 +339,44 @@ export function GiftsCombobox({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2 text-xs text-[#26352f] transition hover:bg-white focus:border-[#b36b3c] focus:bg-white focus:outline-none"
+        className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2 text-xs text-bark transition hover:bg-white focus:border-ember focus:bg-white focus:outline-none"
       >
         <div className="flex flex-1 flex-wrap items-center gap-1.5 overflow-hidden text-left">
           {selectedGifts.length === 0 ? (
-            <span className="text-[#617068]">{placeholder}</span>
+            <span className="text-moss">{placeholder}</span>
           ) : (
             <>
               {selectedGifts.slice(0, 2).map((gift) => (
                 <span
                   key={gift}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#eef2ed] px-2 py-0.5 text-[11px] font-semibold text-[#2d5d39]"
+                  className="inline-flex items-center gap-1 rounded-md bg-mist-select px-2 py-0.5 text-[11px] font-semibold text-sage-bright"
                 >
                   <span>{gift}</span>
                 </span>
               ))}
               {selectedGifts.length > 2 && (
-                <span className="rounded-md bg-[#f7f4ee] px-1.5 py-0.5 text-[10px] font-bold text-[#b36b3c] border border-[#dfdbd1]">
+                <span className="rounded-md bg-sand px-1.5 py-0.5 text-[10px] font-bold text-ember border border-sand-line">
                   +{selectedGifts.length - 2} more
                 </span>
               )}
             </>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-[#617068]">
+        <div className="flex items-center gap-1.5 text-moss">
           {selectedGifts.length > 0 && (
-            <span className="rounded-full bg-[#5f8067] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="rounded-full bg-sage px-1.5 py-0.5 text-[10px] font-bold text-white">
               {selectedGifts.length}
             </span>
           )}
           <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>
-            ▼
+            <ChevronDown size={12} aria-hidden="true" />
           </span>
         </div>
       </button>
 
       <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
-          <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
+          <div className="flex items-center justify-between border-b border-sand-line pb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-ember">
               Select Member Gifts ({selectedGifts.length})
             </span>
             <div className="flex items-center gap-2">
@@ -382,7 +384,7 @@ export function GiftsCombobox({
                 <button
                   type="button"
                   onClick={() => onChange([])}
-                  className="text-[11px] text-[#8c2e2e] hover:underline"
+                  className="text-[11px] text-brick hover:underline"
                 >
                   Clear all
                 </button>
@@ -390,7 +392,7 @@ export function GiftsCombobox({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-md bg-[#26352f] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#b36b3c]"
+                className="rounded-md bg-bark px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember"
               >
                 Done
               </button>
@@ -403,7 +405,7 @@ export function GiftsCombobox({
               placeholder="Search or filter gifts..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+              className="w-full rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
             />
           </div>
 
@@ -415,8 +417,8 @@ export function GiftsCombobox({
                   key={gift}
                   className={`flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs cursor-pointer transition select-none ${
                     isChecked
-                      ? "bg-[#eef2ed] text-[#2d5d39] font-semibold"
-                      : "text-[#26352f] hover:bg-[#f7f4ee]"
+                      ? "bg-mist-select text-sage-bright font-semibold"
+                      : "text-bark hover:bg-sand"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -424,20 +426,20 @@ export function GiftsCombobox({
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleGift(gift)}
-                      className="h-4 w-4 rounded accent-[#5f8067] cursor-pointer"
+                      className="h-4 w-4 rounded accent-sage cursor-pointer"
                     />
                     <span>{gift}</span>
                   </div>
-                  {isChecked && <span className="text-xs text-[#5f8067]">✓</span>}
+                  {isChecked && <Check size={12} className="text-xs text-sage" aria-hidden="true" />}
                 </label>
               );
             })}
             {filteredGifts.length === 0 && (
-              <p className="py-2 text-center text-xs text-[#617068]">No matching gifts found.</p>
+              <p className="py-2 text-center text-xs text-moss">No matching gifts found.</p>
             )}
           </div>
 
-          <div className="mt-3 border-t border-[#dfdbd1] pt-2">
+          <div className="mt-3 border-t border-sand-line pt-2">
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
@@ -450,12 +452,12 @@ export function GiftsCombobox({
                     handleAddCustomGift();
                   }
                 }}
-                className="flex-1 rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                className="flex-1 rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1 text-xs text-bark outline-none focus:border-ember"
               />
               <button
                 type="button"
                 onClick={handleAddCustomGift}
-                className="rounded-lg bg-[#5f8067] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#4d6d55]"
+                className="rounded-lg bg-sage px-2.5 py-1 text-xs font-semibold text-white hover:bg-sage-deep"
               >
                 + Add
               </button>
@@ -550,44 +552,44 @@ export function DisabilityCombobox({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2 text-xs text-[#26352f] transition hover:bg-white focus:border-[#b36b3c] focus:bg-white focus:outline-none"
+        className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2 text-xs text-bark transition hover:bg-white focus:border-ember focus:bg-white focus:outline-none"
       >
         <div className="flex flex-1 flex-wrap items-center gap-1.5 overflow-hidden text-left">
           {selectedDisabilities.length === 0 || (selectedDisabilities.length === 1 && selectedDisabilities[0] === "None") ? (
-            <span className="text-[#617068]">{selectedDisabilities.includes("None") ? "None" : placeholder}</span>
+            <span className="text-moss">{selectedDisabilities.includes("None") ? "None" : placeholder}</span>
           ) : (
             <>
               {selectedDisabilities.filter((d) => d !== "None").slice(0, 2).map((item) => (
                 <span
                   key={item}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#eef2ed] px-2 py-0.5 text-[11px] font-semibold text-[#2d5d39]"
+                  className="inline-flex items-center gap-1 rounded-md bg-mist-select px-2 py-0.5 text-[11px] font-semibold text-sage-bright"
                 >
                   <span>{item}</span>
                 </span>
               ))}
               {selectedDisabilities.length > 2 && (
-                <span className="rounded-md bg-[#f7f4ee] px-1.5 py-0.5 text-[10px] font-bold text-[#b36b3c] border border-[#dfdbd1]">
+                <span className="rounded-md bg-sand px-1.5 py-0.5 text-[10px] font-bold text-ember border border-sand-line">
                   +{selectedDisabilities.length - 2} more
                 </span>
               )}
             </>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-[#617068]">
+        <div className="flex items-center gap-1.5 text-moss">
           {selectedDisabilities.length > 0 && (
-            <span className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white">
               {selectedDisabilities.length}
             </span>
           )}
           <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>
-            ▼
+            <ChevronDown size={12} aria-hidden="true" />
           </span>
         </div>
       </button>
 
       <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
-          <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
+          <div className="flex items-center justify-between border-b border-sand-line pb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-ember">
               Select Disability ({selectedDisabilities.length})
             </span>
             <div className="flex items-center gap-2">
@@ -595,7 +597,7 @@ export function DisabilityCombobox({
                 <button
                   type="button"
                   onClick={() => onChange([])}
-                  className="text-[11px] text-[#8c2e2e] hover:underline"
+                  className="text-[11px] text-brick hover:underline"
                 >
                   Clear all
                 </button>
@@ -603,7 +605,7 @@ export function DisabilityCombobox({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-lg bg-[#26352f] px-2.5 py-0.5 text-[11px] font-medium text-white hover:bg-[#b36b3c]"
+                className="rounded-lg bg-bark px-2.5 py-0.5 text-[11px] font-medium text-white hover:bg-ember"
               >
                 Done
               </button>
@@ -616,13 +618,13 @@ export function DisabilityCombobox({
               placeholder="Search disability..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+              className="w-full rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1.5 text-xs text-bark outline-none focus:border-ember"
             />
           </div>
 
           <div className="mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
             {filteredDisabilities.length === 0 ? (
-              <p className="py-2 text-center text-xs text-[#617068]">No matching categories found</p>
+              <p className="py-2 text-center text-xs text-moss">No matching categories found</p>
             ) : (
               filteredDisabilities.map((item) => {
                 const isChecked = selectedDisabilities.includes(item);
@@ -631,8 +633,8 @@ export function DisabilityCombobox({
                     key={item}
                     className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs transition ${
                       isChecked
-                        ? "bg-[#fdf3eb] font-semibold text-[#a35622]"
-                        : "text-[#26352f] hover:bg-[#f7f4ee]"
+                        ? "bg-sand-sheer font-semibold text-ember-shade"
+                        : "text-bark hover:bg-sand"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -640,18 +642,18 @@ export function DisabilityCombobox({
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => toggleDisability(item)}
-                        className="h-4 w-4 rounded accent-[#b36b3c] cursor-pointer"
+                        className="h-4 w-4 rounded accent-ember cursor-pointer"
                       />
                       <span>{item === "None" ? "None (no disability)" : item}</span>
                     </div>
-                    {isChecked && <span className="text-xs text-[#b36b3c]">✓</span>}
+                    {isChecked && <Check size={12} className="text-xs text-ember" aria-hidden="true" />}
                   </label>
                 );
               })
             )}
           </div>
 
-          <div className="mt-3 border-t border-[#dfdbd1] pt-2">
+          <div className="mt-3 border-t border-sand-line pt-2">
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
@@ -664,13 +666,13 @@ export function DisabilityCombobox({
                     handleAddCustom();
                   }
                 }}
-                className="flex-1 rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                className="flex-1 rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1 text-xs text-bark outline-none focus:border-ember"
               />
               <button
                 type="button"
                 onClick={handleAddCustom}
                 disabled={!customDisability.trim()}
-                className="rounded-lg bg-[#b36b3c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#8c4b18] disabled:opacity-50"
+                className="rounded-lg bg-ember px-2.5 py-1 text-xs font-semibold text-white hover:bg-ember-rust disabled:opacity-50"
               >
                 + Add
               </button>
@@ -813,39 +815,39 @@ export function ProfessionCombobox({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="mt-1 flex w-full items-center justify-between gap-2 rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-left text-xs text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:bg-white focus:outline-none"
+        className="mt-1 flex w-full items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-left text-xs text-bark transition hover:border-ember focus:border-ember focus:bg-white focus:outline-none"
       >
         <div className="flex flex-1 items-center gap-2 truncate">
           {value ? (
-            <span className="truncate font-semibold text-[#26352f]">
-              💼 {value}
+            <span className="truncate font-semibold text-bark">
+              <Briefcase size={13} className="inline" aria-hidden="true" /> {value}
             </span>
           ) : (
-            <span className="text-[#8b9790]">{placeholder}</span>
+            <span className="text-moss-faint">{placeholder}</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-[#617068]">
+        <div className="flex items-center gap-1.5 text-moss">
           {value && (
             <span
               onClick={(e) => {
                 e.stopPropagation();
                 onChange("");
               }}
-              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-[#26352f]"
+              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-bark"
               title="Clear profession"
             >
-              ✕
+              <X size={12} aria-hidden="true" />
             </span>
           )}
           <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>
-            ▼
+            <ChevronDown size={12} aria-hidden="true" />
           </span>
         </div>
       </button>
 
       <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
-          <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
+          <div className="flex items-center justify-between border-b border-sand-line pb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-ember">
               Select Profession / Occupation
             </span>
             <div className="flex items-center gap-2">
@@ -853,7 +855,7 @@ export function ProfessionCombobox({
                 <button
                   type="button"
                   onClick={() => onChange("")}
-                  className="text-[11px] text-[#8c2e2e] hover:underline"
+                  className="text-[11px] text-brick hover:underline"
                 >
                   Clear
                 </button>
@@ -864,7 +866,7 @@ export function ProfessionCombobox({
                   setIsOpen(false);
                   setSpecifyingOther(false);
                 }}
-                className="rounded-md bg-[#26352f] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#b36b3c]"
+                className="rounded-md bg-bark px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember"
               >
                 Done
               </button>
@@ -877,7 +879,7 @@ export function ProfessionCombobox({
               placeholder="Search or filter professions..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c] focus:bg-white"
+              className="w-full rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
             />
           </div>
 
@@ -890,26 +892,26 @@ export function ProfessionCombobox({
                   onClick={() => handleSelect(item)}
                   className={`flex cursor-pointer items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs select-none transition ${
                     isSelected
-                      ? "bg-[#fdf3eb] font-semibold text-[#a35622]"
-                      : "text-[#26352f] hover:bg-[#f7f4ee]"
+                      ? "bg-sand-sheer font-semibold text-ember-shade"
+                      : "text-bark hover:bg-sand"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span className="text-sm">{item === "Other" ? "✨" : "💼"}</span>
+                    <span className="text-sm" aria-hidden="true">{item === "Other" ? <Sparkles size={13} className="inline" /> : <Briefcase size={13} className="inline" />}</span>
                     <span className="truncate">{item}</span>
                   </div>
-                  {isSelected && <span className="text-xs font-bold text-[#b36b3c]">✓</span>}
+                  {isSelected && <Check size={12} className="text-xs font-bold text-ember" aria-hidden="true" />}
                 </div>
               );
             })}
             {filteredProfessions.length === 0 && (
-              <p className="py-2 text-center text-xs text-[#617068]">No matching professions found.</p>
+              <p className="py-2 text-center text-xs text-moss">No matching professions found.</p>
             )}
           </div>
 
           {specifyingOther && (
-            <div className="mt-2.5 rounded-xl border border-[#b36b3c]/40 bg-[#fdf3eb]/60 p-2.5">
-              <label className="block text-[11px] font-semibold text-[#a35622]">
+            <div className="mt-2.5 rounded-xl border border-ember/40 bg-sand-sheer/60 p-2.5">
+              <label className="block text-[11px] font-semibold text-ember-shade">
                 Specify &quot;Other&quot; Profession:
               </label>
               <div className="mt-1 flex items-center gap-1.5">
@@ -924,12 +926,12 @@ export function ProfessionCombobox({
                       handleSaveOther();
                     }
                   }}
-                  className="flex-1 rounded-lg border border-[#dfdbd1] bg-white px-2.5 py-1 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  className="flex-1 rounded-lg border border-sand-line bg-white px-2.5 py-1 text-xs text-bark outline-none focus:border-ember"
                 />
                 <button
                   type="button"
                   onClick={handleSaveOther}
-                  className="rounded-lg bg-[#b36b3c] px-3 py-1 text-xs font-semibold text-white hover:bg-[#8c4b18]"
+                  className="rounded-lg bg-ember px-3 py-1 text-xs font-semibold text-white hover:bg-ember-rust"
                 >
                   Set
                 </button>
@@ -937,7 +939,7 @@ export function ProfessionCombobox({
             </div>
           )}
 
-          <div className="mt-3 border-t border-[#dfdbd1] pt-2">
+          <div className="mt-3 border-t border-sand-line pt-2">
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
@@ -950,13 +952,13 @@ export function ProfessionCombobox({
                     handleAddCustom();
                   }
                 }}
-                className="flex-1 rounded-lg border border-[#dfdbd1] bg-[#fcfbf9] px-2.5 py-1 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                className="flex-1 rounded-lg border border-sand-line bg-sand-plate px-2.5 py-1 text-xs text-bark outline-none focus:border-ember"
               />
               <button
                 type="button"
                 onClick={handleAddCustom}
                 disabled={!customProfession.trim()}
-                className="rounded-lg bg-[#b36b3c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#8c4b18] disabled:opacity-50"
+                className="rounded-lg bg-ember px-2.5 py-1 text-xs font-semibold text-white hover:bg-ember-rust disabled:opacity-50"
               >
                 + Set
               </button>
@@ -1101,7 +1103,7 @@ function pendingRowBadge(row: PendingRow) {
       row.transfer.status === "under_review"
         ? "Under review"
         : row.transfer.status.charAt(0).toUpperCase() + row.transfer.status.slice(1);
-    return <span className="rounded-full bg-[#f7e3d2] px-2.5 py-1 text-[10px] font-bold text-[#96552c]">{label}</span>;
+    return <span className="rounded-full bg-gold-pale px-2.5 py-1 text-[10px] font-bold text-ember-deep">{label}</span>;
   }
   return invitationStatusBadge(row.invitation);
 }
@@ -1118,10 +1120,10 @@ function invitationStatusBadge(invitation: InvitationRow) {
           : "Withdrawn";
   const tone =
     invitation.status === "pending"
-      ? "bg-[#eef2ed] text-[#3d5148]"
+      ? "bg-mist-select text-moss-dark"
       : invitation.status === "accepted"
-        ? "bg-[#26352f] text-white"
-        : "bg-[#f0e6dc] text-[#96552c]";
+        ? "bg-bark text-white"
+        : "bg-gold-blush text-ember-deep";
   return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${tone}`}>{label}</span>;
 }
 
@@ -1137,7 +1139,7 @@ function TransferActions({
     <button
       type="button"
       onClick={() => onCancel(transfer)}
-      className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]"
+      className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-ember-deep hover:border-ember-deep"
     >
       Cancel
     </button>
@@ -1175,7 +1177,7 @@ function InvitationActions({
         <button
           type="button"
           onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")}
-          className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+          className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark hover:border-ember"
         >
           Copy link
         </button>
@@ -1183,14 +1185,14 @@ function InvitationActions({
       <button
         type="button"
         onClick={() => onAction(invitation.id, "resend")}
-        className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark hover:border-ember"
       >
         Resend
       </button>
       <button
         type="button"
         onClick={() => onAction(invitation.id, "revoke")}
-        className="rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]"
+        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-ember-deep hover:border-ember-deep"
       >
         Withdraw
       </button>
@@ -2053,7 +2055,7 @@ export function UserManagement() {
         showCancelButton: true,
         confirmButtonText: remove ? "Remove" : "Restore",
         cancelButtonText: "Cancel",
-        confirmButtonColor: remove ? "#b91c1c" : "#26352f",
+        confirmButtonColor: remove ? brand.alert : brand.bark,
       },
     );
     if (!answer.isConfirmed) return;
@@ -2127,24 +2129,69 @@ export function UserManagement() {
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {/* ── Header ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        {/* Wraps on the narrowest phones: the count and the density toggle drop
-            to their own line rather than hanging off the right edge. */}
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:w-auto">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:px-6">
+        {/* Top row: heading, record count, density and the list tabs together.
+            Wraps on the narrowest phones rather than hanging off the edge. */}
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <h2 className="text-xl font-bold text-[#26352f]">User Management</h2>
+            <h2 className="text-xl font-bold text-bark">User Management</h2>
           </span>
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            <p className="text-xs text-[#617068]">
-              {visibleMembers.length} records registered
-            </p>
-            {/* Row density: one setting for every desk table, so it sits with
-                the record count rather than among the filters. */}
-            <DensityToggle dense={dense} onToggle={toggleDensity} />
-          </span>
+          <div className="ml-auto flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:w-auto sm:justify-end">
+            <span className="flex shrink-0 items-center gap-2">
+              <p className="text-xs text-moss">
+                {visibleMembers.length} records registered
+              </p>
+              {/* Row density: one setting for every desk table, so it sits with
+                  the record count rather than among the filters. */}
+              <DensityToggle dense={dense} onToggle={toggleDensity} />
+            </span>
+            {/* The list tabs ride the top row with the heading and the count.
+                Confirmed tabs by account state; Pending tabs by what the
+                person is joining as. On a phone the group scrolls rather than
+                wraps, keeping the band to one line. */}
+            <div
+              className="flex h-[38px] w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-xl border border-sand-line bg-sand p-0.5 sm:w-auto"
+              role="group"
+              aria-label={invitationFilter === "confirmed" ? "Account status filter" : "Pending record type filter"}
+            >
+              {(invitationFilter === "confirmed" ? STATUS_TABS : PENDING_KIND_TABS).map((tab) => {
+                const isActive = invitationFilter === "confirmed" ? statusFilter === tab.key : pendingKindFilter === tab.key;
+                const count =
+                  invitationFilter === "confirmed"
+                    ? tab.key === "all"
+                      ? rosterScoped.length
+                      : statusCounts[tab.key as Exclude<StatusFilter, "all">]
+                    : pendingScoped.filter((row) => pendingKindOf(row) === tab.key).length;
+                return (
+                  <button
+                    key={`${invitationFilter}-${tab.key}`}
+                    type="button"
+                    onClick={() =>
+                      invitationFilter === "confirmed"
+                        ? setStatusFilter(tab.key as StatusFilter)
+                        : setPendingKindFilter(tab.key as PendingKindFilter)
+                    }
+                    title={tab.help}
+                    aria-pressed={isActive}
+                    className={`flex h-8 flex-1 shrink-0 items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition sm:flex-none ${
+                      isActive ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`text-[10px] font-bold ${isActive ? "text-white/70" : "text-moss-faint"}`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        {/* Second row: the list chooser, the type filter and the search box. */}
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex w-full items-center gap-2 sm:w-auto">
             {/* Phones keep one compact popover; desktop has room for the two
                 status filters as separate controls side by side. */}
@@ -2157,14 +2204,14 @@ export function UserManagement() {
                 setStatusFilter("all");
                 setPendingKindFilter("all");
               }}
-              className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none md:hidden"
+              className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none md:hidden"
               aria-label="Account confirmation filter"
             >
               <option value="confirmed">Confirmed</option>
               <option value="pending">Pending</option>
             </select>
             <div
-              className="hidden h-[38px] shrink-0 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 md:flex"
+              className="hidden h-[38px] shrink-0 items-center rounded-xl border border-sand-line bg-sand p-0.5 md:flex"
               role="group"
               aria-label="Account confirmation filter"
             >
@@ -2183,8 +2230,8 @@ export function UserManagement() {
                   }}
                   className={`h-8 rounded-lg px-3 text-xs font-semibold capitalize transition ${
                     invitationFilter === key
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#617068] hover:text-[#26352f]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-moss hover:text-bark"
                   }`}
                 >
                   {key}
@@ -2198,7 +2245,7 @@ export function UserManagement() {
             <select
               value={invitationFilter === "confirmed" ? memberFilter : memberFilter === "ex_members" ? "all" : memberFilter}
               onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
-              className="min-w-0 flex-1 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2.5 text-xs font-semibold text-[#26352f] focus:border-[#b36b3c] focus:outline-none sm:flex-none"
+              className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
               aria-label={invitationFilter === "confirmed" ? "Member type filter" : "Pending record type filter"}
             >
               <option value="all">All types</option>
@@ -2216,68 +2263,25 @@ export function UserManagement() {
             placeholder="Search by name, email, phone, gifts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:min-w-[180px] sm:max-w-sm sm:flex-1"
+            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:min-w-[180px] sm:flex-1"
           />
-          {/* The roster's third question — which list is showing decides what it
-              asks. Confirmed tabs by account state; Pending tabs by what the
-              person is joining as. Same slot, same look, so the page's
-              structure holds whichever list is up. On a phone the group scrolls
-              rather than wraps, which keeps the filter block to one band. */}
-          <div
-            className="flex h-[38px] w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:w-auto"
-            role="group"
-            aria-label={invitationFilter === "confirmed" ? "Account status filter" : "Pending record type filter"}
-          >
-            {(invitationFilter === "confirmed" ? STATUS_TABS : PENDING_KIND_TABS).map((tab) => {
-              const isActive = invitationFilter === "confirmed" ? statusFilter === tab.key : pendingKindFilter === tab.key;
-              const count =
-                invitationFilter === "confirmed"
-                  ? tab.key === "all"
-                    ? rosterScoped.length
-                    : statusCounts[tab.key as Exclude<StatusFilter, "all">]
-                  : pendingScoped.filter((row) => pendingKindOf(row) === tab.key).length;
-              return (
-                <button
-                  key={`${invitationFilter}-${tab.key}`}
-                  type="button"
-                  onClick={() =>
-                    invitationFilter === "confirmed"
-                      ? setStatusFilter(tab.key as StatusFilter)
-                      : setPendingKindFilter(tab.key as PendingKindFilter)
-                  }
-                  title={tab.help}
-                  aria-pressed={isActive}
-                  className={`flex h-8 flex-1 shrink-0 items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition sm:flex-none ${
-                    isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
-                  }`}
-                >
-                  {tab.label}
-                  <span
-                    className={`text-[10px] font-bold ${isActive ? "text-white/70" : "text-[#8b9790]"}`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 
       {/* ── Alert message ── */}
       {message && (
-        <div className={`mx-6 mt-3 shrink-0 rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>
+        <div className={`mx-6 mt-3 shrink-0 rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-mist-select text-moss-dark" : "bg-red-50 text-red-700"}`}>
           {message.text}
-          <button className="ml-3 opacity-60 hover:opacity-100" onClick={() => setMessage(null)}>✕</button>
+          <button className="ml-3 opacity-60 hover:opacity-100" onClick={() => setMessage(null)}><X size={12} className="inline" aria-hidden="true" /></button>
           {message.credentials && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wide text-[#26352f] select-all">
+              <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wide text-bark select-all">
                 {message.credentials}
               </code>
               <button
                 type="button"
                 onClick={() => navigator.clipboard?.writeText(message.credentials || "")}
-                className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white"
+                className="rounded-lg border border-moss-dark/30 px-2 py-1 text-[11px] font-semibold hover:bg-white"
               >
                 Copy
               </button>
@@ -2308,13 +2312,13 @@ export function UserManagement() {
             tableEmpty="No pending records match these filters."
             cardsEmpty="No pending records match these filters."
             renderRow={(row, idx) => (
-              <tr key={`${row.kind}-${row.id}`} className="hover:bg-[#f7f4ee]">
-                <td className={`${cellPad} text-[#617068] w-8`}>{idx + 1}</td>
-                <td className={`${cellPad} font-semibold text-[#26352f]`}>{pendingRowName(row)}</td>
-                <td className={`${cellPad} text-[#617068]`}>
+              <tr key={`${row.kind}-${row.id}`} className="hover:bg-sand">
+                <td className={`${cellPad} text-moss w-8`}>{idx + 1}</td>
+                <td className={`${cellPad} font-semibold text-bark`}>{pendingRowName(row)}</td>
+                <td className={`${cellPad} text-moss`}>
                   {row.kind === "invitation" ? row.invitation.email : row.transfer.email || "—"}
                 </td>
-                <td className={`${cellPad} text-[#617068]`}>
+                <td className={`${cellPad} text-moss`}>
                   {row.kind === "invitation"
                     ? `${formatRoles(row.invitation.role_codes)} · ${row.invitation.account_type_display}`
                     : pendingRowCategory(row)
@@ -2329,11 +2333,11 @@ export function UserManagement() {
               </tr>
             )}
             renderCard={(row) => (
-              <div key={`${row.kind}-${row.id}`} className={`rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] ${dense ? "px-3 py-2" : "px-4 py-3"}`}>
+              <div key={`${row.kind}-${row.id}`} className={`rounded-2xl border border-sand-line bg-sand-plate ${dense ? "px-3 py-2" : "px-4 py-3"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#26352f]">{pendingRowName(row)}</p>
-                    <p className="truncate text-xs text-[#617068]">
+                    <p className="truncate text-sm font-semibold text-bark">{pendingRowName(row)}</p>
+                    <p className="truncate text-xs text-moss">
                       {row.kind === "invitation"
                         ? `${row.invitation.email} · ${formatRoles(row.invitation.role_codes)} · ${row.invitation.account_type_display}`
                         : `${row.transfer.email || "no email"} · ${row.transfer.other_church}`
@@ -2371,19 +2375,19 @@ export function UserManagement() {
           tableEmpty="No members match these filters."
           cardsEmpty="No members match these filters."
           renderRow={(m, idx) => (
-                  <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
-                    <td className={`${cellPad} text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
-                    <td className={`${cellPad} font-semibold text-[#26352f] ${COL_NAME}`}>
+                  <tr key={m.id} className={`hover:bg-sand ${m.is_disfellowshipped ? "opacity-70" : ""} ${pendingChangeIds.includes(m.id) ? "bg-sand-glow" : ""}`}>
+                    <td className={`${cellPad} text-moss ${COL_INDEX}`}>{idx + 1}</td>
+                    <td className={`${cellPad} font-semibold text-bark ${COL_NAME}`}>
                       <div className="min-w-0">
                         <div className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</div>
                         {/* The compact view drops the second line: it is where
                             most of a row's height goes. */}
                         {!dense && (
-                          <div className="truncate text-[11px] font-normal text-[#8b9790]">@{m.username}</div>
+                          <div className="truncate text-[11px] font-normal text-moss-faint">@{m.username}</div>
                         )}
                       </div>
                     </td>
-                    <td className={`${cellPad} text-[#617068] ${COL_CONTACT}`} title={dense ? m.email : undefined}>
+                    <td className={`${cellPad} text-moss ${COL_CONTACT}`} title={dense ? m.email : undefined}>
                       <div className="truncate">{m.phone_number || m.email || "—"}</div>
                       {!dense && m.phone_number && m.email && <div className="truncate text-[11px]">{m.email}</div>}
                     </td>
@@ -2398,34 +2402,34 @@ export function UserManagement() {
                     </td>
                     {/* No extra left padding: the value lines up under its own
                         SEX heading rather than sitting a nudge to the right. */}
-                    <td className={`${cellPad} text-[#617068] ${COL_SEX}`}>{m.gender || "—"}</td>
+                    <td className={`${cellPad} text-moss ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`${cellPad} text-right ${COL_ACTIONS}`}>
                       <div className="relative inline-block" data-action-menu>
                         <button
                           onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
-                          className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                          className="rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
                         >
                           ⋯ Actions
                         </button>
                         {openActionMenuId === m.id && (
-                          <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
+                          <div className={`absolute right-0 z-50 w-48 rounded-xl border border-sand-line bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                             <button
                               onClick={() => { openProfile(m); setOpenActionMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              👤 See Profile
+                              <User size={12} aria-hidden="true" /> See Profile
                             </button>
                             <button
                               onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              📞 Contact Member
+                              <Phone size={12} aria-hidden="true" /> Contact Member
                             </button>
                             <button
                               onClick={() => { setTransferMember(m); setOpenActionMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              🔄 Transfer Member
+                              <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
                             </button>
                             <button
                               onClick={() => {
@@ -2434,31 +2438,31 @@ export function UserManagement() {
                                 setNewAssistants(m.assistant_roles || []);
                                 setOpenActionMenuId(null);
                               }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              👑 Assign Leadership
+                              <Crown size={12} aria-hidden="true" /> Assign Leadership
                             </button>
                             <button
                               onClick={() => openAccountTypeModal(m)}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              🎚️ Account Type
+                              <SlidersHorizontal size={12} aria-hidden="true" /> Account Type
                             </button>
                             {m.is_disfellowshipped ? (
                               <button
                                 onClick={() => { handleMembershipChange(m, false); setOpenActionMenuId(null); }}
                                 disabled={updatingTypeId === m.id}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand disabled:opacity-60"
                               >
-                                ↩ Restore
+                                <Undo2 size={12} aria-hidden="true" /> Restore
                               </button>
                             ) : (
                               <button
                                 onClick={() => { handleMembershipChange(m, true); setOpenActionMenuId(null); }}
                                 disabled={updatingTypeId === m.id}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-alert hover:bg-alert-wash disabled:opacity-60"
                               >
-                                🗑 Remove
+                                <Trash2 size={12} aria-hidden="true" /> Remove
                               </button>
                             )}
                           </div>
@@ -2471,18 +2475,18 @@ export function UserManagement() {
               const name = m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
               const contact = m.phone_number || m.email || "—";
               return (
-                <div key={m.id} className={`rounded-2xl border border-[#dfdbd1] shadow-sm space-y-2 ${dense ? "p-2.5" : "p-4"} ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
+                <div key={m.id} className={`rounded-2xl border border-sand-line shadow-sm space-y-2 ${dense ? "p-2.5" : "p-4"} ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-sand-glow" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h3 className="font-bold text-sm text-[#26352f]">
+                      <h3 className="font-bold text-sm text-bark">
                         {name}
 
                       </h3>
                       {!dense && (
-                        <p className="text-[11px] text-[#8b9790] mt-0.5">@{m.username}</p>
+                        <p className="text-[11px] text-moss-faint mt-0.5">@{m.username}</p>
                       )}
-                      <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
-                      <div className="mt-0.5 truncate text-xs font-semibold text-[#26352f]">
+                      <p className="text-xs text-moss mt-0.5">{contact}</p>
+                      <div className="mt-0.5 truncate text-xs font-semibold text-bark">
                         <RoleCell member={m} />
                       </div>
                     </div>
@@ -2493,11 +2497,11 @@ export function UserManagement() {
                       <AccountTypeCell member={m} />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1]/60 pt-2">
+                  <div className="flex items-center justify-between gap-2 border-t border-sand-line/60 pt-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <AccountStatus member={m} />
                       {m.gender ? (
-                        <p className="min-w-0 truncate text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>
+                        <p className="min-w-0 truncate text-xs text-moss"><span className="font-semibold text-bark">Sex:</span> {m.gender}</p>
                       ) : null}
                     </div>
                     {/* The card's actions live in one menu, anchored to this
@@ -2507,29 +2511,29 @@ export function UserManagement() {
                         onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
                         aria-expanded={openActionMenuId === m.id}
                         aria-label={`Actions for ${name}`}
-                        className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                        className="rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
                       >
                         ⋯ Actions
                       </button>
                       {openActionMenuId === m.id && (
-                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
+                        <div className={`absolute right-0 z-50 w-48 rounded-xl border border-sand-line bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                           <button
                             onClick={() => { handleStartEdit(m); setOpenActionMenuId(null); }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            ✏️ Edit Profile
+                            <Pencil size={12} aria-hidden="true" /> Edit Profile
                           </button>
                           <button
                             onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            📞 Contact Member
+                            <Phone size={12} aria-hidden="true" /> Contact Member
                           </button>
                           <button
                             onClick={() => { setTransferMember(m); setOpenActionMenuId(null); }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            🔄 Transfer Member
+                            <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
                           </button>
                           <button
                             onClick={() => {
@@ -2538,31 +2542,31 @@ export function UserManagement() {
                               setNewAssistants(m.assistant_roles || []);
                               setOpenActionMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            👑 Assign Leadership
+                            <Crown size={12} aria-hidden="true" /> Assign Leadership
                           </button>
                           <button
                             onClick={() => openAccountTypeModal(m)}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            🎚️ Account Type
+                            <SlidersHorizontal size={12} aria-hidden="true" /> Account Type
                           </button>
                           {m.is_disfellowshipped ? (
                             <button
                               onClick={() => { handleMembershipChange(m, false); setOpenActionMenuId(null); }}
                               disabled={updatingTypeId === m.id}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand disabled:opacity-60"
                             >
-                              ↩ Restore
+                              <Undo2 size={12} aria-hidden="true" /> Restore
                             </button>
                           ) : (
                             <button
                               onClick={() => { handleMembershipChange(m, true); setOpenActionMenuId(null); }}
                               disabled={updatingTypeId === m.id}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-alert hover:bg-alert-wash disabled:opacity-60"
                             >
-                              🗑 Remove
+                              <Trash2 size={12} aria-hidden="true" /> Remove
                             </button>
                           )}
                         </div>
@@ -2576,9 +2580,9 @@ export function UserManagement() {
       </div>
 
       {/* ── Bottom bar: Print + Add ── */}
-      <div className="shrink-0 border-t border-[#dfdbd1] bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* The count line is a desktop nicety; on phones the buttons need the width. */}
-        <p className="hidden text-[11px] text-[#617068] sm:block">
+        <p className="hidden text-[11px] text-moss sm:block">
           {invitationFilter === "pending" ? `${filteredPendingRows.length} of ${pendingRows.length} pending record${pendingRows.length === 1 ? "" : "s"} shown` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
         </p>
         {/* Large screens get one row of three equal-width buttons under their
@@ -2587,23 +2591,23 @@ export function UserManagement() {
         <div className="grid grid-cols-3 gap-2 lg:flex lg:w-auto lg:gap-2">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
-            className="rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#b36b3c] lg:w-44"
+            className="rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember lg:w-44"
           >
-            <span className="lg:hidden">✉️ Invite</span>
+            <span className="lg:hidden"><Mail size={12} className="inline" aria-hidden="true" /> Invite</span>
             <span className="hidden lg:inline">Invite via Email</span>
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
-            className="rounded-xl border border-[#26352f] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] lg:w-44"
+            className="rounded-xl border border-bark bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:bg-sand lg:w-44"
           >
             <span className="lg:hidden">+ Add</span>
             <span className="hidden lg:inline">Add Manually</span>
           </button>
           <button
             onClick={handlePrintMemberList}
-            className="rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee] lg:w-44"
+            className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand lg:w-44"
           >
-            <span className="lg:hidden">🖨️ Print</span>
+            <span className="lg:hidden"><Printer size={12} className="inline" aria-hidden="true" /> Print</span>
             <span className="hidden lg:inline">Print Users List</span>
           </button>
         </div>
@@ -2613,29 +2617,29 @@ export function UserManagement() {
       {false && showAddFriendForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="add-friend-title"
-            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 id="add-friend-title" className="text-xl font-bold text-[#26352f]">Add New Friend</h3>
-                <p className="mt-0.5 text-xs text-[#617068]">Register a friend of the church (no login access).</p>
+                <h3 id="add-friend-title" className="text-xl font-bold text-bark">Add New Friend</h3>
+                <p className="mt-0.5 text-xs text-moss">Register a friend of the church (no login access).</p>
               </div>
-              <button type="button" onClick={() => setShowAddFriendForm(false)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+              <button type="button" onClick={() => setShowAddFriendForm(false)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
             <form onSubmit={handleAddFriend} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Full Name *</label>
+                <label className="block text-xs font-semibold text-bark">Full Name *</label>
                 <input
                   type="text"
                   required
                   value={friendFormData.name}
                   onChange={(e) => setFriendFormData({ ...friendFormData, name: e.target.value })}
                   placeholder="e.g. Grace Achieng"
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Phone Number</label>
+                  <label className="block text-xs font-semibold text-bark">Phone Number</label>
                   <input
                     type="tel"
                     inputMode="numeric"
@@ -2643,26 +2647,26 @@ export function UserManagement() {
                     value={friendFormData.phone_number}
                     onChange={(e) => setFriendFormData({ ...friendFormData, phone_number: e.target.value })}
                     placeholder="07XXXXXXXX"
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Email</label>
+                  <label className="block text-xs font-semibold text-bark">Email</label>
                   <input
                     type="email"
                     value={friendFormData.email}
                     onChange={(e) => setFriendFormData({ ...friendFormData, email: e.target.value })}
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Sex / Gender</label>
+                  <label className="block text-xs font-semibold text-bark">Sex / Gender</label>
                   <select
                     value={friendFormData.gender || ""}
                     onChange={(e) => setFriendFormData({ ...friendFormData, gender: e.target.value })}
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                   >
                     <option value="">-- Select Sex --</option>
                     <option value="Male">Male</option>
@@ -2671,21 +2675,21 @@ export function UserManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Date of Birth</label>
+                  <label className="block text-xs font-semibold text-bark">Date of Birth</label>
                   <input
                     type="date"
                     value={friendFormData.date_of_birth || ""}
                     onChange={(e) => setFriendFormData({ ...friendFormData, date_of_birth: e.target.value })}
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                    className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Disability / Special Needs</label>
+                <label className="block text-xs font-semibold text-bark">Disability / Special Needs</label>
                 <select
                   value={friendFormData.disability || ""}
                   onChange={(e) => setFriendFormData({ ...friendFormData, disability: e.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                 >
                   <option value="">None / None Recorded</option>
                   <option value="Physical / Mobility">Physical / Mobility Impairment</option>
@@ -2695,46 +2699,46 @@ export function UserManagement() {
                   <option value="Intellectual">Intellectual / Learning Support</option>
                   <option value="Other">Other Special Need</option>
                 </select>
-                <p className="mt-1 text-[11px] text-[#617068]">
-                  Note: Friends with a recorded disability automatically belong to <span className="font-bold text-[#b36b3c]">Adventist Possibility Ministries (APM)</span>.
+                <p className="mt-1 text-[11px] text-moss">
+                  Note: Friends with a recorded disability automatically belong to <span className="font-bold text-ember">Adventist Possibility Ministries (APM)</span>.
                 </p>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Current Church *</label>
+                <label className="block text-xs font-semibold text-bark">Current Church *</label>
                 <input
                   type="text"
                   required
                   value={friendFormData.current_church}
                   onChange={(e) => setFriendFormData({ ...friendFormData, current_church: e.target.value })}
                   placeholder="Church they currently attend"
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                   title="The church this friend currently attends"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Baptismal Status</label>
+                <label className="block text-xs font-semibold text-bark">Baptismal Status</label>
                 <select
                   value={friendFormData.baptismal_status}
                   onChange={(e) => setFriendFormData({ ...friendFormData, baptismal_status: e.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
+                  className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
                 >
                   <option value="baptised">Baptised</option>
                   <option value="not_baptised">Not Baptised</option>
                   <option value="transfer_pending">Transfer In Progress</option>
                 </select>
               </div>
-              <div className="flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                 <button
                   type="button"
                   onClick={() => setShowAddFriendForm(false)}
-                  className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]"
+                  className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-[#b36b3c] px-5 py-2 text-xs font-semibold text-white disabled:opacity-60 transition hover:bg-[#96552c]"
+                  className="rounded-xl bg-ember px-5 py-2 text-xs font-semibold text-white disabled:opacity-60 transition hover:bg-ember-deep"
                 >
                   {submitting ? "Adding..." : "Add Friend"}
                 </button>
@@ -2748,14 +2752,14 @@ export function UserManagement() {
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="add-member-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 id="add-member-title" className="text-xl font-bold text-[#26352f]">Add User</h3>
-                <p className="mt-0.5 text-xs text-[#617068]">Step {addStep} of 2 · {addStep === 1 ? "Basic account details" : "Additional details"}</p>
+                <h3 id="add-member-title" className="text-xl font-bold text-bark">Add User</h3>
+                <p className="mt-0.5 text-xs text-moss">Step {addStep} of 2 · {addStep === 1 ? "Basic account details" : "Additional details"}</p>
               </div>
               <button type="button" onClick={() => setShowAddForm(false)}
-                className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] hover:text-[#26352f] transition text-xl leading-none" aria-label="Close modal">✕</button>
+                className="rounded-full p-2 text-moss hover:bg-sand hover:text-bark transition text-xl leading-none" aria-label="Close modal"><X size={18} aria-hidden="true" /></button>
             </div>
 
             <form onSubmit={addStep === 1 ? (e) => { e.preventDefault(); setAddStep(2); } : handleAddPerson} className="mt-3.5 space-y-4">
@@ -2763,11 +2767,11 @@ export function UserManagement() {
                 <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Account Type *</label>
+                <label className="block text-xs font-semibold text-bark">Account Type *</label>
                 <select
                   value={addAccountType}
                   onChange={(e) => setAddAccountType(e.target.value as "member" | "friend")}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none"
                 >
                   <option value="member">Church Member</option>
                   <option value="friend">Friend of the Church</option>
@@ -2776,22 +2780,22 @@ export function UserManagement() {
 
                 {/* Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Name *</label>
+                  <label className="block text-xs font-semibold text-bark">Name *</label>
                   <input type="text" required placeholder="Enter full name" value={formData.name}
                     onChange={(e) => {
                       setFormData({ ...formData, name: e.target.value });
                       setFriendFormData({ ...friendFormData, name: e.target.value });
                     }}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Sex */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Sex</label>
+                  <label className="block text-xs font-semibold text-bark">Sex</label>
                   <select value={formData.gender} onChange={(e) => handleGenderChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
                     <option value="">-- Select Sex --</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -2801,7 +2805,7 @@ export function UserManagement() {
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Phone Number</label>
+                  <label className="block text-xs font-semibold text-bark">Phone Number</label>
                   <input type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="e.g. 07XXXXXXXX"
                     value={formData.phone_number}
                     onChange={(e) => {
@@ -2809,58 +2813,58 @@ export function UserManagement() {
                       setFormData({ ...formData, phone_number: phone });
                       setFriendFormData({ ...friendFormData, phone_number: phone });
                     }}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
 
                 {/* WhatsApp */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">WhatsApp Number</label>
+                  <label className="block text-xs font-semibold text-bark">WhatsApp Number</label>
                   <input type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="e.g. 07XXXXXXXX"
                     value={formData.whatsapp_number}
                     onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Email Address {addAccountType === "member" ? "*" : ""}</label>
+                  <label className="block text-xs font-semibold text-bark">Email Address {addAccountType === "member" ? "*" : ""}</label>
                   <input type="email" required={addAccountType === "member"} placeholder="member@example.com" value={formData.email}
                     onChange={(e) => {
                       setFormData({ ...formData, email: e.target.value });
                       setFriendFormData({ ...friendFormData, email: e.target.value });
                     }}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
 
                 {/* Login credentials */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Username *</label>
+                  <label className="block text-xs font-semibold text-bark">Username *</label>
                   <input type="text" required autoComplete="off" placeholder="e.g. grace.wanjiku" value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Initial Password *</label>
+                  <label className="block text-xs font-semibold text-bark">Initial Password *</label>
                   <input type="text" required autoComplete="off" value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
-                  <p className="mt-1 text-[10px] text-[#617068]">They must change this password at first login.</p>
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
+                  <p className="mt-1 text-[10px] text-moss">They must change this password at first login.</p>
                 </div>
 
                 {/* Date of Birth */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Date of Birth</label>
+                  <label className="block text-xs font-semibold text-bark">Date of Birth</label>
                   <input type="date" value={formData.date_of_birth}
                     onChange={(e) => handleDobChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
 
                 {/* Age */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Age (Years)</label>
+                  <label className="block text-xs font-semibold text-bark">Age (Years)</label>
                   <input type="number" min="0" max="130" placeholder="e.g. 25" value={age}
                     onChange={(e) => handleAgeChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
 
               </div>
@@ -2872,18 +2876,18 @@ export function UserManagement() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     {/* Profession follows age on the second step. */}
                     <div>
-                      <label className="block text-xs font-semibold text-[#26352f]">Profession / Occupation</label>
+                      <label className="block text-xs font-semibold text-bark">Profession / Occupation</label>
                       <ProfessionCombobox value={formData.profession} onChange={(val) => setFormData({ ...formData, profession: val })} />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#26352f]">Ministry</label>
+                      <label className="block text-xs font-semibold text-bark">Ministry</label>
                       {/* Ministry membership, not a role: roles are handed out in
                           the Role column, so a new member is never secretly made
                           a ministry's leader here. */}
                       <select value={formData.ministry}
                         onChange={(e) => setFormData({ ...formData, ministry: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
                         {getFilteredMinistries(formData.gender).map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
@@ -2892,19 +2896,19 @@ export function UserManagement() {
                   </div>
 
               {addAccountType === "friend" && (
-                <div className="grid gap-4 sm:grid-cols-2 rounded-2xl border border-[#dfdbd1] bg-[#fcfbf9] p-4">
+                <div className="grid gap-4 sm:grid-cols-2 rounded-2xl border border-sand-line bg-sand-plate p-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[#26352f]">Current Church *</label>
+                    <label className="block text-xs font-semibold text-bark">Current Church *</label>
                     <input type="text" required value={friendFormData.current_church}
                       onChange={(e) => setFriendFormData({ ...friendFormData, current_church: e.target.value })}
                       placeholder="Church they currently attend"
-                      className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3.5 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                      className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-xs focus:border-ember focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#26352f]">Baptismal Status</label>
+                    <label className="block text-xs font-semibold text-bark">Baptismal Status</label>
                     <select value={friendFormData.baptismal_status}
                       onChange={(e) => setFriendFormData({ ...friendFormData, baptismal_status: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3.5 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none">
+                      className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-xs focus:border-ember focus:outline-none">
                       <option value="baptised">Baptised</option>
                       <option value="not_baptised">Not Baptised</option>
                       <option value="transfer_pending">Transfer In Progress</option>
@@ -2915,31 +2919,31 @@ export function UserManagement() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Gifts &amp; Talents</label>
+                  <label className="block text-xs font-semibold text-bark">Gifts &amp; Talents</label>
                   <GiftsCombobox selectedGifts={formData.gifts} onChange={(gifts) => setFormData({ ...formData, gifts })} />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Disability / Special Needs</label>
+                  <label className="block text-xs font-semibold text-bark">Disability / Special Needs</label>
                   <DisabilityCombobox selectedDisabilities={formData.disability} onChange={(d) => setFormData({ ...formData, disability: d })} />
                 </div>
               </div>
 
               {message && (
-                <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>{message.text}</div>
+                <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-mist-select text-moss-dark" : "bg-red-50 text-red-700"}`}>{message.text}</div>
               )}
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setAddStep(1)}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Back
                 </button>
                 <button type="button" onClick={() => setShowAddForm(false)}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
                   {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
                 </button>
               </div>
@@ -2947,10 +2951,10 @@ export function UserManagement() {
               )}
               {addStep === 1 && (
                 <div className="flex items-center justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                     Cancel
                   </button>
-                  <button type="submit" className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  <button type="submit" className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
                     Next: Additional Details
                   </button>
                 </div>
@@ -2964,54 +2968,54 @@ export function UserManagement() {
       {showInviteForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="invite-member-title"
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line sm:px-8">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 id="invite-member-title" className="text-xl font-bold text-[#26352f]">Invite by Email</h3>
-                <p className="mt-0.5 text-xs text-[#617068]">
+                <h3 id="invite-member-title" className="text-xl font-bold text-bark">Invite by Email</h3>
+                <p className="mt-0.5 text-xs text-moss">
                   They receive a link, choose their own username and password, then sign in.
                 </p>
               </div>
-              <button type="button" onClick={() => setShowInviteForm(false)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+              <button type="button" onClick={() => setShowInviteForm(false)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
 
             <form onSubmit={handleSendInvite} className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Email Address *</label>
+                  <label className="block text-xs font-semibold text-bark">Email Address *</label>
                   <input type="email" required placeholder="leader@example.com" value={inviteFormData.email}
                     onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">First Name *</label>
+                  <label className="block text-xs font-semibold text-bark">First Name *</label>
                   <input type="text" required value={inviteFormData.first_name}
                     onChange={(e) => setInviteFormData({ ...inviteFormData, first_name: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Last Name</label>
+                  <label className="block text-xs font-semibold text-bark">Last Name</label>
                   <input type="text" value={inviteFormData.last_name}
                     onChange={(e) => setInviteFormData({ ...inviteFormData, last_name: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Phone Number</label>
+                  <label className="block text-xs font-semibold text-bark">Phone Number</label>
                   <input type="tel" placeholder="07XXXXXXXX" value={inviteFormData.phone_number}
                     onChange={(e) => setInviteFormData({ ...inviteFormData, phone_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Account Type</label>
+                  <label className="block text-xs font-semibold text-bark">Account Type</label>
                   <select value={inviteFormData.account_type}
                     onChange={(e) => setInviteFormData({ ...inviteFormData, account_type: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
                     <option value="member">Church Member</option>
                     <option value="friend">Friend of the Church</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Access / Roles</label>
+                  <label className="block text-xs font-semibold text-bark">Access / Roles</label>
                   <RolesCombobox
                     selected={inviteFormData.roles}
                     onChange={(roles) => setInviteFormData({ ...inviteFormData, roles })}
@@ -3022,26 +3026,26 @@ export function UserManagement() {
               </div>
 
               {message && (
-                <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-[#eef2ed] text-[#3d5148]" : "bg-red-50 text-red-700"}`}>
+                <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-mist-select text-moss-dark" : "bg-red-50 text-red-700"}`}>
                   {message.text}
                   {lastInviteLink && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <code className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-[#26352f] select-all">
+                      <code className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-bark select-all">
                         {lastInviteLink}
                       </code>
                       <button type="button" onClick={() => navigator.clipboard?.writeText(lastInviteLink)}
-                        className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
+                        className="rounded-lg border border-moss-dark/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
                         Copy link
                       </button>
                     </div>
                   )}
                   {lastInviteCode && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wider text-[#26352f] select-all">
+                      <code className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wider text-bark select-all">
                         {lastInviteCode}
                       </code>
                       <button type="button" onClick={() => navigator.clipboard?.writeText(lastInviteCode)}
-                        className="rounded-lg border border-[#3d5148]/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
+                        className="rounded-lg border border-moss-dark/30 px-2 py-1 text-[11px] font-semibold hover:bg-white">
                         Copy code
                       </button>
                     </div>
@@ -3051,11 +3055,11 @@ export function UserManagement() {
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowInviteForm(false)}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
                 </button>
                 <button type="submit" disabled={inviteSubmitting}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60">
+                  className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember disabled:opacity-60">
                   {inviteSubmitting ? "Sending…" : "Send Invitation"}
                 </button>
               </div>
@@ -3063,21 +3067,21 @@ export function UserManagement() {
 
             {/* Pending, accepted and withdrawn invitations */}
             {false && invitations.length > 0 && (
-              <div className="mt-6 border-t border-[#dfdbd1] pt-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#617068]">Invitations</p>
+              <div className="mt-6 border-t border-sand-line pt-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-moss">Invitations</p>
                 <div className="mt-3 space-y-2">
                   {invitations.map((invitation) => (
-                    <div key={invitation.id} className="rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3 py-2">
+                    <div key={invitation.id} className="rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-[#26352f]">
+                          <p className="truncate text-xs font-semibold text-bark">
                             {[invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email}
                           </p>
-                          <p className="truncate text-[11px] text-[#617068]">
+                          <p className="truncate text-[11px] text-moss">
                             {invitation.email} · {formatRoles(invitation.role_codes)} · {invitation.account_type_display}
                           </p>
                         </div>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-[#eef2ed] text-[#3d5148]" : invitation.status === "accepted" ? "bg-[#26352f] text-white" : "bg-[#f0e6dc] text-[#96552c]"}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-mist-select text-moss-dark" : invitation.status === "accepted" ? "bg-bark text-white" : "bg-gold-blush text-ember-deep"}`}>
                           {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Accepted" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
                         </span>
                       </div>
@@ -3085,16 +3089,16 @@ export function UserManagement() {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {invitation.invite_url && (
                             <button type="button" onClick={() => navigator.clipboard?.writeText(invitation.invite_url ?? "")}
-                              className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
+                              className="rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-bark hover:border-ember">
                               Copy link
                             </button>
                           )}
                           <button type="button" onClick={() => handleInviteAction(invitation.id, "resend")}
-                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]">
+                            className="rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-bark hover:border-ember">
                             Resend
                           </button>
                           <button type="button" onClick={() => handleInviteAction(invitation.id, "revoke")}
-                            className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-1 text-[11px] font-semibold text-[#96552c] hover:border-[#96552c]">
+                            className="rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-ember-deep hover:border-ember-deep">
                             Withdraw
                           </button>
                         </div>
@@ -3112,28 +3116,28 @@ export function UserManagement() {
       {profileMemberId && profileData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="profile-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 id="profile-title" className="text-xl font-bold text-[#26352f]">
+                <h3 id="profile-title" className="text-xl font-bold text-bark">
                   {profileData.first_name || profileData.last_name
                     ? `${profileData.first_name || ""} ${profileData.last_name || ""}`.trim()
                     : profileData.username}
                 </h3>
-                <p className="text-[11px] text-[#8b9790]">
+                <p className="text-[11px] text-moss-faint">
                   @{profileData.username}
                   {profileData.date_joined ? ` · Joined ${fmtDate(profileData.date_joined)}` : ""}
                 </p>
               </div>
               <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
-                className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] text-xl leading-none">✕</button>
+                className="rounded-full p-2 text-moss hover:bg-sand text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
 
-            {profileLoading && <p className="mt-3 text-[11px] text-[#617068]">Loading full record…</p>}
+            {profileLoading && <p className="mt-3 text-[11px] text-moss">Loading full record…</p>}
 
             <div className="mt-4 space-y-5">
               <section>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Basic details</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Basic details</h4>
                 <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                   <ProfileField label="Email" value={profileData.email} />
                   <ProfileField label="Phone" value={profileData.phone_number} />
@@ -3162,33 +3166,33 @@ export function UserManagement() {
               </section>
 
               <section>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Gifts &amp; talents</h4>
-                <p className="mt-1 text-xs text-[#26352f]">{profileData.gifts?.trim() || "—"}</p>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Gifts &amp; talents</h4>
+                <p className="mt-1 text-xs text-bark">{profileData.gifts?.trim() || "—"}</p>
               </section>
 
               <section>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Current roles</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Current roles</h4>
                 {(profileData.current_roles && profileData.current_roles.length > 0) ? (
                   <ul className="mt-2 space-y-1">
                     {profileData.current_roles.map((r) => (
-                      <li key={r.role} className="flex items-center justify-between rounded-lg bg-[#f7f4ee] px-3 py-1.5 text-xs text-[#26352f]">
+                      <li key={r.role} className="flex items-center justify-between rounded-lg bg-sand px-3 py-1.5 text-xs text-bark">
                         <span className="font-semibold">{r.role_label}</span>
-                        <span className="text-[10px] text-[#617068]">since {fmtDate(r.started_at)}</span>
+                        <span className="text-[10px] text-moss">since {fmtDate(r.started_at)}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1 text-xs text-[#26352f]">Member</p>
+                  <p className="mt-1 text-xs text-bark">Member</p>
                 )}
               </section>
 
               {(profileData.past_roles && profileData.past_roles.length > 0) && (
                 <section>
-                  <h4 className="text-xs font-bold uppercase tracking-wide text-[#8b9790]">Roles served</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Roles served</h4>
                   <ul className="mt-2 space-y-1">
                     {profileData.past_roles.map((r) => (
-                      <li key={`${r.role}-${r.ended_at}`} className="flex items-center justify-between rounded-lg border border-[#dfdbd1] px-3 py-1.5 text-xs text-[#617068]">
-                        <span className="font-semibold text-[#26352f]">{r.role_label}</span>
+                      <li key={`${r.role}-${r.ended_at}`} className="flex items-center justify-between rounded-lg border border-sand-line px-3 py-1.5 text-xs text-moss">
+                        <span className="font-semibold text-bark">{r.role_label}</span>
                         <span className="text-[10px]">{fmtDate(r.started_at)} – {fmtDate(r.ended_at)}</span>
                       </li>
                     ))}
@@ -3196,8 +3200,8 @@ export function UserManagement() {
                 </section>
               )}
 
-              <p className="rounded-xl bg-[#fdf8ef] px-4 py-3 text-[11px] leading-relaxed text-[#617068]">
-                To correct any of these details, use <strong className="text-[#26352f]">Assign Leadership</strong> for roles,
+              <p className="rounded-xl bg-sand-cream px-4 py-3 text-[11px] leading-relaxed text-moss">
+                To correct any of these details, use <strong className="text-bark">Assign Leadership</strong> for roles,
                 or ask the clerk to propose a change — the member approves it on their dashboard before anything is applied.
               </p>
 
@@ -3210,14 +3214,14 @@ export function UserManagement() {
                 const member = members.find((m) => m.id === profileMemberId);
                 if (!member || member.is_superuser) return null;
                 return (
-                  <div className="flex flex-wrap items-center gap-2 border-t border-[#dfdbd1] pt-3">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-sand-line pt-3">
                     <button
                       type="button"
                       disabled={updatingTypeId === member.id}
                       onClick={() => handleMembershipChange(member, !member.is_disfellowshipped)}
-                      className="rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] disabled:opacity-50"
+                      className="rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember disabled:opacity-50"
                     >
-                      {member.is_disfellowshipped ? "↩ Restore" : "🗑 Remove"}
+                      {member.is_disfellowshipped ? <><Undo2 size={12} className="inline" aria-hidden="true" /> Restore</> : <><Trash2 size={12} className="inline" aria-hidden="true" /> Remove</>}
                     </button>
                   </div>
                 );
@@ -3226,11 +3230,11 @@ export function UserManagement() {
               <div className="flex items-center gap-3 pb-1">
                 <button type="button"
                   onClick={() => { const member = members.find((m) => m.id === profileMemberId); if (member) { setProfileMemberId(null); setProfileData(null); handleStartEdit(member); } }}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
                   Propose Changes
                 </button>
                 <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Close
                 </button>
               </div>
@@ -3243,46 +3247,46 @@ export function UserManagement() {
       {editingMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="edit-member-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-[#dfdbd1] sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 id="edit-member-title" className="text-xl font-bold text-[#26352f]">
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 id="edit-member-title" className="text-xl font-bold text-bark">
                 Edit Profile — {editingMember.first_name || editingMember.username}
               </h3>
-              <button type="button" onClick={() => setEditingMember(null)} className="rounded-full p-2 text-[#617068] hover:bg-[#f7f4ee] text-xl leading-none">✕</button>
+              <button type="button" onClick={() => setEditingMember(null)} className="rounded-full p-2 text-moss hover:bg-sand text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">First Name</label>
+                  <label className="block text-xs font-medium text-bark">First Name</label>
                   <input type="text" value={editFormData.first_name || ""} onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Last Name</label>
+                  <label className="block text-xs font-medium text-bark">Last Name</label>
                   <input type="text" value={editFormData.last_name || ""} onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Email</label>
+                  <label className="block text-xs font-medium text-bark">Email</label>
                   <input type="email" value={editFormData.email || ""} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Phone Number</label>
+                  <label className="block text-xs font-medium text-bark">Phone Number</label>
                   <input type="tel" inputMode="numeric" maxLength={10} value={editFormData.phone_number || ""}
                     onChange={(e) => setEditFormData({ ...editFormData, phone_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">WhatsApp Number</label>
+                  <label className="block text-xs font-medium text-bark">WhatsApp Number</label>
                   <input type="tel" inputMode="numeric" maxLength={10} value={editFormData.whatsapp_number || ""}
                     onChange={(e) => setEditFormData({ ...editFormData, whatsapp_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Sex</label>
+                  <label className="block text-xs font-medium text-bark">Sex</label>
                   <select value={editFormData.gender || ""} onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none">
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none">
                     <option value="">-- Select Sex --</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -3290,45 +3294,45 @@ export function UserManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Date of Birth</label>
+                  <label className="block text-xs font-medium text-bark">Date of Birth</label>
                   <input type="date" value={editFormData.date_of_birth || ""} onChange={(e) => handleEditDobChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Age (Years)</label>
+                  <label className="block text-xs font-medium text-bark">Age (Years)</label>
                   <input type="number" min="0" max="130" placeholder="e.g. 25" value={editAge} onChange={(e) => handleEditAgeChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Profession / Occupation</label>
+                  <label className="block text-xs font-medium text-bark">Profession / Occupation</label>
                   <ProfessionCombobox value={editFormData.profession || ""} onChange={(val) => setEditFormData({ ...editFormData, profession: val })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Residence</label>
+                  <label className="block text-xs font-medium text-bark">Residence</label>
                   <input type="text" placeholder="Estate, street or town" value={editFormData.residence || ""}
                     onChange={(e) => setEditFormData({ ...editFormData, residence: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Gifts &amp; Talents</label>
+                  <label className="block text-xs font-medium text-bark">Gifts &amp; Talents</label>
                   <GiftsCombobox selectedGifts={editGifts} onChange={setEditGifts} placeholder="Select spiritual gifts..." />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#26352f]">Disability / Special Needs</label>
+                  <label className="block text-xs font-medium text-bark">Disability / Special Needs</label>
                   <DisabilityCombobox selectedDisabilities={editDisability} onChange={setEditDisability} placeholder="Select disability (optional)..." />
                 </div>
               </div>
-              <p className="rounded-xl bg-[#fdf8ef] px-4 py-3 text-[11px] leading-relaxed text-[#617068]">
-                Profile changes take effect when <strong className="text-[#26352f]">{editingMember.first_name || editingMember.username}</strong> approves
+              <p className="rounded-xl bg-sand-cream px-4 py-3 text-[11px] leading-relaxed text-moss">
+                Profile changes take effect when <strong className="text-bark">{editingMember.first_name || editingMember.username}</strong> approves
                 them — they&apos;ll get a notification on their dashboard and can accept or keep their current details. Role changes apply immediately.
               </p>
               <div className="flex items-center gap-3 pt-2">
                 <button type="submit" disabled={submitting}
-                  className="rounded-full bg-[#26352f] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c]">
+                  className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
                   {submitting ? "Sending…" : "Send Update for Approval"}
                 </button>
                 <button type="button" onClick={() => setEditingMember(null)}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
                 </button>
               </div>
@@ -3341,33 +3345,33 @@ export function UserManagement() {
       {/* ══ Transfer Modal ══ */}
       {transferMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="text-base font-bold text-[#26352f]">
+          <div className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="text-base font-bold text-bark">
                 Transfer Member — {transferMember.first_name || transferMember.username}
               </h3>
-              <button onClick={() => setTransferMember(null)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+              <button onClick={() => setTransferMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
             <form onSubmit={handleTransferSubmit} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Destination Church *</label>
+                <label className="block text-xs font-semibold text-bark">Destination Church *</label>
                 <input type="text" required placeholder="e.g. Meru Central SDA" value={transferChurch}
                   onChange={(e) => setTransferChurch(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Reason (Optional)</label>
+                <label className="block text-xs font-semibold text-bark">Reason (Optional)</label>
                 <textarea rows={3} placeholder="Reason for transfer..." value={transferReason}
                   onChange={(e) => setTransferReason(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none" />
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none" />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={transferSubmitting}
-                  className="rounded-xl bg-[#26352f] px-5 py-2 text-xs font-semibold text-white hover:bg-[#b36b3c]">
+                  className="rounded-xl bg-bark px-5 py-2 text-xs font-semibold text-white hover:bg-ember">
                   {transferSubmitting ? "Processing..." : "Submit Transfer"}
                 </button>
                 <button type="button" onClick={() => setTransferMember(null)}
-                  className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
                 </button>
               </div>
@@ -3379,15 +3383,15 @@ export function UserManagement() {
       {/* ══ Account Type Modal ══ */}
       {typeMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="text-base font-bold text-[#26352f]">
+          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="text-base font-bold text-bark">
                 Account Type — {typeMember.first_name || typeMember.username}
               </h3>
-              <button onClick={() => setTypeMember(null)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+              <button onClick={() => setTypeMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
             {accountTypeOf(typeMember.account_type, typeMember.is_disfellowshipped) === "ex_member" && (
-              <p className="mt-3 rounded-xl bg-[#fdf6ec] px-3 py-2 text-[11px] text-[#96552c]">
+              <p className="mt-3 rounded-xl bg-sand-glow px-3 py-2 text-[11px] text-ember-deep">
                 They are recorded as an ex-member. Choosing a type here puts them back on the church roll.
               </p>
             )}
@@ -3402,19 +3406,19 @@ export function UserManagement() {
                   aria-pressed={typeChoice === option.value}
                   className={`flex w-full items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
                     typeChoice === option.value
-                      ? "border-[#b36b3c] bg-[#fdf6ec]"
-                      : "border-[#dfdbd1] bg-white hover:border-[#b36b3c]"
+                      ? "border-ember bg-sand-glow"
+                      : "border-sand-line bg-white hover:border-ember"
                   }`}
                 >
                   <span
                     className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
-                      typeChoice === option.value ? "border-[#b36b3c] bg-[#b36b3c]" : "border-[#c9c5bb]"
+                      typeChoice === option.value ? "border-ember bg-ember" : "border-sand-mute"
                     }`}
                     aria-hidden="true"
                   />
                   <span className="min-w-0">
-                    <span className="block text-xs font-semibold text-[#26352f]">{option.label}</span>
-                    <span className="mt-0.5 block text-[11px] text-[#617068]">{option.help}</span>
+                    <span className="block text-xs font-semibold text-bark">{option.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-moss">{option.help}</span>
                   </span>
                 </button>
               ))}
@@ -3424,14 +3428,14 @@ export function UserManagement() {
                 type="button"
                 onClick={handleAccountTypeSubmit}
                 disabled={updatingTypeId === typeMember.id || typeChoice === "ex_member"}
-                className="rounded-xl bg-[#26352f] px-5 py-2 text-xs font-semibold text-white hover:bg-[#b36b3c] disabled:opacity-60"
+                className="rounded-xl bg-bark px-5 py-2 text-xs font-semibold text-white hover:bg-ember disabled:opacity-60"
               >
                 {updatingTypeId === typeMember.id ? "Saving..." : "Save Type"}
               </button>
               <button
                 type="button"
                 onClick={() => setTypeMember(null)}
-                className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]"
+                className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember"
               >
                 Cancel
               </button>
@@ -3443,17 +3447,17 @@ export function UserManagement() {
       {/* ══ Assign Leadership Modal ══ */}
       {leadershipMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="text-base font-bold text-[#26352f]">
+          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="text-base font-bold text-bark">
                 Assign Role — {leadershipMember.first_name || leadershipMember.username}
               </h3>
-              <button onClick={() => setLeadershipMember(null)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+              <button onClick={() => setLeadershipMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
             <form onSubmit={handleLeadershipSubmit} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Leadership Roles *</label>
-                <p className="mt-0.5 text-[10px] text-[#617068]">
+                <label className="block text-xs font-semibold text-bark">Leadership Roles *</label>
+                <p className="mt-0.5 text-[10px] text-moss">
                   Tick every role this person holds. A person can hold several roles. {SYSTEM_ROLE_HELP}
                 </p>
                 <div className="mt-2">
@@ -3473,11 +3477,11 @@ export function UserManagement() {
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={leadershipSubmitting}
-                  className="rounded-xl bg-[#26352f] px-5 py-2 text-xs font-semibold text-white hover:bg-[#b36b3c]">
+                  className="rounded-xl bg-bark px-5 py-2 text-xs font-semibold text-white hover:bg-ember">
                   {leadershipSubmitting ? "Saving..." : "Assign Role"}
                 </button>
                 <button type="button" onClick={() => setLeadershipMember(null)}
-                  className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]">
+                  className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
                 </button>
               </div>

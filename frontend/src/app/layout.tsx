@@ -3,12 +3,14 @@ import "./globals.css";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { AccessibilityProvider } from "@/context/accessibility-context";
+import { brand } from "@/lib/brand";
 
 export const viewport: Viewport = {
-  themeColor: "#26352f",
+  themeColor: brand.bark,
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Pinch-zoom stays available (WCAG 1.4.4) — never lock maximumScale on an
+  // accessibility-forward app.
   // Let the tab bar extend into the gesture bar and pad with env(safe-area-inset-bottom)
   viewportFit: "cover",
 };

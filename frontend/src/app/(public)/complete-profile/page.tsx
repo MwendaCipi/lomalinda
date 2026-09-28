@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
+import { ChevronDown } from "lucide-react";
 import { ComboboxPopover } from "@/components/combobox-popover";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -47,7 +48,7 @@ const MINISTRY_OPTIONS = [
 ];
 
 const inputClass =
-  "mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]";
+  "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm text-bark outline-none focus:border-ember";
 
 /**
  * A multi-select combo shared by the gifts and disability boxes.
@@ -116,18 +117,18 @@ function CheckboxCombobox({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="mt-1.5 flex w-full items-center justify-between gap-3 rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-left text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+        className="mt-1.5 flex w-full items-center justify-between gap-3 rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-left text-sm text-bark outline-none focus:border-ember"
       >
-        <span className={`truncate ${selected.length === 0 ? "text-[#617068]" : ""}`}>
+        <span className={`truncate ${selected.length === 0 ? "text-moss" : ""}`}>
           {summary}
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-[#617068]">
+        <span className="flex shrink-0 items-center gap-2 text-moss">
           {selected.length > 0 && (
-            <span className="rounded-full bg-[#5f8067] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="rounded-full bg-sage px-1.5 py-0.5 text-[10px] font-bold text-white">
               {selected.length}
             </span>
           )}
-          <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
+          <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}><ChevronDown size={10} aria-hidden="true" /></span>
         </span>
       </button>
 
@@ -136,15 +137,15 @@ function CheckboxCombobox({
         panelRef={panelRef}
         open={open}
         minW={280}
-        panelClassName="max-h-72 overflow-y-auto rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg scrollbar-thin"
+        panelClassName="max-h-72 overflow-y-auto rounded-xl border border-sand-line bg-white p-2 shadow-lg scrollbar-thin"
       >
         {allowNone && (
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-[#f7f4ee]">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-sand">
             <input
               type="checkbox"
               checked={selected.length === 0}
               onChange={() => onChange([])}
-              className="h-4 w-4 rounded border-[#c9c5bb] accent-[#5f8067]"
+              className="h-4 w-4 rounded border-sand-mute accent-sage"
             />
             <span className="font-medium">None — no special needs</span>
           </label>
@@ -155,24 +156,24 @@ function CheckboxCombobox({
             <label
               key={item}
               className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm ${
-                checked ? "bg-[#eef2ed] font-semibold text-[#2d5d39]" : "hover:bg-[#f7f4ee]"
+                checked ? "bg-mist-select font-semibold text-sage-bright" : "hover:bg-sand"
               }`}
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggle(item)}
-                className="h-4 w-4 rounded border-[#c9c5bb] accent-[#5f8067]"
+                className="h-4 w-4 rounded border-sand-mute accent-sage"
               />
               <span>{item}</span>
             </label>
           );
         })}
-        <div className="sticky bottom-0 -mx-2 mt-1 border-t border-[#dfdbd1] bg-white px-2 pt-2">
+        <div className="sticky bottom-0 -mx-2 mt-1 border-t border-sand-line bg-white px-2 pt-2">
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="w-full rounded-lg bg-[#26352f] px-3 py-2 text-xs font-semibold text-white"
+            className="w-full rounded-lg bg-bark px-3 py-2 text-xs font-semibold text-white"
           >
             Done
           </button>
@@ -279,17 +280,17 @@ export default function CompleteProfilePage() {
 
   if (checking) {
     return (
-      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 text-[#26352f]">
-        <p className="text-sm text-[#617068]">Loading…</p>
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 text-bark">
+        <p className="text-sm text-moss">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-[#f7f4ee] px-6 pb-28 pt-10 text-[#26352f] sm:items-center sm:pb-10">
-      <section className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
+    <main className="flex min-h-[calc(100vh-73px)] items-start justify-center bg-sand px-6 pb-28 pt-10 text-bark sm:items-center sm:pb-10">
+      <section className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight">Add more details</h1>
-        <p className="mt-3 text-sm leading-6 text-[#617068]">
+        <p className="mt-3 text-sm leading-6 text-moss">
           The leadership uses these details to plan ministry and serve you well.
         </p>
         <form onSubmit={submit} className="mt-6 space-y-5">
@@ -314,7 +315,7 @@ export default function CompleteProfilePage() {
               <option value="Other">Other</option>
             </select>
             {genderLocked && (
-              <span className="mt-1 block text-xs font-normal text-[#617068]">
+              <span className="mt-1 block text-xs font-normal text-moss">
                 Already on record. It cannot be changed here — ask the church
                 office if it needs correcting.
               </span>
@@ -352,7 +353,7 @@ export default function CompleteProfilePage() {
           <button
             type="submit"
             disabled={saving}
-            className="w-full rounded-full bg-[#26352f] px-5 py-3 font-medium text-white disabled:opacity-60"
+            className="w-full rounded-full bg-bark px-5 py-3 font-medium text-white disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save and continue"}
           </button>

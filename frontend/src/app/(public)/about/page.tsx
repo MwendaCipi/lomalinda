@@ -12,12 +12,12 @@ const values = [
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
+    <main className="min-h-screen bg-sand text-bark">
       <section className="px-6 pt-14 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">About us</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">About us</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">About SDA Loma Linda</h1>
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-[#617068]">
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
             A welcoming Seventh-day church family in Meru, growing together in faith, hope, and love.
           </p>
         </div>
@@ -25,20 +25,20 @@ export default function AboutPage() {
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
         <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1] sm:p-9">
+          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-sand-line sm:p-9">
             <h2 className="text-2xl font-semibold tracking-tight">Our history</h2>
-            <p className="mt-4 text-base leading-8 text-[#617068]">
+            <p className="mt-4 text-base leading-8 text-moss">
               SDA Loma Linda is a community shaped by worship, prayer, Bible study, fellowship, and service. Our
               story continues through the people who gather here, the families we support, and the neighbours we serve.
             </p>
-            <p className="mt-4 text-base leading-8 text-[#617068]">
+            <p className="mt-4 text-base leading-8 text-moss">
               As the church grows, we remain committed to remembering where we have come from while making room for
               new people, new ministries, and new ways to share God&apos;s love in Meru and beyond.
             </p>
           </article>
 
-          <article className="rounded-[2rem] bg-[#26352f] p-7 text-white shadow-sm sm:p-9">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#f1c89e]">Our purpose</p>
+          <article className="rounded-[2rem] bg-bark p-7 text-white shadow-sm sm:p-9">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">Our purpose</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">
               A church for faith, friendship, and service.
             </h2>
@@ -49,19 +49,19 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="border-y border-[#dfdbd1] bg-white/60 px-6 py-12 lg:px-8 lg:py-14">
+      <section className="border-y border-sand-line bg-white/60 px-6 py-12 lg:px-8 lg:py-14">
         <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
-          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1] sm:p-9">
+          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-sand-line sm:p-9">
             <h2 className="text-2xl font-semibold tracking-tight">Our mission</h2>
-            <p className="mt-4 text-base leading-8 text-[#617068]">
+            <p className="mt-4 text-base leading-8 text-moss">
               Make disciples of Jesus Christ who live as His loving witnesses and proclaim to all people the
               everlasting gospel of the Three Angels&apos; Messages in preparation for His soon return (Matt 28:18-20,
               Acts 1:8, Rev 14:6-12).
             </p>
           </article>
-          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1] sm:p-9">
+          <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-sand-line sm:p-9">
             <h2 className="text-2xl font-semibold tracking-tight">Our vision</h2>
-            <p className="mt-4 text-base leading-8 text-[#617068]">
+            <p className="mt-4 text-base leading-8 text-moss">
               In harmony with Bible revelation, Seventh-day Adventists see as the climax of God&apos;s plan the
               restoration of all His creation to full harmony with His perfect will and righteousness.
             </p>
@@ -74,9 +74,9 @@ export default function AboutPage() {
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">What guides us</h2>
           <div className="mt-8 grid gap-8 sm:grid-cols-2">
             {values.map(([title, text]) => (
-              <article key={title} className="border-l-2 border-[#b36b3c] pl-6">
+              <article key={title} className="border-l-2 border-ember pl-6">
                 <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
-                <p className="mt-3 text-sm leading-7 text-[#617068]">{text}</p>
+                <p className="mt-3 text-sm leading-7 text-moss">{text}</p>
               </article>
             ))}
           </div>
@@ -90,12 +90,12 @@ export default function AboutPage() {
         description="Our calendar, working with us, and how we handle the information you share."
         links={aboutSectionLinks}
         activeKey="about"
-        className="border-t border-[#dfdbd1] bg-white/60"
+        className="border-t border-sand-line bg-white/60"
       />
 
       <section className="px-6 pb-16 lg:px-8 lg:pb-20">
-        <div className="mx-auto max-w-6xl rounded-[2rem] bg-[#26352f] px-8 py-12 text-white shadow-sm sm:px-12">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Come and see</p>
+        <div className="mx-auto max-w-6xl rounded-[2rem] bg-bark px-8 py-12 text-white shadow-sm sm:px-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">Come and see</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Come and be part of the story</h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
             Join us for worship, explore our ministries, or reach out when you need prayer and care.
@@ -103,7 +103,7 @@ export default function AboutPage() {
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
               href="/calendar"
-              className="rounded-full bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+              className="rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-ember-dark"
             >
               See our calendar
             </Link>

@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { brand } from "@/lib/brand";
 import Link from "next/link";
 import {
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   Banknote,
   HandCoins,
@@ -88,8 +90,8 @@ type Analytics = {
   pending_refunds: { count: number; amount: number };
 };
 
-const INCOME_COLOR = "#5f8067";
-const EXPENSE_COLOR = "#b36b3c";
+const INCOME_COLOR = brand.sage;
+const EXPENSE_COLOR = brand.ember;
 
 /** The windows an officer actually asks about: this month, the quarter, half a year. */
 const RANGES = [
@@ -188,13 +190,13 @@ function StatTile({
   tone?: "good" | "warn";
 }) {
   return (
-    <div className="rounded-2xl border border-[#e5dfd2] bg-[#faf9f5] p-3.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{label}</p>
-      <p className="mt-1.5 text-sm font-bold text-[#26352f] sm:text-base">{value}</p>
+    <div className="rounded-2xl border border-sand-deep bg-sand-card p-3.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-moss">{label}</p>
+      <p className="mt-1.5 text-sm font-bold text-bark sm:text-base">{value}</p>
       {hint && (
         <p
           className={`mt-1 flex items-center gap-1 text-[10px] ${
-            tone === "good" ? "text-[#4d6d55]" : tone === "warn" ? "text-[#96552c]" : "text-[#617068]"
+            tone === "good" ? "text-sage-deep" : tone === "warn" ? "text-ember-deep" : "text-moss"
           }`}
         >
           {tone === "good" && <ArrowUpRight className="h-3 w-3" />}
@@ -222,19 +224,19 @@ function ProgressRow({
   return (
     <li>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-xs font-semibold text-[#26352f]">{label}</span>
-        <span className="text-xs font-bold text-[#26352f]">
+        <span className="text-xs font-semibold text-bark">{label}</span>
+        <span className="text-xs font-bold text-bark">
           {formatValue(actual)}
-          <span className="font-semibold text-[#617068]"> of {formatValue(target)}</span>
+          <span className="font-semibold text-moss"> of {formatValue(target)}</span>
         </span>
       </div>
-      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-[#f2efe8]">
+      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-sand-light">
         <div
           className="h-full rounded-full"
-          style={{ width: `${Math.min(100, Math.max(2, share))}%`, backgroundColor: over ? "#96552c" : "#5f8067" }}
+          style={{ width: `${Math.min(100, Math.max(2, share))}%`, backgroundColor: over ? brand.emberDeep : brand.sage }}
         />
       </div>
-      <p className="mt-1 text-[10px] text-[#617068]">
+      <p className="mt-1 text-[10px] text-moss">
         {share.toFixed(0)}% of the year's plan
         {target > 0 && !over && actual < target && ` · ${formatValue(target - actual)} to go`}
         {over && ` · ${formatValue(actual - target)} beyond the plan`}
@@ -288,17 +290,17 @@ export function DashboardAnalytics() {
 
   if (state === "loading") {
     return (
-      <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-center text-xs text-[#617068]">Loading church finances…</p>
+      <section className="mt-6 rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-center text-xs text-moss">Loading church finances…</p>
       </section>
     );
   }
 
   if (state === "error" || !data) {
     return (
-      <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-        <h2 className="text-sm font-bold text-[#26352f]">Church finances</h2>
-        <p className="mt-2 text-xs text-[#617068]">
+      <section className="mt-6 rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-sm font-bold text-bark">Church finances</h2>
+        <p className="mt-2 text-xs text-moss">
           The figures could not be loaded just now. Reload the page to try again — the rest of your dashboard is
           unaffected.
         </p>
@@ -345,22 +347,22 @@ export function DashboardAnalytics() {
   return (
     <section
       aria-busy={busy}
-      className={`mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm transition-opacity sm:p-6 ${
+      className={`mt-6 rounded-2xl border border-sand-line bg-white p-5 shadow-sm transition-opacity sm:p-6 ${
         busy ? "opacity-60" : ""
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-            <Landmark className="h-4 w-4 text-[#b36b3c]" /> Church finances at a glance
+          <h2 className="flex items-center gap-2 text-base font-bold text-bark">
+            <Landmark className="h-4 w-4 text-ember" /> Church finances at a glance
           </h2>
-          <p className="mt-1 text-[11px] text-[#617068]">
+          <p className="mt-1 text-[11px] text-moss">
             Real receipts only — completed gifts and recorded cash — for the {rangeLabel} to{" "}
             {fmtDay(data.as_of)}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-full border border-[#c9c5bb] bg-white p-0.5" role="group" aria-label="Window">
+          <div className="flex rounded-full border border-sand-mute bg-white p-0.5" role="group" aria-label="Window">
             {RANGES.map((option) => (
               <button
                 key={option.weeks}
@@ -368,7 +370,7 @@ export function DashboardAnalytics() {
                 onClick={() => setWeeks(option.weeks)}
                 aria-pressed={weeks === option.weeks}
                 className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
-                  weeks === option.weeks ? "bg-[#26352f] text-white" : "text-[#26352f] hover:bg-[#f2efe8]"
+                  weeks === option.weeks ? "bg-bark text-white" : "text-bark hover:bg-sand-light"
                 }`}
               >
                 {option.label}
@@ -377,13 +379,13 @@ export function DashboardAnalytics() {
           </div>
           <Link
             href="/administration/reconciliation"
-            className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+            className="rounded-full border border-sand-mute bg-white px-3.5 py-2 text-[11px] font-semibold text-bark hover:border-ember"
           >
             Reconciliation
           </Link>
           <Link
             href="/support/reports"
-            className="rounded-full border border-[#c9c5bb] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#26352f] hover:border-[#b36b3c]"
+            className="rounded-full border border-sand-mute bg-white px-3.5 py-2 text-[11px] font-semibold text-bark hover:border-ember"
           >
             Live reports
           </Link>
@@ -391,10 +393,10 @@ export function DashboardAnalytics() {
       </div>
 
       {insights.length > 0 && (
-        <ul className="mt-4 grid gap-2 rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4 sm:grid-cols-2">
+        <ul className="mt-4 grid gap-2 rounded-2xl border border-sand-deep bg-sand-veil p-4 sm:grid-cols-2">
           {insights.map((note) => (
-            <li key={note} className="flex items-start gap-2 text-[11px] leading-snug text-[#4a564f]">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#b36b3c]" />
+            <li key={note} className="flex items-start gap-2 text-[11px] leading-snug text-moss-dim">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ember" />
               {note}
             </li>
           ))}
@@ -428,11 +430,11 @@ export function DashboardAnalytics() {
       {/* The quarterly slides a treasurer opens with: one card per quarter,
           each with the income vs spending bar for that window and a short
           honest read. */}
-      <div className="mt-6 rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-          <TrendingUp className="h-4 w-4 text-[#b36b3c]" /> Giving in vs spending out, by quarter
+      <div className="mt-6 rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+          <TrendingUp className="h-4 w-4 text-ember" /> Giving in vs spending out, by quarter
         </h3>
-        <p className="mt-1 text-[11px] text-[#617068]">
+        <p className="mt-1 text-[11px] text-moss">
           The quarters of the year, oldest first, over the twelve months the API reports.
         </p>
         <div className="mt-4 gap-4 sm:gap-6">
@@ -442,18 +444,18 @@ export function DashboardAnalytics() {
             const net = income - expense;
 
             return (
-              <div key={index} className={`rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-4 ${index > 0 ? "sm:mt-4" : ""}`}>
+              <div key={index} className={`rounded-xl border border-sand-deep bg-sand-card p-4 ${index > 0 ? "sm:mt-4" : ""}`}>
                 <div className="flex items-baseline justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#26352f]">{quarterLabel(index)}</p>
-                    <p className="mt-0.5 text-[11px] text-[#617068]">
+                    <p className="text-sm font-semibold text-bark">{quarterLabel(index)}</p>
+                    <p className="mt-0.5 text-[11px] text-moss">
                       {quarter.length > 0 ? `${quarter.reduce((sum, month) => sum + month.income + month.expense, 0)} recorded across ${quarter.length} month${quarter.length === 1 ? "" : "s"}` : "No money recorded in this quarter yet."}
                     </p>
                   </div>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-sm font-bold text-[#26352f]">{fmtAmount(income)}</span>
-                    <span className="text-sm font-bold text-[#96552c]">{fmtAmount(expense)}</span>
-                    <span className={`text-sm font-bold ${net >= 0 ? "text-[#4d6d55]" : "text-[#96552c]"}`}>
+                    <span className="text-sm font-bold text-bark">{fmtAmount(income)}</span>
+                    <span className="text-sm font-bold text-ember-deep">{fmtAmount(expense)}</span>
+                    <span className={`text-sm font-bold ${net >= 0 ? "text-sage-deep" : "text-ember-deep"}`}>
                       {fmtAmount(net)}
                     </span>
                   </div>
@@ -470,7 +472,7 @@ export function DashboardAnalytics() {
                       emptyLabel={`No giving or spending recorded in ${quarterLabel(index)} yet.`}
                     />
                   ) : (
-                    <p className="text-[11px] text-[#617068]">
+                    <p className="text-[11px] text-moss">
                       No giving or spending recorded in this quarter yet.
                     </p>
                   )}
@@ -485,11 +487,11 @@ export function DashboardAnalytics() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-            <Wallet className="h-4 w-4 text-[#b36b3c]" /> Where the money sits
+        <div className="rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+            <Wallet className="h-4 w-4 text-ember" /> Where the money sits
           </h3>
-          <p className="mt-1 text-[11px] text-[#617068]">
+          <p className="mt-1 text-[11px] text-moss">
             {fmtAmount(data.funds.total_liquidity)} across {data.funds.account_count} treasury{" "}
             {data.funds.account_count === 1 ? "account" : "accounts"}.
           </p>
@@ -501,25 +503,25 @@ export function DashboardAnalytics() {
             />
           </div>
           {data.funds.accounts.length > 0 && (
-            <div className="mt-4 border-t border-[#dfdbd1] pt-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">Largest balances</p>
+            <div className="mt-4 border-t border-sand-line pt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-moss">Largest balances</p>
               <div className="mt-3">
                 <HorizontalBars
                   items={data.funds.accounts.map((account) => ({ label: account.name, value: account.balance }))}
                   formatValue={fmtAmount}
                   limit={5}
-                  color="#26352f"
+                  color={brand.bark}
                 />
               </div>
             </div>
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-            <PiggyBank className="h-4 w-4 text-[#b36b3c]" /> Giving by account
+        <div className="rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+            <PiggyBank className="h-4 w-4 text-ember" /> Giving by account
           </h3>
-          <p className="mt-1 text-[11px] text-[#617068]">
+          <p className="mt-1 text-[11px] text-moss">
             {fmtAmount(data.giving.window_total)} received across {data.giving.by_account.length}{" "}
             {data.giving.by_account.length === 1 ? "account" : "accounts"} in the {rangeLabel}.
           </p>
@@ -532,11 +534,11 @@ export function DashboardAnalytics() {
             />
           </div>
           {data.giving.by_method.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-[#dfdbd1] pt-3">
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-sand-line pt-3">
               {data.giving.by_method.map((row) => (
                 <span
                   key={row.label}
-                  className="rounded-full bg-[#f2efe8] px-2.5 py-1 text-[10px] font-semibold text-[#26352f]"
+                  className="rounded-full bg-sand-light px-2.5 py-1 text-[10px] font-semibold text-bark"
                 >
                   {row.label}: {fmtAmount(row.total)}
                 </span>
@@ -545,11 +547,11 @@ export function DashboardAnalytics() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-            <ArrowDownRight className="h-4 w-4 text-[#b36b3c]" /> Spending by category
+        <div className="rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+            <ArrowDownRight className="h-4 w-4 text-ember" /> Spending by category
           </h3>
-          <p className="mt-1 text-[11px] text-[#617068]">
+          <p className="mt-1 text-[11px] text-moss">
             {fmtAmount(data.expenditure.window_total)} spent in the {rangeLabel} ·{" "}
             {fmtAmount(data.expenditure.this_year)} this year.
           </p>
@@ -559,17 +561,17 @@ export function DashboardAnalytics() {
               formatValue={fmtAmount}
               emptyLabel={`No expenditure recorded in the ${rangeLabel}.`}
               limit={5}
-              color="#96552c"
+              color={brand.emberDeep}
             />
           </div>
           {data.expenditure.by_account.length > 0 && (
-            <div className="mt-4 border-t border-[#dfdbd1] pt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">Paid from</p>
+            <div className="mt-4 border-t border-sand-line pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-moss">Paid from</p>
               <ul className="mt-2 space-y-1.5">
                 {data.expenditure.by_account.slice(0, 4).map((row) => (
                   <li key={row.label} className="flex items-baseline justify-between gap-3 text-[11px]">
-                    <span className="truncate text-[#617068]">{row.label}</span>
-                    <span className="shrink-0 font-semibold text-[#26352f]">{fmtAmount(row.total)}</span>
+                    <span className="truncate text-moss">{row.label}</span>
+                    <span className="shrink-0 font-semibold text-bark">{fmtAmount(row.total)}</span>
                   </li>
                 ))}
               </ul>
@@ -579,11 +581,11 @@ export function DashboardAnalytics() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-            <Users className="h-4 w-4 text-[#b36b3c]" /> Giving activity
+        <div className="rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+            <Users className="h-4 w-4 text-ember" /> Giving activity
           </h3>
-          <p className="mt-1 text-[11px] text-[#617068]">
+          <p className="mt-1 text-[11px] text-moss">
             Who is giving, without naming and ranking donors — the figures are per gift, not per person.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -596,26 +598,26 @@ export function DashboardAnalytics() {
               { label: "Last quarter", value: fmtAmount(quarterIncome(lastQuarterIndex)) },
             ].map((row) => (
               <div key={row.label}>
-                <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#617068]">{row.label}</dt>
-                <dd className="mt-1 text-xs font-bold text-[#26352f]">{row.value}</dd>
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-moss">{row.label}</dt>
+                <dd className="mt-1 text-xs font-bold text-bark">{row.value}</dd>
               </div>
             ))}
           </dl>
-          <p className="mt-4 flex items-center gap-2 border-t border-[#dfdbd1] pt-3 text-[11px] text-[#617068]">
-            <HandCoins className="h-3.5 w-3.5 text-[#b36b3c]" />
+          <p className="mt-4 flex items-center gap-2 border-t border-sand-line pt-3 text-[11px] text-moss">
+            <HandCoins className="h-3.5 w-3.5 text-ember" />
             {data.giving.givers.last_gift_on
               ? `Most recent gift: ${fmtDay(data.giving.givers.last_gift_on)}`
               : `No gift recorded in the ${rangeLabel}.`}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#e5dfd2] bg-white p-4 sm:p-5">
+        <div className="rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-[#26352f]">
-              <Target className="h-4 w-4 text-[#b36b3c]" /> {data.budget.year} budget
+            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+              <Target className="h-4 w-4 text-ember" /> {data.budget.year} budget
             </h3>
-            <Link href="/support/budget" className="text-[11px] font-semibold text-[#b36b3c] hover:underline">
-              Open budget →
+            <Link href="/support/budget" className="text-[11px] font-semibold text-ember hover:underline">
+              Open budget <ArrowRight size={11} className="inline" aria-hidden="true" />
             </Link>
           </div>
           {data.budget.has_budget ? (
@@ -634,17 +636,17 @@ export function DashboardAnalytics() {
               />
             </ul>
           ) : (
-            <p className="mt-3 text-[11px] leading-relaxed text-[#617068]">
+            <p className="mt-3 text-[11px] leading-relaxed text-moss">
               No budget has been set for {data.budget.year}, so there is no plan to measure the year against. Record
               one and this card turns into a progress bar for income and expenditure.
             </p>
           )}
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[#dfdbd1] pt-3 text-[11px] text-[#617068]">
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-sand-line pt-3 text-[11px] text-moss">
             <span className="flex items-center gap-1.5">
-              <Banknote className="h-3.5 w-3.5 text-[#b36b3c]" /> {fmtAmount(data.giving.this_year)} given this year
+              <Banknote className="h-3.5 w-3.5 text-ember" /> {fmtAmount(data.giving.this_year)} given this year
             </span>
             <span className="flex items-center gap-1.5">
-              <Wallet className="h-3.5 w-3.5 text-[#b36b3c]" /> {fmtAmount(data.expenditure.this_year)} spent this
+              <Wallet className="h-3.5 w-3.5 text-ember" /> {fmtAmount(data.expenditure.this_year)} spent this
               year
             </span>
             {data.members.pending_invitations > 0 && (

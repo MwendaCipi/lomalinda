@@ -1,4 +1,5 @@
 import Swal, { SweetAlertIcon, SweetAlertOptions } from "sweetalert2";
+import { brand } from "@/lib/brand";
 
 export function showAlert(
   title: string,
@@ -11,7 +12,7 @@ export function showAlert(
     text,
     icon,
     confirmButtonText: "OK",
-    confirmButtonColor: "#26352f",
+    confirmButtonColor: brand.bark,
     ...options,
   });
 }

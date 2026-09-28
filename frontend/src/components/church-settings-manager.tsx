@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
+import { Landmark, Mail, MapPin, Megaphone, Scale, Shield, Smartphone, Stamp, UserPlus, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { ROLE_OPTIONS } from "./roles-combobox";
 
@@ -202,39 +203,39 @@ export function ChurchSettingsManager() {
   }
 
   if (loading) {
-    return <div className="py-8 text-center text-sm text-[#617068]">Loading church settings...</div>;
+    return <div className="py-8 text-center text-sm text-moss">Loading church settings...</div>;
   }
 
   return (
-    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-[#dfdbd1]">
-      <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
+    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line">
+      <div className="flex items-center justify-between border-b border-sand-line pb-4">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>
-            <h2 className="text-2xl font-semibold text-[#26352f]">Church Settings & Configuration</h2>
-            <p className="mt-1 text-xs text-[#617068]">
+            <h2 className="text-2xl font-semibold text-bark">Church Settings & Configuration</h2>
+            <p className="mt-1 text-xs text-moss">
               Configure custom homepage clarion call message, service links, and church details.
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-[#26352f] px-3 py-1 text-xs font-semibold text-white">
+        <span className="rounded-full bg-bark px-3 py-1 text-xs font-semibold text-white">
           Admin Portal
         </span>
       </div>
 
       <form onSubmit={handleSave} className="mt-6 space-y-6">
         {/* Clarion Call Settings Box */}
-        <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#faf7f2] p-5">
-          <h3 className="text-base font-bold text-[#b36b3c] flex items-center gap-2">
-            <span>📢</span> Homepage Clarion Call (Default Message)
+        <div className="rounded-2xl border border-ember/30 bg-sand-linen p-5">
+          <h3 className="text-base font-bold text-ember flex items-center gap-2">
+            <Megaphone size={16} aria-hidden="true" /> Homepage Clarion Call (Default Message)
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Displayed in the main hero section when there are no active announcements for the week.
           </p>
 
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Clarion Call Heading (Separate lines with ENTER)
               </label>
               <textarea
@@ -242,12 +243,12 @@ export function ChurchSettingsManager() {
                 required
                 value={clarionCallHeading}
                 onChange={(e) => setClarionCallHeading(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#b36b3c]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold outline-none focus:border-ember"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Clarion Call Subtext / Description
               </label>
               <textarea
@@ -255,161 +256,161 @@ export function ChurchSettingsManager() {
                 required
                 value={clarionCallSubtext}
                 onChange={(e) => setClarionCallSubtext(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-ember"
               />
             </div>
           </div>
         </div>
 
         {/* Default Receipt Message Settings Box */}
-        <div className="rounded-2xl border border-[#5f8067]/30 bg-[#f4f7f4] p-5">
-          <h3 className="text-base font-bold text-[#5f8067] flex items-center gap-2">
-            <span>🧾</span> Default Contribution Receipt Message
+        <div className="rounded-2xl border border-sage/30 bg-mist p-5">
+          <h3 className="text-base font-bold text-sage flex items-center gap-2">
+            <Stamp size={16} aria-hidden="true" /> Default Contribution Receipt Message
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Default thank-you message included when sending SMS and email contribution receipts to givers.
           </p>
 
           <div className="mt-3">
-            <label className="mt-4 block text-xs font-semibold text-[#26352f]">
+            <label className="mt-4 block text-xs font-semibold text-bark">
               Receipt Thank-You Message
             </label>
-            <p className="mt-0.5 text-xs text-[#617068]">
-              Supports placeholders: <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{amount}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{account}"}</code>. The message is sent exactly as written — start it with your greeting (e.g. <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">Dear {"{name}"}</code>).
+            <p className="mt-0.5 text-xs text-moss">
+              Supports placeholders: <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{account}"}</code>. The message is sent exactly as written — start it with your greeting (e.g. <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">Dear {"{name}"}</code>).
             </p>
             <textarea
               rows={3}
               value={defaultReceiptMessage}
               onChange={(e) => setDefaultReceiptMessage(e.target.value)}
               placeholder="Dear {name}, your contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly"
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-sage"
             />
           </div>
 
           {/* Split gifts reach the giver as one letter listing where each part
               of the money went — one template, edited like the first. */}
-          <div className="mt-3 border-t border-[#5f8067]/20 pt-4">
-            <label className="block text-xs font-semibold text-[#26352f]">
+          <div className="mt-3 border-t border-sage/20 pt-4">
+            <label className="block text-xs font-semibold text-bark">
               Split-Gift Receipt Message
             </label>
-            <p className="mt-0.5 text-xs text-[#617068]">
-              Used when one gift is spread over several accounts, so the giver gets one receipt listing the distribution instead of one per account. Supports <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{amount}"}</code> (the whole gift) and <code className="bg-white px-1 py-0.5 rounded border border-[#dfdbd1] text-[#b36b3c]">{"{distribution}"}</code> — the "Account: amount" lines.
+            <p className="mt-0.5 text-xs text-moss">
+              Used when one gift is spread over several accounts, so the giver gets one receipt listing the distribution instead of one per account. Supports <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code> (the whole gift) and <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{distribution}"}</code> — the "Account: amount" lines.
             </p>
             <textarea
               rows={4}
               value={splitReceiptMessage}
               onChange={(e) => setSplitReceiptMessage(e.target.value)}
               placeholder="Dear {name}, your contribution of {amount} has been received and distributed accordingly as follows: {distribution}. Thank you, and may God bless you abundantly"
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#5f8067]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-sage"
             />
           </div>
         </div>
 
         {/* Church Bank Account Details Box */}
-        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>🏦</span> Church Bank Account &amp; Payment Details
+        <div className="rounded-2xl border border-bark/30 bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <Landmark size={16} aria-hidden="true" /> Church Bank Account &amp; Payment Details
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Configure the default bank account details displayed to members giving via Bank Transfer or Paybill.
           </p>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Bank Name</label>
+              <label className="block text-xs font-semibold text-bark">Bank Name</label>
               <input
                 type="text"
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 placeholder="e.g. KCB Bank Kenya"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Account Name</label>
+              <label className="block text-xs font-semibold text-bark">Account Name</label>
               <input
                 type="text"
                 value={bankAccountName}
                 onChange={(e) => setBankAccountName(e.target.value)}
                 placeholder="e.g. SDA Church Main Account"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Account Number</label>
+              <label className="block text-xs font-semibold text-bark">Account Number</label>
               <input
                 type="text"
                 value={bankAccountNumber}
                 onChange={(e) => setBankAccountNumber(e.target.value)}
                 placeholder="e.g. 1122334455"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Branch Name</label>
+              <label className="block text-xs font-semibold text-bark">Branch Name</label>
               <input
                 type="text"
                 value={bankBranch}
                 onChange={(e) => setBankBranch(e.target.value)}
                 placeholder="e.g. Meru"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">SWIFT / Routing Code</label>
+              <label className="block text-xs font-semibold text-bark">SWIFT / Routing Code</label>
               <input
                 type="text"
                 value={bankSwiftCode}
                 onChange={(e) => setBankSwiftCode(e.target.value)}
                 placeholder="e.g. KCBKNEN"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">M-Pesa Paybill Number</label>
+              <label className="block text-xs font-semibold text-bark">M-Pesa Paybill Number</label>
               <input
                 type="text"
                 value={bankPaybillNumber}
                 onChange={(e) => setBankPaybillNumber(e.target.value)}
                 placeholder="e.g. 522522"
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
           </div>
         </div>
 
         {/* Church M-Pesa Payment Details Box */}
-        <div className="rounded-2xl border border-[#3d7146]/30 bg-[#f4f7f2] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>📱</span> Church M-Pesa Payment Details
+        <div className="rounded-2xl border border-sage-strong/30 bg-mist-tint p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <Smartphone size={16} aria-hidden="true" /> Church M-Pesa Payment Details
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             The one number members pay into. On the giving page they are told to type what they are giving for as the
             M-Pesa account number — the account they picked on the form, such as Tithe or Combined Offering.
           </p>
 
           <div className="mt-4 max-w-sm">
-            <label className="block text-xs font-semibold text-[#26352f]">Pay Bill Number</label>
+            <label className="block text-xs font-semibold text-bark">Pay Bill Number</label>
             <input
               type="text"
               inputMode="numeric"
               value={mpesaPaybillNumber}
               onChange={(e) => setMpesaPaybillNumber(e.target.value.replace(/\D/g, "").slice(0, 12))}
               placeholder="e.g. 522522"
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#3d7146]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-sage-strong"
             />
-            <p className="mt-2 text-xs text-[#617068]">
+            <p className="mt-2 text-xs text-moss">
               Leave it blank and the giving page shows no M-Pesa details at all.
             </p>
           </div>
         </div>
 
         {/* Church Roles Configuration Box */}
-        <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#faf7f2] p-5">
-          <h3 className="text-base font-bold text-[#b36b3c] flex items-center gap-2">
-            <span>🛡️</span> Church Roles Configuration
+        <div className="rounded-2xl border border-ember/30 bg-sand-linen p-5">
+          <h3 className="text-base font-bold text-ember flex items-center gap-2">
+            <Shield size={16} aria-hidden="true" /> Church Roles Configuration
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Every role holder sits on the church board by default, so board invitations go to them automatically —
             except assistants, who share the role's work but not its board seat. Pick a role below to give or take away
             what its holders may do in the app.
@@ -423,8 +424,8 @@ export function ChurchSettingsManager() {
                 onClick={() => setRightsRole(role.value)}
                 className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
                   rightsRole === role.value
-                    ? "border-[#b36b3c] bg-white text-[#26352f] shadow-sm"
-                    : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
+                    ? "border-ember bg-white text-bark shadow-sm"
+                    : "border-sand-line bg-sand/60 text-moss hover:border-ember/50"
                 }`}
               >
                 {role.label}
@@ -436,10 +437,10 @@ export function ChurchSettingsManager() {
             const selected = ROLE_OPTIONS.find((r) => r.value === rightsRole) ?? ROLE_OPTIONS[0];
             const held = new Set(roleRights.by_role[selected.value] ?? []);
             return (
-              <div className="mt-4 rounded-xl border border-[#dfdbd1] bg-white p-4">
-                <p className="text-sm font-bold text-[#26352f]">
+              <div className="mt-4 rounded-xl border border-sand-line bg-white p-4">
+                <p className="text-sm font-bold text-bark">
                   {selected.label}
-                  <span className="ml-2 text-xs font-medium text-[#617068]">— rights held by this role</span>
+                  <span className="ml-2 text-xs font-medium text-moss">— rights held by this role</span>
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {roleRights.rights.map((right) => {
@@ -449,15 +450,15 @@ export function ChurchSettingsManager() {
                         key={right.code}
                         className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition ${
                           isHeld
-                            ? "border-[#b36b3c] bg-[#faf7f2] text-[#26352f] shadow-sm"
-                            : "border-[#dfdbd1] bg-[#f7f4ee]/60 text-[#617068] hover:border-[#b36b3c]/50"
+                            ? "border-ember bg-sand-linen text-bark shadow-sm"
+                            : "border-sand-line bg-sand/60 text-moss hover:border-ember/50"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isHeld}
                           onChange={() => toggleRoleRight(selected.value, right.code)}
-                          className="mt-0.5 h-4 w-4 rounded border-[#c9c5bb] text-[#b36b3c] focus:ring-[#b36b3c]"
+                          className="mt-0.5 h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
                         />
                         <span className="min-w-0">
                           <span className="block font-bold">{right.label}</span>
@@ -473,18 +474,18 @@ export function ChurchSettingsManager() {
         </div>
 
         {/* Meeting Invitation Templates Box */}
-        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>✉️</span> Default Meeting Invitation Message Templates
+        <div className="rounded-2xl border border-bark/30 bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <Mail size={16} aria-hidden="true" /> Default Meeting Invitation Message Templates
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             The message members receive when you schedule a Business or Board meeting. Each placeholder is
             filled in per member as the message is sent.
           </p>
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-moss">
             {invitationPlaceholders.map((placeholder) => (
               <li key={placeholder.token}>
-                <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                <code className="rounded border border-sand-line bg-white px-1 py-0.5 text-ember">
                   {placeholder.token}
                 </code>{" "}
                 {placeholder.description}
@@ -494,7 +495,7 @@ export function ChurchSettingsManager() {
 
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Church Business Meeting Invitation Template
               </label>
               <textarea
@@ -502,12 +503,12 @@ export function ChurchSettingsManager() {
                 value={defaultBusinessMeetingInvitationMessage}
                 onChange={(e) => setDefaultBusinessMeetingInvitationMessage(e.target.value)}
                 placeholder="Message sent to all church members..."
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Church Board Meeting Invitation Template
               </label>
               <textarea
@@ -515,31 +516,31 @@ export function ChurchSettingsManager() {
                 value={defaultBoardMeetingInvitationMessage}
                 onChange={(e) => setDefaultBoardMeetingInvitationMessage(e.target.value)}
                 placeholder="Message sent to church board members..."
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
               />
             </div>
           </div>
         </div>
 
         {/* Request Notices & Membership Approval Box */}
-        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>🙏</span> Request Notices &amp; Membership Approval
+        <div className="rounded-2xl border border-bark/30 bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <HandHelping size={16} aria-hidden="true" /> Request Notices &amp; Membership Approval
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             What the elders and administrators receive the moment someone submits a join, prayer,
             visitation, dedication, welfare or membership transfer request — and what a person
             receives once their join request has been approved.
           </p>
 
           <div className="mt-4">
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Request Notification Message (to the elders and administrators)
             </label>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-moss">
               {requestPlaceholders.map((placeholder) => (
                 <li key={placeholder.token}>
-                  <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                  <code className="rounded border border-sand-line bg-white px-1 py-0.5 text-ember">
                     {placeholder.token}
                   </code>{" "}
                   {placeholder.description}
@@ -551,22 +552,22 @@ export function ChurchSettingsManager() {
               value={requestNotificationMessage}
               onChange={(e) => setRequestNotificationMessage(e.target.value)}
               placeholder="e.g. {greeting}, {user_name} has submitted a {request}. Log in to respond to it: {link}"
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
             />
-            <p className="mt-1 text-[11px] text-[#617068]">
+            <p className="mt-1 text-[11px] text-moss">
               One letter each to the church&apos;s administrators and elders, at the address on their
               own account. Nobody else is told about a request.
             </p>
           </div>
 
           <div className="mt-4">
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Membership Approval Message (to the member)
             </label>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#617068]">
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-moss">
               {approvalPlaceholders.map((placeholder) => (
                 <li key={placeholder.token}>
-                  <code className="rounded border border-[#dfdbd1] bg-white px-1 py-0.5 text-[#b36b3c]">
+                  <code className="rounded border border-sand-line bg-white px-1 py-0.5 text-ember">
                     {placeholder.token}
                   </code>{" "}
                   {placeholder.description}
@@ -578,40 +579,40 @@ export function ChurchSettingsManager() {
               value={membershipApprovalMessage}
               onChange={(e) => setMembershipApprovalMessage(e.target.value)}
               placeholder="Sent when a join request is approved..."
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#26352f]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
             />
           </div>
         </div>
 
         {/* Legal documents */}
-        <div className="rounded-2xl border border-[#26352f]/30 bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>⚖️</span> Privacy Policy &amp; Terms of Use
+        <div className="rounded-2xl border border-bark/30 bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <Scale size={16} aria-hidden="true" /> Privacy Policy &amp; Terms of Use
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Your own wording for the two legal pages. Separate paragraphs with a blank line. Leave a box empty and the
             public page keeps the built-in document.
           </p>
 
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Privacy Policy</label>
+              <label className="block text-xs font-semibold text-bark">Privacy Policy</label>
               <textarea
                 rows={8}
                 value={privacyPolicy}
                 onChange={(e) => setPrivacyPolicy(e.target.value)}
                 placeholder="Shown at /privacy. Start with who the church is, then what you collect and how you use it..."
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-bark"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Terms of Use</label>
+              <label className="block text-xs font-semibold text-bark">Terms of Use</label>
               <textarea
                 rows={8}
                 value={termsOfUse}
                 onChange={(e) => setTermsOfUse(e.target.value)}
                 placeholder="Shown at /terms. Cover accounts, acceptable use, giving and changes to the terms..."
-                className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-[#26352f]"
+                className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 font-mono text-xs leading-6 outline-none focus:border-bark"
               />
             </div>
           </div>
@@ -620,7 +621,7 @@ export function ChurchSettingsManager() {
         {/* General Church Details */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Church Name
             </label>
             <input
@@ -628,12 +629,12 @@ export function ChurchSettingsManager() {
               required
               value={churchName}
               onChange={(e) => setChurchName(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Physical Address
             </label>
             <input
@@ -641,17 +642,17 @@ export function ChurchSettingsManager() {
               placeholder="e.g. Off Ngong Road, Meru"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
         </div>
 
         {/* Church GPS Location & Map Picker */}
-        <div className="rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] p-5">
-          <h3 className="text-base font-bold text-[#26352f] flex items-center gap-2">
-            <span>📍</span> Church Location Map Pin &amp; GPS
+        <div className="rounded-2xl border border-sand-line bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <MapPin size={16} aria-hidden="true" /> Church Location Map Pin &amp; GPS
           </h3>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Capture current GPS position or drop a pin on the map to set exact church coordinates for Google Maps navigation.
           </p>
           <div className="mt-4">
@@ -673,43 +674,43 @@ export function ChurchSettingsManager() {
         {/* Service Times & Links */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Midweek Vespers Time
             </label>
             <input
               type="text"
               value={midweekVespersTime}
               onChange={(e) => setMidweekVespersTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Friday Vespers Time
             </label>
             <input
               type="text"
               value={fridayVespersTime}
               onChange={(e) => setFridayVespersTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Sabbath Worship Time
             </label>
             <input
               type="text"
               value={sabbathTime}
               onChange={(e) => setSabbathTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Live Stream URL (YouTube / Zoom)
             </label>
             <input
@@ -717,12 +718,12 @@ export function ChurchSettingsManager() {
               placeholder="https://youtube.com/..."
               value={liveServiceLink}
               onChange={(e) => setLiveServiceLink(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#26352f]">
+            <label className="block text-xs font-semibold text-bark">
               Invitation Link Lifetime (days)
             </label>
             <input
@@ -732,9 +733,9 @@ export function ChurchSettingsManager() {
               required
               value={invitationLinkLifetimeDays}
               onChange={(e) => setInvitationLinkLifetimeDays(Math.max(1, Number(e.target.value) || 1))}
-              className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
             />
-            <p className="mt-1 text-[11px] text-[#617068]">
+            <p className="mt-1 text-[11px] text-moss">
               How many days an emailed invitation link stays usable before it expires.
             </p>
           </div>
@@ -743,7 +744,7 @@ export function ChurchSettingsManager() {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-full bg-[#b36b3c] px-7 py-3 font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
+          className="rounded-full bg-ember px-7 py-3 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
         >
           {saving ? "Saving Settings..." : "Save Church Settings"}
         </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -168,41 +169,41 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
         role="dialog"
         aria-modal="true"
         aria-labelledby="pledge-modal-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-7"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-7"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#dfdbd1] pb-3">
+        <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c]">Pledge</p>
-            <h3 id="pledge-modal-title" className="truncate text-lg font-bold text-[#26352f]">{target.title}</h3>
-            <p className="mt-0.5 truncate text-xs text-[#617068]">towards {towards}</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-ember">Pledge</p>
+            <h3 id="pledge-modal-title" className="truncate text-lg font-bold text-bark">{target.title}</h3>
+            <p className="mt-0.5 truncate text-xs text-moss">towards {towards}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
             aria-label="Close"
-            className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
+            className="text-xl leading-none text-moss hover:text-bark"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         {loadingPledge ? (
-          <p className="py-6 text-center text-sm text-[#617068]">Checking your pledge…</p>
+          <p className="py-6 text-center text-sm text-moss">Checking your pledge…</p>
         ) : pledge ? (
           <div className="mt-5 space-y-4">
-            <div className="rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4">
-              <p className="text-sm font-semibold text-[#26352f]">
+            <div className="rounded-2xl border border-sand-deep bg-sand-veil p-4">
+              <p className="text-sm font-semibold text-bark">
                 You pledged {pledge.amount ? money(pledge.amount) : "—"}
                 {pledge.due_date ? ` by ${prettyDay(pledge.due_date)}` : ""}.
               </p>
               {pledge.redeemed ? (
-                <p className="mt-1 text-xs font-semibold text-[#3d7146]">
-                  ✓ Marked as given
+                <p className="mt-1 text-xs font-semibold text-sage-strong">
+                  <Check className="inline h-3 w-3" aria-hidden="true" /> Marked as given
                   {pledge.redeemed_via === "giving" ? " — we saw your gift come in." : "."}
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-[#617068]">
+                <p className="mt-1 text-xs text-moss">
                   {overdue
                     ? "That day has passed and we have not seen the gift yet. If you have already given it, tell us below."
                     : "We will remind you the day before. If you give through M-Pesa, this closes itself."}
@@ -213,7 +214,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
             {message && (
               <p className={`rounded-xl p-3 text-xs font-semibold ${
                 message.startsWith("Thank you") || message.includes("marked as given")
-                  ? "bg-[#eef2ed] text-[#3d5148]"
+                  ? "bg-mist-select text-moss-dark"
                   : "bg-red-50 text-red-700"
               }`}>
                 {message}
@@ -226,14 +227,14 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
                   type="button"
                   onClick={markGiven}
                   disabled={busy}
-                  className="rounded-full bg-[#3d7146] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#335e3a] disabled:opacity-60"
+                  className="rounded-full bg-sage-strong px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sage-shade disabled:opacity-60"
                 >
                   {busy ? "Saving…" : "I have given this"}
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-sm font-semibold text-[#617068] hover:underline"
+                  className="text-sm font-semibold text-moss hover:underline"
                 >
                   Close
                 </button>
@@ -243,7 +244,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
         ) : (
           <form onSubmit={submit} className="mt-5 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">Pledge amount (KES) *</label>
+              <label className="block text-xs font-semibold text-bark">Pledge amount (KES) *</label>
               <input
                 type="number"
                 min="1"
@@ -251,12 +252,12 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
                 placeholder="e.g. 5000"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-sm focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-sm focus:border-ember focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#26352f]">I will give it by *</label>
+              <label className="block text-xs font-semibold text-bark">I will give it by *</label>
               <input
                 type="date"
                 required
@@ -264,9 +265,9 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
                 max={deadline || undefined}
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-sm focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-sm focus:border-ember focus:outline-none"
               />
-              <p className="mt-1 text-[11px] text-[#617068]">
+              <p className="mt-1 text-[11px] text-moss">
                 {deadline
                   ? `The event is on ${prettyDay(deadline)} — a pledge cannot run past it. We will remind you the day before.`
                   : "We will remind you the day before if the gift has not come in."}
@@ -281,14 +282,14 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
               <button
                 type="submit"
                 disabled={busy || !amount}
-                className="rounded-full bg-[#b36b3c] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+                className="rounded-full bg-ember px-5 py-2.5 text-sm font-bold text-white transition hover:bg-ember-dark disabled:opacity-50"
               >
                 {busy ? "Saving…" : "Record pledge"}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-sm font-semibold text-[#617068] hover:underline"
+                className="text-sm font-semibold text-moss hover:underline"
               >
                 Cancel
               </button>

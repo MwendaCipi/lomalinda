@@ -9,7 +9,7 @@ export function generateStaticParams() {
 
 export default function CampaignDetailPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-[#617068]">Loading campaign...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-sm text-moss">Loading campaign...</div>}>
       <CampaignDetailClient />
     </Suspense>
   );

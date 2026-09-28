@@ -181,26 +181,26 @@ export function PopupAnnouncementModal() {
       aria-labelledby="announcement-modal-title"
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
     >
-      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-2xl sm:p-8">
-        <div className="flex items-center justify-between gap-3 border-b border-[#dfdbd1] pb-4">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
+        <div className="flex items-center justify-between gap-3 border-b border-sand-line pb-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-3 w-3 rounded-full bg-[#b36b3c] animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">
+            <span className="inline-flex h-3 w-3 rounded-full bg-ember animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-ember">
               Important Announcement
             </span>
           </div>
           {queue.length > 1 && (
-            <span className="rounded-full bg-[#26352f]/10 px-3 py-1 text-xs font-semibold text-[#26352f]">
+            <span className="rounded-full bg-bark/10 px-3 py-1 text-xs font-semibold text-bark">
               1 of {queue.length}
             </span>
           )}
         </div>
 
         <div className="mt-4">
-          <h2 id="announcement-modal-title" className="text-xl font-bold text-[#26352f] sm:text-2xl">
+          <h2 id="announcement-modal-title" className="text-xl font-bold text-bark sm:text-2xl">
             {current.title}
           </h2>
-          <p className="mt-3 text-sm leading-relaxed text-[#415047]">
+          <p className="mt-3 text-sm leading-relaxed text-moss-mid">
             {current.text}
           </p>
           {current.attachment && (
@@ -215,17 +215,17 @@ export function PopupAnnouncementModal() {
         </div>
 
         <form onSubmit={handleActionSubmit} className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-[#b36b3c]/30 bg-[#fbf6f0] p-4">
+          <div className="rounded-2xl border border-ember/30 bg-sand-airy p-4">
             {/* An Opinion post's question speaks for itself — no action header
                 or instruction above the answer options. */}
             {!isOpinion && (
               <>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#b36b3c]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-ember">
                   {isContributionAction && `User Action: ${actionLabel} Contribution`}
                   {actionType === "respond" && "User Action: Response"}
                   {actionType === "none" && "No Action Required"}
                 </p>
-                <p className="mt-1 text-xs text-[#617068]">
+                <p className="mt-1 text-xs text-moss">
                   {current.action_prompt ||
                     (isContributionAction
                       ? "Pledge an amount, give in kind, or give money — or dismiss this announcement."
@@ -252,27 +252,27 @@ export function PopupAnnouncementModal() {
                       event_date_from: current.event_date_from ?? null,
                       event_date_to: current.event_date_to ?? null,
                     })}
-                    className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                    className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                   >
                     Pledge
                   </button>
                   <button
                     type="button"
                     onClick={() => setInKindOpen(true)}
-                    className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                    className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                   >
                     In-kind
                   </button>
                   <button
                     type="button"
                     onClick={() => leaveFor(`/give?purpose=${encodeURIComponent(current.title)}`)}
-                    className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                    className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
                   >
                     Give Money
                   </button>
                 </div>
                 {statusMessage && (
-                  <p className="mt-2 text-xs font-semibold text-[#3d7146]">{statusMessage}</p>
+                  <p className="mt-2 text-xs font-semibold text-sage-strong">{statusMessage}</p>
                 )}
               </div>
             )}
@@ -284,7 +284,7 @@ export function PopupAnnouncementModal() {
                     key={option}
                     type="button"
                     onClick={() => setResponseChoice(option)}
-                    className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${responseChoice === option ? "border-[#b36b3c] bg-[#fbf6f0] text-[#26352f]" : "border-[#c9c5bb] bg-white text-[#415047] hover:border-[#b36b3c]"}`}
+                    className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${responseChoice === option ? "border-ember bg-sand-airy text-bark" : "border-sand-mute bg-white text-moss-mid hover:border-ember"}`}
                   >
                     {option}
                   </button>
@@ -293,7 +293,7 @@ export function PopupAnnouncementModal() {
             ) : actionType === "respond" && (
               <div className="mt-3 space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">
+                  <label className="block text-xs font-semibold text-bark">
                     Your Response
                   </label>
                   <textarea
@@ -301,7 +301,7 @@ export function PopupAnnouncementModal() {
                     placeholder="Type your message, response, or commitment..."
                     value={responseText}
                     onChange={(e) => setResponseText(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
                   />
                 </div>
               </div>
@@ -310,7 +310,7 @@ export function PopupAnnouncementModal() {
             {!isLoggedIn && actionType !== "none" && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">
+                  <label className="block text-xs font-semibold text-bark">
                     Your Name (optional)
                   </label>
                   <input
@@ -318,11 +318,11 @@ export function PopupAnnouncementModal() {
                     placeholder="Full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">
+                  <label className="block text-xs font-semibold text-bark">
                     Phone (optional)
                   </label>
                   <input
@@ -330,7 +330,7 @@ export function PopupAnnouncementModal() {
                     placeholder="0712345678"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
                   />
                 </div>
               </div>
@@ -346,7 +346,7 @@ export function PopupAnnouncementModal() {
               type="button"
               onClick={dismissCurrent}
               disabled={submitting}
-              className="rounded-2xl border border-[#c9c5bb] bg-white px-5 py-3.5 text-sm font-semibold text-[#617068] transition hover:border-[#b36b3c]"
+              className="rounded-2xl border border-sand-mute bg-white px-5 py-3.5 text-sm font-semibold text-moss transition hover:border-ember"
             >
               Dismiss
             </button>
@@ -354,7 +354,7 @@ export function PopupAnnouncementModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-2xl bg-[#b36b3c] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#96552e] disabled:opacity-50"
+                className="flex-1 rounded-2xl bg-ember px-6 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-ember-dark disabled:opacity-50"
               >
                 {submitting
                   ? "Submitting..."

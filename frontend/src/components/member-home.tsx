@@ -20,16 +20,9 @@ import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { DashboardQuarterlyGiving } from "@/components/dashboard-quarterly-giving";
+import { useHeaderData } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-type Me = {
-  first_name: string;
-  last_name: string;
-  username: string;
-  roles?: string[];
-  role?: string;
-};
 
 type ProfileChange = {
   id: number;
@@ -40,26 +33,20 @@ type ProfileChange = {
 
 export function MemberHome() {
   const router = useRouter();
-  const [me, setMe] = useState<Me | null>(null);
+  // Identity comes from the cached header hook — the same /me/ the site
+  // header already holds — so the dashboard costs no profile fetch of its own.
+  const { me, hasToken } = useHeaderData();
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
+    if (!hasToken) {
       router.replace("/login?next=/dashboard");
       return;
     }
+    const token = localStorage.getItem("access_token");
     const headers = { Authorization: `Bearer ${token}` };
-
-    fetch(`${API_URL}/api/members/me/`, { headers })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setMe(data);
-        if (!data) router.replace("/login?next=/dashboard");
-      })
-      .catch(() => router.replace("/login?next=/dashboard"));
 
     // A proposed profile edit waits here for the member's own yes or no.
     fetch(`${API_URL}/api/members/me/profile-changes/`, { headers })
@@ -67,7 +54,7 @@ export function MemberHome() {
       .then((data) => setProfileChange(data?.pending ? (data.change_request as ProfileChange) : null))
       .catch(() => setProfileChange(null))
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [hasToken, router]);
 
   const roles = me?.roles && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
@@ -161,8 +148,8 @@ export function MemberHome() {
           published the next gathering stands in. */}
       <DashboardAnnouncements />
 
-      {loading ? (
-        <p className="mt-8 text-center text-sm text-[#617068]">Loading your dashboard…</p>
+      {loading || !me ? (
+        <p className="mt-8 text-center text-sm text-moss">Loading your dashboard…</p>
       ) : (
         <>
           {/* A proposed profile edit, awaiting the member's own approval.
@@ -170,20 +157,20 @@ export function MemberHome() {
           {profileChange && (
             <section
               aria-live="polite"
-              className="mt-6 rounded-2xl border border-[#e0c9a8] bg-[#fdf8ef] p-5 shadow-sm sm:p-6"
+              className="mt-6 rounded-2xl border border-gold-soft bg-sand-cream p-5 shadow-sm sm:p-6"
             >
               <div className="flex items-center gap-2">
-                <UserRoundCheck className="h-4 w-4 text-[#b36b3c]" />
-                <h2 className="text-base font-bold text-[#26352f]">The church office proposed an update to your profile</h2>
+                <UserRoundCheck className="h-4 w-4 text-ember" />
+                <h2 className="text-base font-bold text-bark">The church office proposed an update to your profile</h2>
               </div>
-              <p className="mt-1 text-xs text-[#617068]">
+              <p className="mt-1 text-xs text-moss">
                 Proposed by {profileChange.proposed_by_name}. Nothing changes until you approve it.
               </p>
               <ul className="mt-3 space-y-1.5">
                 {Object.entries(profileChange.changes).map(([field, value]) => (
-                  <li key={field} className="text-sm text-[#26352f]">
+                  <li key={field} className="text-sm text-bark">
                     <span className="font-semibold">{FIELD_LABELS[field] || field}:</span>{" "}
-                    <span className="text-[#617068]">{value === null || value === "" ? "—" : String(value)}</span>
+                    <span className="text-moss">{value === null || value === "" ? "—" : String(value)}</span>
                   </li>
                 ))}
               </ul>
@@ -192,7 +179,7 @@ export function MemberHome() {
                   type="button"
                   disabled={deciding}
                   onClick={() => decideProfileChange("approve")}
-                  className="rounded-full bg-[#26352f] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#b36b3c] disabled:opacity-60"
+                  className="rounded-full bg-bark px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-ember disabled:opacity-60"
                 >
                   {deciding ? "Saving…" : "Approve update"}
                 </button>
@@ -200,7 +187,7 @@ export function MemberHome() {
                   type="button"
                   disabled={deciding}
                   onClick={() => decideProfileChange("keep")}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c] disabled:opacity-60"
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember disabled:opacity-60"
                 >
                   Keep my details
                 </button>
@@ -214,23 +201,23 @@ export function MemberHome() {
               <Link
                 key={t.href}
                 href={t.href}
-                className="group rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:border-[#b36b3c] hover:shadow-md"
+                className="group rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
               >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef2ed] text-[#26352f] transition group-hover:bg-[#f1c89e]">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-mist-select text-bark transition group-hover:bg-gold">
                   <t.icon className="h-4 w-4" />
                 </span>
                 <span className="mt-2.5 flex items-center gap-1.5">
-                  <h2 className="text-sm font-bold text-[#26352f]">{t.label}</h2>
+                  <h2 className="text-sm font-bold text-bark">{t.label}</h2>
                   {"badge" in t && t.badge ? (
                     <span
                       title={`${t.badge} request${t.badge === 1 ? "" : "s"} awaiting review`}
-                      className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
                     >
                       {t.badge}
                     </span>
                   ) : null}
                 </span>
-                <p className="mt-0.5 text-[11px] leading-snug text-[#617068]">{t.desc}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-moss">{t.desc}</p>
               </Link>
             ))}
           </section>

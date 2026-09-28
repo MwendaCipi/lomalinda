@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ArrowRight, ChevronUp } from "lucide-react";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { RecordList } from "./record-list";
 
@@ -15,14 +16,14 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
   const [search, setSearch] = useState("");
   const rows = useMemo(() => events.filter((event) => event.department?.toLowerCase().includes(department.toLowerCase()) && event.date.startsWith(`${selectedYear}-`) && (month === "all" || Number(event.date.slice(5, 7)) - 1 === Number(month)) && `${event.date} ${event.name} ${event.department}`.toLowerCase().includes(search.toLowerCase().trim())).sort((a, b) => a.date.localeCompare(b.date)), [department, events, month, search, selectedYear]);
   return (
-    <div className="mt-6 border-t border-[#dfdbd1] pt-5">
+    <div className="mt-6 border-t border-sand-line pt-5">
       <button
         type="button"
         onClick={() => setOpen((visible) => !visible)}
-        className="text-sm font-semibold text-[#b36b3c] hover:underline"
+        className="text-sm font-semibold text-ember hover:underline"
       >
         {open ? "Hide department calendar" : `See ${year} department calendar`}{" "}
-        {open ? "↑" : "→"}
+        {open ? <ChevronUp size={13} className="inline" aria-hidden="true" /> : <ArrowRight size={13} className="inline" aria-hidden="true" />}
       </button>
 
       {open && (
@@ -32,7 +33,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
               value={selectedYear}
               onChange={(event) => setSelectedYear(Number(event.target.value))}
               aria-label={`${department} calendar year`}
-              className="rounded-lg border border-[#c9c5bb] bg-[#fcfbf9] px-3 py-2 text-sm"
+              className="rounded-lg border border-sand-mute bg-sand-plate px-3 py-2 text-sm"
             >
               <option value={year - 1}>{year - 1}</option>
               <option value={year}>{year}</option>
@@ -42,7 +43,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
               value={month}
               onChange={(event) => setMonth(event.target.value)}
               aria-label={`${department} calendar month`}
-              className="rounded-lg border border-[#c9c5bb] bg-[#fcfbf9] px-3 py-2 text-sm"
+              className="rounded-lg border border-sand-mute bg-sand-plate px-3 py-2 text-sm"
             >
               <option value="all">All months</option>
               {Array.from({ length: 12 }, (_, index) => (
@@ -58,7 +59,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
               onChange={(event) => setSearch(event.target.value)}
               aria-label={`Search ${department} calendar`}
               placeholder="Search this calendar"
-              className="rounded-lg border border-[#c9c5bb] bg-[#fcfbf9] px-3 py-2 text-sm outline-none focus:border-[#b36b3c]"
+              className="rounded-lg border border-sand-mute bg-sand-plate px-3 py-2 text-sm outline-none focus:border-ember"
             />
           </div>
 
@@ -72,31 +73,31 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
             tableEmpty=""
             cardsEmpty="No events found matching your search."
             stateClassName=""
-            headClassName="border-b border-[#dfdbd1] bg-[#eef2ed] text-xs uppercase tracking-wider text-[#617068]"
+            headClassName="border-b border-sand-line bg-mist-select text-xs uppercase tracking-wider text-moss"
             headRowClassName=""
             headCellClassName="px-4 py-3"
             tableClassName="w-full min-w-[500px] text-left text-sm"
-            tableWrapperClassName="overflow-x-auto custom-table-scrollbar rounded-lg border border-[#dfdbd1]"
-            bodyClassName="divide-y divide-[#e9e5dd]"
-            cardsStateClassName="py-6 text-center text-xs text-[#617068] bg-white rounded-xl p-4 border border-[#dfdbd1]"
+            tableWrapperClassName="overflow-x-auto custom-table-scrollbar rounded-lg border border-sand-line"
+            bodyClassName="divide-y divide-sand-wash"
+            cardsStateClassName="py-6 text-center text-xs text-moss bg-white rounded-xl p-4 border border-sand-line"
             renderCard={(event) => (
-                <div key={`${event.date}-${event.name}`} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
-                  <div className="flex items-center justify-between gap-2 border-b border-[#eeeae2] pb-2">
-                    <h3 className="font-bold text-sm text-[#26352f]">{event.name}</h3>
-                    <span className="rounded-lg bg-[#eef2ed] px-2.5 py-1 text-[11px] font-bold text-[#5f8067]">
+                <div key={`${event.date}-${event.name}`} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
+                    <h3 className="font-bold text-sm text-bark">{event.name}</h3>
+                    <span className="rounded-lg bg-mist-select px-2.5 py-1 text-[11px] font-bold text-sage">
                       {new Date(`${event.date}T12:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-1 text-xs">
                     <Link
                       href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(event.name)}`}
-                      className="font-semibold text-[#b36b3c] hover:underline"
+                      className="font-semibold text-ember hover:underline"
                     >
                       View program &rarr;
                     </Link>
                     <Link
                       href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(event.department || department))}`}
-                      className="font-semibold text-[#5f8067] hover:underline"
+                      className="font-semibold text-sage hover:underline"
                     >
                       Give support
                     </Link>
@@ -105,7 +106,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
             )}
             renderRow={(event) => (
                   <tr key={`${event.date}-${event.name}`}>
-                    <td className="whitespace-nowrap px-4 py-3 text-[#617068]">
+                    <td className="whitespace-nowrap px-4 py-3 text-moss">
                       {new Date(`${event.date}T12:00:00`).toLocaleDateString(
                         "en-KE",
                         { month: "short", day: "numeric", year: "numeric" }
@@ -118,18 +119,18 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                           href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(
                             event.name
                           )}`}
-                          className="font-semibold text-[#b36b3c] hover:underline"
+                          className="font-semibold text-ember hover:underline"
                         >
                           View program
                         </Link>
-                        <span className="text-[#c9c5bb]">|</span>
+                        <span className="text-sand-mute">|</span>
                         <Link
                           href={`/give?purpose=${encodeURIComponent(
                             getMinistryGivingPurpose(
                               event.department || department
                             )
                           )}`}
-                          className="font-semibold text-[#5f8067] hover:underline"
+                          className="font-semibold text-sage hover:underline"
                         >
                           Give support
                         </Link>
@@ -140,7 +141,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
           />
 
           {loaded && rows.length === 0 && (
-            <p className="px-4 py-5 text-sm text-[#617068]">
+            <p className="px-4 py-5 text-sm text-moss">
               No events have been added for this department yet.
             </p>
           )}

@@ -52,7 +52,7 @@ type RecordListProps<T> = {
   cardsStateClassName?: string;
 };
 
-const STATE_CLASS = "py-8 text-center text-xs text-[#617068]";
+const STATE_CLASS = "py-8 text-center text-xs text-moss";
 
 export function RecordList<T>({
   rows,
@@ -68,10 +68,10 @@ export function RecordList<T>({
   hidden = false,
   tableWrapperClassName = "",
   tableClassName = "w-full text-left text-xs",
-  headClassName = "sticky top-0 z-10 bg-white border-b border-[#dfdbd1]",
-  headRowClassName = "text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]",
+  headClassName = "sticky top-0 z-10 bg-white border-b border-sand-line",
+  headRowClassName = "text-[11px] font-bold uppercase tracking-wider text-ember",
   headCellClassName = "pb-3 font-bold",
-  bodyClassName = "divide-y divide-[#eeeae2]",
+  bodyClassName = "divide-y divide-sand-soft",
   cardsClassName = "grid gap-3",
   stateClassName = STATE_CLASS,
   tableEmptyClassName,

@@ -22,14 +22,14 @@ export default function ChurchBudgetPage() {
   }, []);
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <SupportSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Budget</h1>
-            <p className="mt-3 text-base leading-7 text-[#617068]">
+            <p className="mt-3 text-base leading-7 text-moss">
               Published annual operating budgets and project allocations for SDA Loma Linda.
             </p>
           </div>
@@ -37,35 +37,35 @@ export default function ChurchBudgetPage() {
           {/* Budget Content */}
           <div className="mt-8">
             {loading ? (
-              <p className="text-sm text-[#617068]">Loading church budgets...</p>
+              <p className="text-sm text-moss">Loading church budgets...</p>
             ) : budgets.length === 0 ? (
-              <div className="rounded-3xl border border-[#dfdbd1] bg-white p-8 text-center text-[#617068]">
+              <div className="rounded-3xl border border-sand-line bg-white p-8 text-center text-moss">
                 No published annual church budgets found at this time.
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2">
                 {budgets.map((budget) => (
-                  <article key={budget.id} className="rounded-3xl border border-[#dfdbd1] bg-white p-7 shadow-sm">
-                    <span className="rounded-full bg-[#f7f4ee] px-3.5 py-1 text-xs font-semibold text-[#b36b3c]">
+                  <article key={budget.id} className="rounded-3xl border border-sand-line bg-white p-7 shadow-sm">
+                    <span className="rounded-full bg-sand px-3.5 py-1 text-xs font-semibold text-ember">
                       {budget.year} Fiscal Year
                     </span>
                     <h2 className="mt-4 text-2xl font-semibold">{budget.year} Annual Budget</h2>
 
-                    <div className="mt-6 grid grid-cols-2 gap-4 border-t border-[#dfdbd1] pt-6">
+                    <div className="mt-6 grid grid-cols-2 gap-4 border-t border-sand-line pt-6">
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-[#617068]">Projected Income</p>
-                        <p className="mt-1 text-xl font-semibold text-[#26352f]">{money(budget.total_income)}</p>
+                        <p className="text-xs uppercase tracking-wider text-moss">Projected Income</p>
+                        <p className="mt-1 text-xl font-semibold text-bark">{money(budget.total_income)}</p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-[#617068]">Planned Expenses</p>
-                        <p className="mt-1 text-xl font-semibold text-[#26352f]">{money(budget.total_expenses)}</p>
+                        <p className="text-xs uppercase tracking-wider text-moss">Planned Expenses</p>
+                        <p className="mt-1 text-xl font-semibold text-bark">{money(budget.total_expenses)}</p>
                       </div>
                     </div>
 
                     {budget.notes && (
-                      <div className="mt-5 border-t border-[#dfdbd1] pt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-[#617068]">Notes &amp; Project Breakdown</p>
-                        <p className="mt-2 text-sm leading-6 text-[#617068]">{budget.notes}</p>
+                      <div className="mt-5 border-t border-sand-line pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-moss">Notes &amp; Project Breakdown</p>
+                        <p className="mt-2 text-sm leading-6 text-moss">{budget.notes}</p>
                       </div>
                     )}
                   </article>

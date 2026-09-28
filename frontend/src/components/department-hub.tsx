@@ -15,19 +15,19 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { brand } from "@/lib/brand";
 import {
   Accessibility,
   ArrowLeft,
   Baby,
   CalendarDays,
   ChevronDown,
-  ChevronRight,
   Church,
   Heart,
   Landmark,
   Mail,
   Megaphone,
-  MoreVertical,
+  Pencil,
   Phone,
   Search,
   Sun,
@@ -37,13 +37,10 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import {
-  RolesCombobox,
-  roleLabel,
-  ROLE_OPTIONS,
-  type RoleRegisterRow,
-} from "./roles-combobox";
+import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
+import { roleLabel } from "./roles-combobox";
 import { AnnouncementManager } from "./announcement-manager";
+import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -62,20 +59,20 @@ const DEPARTMENT_STYLES: Record<DepartmentCode, { icon: React.ReactNode; accent:
 };
 
 /**
- * The row's actions behind one ⋯ button — Budget, Calendar, Members,
- * Communicate, Open — a popover rather than a strip of icons. Closes on an
+ * The row's actions behind one ⋯ button — Edit leadership, Budget, Calendar,
+ * Members, Communicate — a popover rather than a strip of icons. Closes on an
  * outside click, and unmounts cleanly when the row re-renders.
  */
 function DepartmentActionsMenu({
   department,
-  onOpen,
+  onEditLeadership,
   onCalendar,
   onMembers,
   onBudget,
   onCommunicate,
 }: {
   department: DepartmentRow;
-  onOpen: () => void;
+  onEditLeadership: () => void;
   onCalendar: () => void;
   onMembers: () => void;
   onBudget: () => void;
@@ -94,7 +91,7 @@ function DepartmentActionsMenu({
   }, [open]);
 
   const items: { label: string; icon: React.ReactNode; run: () => void }[] = [
-    { label: "Open", icon: <ChevronRight className="h-4 w-4" />, run: onOpen },
+    { label: "Edit leadership", icon: <Pencil className="h-4 w-4" />, run: onEditLeadership },
     { label: "Budget", icon: <Landmark className="h-4 w-4" />, run: onBudget },
     { label: "Calendar", icon: <CalendarDays className="h-4 w-4" />, run: onCalendar },
     { label: "Members", icon: <Users className="h-4 w-4" />, run: onMembers },
@@ -109,15 +106,15 @@ function DepartmentActionsMenu({
         aria-expanded={open}
         aria-label={`Actions for ${department.label}`}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-8 items-center gap-1 rounded-xl border border-[#dfdbd1] bg-white px-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+        className="inline-flex h-8 items-center gap-1 rounded-xl border border-sand-line bg-white px-2.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
       >
         Actions
-        <ChevronDown className={`h-3.5 w-3.5 text-[#617068] transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3.5 w-3.5 text-moss transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-[#dfdbd1] bg-white p-1.5 shadow-xl ring-1 ring-black/5"
+          className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5"
         >
           {items.map((item) => (
             <button
@@ -128,7 +125,7 @@ function DepartmentActionsMenu({
                 setOpen(false);
                 item.run();
               }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
             >
               {item.icon}
               {item.label}
@@ -238,13 +235,13 @@ function HolderCard({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#b36b3c]">{roleCaption}</p>
-          <h4 className="mt-0.5 truncate text-sm font-bold text-[#26352f]">{holder.name}</h4>
-          <p className="text-[11px] text-[#8b9790]">@{holder.username}</p>
-          <div className="mt-1.5 space-y-0.5 text-xs text-[#617068]">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-ember">{roleCaption}</p>
+          <h4 className="mt-0.5 truncate text-sm font-bold text-bark">{holder.name}</h4>
+          <p className="text-[11px] text-moss-faint">@{holder.username}</p>
+          <div className="mt-1.5 space-y-0.5 text-xs text-moss">
             {holder.phone_number && <p className="truncate">{holder.phone_number}</p>}
             {holder.email && <p className="truncate">{holder.email}</p>}
           </div>
@@ -256,7 +253,7 @@ function HolderCard({
               type="button"
               onClick={onContact}
               title="Contact"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
             >
               <Phone className="h-3.5 w-3.5" />
             </button>
@@ -264,7 +261,7 @@ function HolderCard({
               <a
                 href={`mailto:${holder.email}`}
                 title="Email"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
               >
                 <Mail className="h-3.5 w-3.5" />
               </a>
@@ -330,29 +327,29 @@ function AddMemberModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Add member to ${departmentLabel}`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1]"
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-          <h3 className="text-lg font-bold text-[#26352f]">Add to {departmentLabel}</h3>
-          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <h3 className="text-lg font-bold text-bark">Add to {departmentLabel}</h3>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="relative mt-4">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
           <input
             autoFocus
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search members by name, username or phone…"
-            className="w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] py-2 pl-9 pr-3 text-xs focus:border-[#b36b3c] focus:outline-none"
+            className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
           />
         </div>
-        <div className="mt-3 divide-y divide-[#eeeae2]">
-          {searching && <p className="py-4 text-center text-xs text-[#617068]">Searching…</p>}
+        <div className="mt-3 divide-y divide-sand-soft">
+          {searching && <p className="py-4 text-center text-xs text-moss">Searching…</p>}
           {!searching && query.trim().length >= 2 && results.length === 0 && (
-            <p className="py-4 text-center text-xs text-[#617068]">No members match that search.</p>
+            <p className="py-4 text-center text-xs text-moss">No members match that search.</p>
           )}
           {results.map((member) => {
             const onRoll = rollIds.has(member.id);
@@ -363,14 +360,14 @@ function AddMemberModal({
                 disabled={onRoll}
                 onClick={() => onAdd(member)}
                 className={`flex w-full items-center justify-between gap-2 py-2.5 text-left text-xs transition ${
-                  onRoll ? "cursor-not-allowed opacity-50" : "hover:bg-[#f7f4ee]"
+                  onRoll ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
                 }`}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-[#26352f]">{member.name}</span>
-                  <span className="block truncate text-[11px] text-[#8b9790]">@{member.username}</span>
+                  <span className="block truncate font-semibold text-bark">{member.name}</span>
+                  <span className="block truncate text-[11px] text-moss-faint">@{member.username}</span>
                 </span>
-                <span className="shrink-0 text-[11px] font-semibold text-[#b36b3c]">
+                <span className="shrink-0 text-[11px] font-semibold text-ember">
                   {onRoll ? "On this roll" : "Add"}
                 </span>
               </button>
@@ -399,11 +396,11 @@ function AddEventModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Add event to ${departmentLabel}`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1]"
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-          <h3 className="text-lg font-bold text-[#26352f]">Add event — {departmentLabel}</h3>
-          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <h3 className="text-lg font-bold text-bark">Add event — {departmentLabel}</h3>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -416,70 +413,345 @@ function AddEventModal({
           }}
         >
           <div>
-            <label className="text-xs font-semibold text-[#26352f]">Event title *</label>
+            <label className="text-xs font-semibold text-bark">Event title *</label>
             <input
               autoFocus
               type="text"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-[#26352f]">Date *</label>
+              <label className="text-xs font-semibold text-bark">Date *</label>
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-[#26352f]">Time</label>
+              <label className="text-xs font-semibold text-bark">Time</label>
               <input
                 type="text"
                 value={form.time}
                 onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+                className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-[#26352f]">Location</label>
+            <label className="text-xs font-semibold text-bark">Location</label>
             <input
               type="text"
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-[#26352f]">Lead</label>
+            <label className="text-xs font-semibold text-bark">Lead</label>
             <input
               type="text"
               value={form.lead}
               onChange={(e) => setForm({ ...form, lead: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-[#26352f]">Notes</label>
+            <label className="text-xs font-semibold text-bark">Notes</label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={3}
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-3 py-2 text-xs focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={!valid}
-            className="w-full rounded-xl bg-[#b36b3c] py-2.5 text-sm font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50"
+            className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
           >
             Add event
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/** Someone staged in the leadership modal: how they hold the department's
+    lead role, plus the role sets the save needs. */
+type LeadershipPick = {
+  id: number;
+  name: string;
+  username: string;
+  assistant: boolean;
+  roles: string[];
+  assistantRoles: string[];
+  /** True when they were already set when the modal opened. */
+  existing: boolean;
+};
+
+/** The department's leadership as staged, before any save. */
+function departmentPicks(department: DepartmentRow, leadRole: string): LeadershipPick[] {
+  return [
+    ...(department.leader
+      ? [{
+          id: department.leader.id,
+          name: department.leader.name,
+          username: department.leader.username,
+          assistant: false,
+          roles: department.leader.roles ?? [leadRole],
+          assistantRoles: department.leader.assistant_roles ?? [],
+          existing: true,
+        }]
+      : []),
+    ...department.assistants.map((a) => ({
+      id: a.id,
+      name: a.name,
+      username: a.username,
+      assistant: true,
+      roles: a.roles ?? [leadRole],
+      assistantRoles: a.assistant_roles ?? [],
+      existing: true,
+    })),
+  ];
+}
+
+/**
+ * Edit leadership: set the department's leader and assistants in one modal.
+ *
+ * The save rides the same role endpoint the roster uses, so the rules (an
+ * assistant must hold the role; a holder cannot also be its assistant) and
+ * the notifications are shared. People dropped from the list keep their
+ * other roles — only this department's lead role is taken away.
+ */
+function LeadershipEditModal({
+  department,
+  onClose,
+  onSaved,
+}: {
+  department: DepartmentRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const leadRole = DEPARTMENT_LEAD_ROLE[department.code];
+  const [picks, setPicks] = useState<LeadershipPick[]>(() => departmentPicks(department, leadRole));
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ id: number; name: string; username: string; roles: string[] }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      // The office users list is the roster the elder's desk already has.
+      fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((rows) => {
+          const q = query.trim().toLowerCase();
+          setResults(
+            (Array.isArray(rows) ? rows : [])
+              .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) =>
+                `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
+              )
+              .slice(0, 8)
+              .map((u: { id: number; first_name?: string; last_name?: string; username: string; roles?: string[] }) => ({
+                id: u.id,
+                name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
+                username: u.username,
+                roles: Array.isArray(u.roles) ? u.roles : ["member"],
+              }))
+          );
+        })
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const save = async () => {
+    const original = departmentPicks(department, leadRole);
+    const removed = original.filter((o) => !picks.some((p) => p.id === o.id));
+    const plan = [
+      ...picks.map((p) => ({
+        id: p.id,
+        roles: p.roles.includes(leadRole) ? p.roles : [...p.roles, leadRole],
+        assistants: p.assistant
+          ? [...new Set([...p.assistantRoles, leadRole])]
+          : p.assistantRoles.filter((c) => c !== leadRole),
+      })),
+      // Dropped from leadership: keep their other roles, hand back this one.
+      ...removed.map((p) => ({
+        id: p.id,
+        roles: p.roles.filter((c) => c !== leadRole),
+        assistants: p.assistantRoles.filter((c) => c !== leadRole),
+      })),
+    ];
+    const summary = [
+      ...picks.map((p) => `${p.name} — ${p.assistant ? "Assistant" : "Leader"}`),
+      ...removed.map((p) => `${p.name} — removed from leadership`),
+    ].join("\n");
+    const answer = await showAlert("Update leadership?", summary, "question", {
+      showCancelButton: true,
+      confirmButtonText: "Save",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: brand.ember,
+    });
+    if (!answer.isConfirmed) return;
+    setSaving(true);
+    try {
+      const responses = await Promise.all(
+        plan.map((entry) =>
+          fetch(`${API_URL}/api/members/users/${entry.id}/role/`, {
+            method: "PATCH",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ roles: entry.roles, assistant_roles: entry.assistants }),
+          })
+        )
+      );
+      const failed = responses.find((r) => !r.ok);
+      if (failed) {
+        const data = await failed.json().catch(() => ({}));
+        throw new Error(data.detail || "One of the role changes was not saved.");
+      }
+      showAlert("Leadership updated", `${department.label}'s leadership has been saved.`, "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      onSaved();
+    } catch (error) {
+      showAlert("Could not update leadership", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Edit ${department.label} leadership`}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-bark">{department.label} — Leadership</h3>
+            <p className="text-[11px] text-moss">Set the leader and assistants; contacts stay on their accounts.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* The staged leadership, editable in place. */}
+        <div className="mt-4 space-y-2">
+          {picks.length === 0 && (
+            <p className="rounded-xl border border-dashed border-sand-line p-3 text-xs text-moss">
+              No leader set yet. Search below to appoint one.
+            </p>
+          )}
+          {picks.map((pick) => (
+            <div key={pick.id} className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-bark">{pick.name}</p>
+                <p className="truncate text-[11px] text-moss-faint">@{pick.username}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-moss">
+                  <input
+                    type="checkbox"
+                    checked={pick.assistant}
+                    onChange={() =>
+                      setPicks((current) => current.map((p) => (p.id === pick.id ? { ...p, assistant: !p.assistant } : p)))
+                    }
+                    className="h-3.5 w-3.5 accent-ember"
+                  />
+                  Assistant
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setPicks((current) => current.filter((p) => p.id !== pick.id))}
+                  className="rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Appoint someone new: search the roster, add them as leader. */}
+        <div className="relative mt-4">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search members to appoint…"
+            className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
+          />
+        </div>
+        <div className="mt-2 divide-y divide-sand-soft">
+          {searching && <p className="py-3 text-center text-xs text-moss">Searching…</p>}
+          {!searching && query.trim().length >= 2 && results.length === 0 && (
+            <p className="py-3 text-center text-xs text-moss">No members match that search.</p>
+          )}
+          {results.map((member) => {
+            const staged = picks.some((p) => p.id === member.id);
+            return (
+              <button
+                key={member.id}
+                type="button"
+                disabled={staged}
+                onClick={() => {
+                  setPicks((current) => [
+                    ...current,
+                    { id: member.id, name: member.name, username: member.username, assistant: false, roles: member.roles, assistantRoles: [], existing: false },
+                  ]);
+                  setQuery("");
+                  setResults([]);
+                }}
+                className={`flex w-full items-center justify-between gap-2 py-2 text-left text-xs transition ${
+                  staged ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-bark">{member.name}</span>
+                  <span className="block truncate text-[11px] text-moss-faint">@{member.username}</span>
+                </span>
+                <span className="shrink-0 text-[11px] font-semibold text-ember">{staged ? "Added" : "Appoint"}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save leadership"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -504,7 +776,12 @@ function DepartmentDetail({
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  const [showLeadership, setShowLeadership] = useState(false);
   const [subTab, setSubTab] = useState<"members" | "calendar">(initialTab);
+  // The roll's search box and row density, shared with the other desks.
+  const [rollSearch, setRollSearch] = useState("");
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
@@ -551,7 +828,7 @@ function DepartmentDetail({
       "Remove from roll",
       `Take ${member.name} off the ${department.label} roll? Their membership in the church is not affected.`,
       "question",
-      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: "#b36b3c" }
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
     );
     if (!result.isConfirmed) return;
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/${member.id}/`, {
@@ -589,7 +866,7 @@ function DepartmentDetail({
       showCancelButton: true,
       confirmButtonText: "Remove",
       cancelButtonText: "Cancel",
-      confirmButtonColor: "#b36b3c",
+      confirmButtonColor: brand.ember,
     });
     if (!result.isConfirmed) return;
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
@@ -604,34 +881,24 @@ function DepartmentDetail({
     }
   };
 
-  const changeRoles = async (holder: Holder, roles: string[], assistants: string[]) => {
-    const res = await fetch(`${API_URL}/api/members/users/${holder.id}/role/`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ roles, assistant_roles: assistants }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      showAlert("Leadership updated", "The department's leadership has been updated.", "success", { toast: true, timer: 4000, showConfirmButton: false });
-      onChanged();
-    } else {
-      showAlert("Could not update roles", data.detail || "The role change was not saved.", "error");
-    }
-  };
-
   const rollIds = new Set(roll.map((m) => m.id));
 
+  const rollQuery = rollSearch.trim().toLowerCase();
+  const filteredRoll = rollQuery
+    ? roll.filter((m) => `${m.name} ${m.username} ${m.phone_number} ${m.email}`.toLowerCase().includes(rollQuery))
+    : roll;
+
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-1 py-2">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
       {/* Header */}
-      <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
+      <div className="shrink-0 rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
               onClick={onBack}
               aria-label="Back to all departments"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-[#26352f] transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-bark transition hover:bg-sand hover:text-ember"
             >
               <ArrowLeft className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -642,7 +909,7 @@ function DepartmentDetail({
                 </span>
                 <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
               </div>
-              <p className="mt-1 text-xs text-[#617068]">
+              <p className="mt-1 text-xs text-moss">
                 {roll.length} member{roll.length === 1 ? "" : "s"} on the roll · {events.length} calendar event{events.length === 1 ? "" : "s"}
               </p>
             </div>
@@ -652,7 +919,7 @@ function DepartmentDetail({
               type="button"
               onClick={() => setSubTab("members")}
               className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                subTab === "members" ? "bg-[#26352f] text-white" : "border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] hover:text-[#26352f]"
+                subTab === "members" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
               }`}
             >
               <Users className="mr-1 inline h-3.5 w-3.5" /> Members
@@ -661,7 +928,7 @@ function DepartmentDetail({
               type="button"
               onClick={() => setSubTab("calendar")}
               className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                subTab === "calendar" ? "bg-[#26352f] text-white" : "border border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] hover:text-[#26352f]"
+                subTab === "calendar" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
               }`}
             >
               <CalendarDays className="mr-1 inline h-3.5 w-3.5" /> Calendar
@@ -670,27 +937,18 @@ function DepartmentDetail({
         </div>
 
         {/* Leadership */}
-        <div className="mt-4 border-t border-[#dfdbd1] pt-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#617068]">Leadership</p>
+        <div className="mt-4 border-t border-sand-line pt-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Leadership</p>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {department.leader ? (
               <HolderCard
                 holder={department.leader}
                 roleCaption={roleLabel(leadRole) || "Leader"}
                 onContact={() => contactHolder(department.leader!)}
-                actions={
-                  <RolesCombobox
-                    selected={department.leader.roles ?? ["member"]}
-                    assistants={department.leader.assistant_roles ?? []}
-                    showAssistants
-                    onChange={(roles, assistants) => changeRoles(department.leader!, roles, assistants)}
-                    memberId={department.leader.id}
-                  />
-                }
               />
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#dfdbd1] p-4 text-xs text-[#617068]">
-                No {roleLabel(leadRole) || "leader"} is set. Assign the role from the Members tab in user management.
+              <div className="rounded-2xl border border-dashed border-sand-line p-4 text-xs text-moss">
+                No {roleLabel(leadRole) || "leader"} is set. Use Edit leadership to appoint one.
               </div>
             )}
             {department.assistants.map((assistant) => (
@@ -699,100 +957,133 @@ function DepartmentDetail({
                 holder={assistant}
                 roleCaption={`Assistant ${roleLabel(leadRole) || "Leader"}`}
                 onContact={() => contactHolder(assistant)}
-                actions={
-                  <RolesCombobox
-                    selected={assistant.roles ?? ["member"]}
-                    assistants={assistant.assistant_roles ?? []}
-                    showAssistants
-                    onChange={(roles, assistants) => changeRoles(assistant, roles, assistants)}
-                    memberId={assistant.id}
-                  />
-                }
               />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Members tab */}
+      {/* Members tab — a contained table: the page holds still, the rows
+          scroll, the way the roster and treasury read. */}
       {subTab === "members" && (
-        <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-bold text-[#26352f]">Department roll</h3>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
+            <h3 className="text-sm font-bold text-bark">Department roll</h3>
+            <div className="flex items-center gap-2">
+              <DensityToggle dense={dense} onToggle={toggleDensity} />
+              <button
+                type="button"
+                onClick={() => setShowAddMember(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Add member
+              </button>
+            </div>
+          </div>
+          <div className="border-b border-sand-line px-4 py-2.5">
+            <input
+              type="text"
+              value={rollSearch}
+              onChange={(e) => setRollSearch(e.target.value)}
+              placeholder="Search the roll by name, phone or email…"
+              className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
+            {loadingRoll ? (
+              <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
+            ) : filteredRoll.length === 0 ? (
+              <p className="py-8 text-center text-xs text-moss">
+                {roll.length === 0
+                  ? "Nobody is on this roll yet. Use “Add member” to build the department's list."
+                  : "No roll member matches that search."}
+              </p>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
+                  <tr className="border-b border-sand-line">
+                    <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                    <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
+                    <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand-soft">
+                  {filteredRoll.map((member) => (
+                    <tr key={member.membership_id}>
+                      <td className={`px-4 ${rowPad} align-middle`}>
+                        <p className="truncate font-semibold text-bark">{member.name}</p>
+                      </td>
+                      <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
+                        <span className="truncate text-moss">{member.phone_number || member.email || `@${member.username}`}</span>
+                      </td>
+                      <td className={`px-4 ${rowPad} text-right align-middle`}>
+                        <button
+                          type="button"
+                          onClick={() => removeMember(member)}
+                          className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {/* The bottom row: count on the left, Add Member on the right. */}
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
+            <p className="text-xs text-moss">
+              {filteredRoll.length} member{filteredRoll.length === 1 ? "" : "s"}
+              {rollQuery ? ` of ${roll.length}` : ""} on the roll
+            </p>
             <button
               type="button"
               onClick={() => setShowAddMember(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
             >
-              <UserPlus className="h-3.5 w-3.5" /> Add member
+              <UserPlus className="h-3.5 w-3.5" /> Add Member
             </button>
           </div>
-          {loadingRoll ? (
-            <p className="py-8 text-center text-xs text-[#617068]">Loading the roll…</p>
-          ) : roll.length === 0 ? (
-            <p className="py-8 text-center text-xs text-[#617068]">
-              Nobody is on this roll yet. Use “Add member” to build the department's list.
-            </p>
-          ) : (
-            <div className="mt-3 divide-y divide-[#eeeae2]">
-              {roll.map((member) => (
-                <div key={member.membership_id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-[#26352f]">{member.name}</p>
-                    <p className="truncate text-[11px] text-[#8b9790]">
-                      {member.phone_number || member.email || `@${member.username}`}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeMember(member)}
-                    className="shrink-0 rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-red-300 hover:text-red-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {/* Calendar tab */}
       {subTab === "calendar" && (
-        <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-bold text-[#26352f]">Department calendar</h3>
+            <h3 className="text-sm font-bold text-bark">Department calendar</h3>
             <button
               type="button"
               onClick={() => setShowAddEvent(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#b36b3c] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#96552c]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
             >
               <CalendarDays className="h-3.5 w-3.5" /> Add event
             </button>
           </div>
           {loadingEvents ? (
-            <p className="py-8 text-center text-xs text-[#617068]">Loading the calendar…</p>
+            <p className="py-8 text-center text-xs text-moss">Loading the calendar…</p>
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-xs text-[#617068]">
+            <p className="py-8 text-center text-xs text-moss">
               Nothing on the calendar yet. Events added here are stored and can be published to the congregation.
             </p>
           ) : (
-            <div className="mt-3 divide-y divide-[#eeeae2]">
+            <div className="mt-3 divide-y divide-sand-soft">
               {events.map((event) => (
                 <div key={event.id} className="flex items-start justify-between gap-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-[#26352f]">{event.title}</p>
-                    <p className="text-[11px] text-[#617068]">
+                    <p className="text-xs font-semibold text-bark">{event.title}</p>
+                    <p className="text-[11px] text-moss">
                       {event.date}
                       {event.time ? ` · ${event.time}` : ""}
                       {event.location ? ` · ${event.location}` : ""}
                     </p>
-                    {event.notes && <p className="mt-0.5 text-[11px] italic text-[#8b9790]">{event.notes}</p>}
+                    {event.notes && <p className="mt-0.5 text-[11px] italic text-moss-faint">{event.notes}</p>}
                   </div>
                   <button
                     type="button"
                     onClick={() => removeEvent(event)}
-                    className="shrink-0 rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-red-300 hover:text-red-600"
+                    className="shrink-0 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
                   >
                     Remove
                   </button>
@@ -811,6 +1102,16 @@ function DepartmentDetail({
           onAdd={addMember}
         />
       )}
+      {showLeadership && (
+        <LeadershipEditModal
+          department={department}
+          onClose={() => setShowLeadership(false)}
+          onSaved={() => {
+            setShowLeadership(false);
+            onChanged();
+          }}
+        />
+      )}
       {showAddEvent && (
         <AddEventModal departmentLabel={department.label} onClose={() => setShowAddEvent(false)} onAdd={addEvent} />
       )}
@@ -825,9 +1126,15 @@ export function DepartmentHub() {
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
   const [detailTab, setDetailTab] = useState<"members" | "calendar">("members");
-  // Which department's budget modal or Communicate flow is open.
+  // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
+  // Which department's leadership modal is open.
+  const [leadershipDept, setLeadershipDept] = useState<DepartmentRow | null>(null);
+  // Communicate targets: one department, or several ticked in the table.
   const [communicateDept, setCommunicateDept] = useState<DepartmentRow | null>(null);
+  const [communicateSet, setCommunicateSet] = useState<DepartmentRow[] | null>(null);
+  // The table's checked rows.
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
 
   const loadDirectory = useCallback(() => {
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
@@ -846,8 +1153,29 @@ export function DepartmentHub() {
     loadDirectory();
   }, [loadDirectory]);
 
+  const toggleDept = (code: string) => {
+    setSelectedCodes((current) => {
+      const next = new Set(current);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelectedCodes((current) =>
+      current.size === departments.length ? new Set() : new Set(departments.map((d) => d.code))
+    );
+  };
+
+  const openMultiCommunicate = () => {
+    const chosen = departments.filter((d) => selectedCodes.has(d.code));
+    if (chosen.length === 0) return;
+    setCommunicateSet(chosen);
+  };
+
   if (loading) {
-    return <p className="py-16 text-center text-sm text-[#617068]">Loading departments…</p>;
+    return <p className="py-16 text-center text-sm text-moss">Loading departments…</p>;
   }
 
   if (selected) {
@@ -862,20 +1190,30 @@ export function DepartmentHub() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-3 px-1 py-2">
-      <div>
-        <h2 className="text-lg font-bold text-[#26352f]">Departments &amp; Ministries</h2>
-        <p className="mt-0.5 text-xs text-[#617068]">
-          Each row: the department's leadership, and its calendar, roll, budget and announcements.
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
+      <div className="shrink-0">
+        <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
+        <p className="mt-0.5 text-xs text-moss">
+          Each row: the department's leadership, and its calendar, roll, budget and announcements. Tick rows to address several departments at once.
         </p>
       </div>
 
       {/* One table, one row per department — the directory a desk scans, not
           a stack of cards. On phones the same rows are cards. */}
-      <div className="hidden overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm md:block">
+      <div className="hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm md:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-[#dfdbd1] bg-[#faf7f0] text-[10px] uppercase tracking-wider text-[#617068]">
+            <tr className="border-b border-sand-line bg-sand-veil text-[10px] uppercase tracking-wider text-moss">
+              <th className="w-10 px-3 py-3">
+                <input
+                  type="checkbox"
+                  aria-label="Select all departments"
+                  checked={departments.length > 0 && selectedCodes.size === departments.length}
+                  onChange={toggleAll}
+                  className="h-3.5 w-3.5 accent-ember"
+                />
+              </th>
               <th className="px-4 py-3 font-bold">Department</th>
               <th className="px-4 py-3 font-bold">Leader</th>
               <th className="px-4 py-3 font-bold">Assistant</th>
@@ -887,7 +1225,16 @@ export function DepartmentHub() {
             {departments.map((department) => {
               const style = DEPARTMENT_STYLES[department.code];
               return (
-                <tr key={department.code} className="border-b border-[#eeeae2] last:border-0 hover:bg-[#f7f4ee]/60">
+                <tr key={department.code} className="border-b border-sand-soft last:border-0 hover:bg-sand/60">
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${department.label}`}
+                      checked={selectedCodes.has(department.code)}
+                      onChange={() => toggleDept(department.code)}
+                      className="h-3.5 w-3.5 accent-ember"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
@@ -899,34 +1246,31 @@ export function DepartmentHub() {
                   <td className="px-4 py-3">
                     {department.leader ? (
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-[#26352f]">{department.leader.name}</p>
-                        <p className="truncate text-[11px] text-[#617068]">{department.leader.phone_number || department.leader.email || ""}</p>
+                        <p className="truncate text-xs font-semibold text-bark">{department.leader.name}</p>
+                        <p className="truncate text-[11px] text-moss">{department.leader.phone_number || department.leader.email || ""}</p>
                       </div>
                     ) : (
-                      <span className="text-xs italic text-[#8b9790]">not set</span>
+                      <span className="text-xs italic text-moss-faint">not set</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     {department.assistants.length > 0 ? (
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-[#26352f]">{department.assistants.map((a) => a.name).join(", ")}</p>
-                        <p className="truncate text-[11px] text-[#617068]">{department.assistants[0].phone_number || department.assistants[0].email || ""}</p>
+                        <p className="truncate text-xs font-semibold text-bark">{department.assistants.map((a) => a.name).join(", ")}</p>
+                        <p className="truncate text-[11px] text-moss">{department.assistants[0].phone_number || department.assistants[0].email || ""}</p>
                       </div>
                     ) : (
-                      <span className="text-xs italic text-[#8b9790]">not set</span>
+                      <span className="text-xs italic text-moss-faint">not set</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center text-xs text-[#617068]">
+                  <td className="px-4 py-3 text-center text-xs text-moss">
                     {department.member_count}
-                    <span className="block text-[10px] text-[#8b9790]">{department.event_count} event{department.event_count === 1 ? "" : "s"}</span>
+                    <span className="block text-[10px] text-moss-faint">{department.event_count} event{department.event_count === 1 ? "" : "s"}</span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <DepartmentActionsMenu
                       department={department}
-                      onOpen={() => {
-                        setDetailTab("members");
-                        setSelected(department);
-                      }}
+                      onEditLeadership={() => setLeadershipDept(department)}
                       onCalendar={() => {
                         setDetailTab("calendar");
                         setSelected(department);
@@ -944,6 +1288,23 @@ export function DepartmentHub() {
             })}
           </tbody>
         </table>
+        </div>
+        {/* The bottom row: what's ticked on the left, Communicate on the right. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
+          <p className="text-xs text-moss">
+            {selectedCodes.size === 0
+              ? "Tick departments to message several at once"
+              : `${selectedCodes.size} department${selectedCodes.size === 1 ? "" : "s"} selected`}
+          </p>
+          <button
+            type="button"
+            onClick={openMultiCommunicate}
+            disabled={selectedCodes.size === 0}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Megaphone className="h-3.5 w-3.5" /> Communicate
+          </button>
+        </div>
       </div>
 
       {/* Phones: the same directory as cards. */}
@@ -951,7 +1312,7 @@ export function DepartmentHub() {
         {departments.map((department) => {
           const style = DEPARTMENT_STYLES[department.code];
           return (
-            <div key={department.code} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
+            <div key={department.code} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
@@ -961,10 +1322,7 @@ export function DepartmentHub() {
                 </div>
                 <DepartmentActionsMenu
                   department={department}
-                  onOpen={() => {
-                    setDetailTab("members");
-                    setSelected(department);
-                  }}
+                  onEditLeadership={() => setLeadershipDept(department)}
                   onCalendar={() => {
                     setDetailTab("calendar");
                     setSelected(department);
@@ -978,23 +1336,23 @@ export function DepartmentHub() {
                 />
               </div>
               <div className="mt-2 space-y-1 text-xs">
-                <p className="text-[#26352f]">
-                  <span className="font-semibold text-[#617068]">Leader:</span>{" "}
+                <p className="text-bark">
+                  <span className="font-semibold text-moss">Leader:</span>{" "}
                   {department.leader ? (
                     <span className="font-semibold">{department.leader.name}</span>
                   ) : (
-                    <span className="italic text-[#8b9790]">not set</span>
+                    <span className="italic text-moss-faint">not set</span>
                   )}
                 </p>
-                <p className="text-[#26352f]">
-                  <span className="font-semibold text-[#617068]">Assistant:</span>{" "}
+                <p className="text-bark">
+                  <span className="font-semibold text-moss">Assistant:</span>{" "}
                   {department.assistants.length > 0 ? (
                     <span className="font-semibold">{department.assistants.map((a) => a.name).join(", ")}</span>
                   ) : (
-                    <span className="italic text-[#8b9790]">not set</span>
+                    <span className="italic text-moss-faint">not set</span>
                   )}
                 </p>
-                <p className="text-[11px] text-[#617068]">
+                <p className="text-[11px] text-moss">
                   {department.member_count} on roll · {department.event_count} event{department.event_count === 1 ? "" : "s"}
                 </p>
               </div>
@@ -1009,10 +1367,29 @@ export function DepartmentHub() {
           onClose={() => setBudgetDept(null)}
         />
       )}
+      {leadershipDept && (
+        <LeadershipEditModal
+          department={leadershipDept}
+          onClose={() => setLeadershipDept(null)}
+          onSaved={() => {
+            setLeadershipDept(null);
+            loadDirectory();
+          }}
+        />
+      )}
       {communicateDept && (
         <CommunicateModal
-          department={communicateDept}
+          departments={[communicateDept]}
           onClose={() => setCommunicateDept(null)}
+        />
+      )}
+      {communicateSet && (
+        <CommunicateModal
+          departments={communicateSet}
+          onClose={() => {
+            setCommunicateSet(null);
+            setSelectedCodes(new Set());
+          }}
         />
       )}
     </div>
@@ -1086,7 +1463,7 @@ function DepartmentBudgetModal({
       showCancelButton: true,
       confirmButtonText: "Remove",
       cancelButtonText: "Keep",
-      confirmButtonColor: "#b91c1c",
+      confirmButtonColor: brand.alert,
     });
     if (!answer.isConfirmed) return;
     try {
@@ -1109,29 +1486,29 @@ function DepartmentBudgetModal({
         role="dialog"
         aria-modal="true"
         aria-label={`${department.label} budget`}
-        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1]"
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
-            <h3 className="text-lg font-bold text-[#26352f]">{department.label} — Budget</h3>
-            <p className="text-[11px] text-[#617068]">Planned spending lines; the treasury still moves the money.</p>
+            <h3 className="text-lg font-bold text-bark">{department.label} — Budget</h3>
+            <p className="text-[11px] text-moss">Planned spending lines; the treasury still moves the money.</p>
           </div>
-          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={addLine} className="mt-4 flex flex-wrap items-end gap-2">
-          <label className="min-w-0 flex-1 text-xs font-semibold text-[#26352f]">
+          <label className="min-w-0 flex-1 text-xs font-semibold text-bark">
             What the money is for
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Camp fees subsidy"
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
             />
           </label>
-          <label className="w-24 text-xs font-semibold text-[#26352f]">
+          <label className="w-24 text-xs font-semibold text-bark">
             KES
             <input
               type="number"
@@ -1139,52 +1516,52 @@ function DepartmentBudgetModal({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
             />
           </label>
-          <label className="w-24 text-xs font-semibold text-[#26352f]">
+          <label className="w-24 text-xs font-semibold text-bark">
             Year
             <input
               type="number"
               value={year}
               onChange={(e) => setYear(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-[#dfdbd1] px-3 py-2 text-xs font-normal focus:border-[#b36b3c] focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={saving || !title.trim()}
-            className="inline-flex h-9 items-center rounded-xl bg-[#b36b3c] px-4 text-xs font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-50"
+            className="inline-flex h-9 items-center rounded-xl bg-ember px-4 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
           >
             {saving ? "Saving…" : "Add line"}
           </button>
         </form>
 
         {loading ? (
-          <p className="py-8 text-center text-xs text-[#617068]">Loading the budget…</p>
+          <p className="py-8 text-center text-xs text-moss">Loading the budget…</p>
         ) : rows.length === 0 ? (
-          <p className="py-8 text-center text-xs text-[#617068]">No budget lines yet for this department.</p>
+          <p className="py-8 text-center text-xs text-moss">No budget lines yet for this department.</p>
         ) : (
-          <div className="mt-4 divide-y divide-[#eeeae2]">
+          <div className="mt-4 divide-y divide-sand-soft">
             {rows.map((row) => (
               <div key={row.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-[#26352f]">{row.title}</p>
-                  <p className="text-[11px] text-[#617068]">{row.year}</p>
+                  <p className="truncate text-xs font-semibold text-bark">{row.title}</p>
+                  <p className="text-[11px] text-moss">{row.year}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs font-semibold text-[#26352f]">KES {Number(row.amount || 0).toLocaleString("en-KE")}</span>
+                  <span className="text-xs font-semibold text-bark">KES {Number(row.amount || 0).toLocaleString("en-KE")}</span>
                   <button
                     type="button"
                     onClick={() => removeLine(row.id)}
-                    className="rounded-xl border border-[#dfdbd1] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#617068] transition hover:border-red-300 hover:text-red-600"
+                    className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
                   >
                     Remove
                   </button>
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between py-2.5 text-xs font-bold text-[#26352f]">
+            <div className="flex items-center justify-between py-2.5 text-xs font-bold text-bark">
               <span>Total planned</span>
               <span>KES {total.toLocaleString("en-KE")}</span>
             </div>
@@ -1196,36 +1573,39 @@ function DepartmentBudgetModal({
 }
 
 /**
- * Communicate: the announcement composer, opened already addressed to this
- * department. The audience codes are the department's own; the composer's
- * Post-to list carries the same vocabulary, so the preselection renders
- * correctly and the member can widen it if the message is for more people.
+ * Communicate: the announcement composer, opened already addressed to the
+ * chosen departments. The audience codes are the departments' own
+ * whole-department codes — the roll plus its leaders, exactly that group and
+ * nobody else — and several departments at once compose a single post to all
+ * of them. The composer's Post-to list carries the same vocabulary, so the
+ * preselection renders correctly and the sender can widen it if they choose.
  */
 function CommunicateModal({
-  department,
+  departments,
   onClose,
 }: {
-  department: DepartmentRow;
+  departments: DepartmentRow[];
   onClose: () => void;
 }) {
-  const audienceCode = DEPARTMENT_LEAD_ROLE[department.code];
+  const audienceCodes = [...new Set(departments.map((d) => `dept_${d.code}`))];
+  const audienceLabel = departments.map((d) => d.label).join(", ");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Post an announcement to ${department.label}`}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-[#dfdbd1]"
+        aria-label={`Post an announcement to ${audienceLabel}`}
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#dfdbd1] bg-white px-6 py-4">
-          <h3 className="text-base font-bold text-[#26352f]">Announcement — {department.label}</h3>
-          <button type="button" onClick={onClose} className="text-[#617068] hover:text-[#26352f]" aria-label="Close">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-sand-line bg-white px-6 py-4">
+          <h3 className="text-base font-bold text-bark">Announcement — {audienceLabel}</h3>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-6">
           <AnnouncementManager
-            presetAudience={audienceCode ? [audienceCode] : []}
+            presetAudience={audienceCodes}
             composerOnly
             onDone={onClose}
           />

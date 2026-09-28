@@ -14,7 +14,7 @@ export type JoiningMode =
   | "friend"
   | "sabbath_school";
 
-const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]";
+const inputClass = "mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember";
 
 function parseFullName(fullName: string): { first_name: string; last_name: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -204,7 +204,7 @@ export function EnrollmentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {message && <p className="rounded-xl bg-[#f7f4ee] p-4 text-sm text-[#617068]">{message}</p>}
+      {message && <p className="rounded-xl bg-sand p-4 text-sm text-moss">{message}</p>}
 
       {/* Step 2: the verification code from the email. The consent box belongs
           here rather than on step 1 — the server records the agreement when
@@ -224,33 +224,33 @@ export function EnrollmentForm({
               className={inputClass}
             />
           </label>
-          <p className="text-xs leading-5 text-[#617068]">
+          <p className="text-xs leading-5 text-moss">
             Type the code from the email we just sent — then continue below to add your phone number and sign-in details.
           </p>
-          <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" />
-            <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
+          <label className="flex items-start gap-3 text-xs leading-5 text-moss">
+            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-sage" />
+            <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-ember hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-ember hover:underline">Terms of Use</a>.</span>
           </label>
         </div>
       )}
 
       {!codeStage && (
-      <label className="flex items-start gap-3 text-xs leading-5 text-[#617068]">
-        <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#5f8067]" />
-        <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-[#b36b3c] hover:underline">Terms of Use</a>.</span>
+      <label className="flex items-start gap-3 text-xs leading-5 text-moss">
+        <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-sage" />
+        <span>I agree to the <a href="/privacy" target="_blank" className="font-semibold text-ember hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="font-semibold text-ember hover:underline">Terms of Use</a>.</span>
       </label>
       )}
 
       {allowTransferOut && (
         <div>
-          <label className="block text-sm font-semibold text-[#26352f]">Transfer Direction / Request Type</label>
+          <label className="block text-sm font-semibold text-bark">Transfer Direction / Request Type</label>
           <select
             value={transferDirection}
             onChange={(e) => {
               setTransferDirection(e.target.value as TransferDirection);
               setMessage("");
             }}
-            className="mt-1.5 w-full rounded-xl border border-[#b36b3c] bg-[#f7f4ee] px-4 py-3 text-sm font-semibold text-[#26352f] outline-none focus:ring-2 focus:ring-[#b36b3c]"
+            className="mt-1.5 w-full rounded-xl border border-ember bg-sand px-4 py-3 text-sm font-semibold text-bark outline-none focus:ring-2 focus:ring-ember"
           >
             <option value="transfer_in">Transfer In — Join SDA Loma Linda</option>
             <option value="transfer_out">Transfer Out — Move to Another Church</option>
@@ -411,14 +411,14 @@ export function EnrollmentForm({
             type="button"
             onClick={clearForm}
             disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#26352f] bg-white px-5 font-semibold text-[#26352f] transition hover:bg-[#eae6de] disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-bark bg-white px-5 font-semibold text-bark transition hover:bg-sand-tint disabled:opacity-60"
           >
             Clear form
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-sage px-5 font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
           >
             {loading ? "Sending..." : codeStage ? "Verify code" : "Verify via Email"}
           </button>
@@ -428,7 +428,7 @@ export function EnrollmentForm({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-[#9a741c] px-5 font-semibold text-white transition hover:bg-[#7c5d16] disabled:opacity-60"
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-gold-deep px-5 font-semibold text-white transition hover:bg-gold-shadow disabled:opacity-60"
           >
             {loading ? "Sending..." : "Request Transfer Out"}
           </button>

@@ -127,28 +127,28 @@ export function MaterialsDestinationCards({ activeKey }: { activeKey?: string })
         const isActive = activeKey === dest.key;
         const cls = `group flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 ${
           isActive
-            ? "border-[#b36b3c] ring-1 ring-[#b36b3c]"
-            : "border-[#dfdbd1] hover:border-[#b36b3c]/50"
+            ? "border-ember ring-1 ring-ember"
+            : "border-sand-line hover:border-ember/50"
         }`;
         const Icon = dest.icon;
         const inner = (
           <>
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                isActive ? "bg-[#b36b3c]/10 text-[#b36b3c]" : "bg-[#f7f4ee] text-[#26352f]"
+                isActive ? "bg-ember/10 text-ember" : "bg-sand text-bark"
               }`}
               aria-hidden="true"
             >
               <Icon className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-[#26352f]">{dest.label}</span>
-              <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{dest.description}</span>
+              <span className="block text-sm font-bold text-bark">{dest.label}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-moss">{dest.description}</span>
             </span>
             {dest.isExternal ? (
-              <ExternalLink className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" />
+              <ExternalLink className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />
             ) : (
-              <span className="shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true">
+              <span className="shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true">
                 &rarr;
               </span>
             )}
@@ -192,18 +192,18 @@ export function MaterialsSidebar() {
               : undefined;
 
   return (
-    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-sand-line bg-sand-grain lg:block">
       <div className="h-full min-h-0 space-y-5 overflow-y-auto p-5 scrollbar-thin">
-        <div className="border-b border-[#dfdbd1] pb-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">Study Materials</p>
-          <p className="mt-1 text-xs text-[#617068]">
+        <div className="border-b border-sand-line pb-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-ember">Study Materials</p>
+          <p className="mt-1 text-xs text-moss">
             Sabbath School lessons, mission readings, scripture &amp; E.G. White writings.
           </p>
         </div>
         <nav className="space-y-4">
           {materialGroups.map((group) => (
             <div key={group.label}>
-              <p className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
+              <p className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
                 {group.label}
               </p>
               <div className="space-y-1">
@@ -218,7 +218,7 @@ export function MaterialsSidebar() {
                     </>
                   );
                   const cls = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
-                    isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#26352f] hover:bg-[#f7f4ee]"
+                    isActive ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
                   }`;
                   return dest.isExternal ? (
                     <a key={dest.key} href={dest.href} className={cls}>

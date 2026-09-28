@@ -23,15 +23,15 @@ export default function MaterialsPage() {
   }, []);
 
   return (
-    <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
+    <main className={signedIn ? "h-full min-h-0 bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
       {/* Compact hub heading — the cards are the point. The line under it is
           desktop-only: on a phone it costs a row of the screen and says no more
           than the card labels below it. */}
       <section className={signedIn ? "px-5 pt-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "max-w-6xl"}>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Study Materials</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
-          <p className="mt-2 hidden text-sm leading-6 text-[#617068] sm:block">
+          <p className="mt-2 hidden text-sm leading-6 text-moss sm:block">
             Sabbath School lessons, mission readings, Scripture, hymns and the Spirit of Prophecy — open one to begin.
           </p>
         </div>
@@ -48,8 +48,8 @@ export default function MaterialsPage() {
       {!signedIn && (
         <>
           <section className="px-6 py-12 lg:px-8 lg:py-14">
-            <div className="mx-auto max-w-6xl rounded-[2rem] bg-[#26352f] px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f1c89e]">Study &amp; worship resources</p>
+            <div className="mx-auto max-w-6xl rounded-[2rem] bg-bark px-8 py-10 text-white shadow-sm sm:px-12 sm:py-12">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">Study &amp; worship resources</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Church Study Materials</h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
                 Sabbath School lessons, mission readings, Scripture and the Spirit of Prophecy — gathered in one place
@@ -63,7 +63,7 @@ export default function MaterialsPage() {
             title="More from the church family"
             description="Announcements, live services, testimonies and the ideas that help us grow."
             links={fellowshipLinks}
-            className="border-t border-[#dfdbd1] bg-white/60"
+            className="border-t border-sand-line bg-white/60"
           />
         </>
       )}

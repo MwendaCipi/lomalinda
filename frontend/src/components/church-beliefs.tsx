@@ -43,11 +43,11 @@ export function ChurchBeliefs() {
   return (
     <section id="beliefs" className="px-6 py-16 lg:px-8 lg:py-20">
       <div className="mx-auto max-w-6xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">What we believe</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">What we believe</p>
         <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
           Rooted in Scripture, looking for Jesus to come
         </h2>
-        <p className="mt-5 max-w-3xl text-base leading-8 text-[#617068]">
+        <p className="mt-5 max-w-3xl text-base leading-8 text-moss">
           We are a Seventh-day Adventist congregation, which simply means we keep the seventh-day Sabbath and
           live in the hope of Christ&apos;s return. These are the beliefs that shape our worship and our life
           together.
@@ -57,30 +57,30 @@ export function ChurchBeliefs() {
           {beliefs.map((belief) => (
             <article
               key={belief.title}
-              className="flex flex-col rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-[#dfdbd1]"
+              className="flex flex-col rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-sand-line"
             >
               <h3 className="text-xl font-semibold tracking-tight">{belief.title}</h3>
-              <p className="mt-3 flex-1 text-sm leading-7 text-[#617068]">{belief.text}</p>
-              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-[#b36b3c]">
+              <p className="mt-3 flex-1 text-sm leading-7 text-moss">{belief.text}</p>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-ember">
                 {belief.reference}
               </p>
             </article>
           ))}
         </div>
 
-        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-[#dfdbd1] pt-8 text-sm font-semibold">
+        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-sand-line pt-8 text-sm font-semibold">
           <a
             href="https://www.adventist.org/beliefs/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#b36b3c] hover:underline"
+            className="text-ember hover:underline"
           >
             Read the 28 Fundamental Beliefs &rarr;
           </a>
-          <Link href="/materials" className="text-[#26352f] hover:text-[#b36b3c]">
+          <Link href="/materials" className="text-bark hover:text-ember">
             Sabbath School lessons &amp; materials &rarr;
           </Link>
-          <Link href="/about" className="text-[#26352f] hover:text-[#b36b3c]">
+          <Link href="/about" className="text-bark hover:text-ember">
             More about our church &rarr;
           </Link>
         </div>

@@ -18,13 +18,13 @@ export function RequestsSidebar() {
   const pathname = normalizePath(usePathname());
 
   return (
-    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-sand-line bg-sand-grain lg:block">
       <div className="h-full min-h-0 space-y-6 overflow-y-auto p-5 scrollbar-thin">
-        <div className="border-b border-[#dfdbd1] pb-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">
+        <div className="border-b border-sand-line pb-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-ember">
             Requests &amp; Care
           </p>
-          <p className="mt-1 text-xs text-[#617068]">
+          <p className="mt-1 text-xs text-moss">
             Submit prayer requests, visitation forms, dedication requests, or membership transfers.
           </p>
         </div>
@@ -43,8 +43,8 @@ export function RequestsSidebar() {
                 href={item.href}
                 className={`flex items-center justify-between rounded-xl px-3.5 py-3 text-sm font-semibold transition ${
                   isActive
-                    ? "bg-[#26352f] text-white shadow-sm"
-                    : "text-[#26352f] hover:bg-[#f7f4ee]"
+                    ? "bg-bark text-white shadow-sm"
+                    : "text-bark hover:bg-sand"
                 }`}
               >
                 <span className="flex items-center gap-3 min-w-0">

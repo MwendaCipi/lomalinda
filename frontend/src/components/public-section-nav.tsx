@@ -30,9 +30,9 @@ export function PublicSectionNav({
   return (
     <section className={`public-section-nav px-6 py-14 lg:px-8 lg:py-16 ${className}`}>
       <div className="mx-auto max-w-6xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">{eyebrow}</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">{eyebrow}</p>
         <h2 className="mt-3 max-w-3xl text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h2>
-        <p className="mt-3 max-w-2xl text-base leading-8 text-[#617068]">{description}</p>
+        <p className="mt-3 max-w-2xl text-base leading-8 text-moss">{description}</p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((link) => {
@@ -44,20 +44,20 @@ export function PublicSectionNav({
                 href={link.href}
                 aria-current={isActive ? "page" : undefined}
                 className={`group flex items-start gap-4 rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 transition hover:-translate-y-0.5 ${
-                  isActive ? "ring-2 ring-[#b36b3c]" : "ring-[#dfdbd1] hover:ring-[#b9b3a6]"
+                  isActive ? "ring-2 ring-ember" : "ring-sand-line hover:ring-sand-hoverline"
                 }`}
               >
                 <span
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    isActive ? "bg-[#b36b3c]/15 text-[#b36b3c]" : "bg-[#f7f4ee] text-[#617068]"
+                    isActive ? "bg-ember/15 text-ember" : "bg-sand text-moss"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-base font-semibold tracking-tight">{link.label}</span>
-                  <span className="mt-1.5 block text-sm leading-6 text-[#617068]">{link.description}</span>
-                  <span className="mt-3 inline-block text-sm font-semibold text-[#b36b3c] group-hover:underline">
+                  <span className="mt-1.5 block text-sm leading-6 text-moss">{link.description}</span>
+                  <span className="mt-3 inline-block text-sm font-semibold text-ember group-hover:underline">
                     Open &rarr;
                   </span>
                 </span>

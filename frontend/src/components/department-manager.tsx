@@ -14,6 +14,7 @@ import {
   Phone,
   Mail,
   Accessibility,
+  MapPin,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
@@ -308,16 +309,16 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className={`rounded-2xl border border-[#dfdbd1] ${config.bgColor} p-6 text-white shadow-sm`}>
+      <div className={`rounded-2xl border border-sand-line ${config.bgColor} p-6 text-white shadow-sm`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-1">
             <BackToOverviewArrow />
             <div>
               <div className="flex items-center gap-2.5">
-                <Building2 className="h-6 w-6 text-[#f5d0a9]" />
+                <Building2 className="h-6 w-6 text-gold-bright" />
                 <h1 className="text-xl font-bold tracking-tight">{config.fullName}</h1>
               </div>
-              <p className="mt-1.5 text-xs text-[#e8e2d5] leading-relaxed max-w-2xl">
+              <p className="mt-1.5 text-xs text-sand-warm leading-relaxed max-w-2xl">
                 {config.description}
               </p>
             </div>
@@ -333,29 +334,29 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
       {/* SUB-TAB 1: MEMBERS */}
       {activeSubTab === "members" && (
         <div className="space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
             <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
               <input
                 type="text"
                 placeholder={`Search ${config.name} members by name, email, phone...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-[#dfdbd1] bg-[#faf9f5] pl-9 pr-3 py-2 text-xs font-medium text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
+                className="w-full rounded-xl border border-sand-line bg-sand-card pl-9 pr-3 py-2 text-xs font-medium text-bark focus:border-ember focus:outline-none"
               />
             </div>
             <div className="flex items-center gap-3">
               <DensityToggle dense={dense} onToggle={toggleDensity} />
-              <p className="text-xs text-[#617068]">
-                Showing <span className="font-bold text-[#26352f]">{filteredMembers.length}</span> members automatically assigned to this department.
+              <p className="text-xs text-moss">
+                Showing <span className="font-bold text-bark">{filteredMembers.length}</span> members automatically assigned to this department.
               </p>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#dfdbd1] bg-[#f4f1ea] font-bold text-[#26352f]">
+                <thead className="border-b border-sand-line bg-sand-film font-bold text-bark">
                   <tr>
                     <th className="px-4 py-3">Member Name</th>
                     <th className="px-4 py-3">Sex</th>
@@ -365,16 +366,16 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                     <th className="px-4 py-3">Role / Account</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#dfdbd1]">
+                <tbody className="divide-y divide-sand-line">
                   {loadingMembers ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-[#617068]">
+                      <td colSpan={6} className="px-4 py-8 text-center text-moss">
                         Loading department members...
                       </td>
                     </tr>
                   ) : filteredMembers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-[#617068]">
+                      <td colSpan={6} className="px-4 py-8 text-center text-moss">
                         No members currently matched to {config.fullName}.
                       </td>
                     </tr>
@@ -385,21 +386,21 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                       const hasDis = disVal && disVal.toLowerCase() !== "none" && disVal.toLowerCase() !== "no";
 
                       return (
-                        <tr key={m.id} className="transition hover:bg-[#faf8f3]">
+                        <tr key={m.id} className="transition hover:bg-sand-silk">
                           <td className={`px-4 ${rowPad}`}>
-                            <p className="font-bold text-[#26352f]">
+                            <p className="font-bold text-bark">
                               {m.first_name || m.last_name ? `${m.first_name || ""} ${m.last_name || ""}` : m.username}
                             </p>
-                            {!dense && <p className="text-[11px] text-[#617068]">{m.email}</p>}
+                            {!dense && <p className="text-[11px] text-moss">{m.email}</p>}
                           </td>
-                          <td className={`px-4 ${rowPad} text-[#26352f] font-semibold`}>{m.gender || "—"}</td>
+                          <td className={`px-4 ${rowPad} text-bark font-semibold`}>{m.gender || "—"}</td>
                           <td className={`px-4 ${rowPad}`}>
                             {ageVal !== undefined ? (
-                              <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
+                              <span className="rounded-md bg-sand-grain px-2 py-0.5 text-[10px] font-bold text-bark">
                                 {ageVal} yrs ({ageVal < 18 ? "Child" : ageVal <= 35 ? "Youth" : "Adult"})
                               </span>
                             ) : (
-                              <span className="text-[#a1a1a1]">Not recorded</span>
+                              <span className="text-graydim">Not recorded</span>
                             )}
                           </td>
                           <td className={`px-4 ${rowPad}`}>
@@ -409,21 +410,21 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                                 {disVal}
                               </span>
                             ) : (
-                              <span className="text-[#a1a1a1]">None</span>
+                              <span className="text-graydim">None</span>
                             )}
                           </td>
-                          <td className={`px-4 ${rowPad} text-[#617068]`}>
+                          <td className={`px-4 ${rowPad} text-moss`}>
                             {m.phone_number ? (
                               <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3 text-[#b36b3c]" />
+                                <Phone className="h-3 w-3 text-ember" />
                                 {m.phone_number}
                               </span>
                             ) : (
-                              <span className="text-[#a1a1a1]">No Phone</span>
+                              <span className="text-graydim">No Phone</span>
                             )}
                           </td>
                           <td className={`px-4 ${rowPad}`}>
-                            <span className="rounded-md bg-[#26352f] px-2 py-0.5 text-[10px] font-bold text-white capitalize">
+                            <span className="rounded-md bg-bark px-2 py-0.5 text-[10px] font-bold text-white capitalize">
                               {m.account_type === "friend" ? "Friend of Church" : m.role || "Member"}
                             </span>
                           </td>
@@ -443,12 +444,12 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-[#26352f]">{config.name} Calendar &amp; Events</h2>
-              <p className="text-xs text-[#617068]">Scheduled rallies, retreats, departmental meetings, and special sabbaths.</p>
+              <h2 className="text-base font-bold text-bark">{config.name} Calendar &amp; Events</h2>
+              <p className="text-xs text-moss">Scheduled rallies, retreats, departmental meetings, and special sabbaths.</p>
             </div>
             <button
               onClick={() => setShowAddEventModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-[#1a2420]"
+              className="inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-bark-950"
             >
               <Plus className="h-4 w-4" />
               Add Event
@@ -457,22 +458,22 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {events.map((ev) => (
-              <div key={ev.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+              <div key={ev.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-sand-line pb-3">
                   <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold text-white ${config.bgColor}`}>
                     {config.badge}
                   </span>
-                  <span className="text-[11px] font-bold text-[#26352f]">{ev.date}</span>
+                  <span className="text-[11px] font-bold text-bark">{ev.date}</span>
                 </div>
-                <h3 className="font-bold text-sm text-[#26352f]">{ev.title}</h3>
-                <p className="text-xs text-[#617068] flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5 text-[#b36b3c]" />
+                <h3 className="font-bold text-sm text-bark">{ev.title}</h3>
+                <p className="text-xs text-moss flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5 text-ember" />
                   {ev.time}
                 </p>
-                <p className="text-xs text-[#617068]">{ev.notes}</p>
-                <div className="pt-2 border-t border-[#dfdbd1] flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-[#26352f]">📍 {ev.location}</span>
-                  <span className="text-[#617068]">Lead: {ev.lead}</span>
+                <p className="text-xs text-moss">{ev.notes}</p>
+                <div className="pt-2 border-t border-sand-line flex items-center justify-between text-[11px]">
+                  <span className="inline-flex items-center gap-1 font-semibold text-bark"><MapPin size={12} aria-hidden="true" /> {ev.location}</span>
+                  <span className="text-moss">Lead: {ev.lead}</span>
                 </div>
               </div>
             ))}
@@ -483,31 +484,31 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
       {/* SUB-TAB 3: ACTIVITIES & OUTREACH */}
       {activeSubTab === "activities" && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-base text-[#26352f] flex items-center gap-2">
-              <Award className="h-5 w-5 text-[#b36b3c]" />
+          <div className="rounded-2xl border border-sand-line bg-white p-6 shadow-sm space-y-4">
+            <h3 className="font-bold text-base text-bark flex items-center gap-2">
+              <Award className="h-5 w-5 text-ember" />
               {config.name} Core Objectives &amp; Programs
             </h3>
-            <p className="text-xs text-[#617068] leading-relaxed">
+            <p className="text-xs text-moss leading-relaxed">
               Below are the key active programs and strategic initiatives currently tracked by {config.fullName}.
             </p>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] p-4 space-y-1">
-                <h4 className="font-bold text-xs text-[#26352f]">1. Evangelism &amp; Community Outreach</h4>
-                <p className="text-xs text-[#617068]">Organizing local community visitation, literature distribution, and branch Sabbath school initiatives.</p>
+              <div className="rounded-xl border border-sand-line bg-sand-card p-4 space-y-1">
+                <h4 className="font-bold text-xs text-bark">1. Evangelism &amp; Community Outreach</h4>
+                <p className="text-xs text-moss">Organizing local community visitation, literature distribution, and branch Sabbath school initiatives.</p>
               </div>
-              <div className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] p-4 space-y-1">
-                <h4 className="font-bold text-xs text-[#26352f]">2. Member Nurture &amp; Fellowship</h4>
-                <p className="text-xs text-[#617068]">Conducting small group prayer bands, spiritual mentoring, and annual departmental sabbaths.</p>
+              <div className="rounded-xl border border-sand-line bg-sand-card p-4 space-y-1">
+                <h4 className="font-bold text-xs text-bark">2. Member Nurture &amp; Fellowship</h4>
+                <p className="text-xs text-moss">Conducting small group prayer bands, spiritual mentoring, and annual departmental sabbaths.</p>
               </div>
-              <div className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] p-4 space-y-1">
-                <h4 className="font-bold text-xs text-[#26352f]">3. Benevolence &amp; Welfare</h4>
-                <p className="text-xs text-[#617068]">Supporting members in need, hospital visits, and welfare support funds.</p>
+              <div className="rounded-xl border border-sand-line bg-sand-card p-4 space-y-1">
+                <h4 className="font-bold text-xs text-bark">3. Benevolence &amp; Welfare</h4>
+                <p className="text-xs text-moss">Supporting members in need, hospital visits, and welfare support funds.</p>
               </div>
-              <div className="rounded-xl border border-[#dfdbd1] bg-[#faf9f5] p-4 space-y-1">
-                <h4 className="font-bold text-xs text-[#26352f]">4. Leadership &amp; Skill Development</h4>
-                <p className="text-xs text-[#617068]">Hosting seminars, workshops, and inter-church rallies for growth and empowerment.</p>
+              <div className="rounded-xl border border-sand-line bg-sand-card p-4 space-y-1">
+                <h4 className="font-bold text-xs text-bark">4. Leadership &amp; Skill Development</h4>
+                <p className="text-xs text-moss">Hosting seminars, workshops, and inter-church rallies for growth and empowerment.</p>
               </div>
             </div>
           </div>
@@ -517,79 +518,79 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
       {/* MODAL: ADD EVENT */}
       {showAddEventModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <h3 className="font-bold text-base text-[#26352f]">Add {config.name} Event</h3>
-              <button onClick={() => setShowAddEventModal(false)} className="text-[#617068] hover:text-[#26352f]">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">Add {config.name} Event</h3>
+              <button onClick={() => setShowAddEventModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={handleAddEvent} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#26352f]">Event Title *</label>
+                <label className="font-bold text-bark">Event Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Departmental Rally"
                   value={newEvent.title}
                   onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#26352f]">Date *</label>
+                  <label className="font-bold text-bark">Date *</label>
                   <input
                     type="date"
                     required
                     value={newEvent.date}
                     onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#26352f]">Time</label>
+                  <label className="font-bold text-bark">Time</label>
                   <input
                     type="text"
                     placeholder="09:00 AM"
                     value={newEvent.time}
                     onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Location</label>
+                <label className="font-bold text-bark">Location</label>
                 <input
                   type="text"
                   placeholder="Main Sanctuary"
                   value={newEvent.location}
                   onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Leader / Organizer</label>
+                <label className="font-bold text-bark">Leader / Organizer</label>
                 <input
                   type="text"
                   placeholder="Department Leader"
                   value={newEvent.lead}
                   onChange={(e) => setNewEvent({ ...newEvent, lead: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 font-medium text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-[#26352f]">Notes / Details</label>
+                <label className="font-bold text-bark">Notes / Details</label>
                 <textarea
                   rows={2}
                   placeholder="Event details..."
                   value={newEvent.notes}
                   onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-[#dfdbd1] p-2.5 text-xs text-[#26352f]"
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
 
@@ -597,11 +598,11 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                 <button
                   type="button"
                   onClick={() => setShowAddEventModal(false)}
-                  className="rounded-xl border border-[#dfdbd1] px-4 py-2 text-xs font-bold text-[#26352f]"
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded-xl bg-[#26352f] px-4 py-2 text-xs font-bold text-white shadow">
+                <button type="submit" className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow">
                   Save Event
                 </button>
               </div>

@@ -400,26 +400,26 @@ export function TreasuryAccountsManager() {
   const getAccountIcon = (type: string) => {
     switch (type) {
       case "bank":
-        return <Landmark className="h-5 w-5 text-[#26352f]" />;
+        return <Landmark className="h-5 w-5 text-bark" />;
       case "mobile_money":
-        return <Smartphone className="h-5 w-5 text-[#b36b3c]" />;
+        return <Smartphone className="h-5 w-5 text-ember" />;
       case "cash":
-        return <Wallet className="h-5 w-5 text-[#3d7146]" />;
+        return <Wallet className="h-5 w-5 text-sage-strong" />;
       default:
-        return <Building2 className="h-5 w-5 text-[#617068]" />;
+        return <Building2 className="h-5 w-5 text-moss" />;
     }
   };
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {/* ── Header: which of the two tables is showing, its search, and the way between them ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-[#dfdbd1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
           <span className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <h2 className="text-xl font-bold text-[#26352f]">Treasury Accounts</h2>
+            <h2 className="text-xl font-bold text-bark">Treasury Accounts</h2>
           </span>
-          <p className="text-xs text-[#617068]">
+          <p className="text-xs text-moss">
             {view === "accounts"
               ? `${filteredAccounts.length} of ${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
               : `${filteredTransactions.length} of ${transactions.length} ${transactions.length === 1 ? "movement" : "movements"}`}
@@ -431,12 +431,12 @@ export function TreasuryAccountsManager() {
             placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
             value={view === "accounts" ? accountSearch : transactionSearch}
             onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
-            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-60"
+            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-60"
             aria-label={view === "accounts" ? "Search treasury accounts" : "Search account transactions"}
           />
           <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
           <div
-            className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:self-auto"
+            className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-sand-line bg-sand p-0.5 sm:self-auto"
             role="group"
             aria-label="Treasury view"
           >
@@ -450,7 +450,7 @@ export function TreasuryAccountsManager() {
                 onClick={() => setView(option.key)}
                 aria-pressed={view === option.key}
                 className={`h-8 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${
-                  view === option.key ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
+                  view === option.key ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
                 }`}
               >
                 {option.label}
@@ -461,7 +461,7 @@ export function TreasuryAccountsManager() {
       </div>
 
       {actionMessage && (
-        <div className="mx-5 mt-3 shrink-0 rounded-xl border border-[#c9c5bb] bg-white p-3 text-xs font-semibold text-[#26352f] shadow-xs sm:mx-6">
+        <div className="mx-5 mt-3 shrink-0 rounded-xl border border-sand-mute bg-white p-3 text-xs font-semibold text-bark shadow-xs sm:mx-6">
           {actionMessage}
         </div>
       )}
@@ -477,7 +477,7 @@ export function TreasuryAccountsManager() {
           rowKey={(acc) => acc.id}
           tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
           tableClassName="w-full text-left text-sm"
-          headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+          headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm"
           headRowClassName=""
           headCellClassName=""
           headers={[
@@ -490,72 +490,72 @@ export function TreasuryAccountsManager() {
             { label: "Actions", className: "px-4 py-3 text-center" },
           ]}
           loadingLabel="Loading treasury accounts..."
-          stateClassName="px-4 py-12 text-center text-[#617068]"
+          stateClassName="px-4 py-12 text-center text-moss"
           tableEmptyClassName="px-4 py-12 text-center"
           tableEmpty={
             <>
-              <p className="text-sm font-semibold text-[#26352f]">No Treasury Accounts configured yet.</p>
-              <p className="mt-1 text-xs text-[#617068]">Click "Add Account" below to set up bank, paybill, or cash accounts.</p>
+              <p className="text-sm font-semibold text-bark">No Treasury Accounts configured yet.</p>
+              <p className="mt-1 text-xs text-moss">Click "Add Account" below to set up bank, paybill, or cash accounts.</p>
             </>
           }
-          cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+          cardsStateClassName="py-12 text-center text-sm text-moss"
           cardsEmpty={
             <>
-              <Landmark className="mx-auto h-10 w-10 text-[#617068]" />
-              <p className="mt-3 text-sm font-semibold text-[#26352f]">No Treasury Accounts configured yet.</p>
-              <p className="mt-1 text-xs text-[#617068]">Tap "Add Account" below to set up bank, paybill, or cash accounts.</p>
+              <Landmark className="mx-auto h-10 w-10 text-moss" />
+              <p className="mt-3 text-sm font-semibold text-bark">No Treasury Accounts configured yet.</p>
+              <p className="mt-1 text-xs text-moss">Tap "Add Account" below to set up bank, paybill, or cash accounts.</p>
             </>
           }
           cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
-          renderCard={(acc) => (                <div key={acc.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+          renderCard={(acc) => (                <div key={acc.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">{getAccountIcon(acc.account_type)}</div>
                     <div className="min-w-0">
-                      <h4 className="truncate text-sm font-bold text-[#26352f]">{acc.name}</h4>
+                      <h4 className="truncate text-sm font-bold text-bark">{acc.name}</h4>
                       {acc.account_number && (
-                        <p className="truncate font-mono text-[11px] text-[#617068]">{acc.account_number}</p>
+                        <p className="truncate font-mono text-[11px] text-moss">{acc.account_number}</p>
                       )}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-[#617068]">
+                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
                     {acc.account_type_display || acc.account_type}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[#617068]">Balance</span>
-                  <span className="text-sm font-bold text-[#26352f]">
+                  <span className="text-moss">Balance</span>
+                  <span className="text-sm font-bold text-bark">
                     KES {Number(acc.balance || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                {acc.description && <p className="text-[11px] leading-relaxed text-[#617068]">{acc.description}</p>}
-                <div className="mt-2 rounded-2xl border border-[#dfdbd1] bg-white p-1.5" data-action-menu>
+                {acc.description && <p className="text-[11px] leading-relaxed text-moss">{acc.description}</p>}
+                <div className="mt-2 rounded-2xl border border-sand-line bg-white p-1.5" data-action-menu>
                   <button
                     onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
                     aria-expanded={openMenuAccountId === acc.id}
                     aria-label={`Actions for ${acc.description || acc.name}`}
-                    className="flex w-full items-center justify-between gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                    className="flex w-full items-center justify-between gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-bark transition hover:bg-sand"
                   >
-                    <span className="text-[#617068]">More</span>
-                    <MoreVertical className="h-3.5 w-3.5 text-[#617068]" />
+                    <span className="text-moss">More</span>
+                    <MoreVertical className="h-3.5 w-3.5 text-moss" />
                   </button>
                   {openMenuAccountId === acc.id && (
-                    <div className="mt-1 w-46 rounded-2xl border border-[#dfdbd1] bg-white p-1 shadow-2xl ring-1 ring-black/5">
+                    <div className="mt-1 w-46 rounded-2xl border border-sand-line bg-white p-1 shadow-2xl ring-1 ring-black/5">
                       {([
-                        { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "credit"); } },
-                        { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "debit"); } },
-                        { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); openTransferFromAccount(acc.id); }, disabled: accounts.length < 2 },
-                        { label: "Promote", icon: <Megaphone className="h-4 w-4 text-[#3d7146]" />, run: () => { setOpenMenuAccountId(null); openPromoteForAccount(acc); } },
-                        { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => { setOpenMenuAccountId(null); setSupportAccount(acc); } },
-                        { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => { setOpenMenuAccountId(null); openEditForAccount(acc); } },
-                        { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => { setOpenMenuAccountId(null); handleDeleteAccount(acc); } },
+                        { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-sage-strong" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "credit"); } },
+                        { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-alert" />, run: () => { setOpenMenuAccountId(null); openCreditDebitForAccount(acc.id, "debit"); } },
+                        { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-ember" />, run: () => { setOpenMenuAccountId(null); openTransferFromAccount(acc.id); }, disabled: accounts.length < 2 },
+                        { label: "Promote", icon: <Megaphone className="h-4 w-4 text-sage-strong" />, run: () => { setOpenMenuAccountId(null); openPromoteForAccount(acc); } },
+                        { label: "Support", icon: <HandHeart className="h-4 w-4 text-ember" />, run: () => { setOpenMenuAccountId(null); setSupportAccount(acc); } },
+                        { label: "Edit", icon: <Pencil className="h-4 w-4 text-bark" />, run: () => { setOpenMenuAccountId(null); openEditForAccount(acc); } },
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4 text-alert" />, run: () => { setOpenMenuAccountId(null); handleDeleteAccount(acc); } },
                       ] as const).map((action) => (
                         <button
                           key={action.label}
                           type="button"
                           disabled={"disabled" in action && action.disabled}
                           onClick={action.run}
-                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           {action.icon}
                           {action.label}
@@ -566,26 +566,26 @@ export function TreasuryAccountsManager() {
                 </div>
               </div>            )}
           renderRow={(acc, idx) => (
-                  <tr key={acc.id} className="hover:bg-[#faf7f2]">
-                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-[#617068]`}>{idx + 1}</td>
+                  <tr key={acc.id} className="hover:bg-sand-linen">
+                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-moss`}>{idx + 1}</td>
                     <td className={`px-4 ${rowPad}`}>
                       <div className="flex items-center gap-2.5">
-                        <div className="shrink-0 rounded-lg bg-[#f7f4ee] p-1.5">{getAccountIcon(acc.account_type)}</div>
-                        <span className="font-semibold text-[#26352f]" title={acc.description || acc.name}>
+                        <div className="shrink-0 rounded-lg bg-sand p-1.5">{getAccountIcon(acc.account_type)}</div>
+                        <span className="font-semibold text-bark" title={acc.description || acc.name}>
                           {acc.description || acc.name}
                         </span>
                       </div>
                     </td>
-                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-[#617068]`} title="Shown in the M-Pesa prompt (max 12 characters)">
+                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-moss`} title="Shown in the M-Pesa prompt (max 12 characters)">
                       {acc.name}
                     </td>
-                    <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{acc.account_number || "—"}</td>
+                    <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-moss`}>{acc.account_number || "—"}</td>
                     <td className={`whitespace-nowrap px-4 ${rowPad}`}>
-                      <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#5f8067]">
+                      <span className="rounded-full bg-mist-select px-2.5 py-0.5 text-xs font-semibold text-sage">
                         {acc.account_type_display || acc.account_type}
                       </span>
                     </td>
-                    <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold text-[#26352f]`}>
+                    <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold text-bark`}>
                       KES {Number(acc.balance || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                     </td>
                     <td className={`px-4 ${rowPad}`}>
@@ -594,28 +594,28 @@ export function TreasuryAccountsManager() {
                           onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
                           aria-expanded={openMenuAccountId === acc.id}
                           aria-label={`Actions for ${acc.description || acc.name}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#c9c5bb] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-sand"
                         >
                           Actions
-                          <MoreVertical className="h-3.5 w-3.5 text-[#617068]" />
+                          <MoreVertical className="h-3.5 w-3.5 text-moss" />
                         </button>
                         {openMenuAccountId === acc.id && (
-                          <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-[#dfdbd1] bg-white p-1.5 shadow-2xl ring-1 ring-black/5">
+                          <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 shadow-2xl ring-1 ring-black/5">
                             {([
-                              { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-[#3d7146]" />, run: () => openCreditDebitForAccount(acc.id, "credit") },
-                              { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-[#b91c1c]" />, run: () => openCreditDebitForAccount(acc.id, "debit") },
-                              { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-[#b36b3c]" />, run: () => openTransferFromAccount(acc.id), disabled: accounts.length < 2 },
-                              { label: "Promote", icon: <Megaphone className="h-4 w-4 text-[#3d7146]" />, run: () => openPromoteForAccount(acc) },
-                              { label: "Support", icon: <HandHeart className="h-4 w-4 text-[#b36b3c]" />, run: () => setSupportAccount(acc) },
-                              { label: "Edit", icon: <Pencil className="h-4 w-4 text-[#26352f]" />, run: () => openEditForAccount(acc) },
-                              { label: "Delete", icon: <Trash2 className="h-4 w-4 text-[#b91c1c]" />, run: () => handleDeleteAccount(acc) },
+                              { label: "Credit", icon: <ArrowDownLeft className="h-4 w-4 text-sage-strong" />, run: () => openCreditDebitForAccount(acc.id, "credit") },
+                              { label: "Debit", icon: <ArrowUpRight className="h-4 w-4 text-alert" />, run: () => openCreditDebitForAccount(acc.id, "debit") },
+                              { label: "Transfer", icon: <ArrowRightLeft className="h-4 w-4 text-ember" />, run: () => openTransferFromAccount(acc.id), disabled: accounts.length < 2 },
+                              { label: "Promote", icon: <Megaphone className="h-4 w-4 text-sage-strong" />, run: () => openPromoteForAccount(acc) },
+                              { label: "Support", icon: <HandHeart className="h-4 w-4 text-ember" />, run: () => setSupportAccount(acc) },
+                              { label: "Edit", icon: <Pencil className="h-4 w-4 text-bark" />, run: () => openEditForAccount(acc) },
+                              { label: "Delete", icon: <Trash2 className="h-4 w-4 text-alert" />, run: () => handleDeleteAccount(acc) },
                             ] as const).map((action) => (
                               <button
                                 key={action.label}
                                 type="button"
                                 disabled={"disabled" in action && action.disabled}
                                 onClick={() => { setOpenMenuAccountId(null); action.run(); }}
-                                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 {action.icon}
                                 {action.label}
@@ -636,7 +636,7 @@ export function TreasuryAccountsManager() {
             rowKey={(tx) => tx.id}
             tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
             tableClassName="w-full text-left text-sm"
-            headClassName="sticky top-0 z-10 bg-[#f7f4ee] text-xs font-semibold uppercase tracking-wider text-[#617068] shadow-sm"
+            headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm"
             headRowClassName=""
             headCellClassName=""
             headers={[
@@ -648,22 +648,22 @@ export function TreasuryAccountsManager() {
               { label: "Ref", className: "px-4 py-3" },
             ]}
             loadingLabel="Loading account transactions..."
-            stateClassName="px-4 py-12 text-center text-[#617068]"
+            stateClassName="px-4 py-12 text-center text-moss"
             tableEmptyClassName="px-4 py-12 text-center"
             tableEmpty={
               <>
-                <p className="text-sm font-semibold text-[#26352f]">No account transactions recorded yet.</p>
-                <p className="mt-1 text-xs text-[#617068]">
+                <p className="text-sm font-semibold text-bark">No account transactions recorded yet.</p>
+                <p className="mt-1 text-xs text-moss">
                   Credits, debits and transfers appear here the moment they are recorded.
                 </p>
               </>
             }
-            cardsStateClassName="py-12 text-center text-sm text-[#617068]"
+            cardsStateClassName="py-12 text-center text-sm text-moss"
             cardsEmpty={
               <>
-                <ArrowRightLeft className="mx-auto h-10 w-10 text-[#617068]" />
-                <p className="mt-3 text-sm font-semibold text-[#26352f]">No account transactions recorded yet.</p>
-                <p className="mt-1 text-xs text-[#617068]">
+                <ArrowRightLeft className="mx-auto h-10 w-10 text-moss" />
+                <p className="mt-3 text-sm font-semibold text-bark">No account transactions recorded yet.</p>
+                <p className="mt-1 text-xs text-moss">
                   Credits, debits and transfers appear here the moment they are recorded.
                 </p>
               </>
@@ -672,48 +672,48 @@ export function TreasuryAccountsManager() {
             renderCard={(tx) => {
               const isCredit = isCreditMovement(tx);
               return (
-                <div key={tx.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+                <div key={tx.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h4 className="truncate text-sm font-bold text-[#26352f]">{tx.account_name}</h4>
-                      <p className="text-[11px] text-[#617068]">
+                      <h4 className="truncate text-sm font-bold text-bark">{tx.account_name}</h4>
+                      <p className="text-[11px] text-moss">
                         {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
                       </p>
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
-                        isCredit ? "bg-[#eef2ed] text-[#3d7146]" : "bg-[#fdf2f2] text-[#b91c1c]"
+                        isCredit ? "bg-mist-select text-sage-strong" : "bg-alert-wash text-alert"
                       }`}
                     >
                       {tx.transaction_type_display}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[#617068]">Amount</span>
-                    <span className={`text-sm font-bold ${isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"}`}>
+                    <span className="text-moss">Amount</span>
+                    <span className={`text-sm font-bold ${isCredit ? "text-sage-strong" : "text-alert"}`}>
                       {isCredit ? "+" : "−"}KES {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-[#617068]">
+                  <p className="text-[11px] leading-relaxed text-moss">
                     {tx.description}
                     {tx.related_account_name && <span className="ml-1">({tx.related_account_name})</span>}
                   </p>
-                  {tx.reference && <p className="font-mono text-[11px] text-[#617068]">Ref {tx.reference}</p>}
+                  {tx.reference && <p className="font-mono text-[11px] text-moss">Ref {tx.reference}</p>}
                 </div>
               );
             }}
             renderRow={(tx) => {
               const isCredit = isCreditMovement(tx);
               return (
-                <tr key={tx.id} className="hover:bg-[#faf7f2]">
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-[#617068]`}>
+                <tr key={tx.id} className="hover:bg-sand-linen">
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>
                     {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
                   </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} font-semibold text-[#26352f]`}>{tx.account_name}</td>
+                  <td className={`whitespace-nowrap px-4 ${rowPad} font-semibold text-bark`}>{tx.account_name}</td>
                   <td className={`whitespace-nowrap px-4 ${rowPad}`}>
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                        isCredit ? "bg-[#eef2ed] text-[#3d7146]" : "bg-[#fdf2f2] text-[#b91c1c]"
+                        isCredit ? "bg-mist-select text-sage-strong" : "bg-alert-wash text-alert"
                       }`}
                     >
                       {tx.transaction_type_display}
@@ -721,17 +721,17 @@ export function TreasuryAccountsManager() {
                   </td>
                   <td
                     className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold ${
-                      isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"
+                      isCredit ? "text-sage-strong" : "text-alert"
                     }`}
                   >
                     {isCredit ? "+" : "−"}
                     {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </td>
-                  <td className={`max-w-[280px] truncate px-4 ${rowPad} text-xs text-[#26352f]`} title={tx.description || undefined}>
+                  <td className={`max-w-[280px] truncate px-4 ${rowPad} text-xs text-bark`} title={tx.description || undefined}>
                     {tx.description}
-                    {tx.related_account_name && <span className="ml-1 text-[#617068]">({tx.related_account_name})</span>}
+                    {tx.related_account_name && <span className="ml-1 text-moss">({tx.related_account_name})</span>}
                   </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-[#617068]`}>
+                  <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-moss`}>
                     {tx.reference || "—"}
                   </td>
                 </tr>
@@ -745,26 +745,26 @@ export function TreasuryAccountsManager() {
           One row on every screen: the stats on the left, the Add Account
           button on the right (the account count never earned the space it
           took from a phone's footer). */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#dfdbd1] bg-white px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#617068]">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
           {view === "accounts" ? (
             <span>
               Total liquidity:{" "}
-              <strong className="text-[#b36b3c]">
+              <strong className="text-ember">
                 KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
               </strong>
             </span>
           ) : (
             <>
               <span>
-                Showing <strong className="text-[#26352f]">{transactions.length}</strong> movement
+                Showing <strong className="text-bark">{transactions.length}</strong> movement
                 {transactions.length === 1 ? "" : "s"}
               </span>
               <span>
-                In: <strong className="text-[#3d7146]">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+                In: <strong className="text-sage-strong">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
               </span>
               <span>
-                Out: <strong className="text-[#b91c1c]">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+                Out: <strong className="text-alert">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
               </span>
               {transactions.length >= TRANSACTION_LOG_LIMIT && (
                 <span>Only the most recent {TRANSACTION_LOG_LIMIT} movements are listed.</span>
@@ -780,7 +780,7 @@ export function TreasuryAccountsManager() {
           <button
             type="button"
             onClick={() => setShowAddAccountModal(true)}
-            className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
+            className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
           >
             <Plus className="h-4 w-4" />
             <span>Add Account</span>
@@ -793,20 +793,20 @@ export function TreasuryAccountsManager() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-xl">
             <div>
-              <h3 className="text-lg font-bold text-[#26352f]">Support {supportAccount.name}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-[#617068]">
+              <h3 className="text-lg font-bold text-bark">Support {supportAccount.name}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-moss">
                 Send this link to members, or paste it into a group. It opens the giving form with this account
                 already chosen, so a member only has to enter an amount.
               </p>
             </div>
-            <div className="rounded-2xl border border-[#dfdbd1] bg-[#faf7f2] p-3">
-              <p className="break-all font-mono text-[11px] text-[#26352f]">{supportLinkFor(supportAccount)}</p>
+            <div className="rounded-2xl border border-sand-line bg-sand-linen p-3">
+              <p className="break-all font-mono text-[11px] text-bark">{supportLinkFor(supportAccount)}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => copySupportLink(supportAccount)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#3a4a43]"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3 py-2 text-xs font-bold text-white transition hover:bg-moss-hover"
               >
                 <Copy className="h-3.5 w-3.5" />
                 Copy link
@@ -814,26 +814,26 @@ export function TreasuryAccountsManager() {
               <Link
                 href={`/give?purpose=${encodeURIComponent(supportAccount.description || supportAccount.name)}`}
                 target="_blank"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c]"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-bold text-bark transition hover:border-ember"
               >
-                <HandHeart className="h-3.5 w-3.5 text-[#b36b3c]" />
+                <HandHeart className="h-3.5 w-3.5 text-ember" />
                 Open giving form
               </Link>
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(`Support ${supportAccount.name}: ${supportLinkFor(supportAccount)}`)}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9c5bb] bg-white px-3 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c]"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-bold text-bark transition hover:border-ember"
               >
-                <MessageCircle className="h-3.5 w-3.5 text-[#3d7146]" />
+                <MessageCircle className="h-3.5 w-3.5 text-sage-strong" />
                 Share on WhatsApp
               </a>
             </div>
-            <div className="flex justify-end border-t border-[#dfdbd1] pt-3">
+            <div className="flex justify-end border-t border-sand-line pt-3">
               <button
                 type="button"
                 onClick={() => setSupportAccount(null)}
-                className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] transition hover:bg-[#f7f4ee]"
+                className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss transition hover:bg-sand"
               >
                 Close
               </button>
@@ -846,27 +846,27 @@ export function TreasuryAccountsManager() {
       {showAddAccountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-[#26352f]">Add Treasury Account</h3>
+            <h3 className="text-xl font-bold text-bark">Add Treasury Account</h3>
             <form onSubmit={handleAddAccount} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Name</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. KCB Operating Account, Paybill 522522"
                   value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Type</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Type</label>
                   <select
                     value={addForm.account_type}
                     onChange={(e) => setAddForm({ ...addForm, account_type: e.target.value as any })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   >
                     <option value="bank">Bank Account</option>
                     <option value="mobile_money">Mobile Money / Paybill</option>
@@ -875,52 +875,52 @@ export function TreasuryAccountsManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account / Ref #</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account / Ref #</label>
                   <input
                     type="text"
                     placeholder="e.g. 1122334455"
                     value={addForm.account_number}
                     onChange={(e) => setAddForm({ ...addForm, account_number: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Initial Balance (KES)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Initial Balance (KES)</label>
                 <input
                   type="number"
                   step="0.01"
                   placeholder="0.00"
                   value={addForm.balance}
                   onChange={(e) => setAddForm({ ...addForm, balance: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Description / Notes</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Description / Notes</label>
                 <textarea
                   rows={2}
                   placeholder="Optional details about this account"
                   value={addForm.description}
                   onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2 outline-none focus:border-ember"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
                 <button
                   type="button"
                   onClick={() => setShowAddAccountModal(false)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                  className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-60"
+                  className="rounded-full bg-ember px-6 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-60"
                 >
                   {submitting ? "Saving..." : "Create Account"}
                 </button>
@@ -934,10 +934,10 @@ export function TreasuryAccountsManager() {
       {editAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-[#26352f]">Edit Treasury Account</h3>
+            <h3 className="text-xl font-bold text-bark">Edit Treasury Account</h3>
             <form onSubmit={handleEditAccount} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Name</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Name</label>
                 <input
                   type="text"
                   required
@@ -946,35 +946,35 @@ export function TreasuryAccountsManager() {
                   placeholder="e.g. Tithe, Camporee"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
-                <p className="mt-1 text-[11px] text-[#617068]">
+                <p className="mt-1 text-[11px] text-moss">
                   What M-Pesa shows in the prompt — Safaricom caps it at 12 characters.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Description</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Description</label>
                 <input
                   type="text"
                   maxLength={160}
                   placeholder="e.g. Adventist Men Ministry"
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
-                <p className="mt-1 text-[11px] text-[#617068]">
+                <p className="mt-1 text-[11px] text-moss">
                   What givers read on the giving form and in reports.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account Type</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Type</label>
                   <select
                     value={editForm.account_type}
                     onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value as TreasuryAccount["account_type"] })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   >
                     <option value="bank">Bank Account</option>
                     <option value="mobile_money">Mobile Money / Paybill</option>
@@ -983,28 +983,28 @@ export function TreasuryAccountsManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Account / Ref #</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account / Ref #</label>
                   <input
                     type="text"
                     value={editForm.account_number}
                     onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
                 <button
                   type="button"
                   onClick={() => setEditAccount(null)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                  className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-60"
+                  className="rounded-full bg-ember px-6 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-60"
                 >
                   {submitting ? "Saving..." : "Save Changes"}
                 </button>
@@ -1018,15 +1018,15 @@ export function TreasuryAccountsManager() {
       {showCreditDebitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-[#26352f]">Credit or Debit Account</h3>
+            <h3 className="text-xl font-bold text-bark">Credit or Debit Account</h3>
             <form onSubmit={handleCreditDebit} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Select Account</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Select Account</label>
                 <select
                   required
                   value={creditDebitForm.account_id}
                   onChange={(e) => setCreditDebitForm({ ...creditDebitForm, account_id: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                 >
                   <option value="">-- Choose Account --</option>
                   {accounts.map((a) => (
@@ -1039,18 +1039,18 @@ export function TreasuryAccountsManager() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Action Type</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Action Type</label>
                   <select
                     value={creditDebitForm.action_type}
                     onChange={(e) => setCreditDebitForm({ ...creditDebitForm, action_type: e.target.value as any })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   >
                     <option value="credit">Credit (+ Deposit)</option>
                     <option value="debit">Debit (- Outflow)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Amount (KES)</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">Amount (KES)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1058,39 +1058,39 @@ export function TreasuryAccountsManager() {
                     placeholder="0.00"
                     value={creditDebitForm.amount}
                     onChange={(e) => setCreditDebitForm({ ...creditDebitForm, amount: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Description / Reason</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Description / Reason</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Bank interest credit, Sound system deposit debit"
                   value={creditDebitForm.description}
                   onChange={(e) => setCreditDebitForm({ ...creditDebitForm, description: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Reference / Voucher # (optional)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Reference / Voucher # (optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. CHQ-1002 or DEP-881"
                   value={creditDebitForm.reference}
                   onChange={(e) => setCreditDebitForm({ ...creditDebitForm, reference: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
                 <button
                   type="button"
                   onClick={() => setShowCreditDebitModal(false)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                  className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
                 >
                   Cancel
                 </button>
@@ -1098,7 +1098,7 @@ export function TreasuryAccountsManager() {
                   type="submit"
                   disabled={submitting}
                   className={`rounded-full px-6 py-2 text-xs font-bold text-white transition disabled:opacity-60 ${
-                    creditDebitForm.action_type === "credit" ? "bg-[#3d7146] hover:bg-[#2e5735]" : "bg-[#b91c1c] hover:bg-[#991b1b]"
+                    creditDebitForm.action_type === "credit" ? "bg-sage-strong hover:bg-sage-deepest" : "bg-alert hover:bg-alert-deep"
                   }`}
                 >
                   {submitting ? "Processing..." : creditDebitForm.action_type === "credit" ? "Credit Account" : "Debit Account"}
@@ -1113,15 +1113,15 @@ export function TreasuryAccountsManager() {
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-[#26352f]">Transfer Funds Between Accounts</h3>
+            <h3 className="text-xl font-bold text-bark">Transfer Funds Between Accounts</h3>
             <form onSubmit={handleTransfer} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">From Source Account (Debit)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">From Source Account (Debit)</label>
                 <select
                   required
                   value={transferForm.source_account_id}
                   onChange={(e) => setTransferForm({ ...transferForm, source_account_id: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                 >
                   <option value="">-- Choose Source Account --</option>
                   {accounts.map((a) => (
@@ -1133,12 +1133,12 @@ export function TreasuryAccountsManager() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">To Target Account (Credit)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">To Target Account (Credit)</label>
                 <select
                   required
                   value={transferForm.target_account_id}
                   onChange={(e) => setTransferForm({ ...transferForm, target_account_id: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                 >
                   <option value="">-- Choose Target Account --</option>
                   {accounts
@@ -1152,7 +1152,7 @@ export function TreasuryAccountsManager() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Amount to Transfer (KES)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Amount to Transfer (KES)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1160,45 +1160,45 @@ export function TreasuryAccountsManager() {
                   placeholder="0.00"
                   value={transferForm.amount}
                   onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Description / Purpose of Transfer</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Description / Purpose of Transfer</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. M-Pesa paybill sweep to KCB main account"
                   value={transferForm.description}
                   onChange={(e) => setTransferForm({ ...transferForm, description: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#617068]">Reference (optional)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Reference (optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. TRF-909"
                   value={transferForm.reference}
                   onChange={(e) => setTransferForm({ ...transferForm, reference: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 outline-none focus:border-[#b36b3c]"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#dfdbd1]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
                 <button
                   type="button"
                   onClick={() => setShowTransferModal(false)}
-                  className="rounded-full border border-[#c9c5bb] px-5 py-2 text-xs font-bold text-[#617068] hover:bg-[#f7f4ee]"
+                  className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#b36b3c] px-6 py-2 text-xs font-bold text-white hover:bg-[#96552e] disabled:opacity-60"
+                  className="rounded-full bg-ember px-6 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-60"
                 >
                   {submitting ? "Transferring..." : "Complete Transfer"}
                 </button>

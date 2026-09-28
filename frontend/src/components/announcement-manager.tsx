@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { ArrowUpRight, Download, Megaphone, X } from "lucide-react";
+import { brand } from "@/lib/brand";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
@@ -143,8 +145,8 @@ function PollTally({ item }: { item: Announcement }) {
   const best = total > 0 ? Math.max(...counts.values()) : 0;
   const leader = total > 0 ? (options.find((option) => (counts.get(option) ?? 0) === best) ?? null) : null;
   return (
-    <div className="mt-1 rounded-xl border border-[#eeeae2] bg-[#f7f4ee] p-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+    <div className="mt-1 rounded-xl border border-sand-soft bg-sand p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-moss">
         {total === 0 ? "No responses yet" : `${total} response${total === 1 ? "" : "s"}`}
       </p>
       <div className="mt-1.5 space-y-1.5">
@@ -155,11 +157,11 @@ function PollTally({ item }: { item: Announcement }) {
           return (
             <div key={option}>
               <div className="flex items-baseline justify-between gap-2">
-                <span className={`min-w-0 truncate text-[11px] ${isLeader ? "font-bold text-[#3d5148]" : "text-[#415047]"}`}>{option}</span>
-                <span className={`shrink-0 text-[10px] ${isLeader ? "font-bold text-[#3d5148]" : "text-[#617068]"}`}>{count} · {pct}%</span>
+                <span className={`min-w-0 truncate text-[11px] ${isLeader ? "font-bold text-moss-dark" : "text-moss-mid"}`}>{option}</span>
+                <span className={`shrink-0 text-[10px] ${isLeader ? "font-bold text-moss-dark" : "text-moss"}`}>{count} · {pct}%</span>
               </div>
-              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[#dfdbd1]">
-                <div className={`h-full rounded-full ${isLeader ? "bg-[#5f8067]" : "bg-[#b36b3c]/60"}`} style={{ width: `${pct}%` }} />
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-sand-line">
+                <div className={`h-full rounded-full ${isLeader ? "bg-sage" : "bg-ember/60"}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
           );
@@ -245,8 +247,8 @@ function PledgePanel({ item }: { item: Announcement }) {
   if (rows.length === 0) return null;
 
   return (
-    <div className="mt-1 rounded-xl border border-[#eeeae2] bg-[#f7f4ee] p-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+    <div className="mt-1 rounded-xl border border-sand-soft bg-sand p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-moss">
         {totals.outstanding === 0
           ? `All ${rows.length} pledge${rows.length === 1 ? "" : "s"} honoured`
           : `${totals.outstanding} of ${rows.length} pledge${rows.length === 1 ? "" : "s"} still owed · KES ${totals.pledged.toLocaleString()}`}
@@ -255,11 +257,11 @@ function PledgePanel({ item }: { item: Announcement }) {
         {rows.map((pledge) => (
           <div key={pledge.id} className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className={`truncate text-[11px] ${pledge.redeemed ? "text-[#617068]" : "font-semibold text-[#26352f]"}`}>
+              <p className={`truncate text-[11px] ${pledge.redeemed ? "text-moss" : "font-semibold text-bark"}`}>
                 {pledge.member_name}
                 {pledge.amount ? ` · KES ${pledge.amount.toLocaleString()}` : ""}
               </p>
-              <p className="truncate text-[10px] text-[#617068]">
+              <p className="truncate text-[10px] text-moss">
                 {pledge.redeemed
                   ? `Given${pledge.redeemed_via === "giving" ? " — matched to their giving" : pledge.redeemed_via === "member" ? " — ticked off by them" : " — marked here"}`
                   : `promised by ${pledgeDay(pledge.due_date)}`}
@@ -271,8 +273,8 @@ function PledgePanel({ item }: { item: Announcement }) {
               disabled={busyId === pledge.id}
               className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition disabled:opacity-50 ${
                 pledge.redeemed
-                  ? "border-[#c9c5bb] bg-white text-[#617068] hover:border-[#b36b3c]"
-                  : "border-[#5f8067] bg-[#5f8067] text-white hover:bg-[#4e6b55]"
+                  ? "border-sand-mute bg-white text-moss hover:border-ember"
+                  : "border-sage bg-sage text-white hover:bg-sage-soft"
               }`}
             >
               {pledge.redeemed ? "Reopen" : "Mark given"}
@@ -401,7 +403,7 @@ export function AnnouncementManager({
         showCancelButton: true,
         confirmButtonText: "Delete",
         cancelButtonText: "Cancel",
-        confirmButtonColor: "#b91c1c",
+        confirmButtonColor: brand.alert,
       },
     );
     if (!answer.isConfirmed) return;
@@ -596,7 +598,7 @@ export function AnnouncementManager({
       <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
               {/* The type leads: it decides which special fields the rest of
                   the form shows. */}
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Announcement type *
                 <select
                   value={form.announcement_type}
@@ -609,7 +611,7 @@ export function AnnouncementManager({
                     else if (type === "opinion") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
                     else setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
                   }}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                 >
                   <option value="awareness">Awareness</option>
                   <option value="web_conference">Web conference</option>
@@ -618,7 +620,7 @@ export function AnnouncementManager({
                 </select>
               </label>
 
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <label className="block text-xs font-semibold text-bark">
                 Title *
                 <input
                   required
@@ -626,26 +628,26 @@ export function AnnouncementManager({
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Announcement title"
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                 />
               </label>
 
               {/* Post to: one flat list — who the post reaches, then the
                   congregation groups it addresses. */}
-              <div className="block text-xs font-semibold text-[#26352f]">
+              <div className="block text-xs font-semibold text-bark">
                 <span>Post to *</span>
                 <div className="relative mt-1" ref={postToDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setShowPostToDropdown((prev) => !prev)}
                     aria-expanded={showPostToDropdown}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-left text-xs outline-none transition hover:border-[#b36b3c] focus:border-[#b36b3c]"
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-left text-xs outline-none transition hover:border-ember focus:border-ember"
                   >
-                    <span className="min-w-0 truncate text-[#26352f]">{postToLabel}</span>
-                    <svg className="h-4 w-4 shrink-0 text-[#617068]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <span className="min-w-0 truncate text-bark">{postToLabel}</span>
+                    <svg className="h-4 w-4 shrink-0 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   {showPostToDropdown && (
-                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg">
+                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-sand-line bg-white p-2 shadow-lg">
                       {POST_TO_OPTIONS.map((option) => {
                         const isReach = REACH_VALUES.has(option.value);
                         const selected = isReach
@@ -667,9 +669,9 @@ export function AnnouncementManager({
                                 });
                               }
                             }}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-[#26352f] transition hover:bg-[#f7f4ee]"
+                            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-bark transition hover:bg-sand"
                           >
-                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-[#b36b3c] bg-[#b36b3c]" : "border-[#c9c5bb] bg-white"}`}>
+                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-ember bg-ember" : "border-sand-mute bg-white"}`}>
                               {selected && (
                                 <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                               )}
@@ -687,7 +689,7 @@ export function AnnouncementManager({
                   picker belongs to the promotion type only. Awareness shows
                   neither — a plain notice is a plain notice. */}
               {form.announcement_type === "web_conference" && (
-                <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                <label className="block text-xs font-semibold text-bark md:col-span-2">
                   Meeting link *
                   <input
                     type="url"
@@ -695,30 +697,30 @@ export function AnnouncementManager({
                     value={form.href}
                     onChange={(e) => setForm({ ...form, href: e.target.value })}
                     placeholder="https://… — Zoom, Meet or Teams link"
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
               )}
 
-              <label className="block text-xs font-semibold text-[#26352f]">
-                Share Announcement Via *<span className="font-normal text-[#617068]"> (select one or more)</span>
+              <label className="block text-xs font-semibold text-bark">
+                Share Announcement Via *<span className="font-normal text-moss"> (select one or more)</span>
                 <div className="mt-1 relative" ref={sharingDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setShowSharingDropdown((prev) => !prev)}
-                    className="w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-left outline-none focus:border-[#b36b3c] flex items-center justify-between"
+                    className="w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-left outline-none focus:border-ember flex items-center justify-between"
                   >
-                    <span className={form.sharing_option ? "text-[#26352f]" : "text-[#9ca3af]"}>
+                    <span className={form.sharing_option ? "text-bark" : "text-graymuted"}>
                       {(() => {
                         const channels = form.sharing_option.split(",").map((s) => s.trim()).filter(Boolean);
                         if (channels.length === 0) return "Select channels";
                         return channels.map((c) => c === "site" ? "Site" : c === "sms" ? "SMS" : "Email").join(", ");
                       })()}
                     </span>
-                    <svg className="h-4 w-4 text-[#617068] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <svg className="h-4 w-4 text-moss shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   {showSharingDropdown && (
-                    <div className="absolute z-50 mt-1 w-full rounded-xl border border-[#dfdbd1] bg-white shadow-lg p-2 space-y-1">
+                    <div className="absolute z-50 mt-1 w-full rounded-xl border border-sand-line bg-white shadow-lg p-2 space-y-1">
                       {["site", "sms", "email", "phone"].map((channel) => {
                         const selected = form.sharing_option.split(",").map((s) => s.trim()).includes(channel);
                         return (
@@ -730,14 +732,14 @@ export function AnnouncementManager({
                               const next = selected ? current.filter((c) => c !== channel) : [...current, channel];
                               setForm({ ...form, sharing_option: next.join(",") });
                             }}
-                            className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs hover:bg-[#f7f4ee] transition"
+                            className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs hover:bg-sand transition"
                           >
-                            <span className={`flex h-4 w-4 items-center justify-center rounded border ${selected ? "bg-[#b36b3c] border-[#b36b3c]" : "border-[#c9c5bb] bg-white"}`}>
+                            <span className={`flex h-4 w-4 items-center justify-center rounded border ${selected ? "bg-ember border-ember" : "border-sand-mute bg-white"}`}>
                               {selected && (
                                 <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                               )}
                             </span>
-                            <span className="text-[#26352f]">
+                            <span className="text-bark">
                               {channel === "site"
                                 ? "On the Site"
                                 : channel === "sms"
@@ -759,7 +761,7 @@ export function AnnouncementManager({
                   leads, then the answer shape it collects. */}
               {form.announcement_type === "opinion" && (
                 <>
-                  <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                  <label className="block text-xs font-semibold text-bark md:col-span-2">
                     Opinion question *
                     <textarea
                       required
@@ -768,37 +770,37 @@ export function AnnouncementManager({
                       value={form.text}
                       onChange={(e) => setForm({ ...form, text: e.target.value })}
                       placeholder="Ask the question members will answer, e.g. Will you join the choir's visit to Nkubu?"
-                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                      className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                     />
                     <span
                       className={`mt-1 block text-right text-[10px] font-semibold ${
-                        form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
+                        form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-moss"
                       }`}
                     >
                       {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
                     </span>
                   </label>
-                  <label className="block text-xs font-semibold text-[#26352f]">
+                  <label className="block text-xs font-semibold text-bark">
                     Response type *
                     <select
                       value={form.response_mode}
                       onChange={(e) => setForm({ ...form, response_mode: e.target.value as "open" | "closed" })}
-                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                     >
                       <option value="open">Open — members write their answer</option>
                       <option value="closed">Closed — members pick from options</option>
                     </select>
                   </label>
                   {form.response_mode === "closed" && (
-                    <label className="block text-xs font-semibold text-[#26352f]">
-                      Options *<span className="font-normal text-[#617068]"> (one per line)</span>
+                    <label className="block text-xs font-semibold text-bark">
+                      Options *<span className="font-normal text-moss"> (one per line)</span>
                       <textarea
                         required
                         rows={4}
                         value={form.response_options}
                         onChange={(e) => setForm({ ...form, response_options: e.target.value })}
                         placeholder={"Yes, I will attend\nNo, I cannot make it\nMaybe — I will confirm later"}
-                        className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                        className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                       />
                     </label>
                   )}
@@ -806,12 +808,12 @@ export function AnnouncementManager({
               )}
 
               {form.announcement_type === "promotion" && (
-                <label className="block text-xs font-semibold text-[#26352f]">
+                <label className="block text-xs font-semibold text-bark">
                   Support account *
                   <select
                     value={form.support_account}
                     onChange={(e) => setForm({ ...form, support_account: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   >
                     <option value="">-- Select account --</option>
                     {accounts.map((account) => (
@@ -824,7 +826,7 @@ export function AnnouncementManager({
               )}
 
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
-                <label className="block text-xs font-semibold text-[#26352f]">
+                <label className="block text-xs font-semibold text-bark">
                   Event start *
                   <input
                     type="date"
@@ -837,26 +839,26 @@ export function AnnouncementManager({
                       // end >= start no matter how the start moves.
                       setForm({ ...form, event_date_from: e.target.value, event_date_to: e.target.value });
                     }}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
 
-                <label className="block text-xs font-semibold text-[#26352f]">
+                <label className="block text-xs font-semibold text-bark">
                   Event end
                   <input
                     type="date"
                     min={form.event_date_from || undefined}
                     value={form.event_date_to}
                     onChange={(e) => setForm({ ...form, event_date_to: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
               </div>
 
-              <div className="text-xs font-semibold text-[#26352f]">
+              <div className="text-xs font-semibold text-bark">
                 Attachment (optional)
                 {existingAttachment && !removeAttachment && (
-                  <p className="mt-1 flex flex-wrap items-center gap-2 rounded-xl border border-[#e5dfd2] bg-[#faf7f0] px-3 py-2 text-xs font-normal text-[#415047]">
+                  <p className="mt-1 flex flex-wrap items-center gap-2 rounded-xl border border-sand-deep bg-sand-veil px-3 py-2 text-xs font-normal text-moss-mid">
                     <span className="truncate">{existingAttachment.name || "Current attachment"}</span>
                     <button
                       type="button"
@@ -879,7 +881,7 @@ export function AnnouncementManager({
                       setAttachment(e.target.files?.[0] ?? null);
                       if (e.target.files?.[0]) setRemoveAttachment(false);
                     }}
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 font-normal text-[#26352f] outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f] focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2 font-normal text-bark outline-none file:mr-3 file:rounded-full file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-bark focus:border-ember"
                   />
                 )}
               </div>
@@ -887,7 +889,7 @@ export function AnnouncementManager({
               {/* Other types keep the ordinary body field; an opinion poll's
                   body is its question, collected in the poll block above. */}
               {form.announcement_type !== "opinion" && (
-                <label className="block text-xs font-semibold text-[#26352f] md:col-span-2">
+                <label className="block text-xs font-semibold text-bark md:col-span-2">
                   Announcement Text *
                   <textarea
                     required
@@ -896,11 +898,11 @@ export function AnnouncementManager({
                     value={form.text}
                     onChange={(e) => setForm({ ...form, text: e.target.value })}
                     placeholder="Write full announcement content..."
-                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-xs text-[#26352f] outline-none focus:border-[#b36b3c]"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                   <span
                     className={`mt-1 block text-right text-[10px] font-semibold ${
-                      form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-[#617068]"
+                      form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-moss"
                     }`}
                   >
                     {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
@@ -914,19 +916,19 @@ export function AnnouncementManager({
                 </div>
               )}
 
-              <div className="md:col-span-2 flex items-center justify-end gap-3 border-t border-[#dfdbd1] pt-4">
+              <div className="md:col-span-2 flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                 <button
                   type="button"
                   disabled={submitting}
                   onClick={resetAndCloseModal}
-                  className="rounded-full border border-[#c9c5bb] bg-white px-5 py-2.5 text-xs font-semibold text-[#617068] transition hover:border-[#b36b3c]"
+                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full bg-[#5f8067] px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+                  className="rounded-full bg-sage px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
                 >
                   {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
                 </button>
@@ -942,20 +944,20 @@ export function AnnouncementManager({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-announcement-title"
-        className={inline ? "w-full" : "max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"}
+        className={inline ? "w-full" : "max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"}
       >
-        <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-          <h2 id="create-announcement-title" className="text-xl font-bold text-[#26352f]">
+        <div className="flex items-center justify-between border-b border-sand-line pb-4">
+          <h2 id="create-announcement-title" className="text-xl font-bold text-bark">
             {editingId ? "Edit Announcement" : "Post Announcement"}
           </h2>
           <button
             type="button"
             disabled={submitting}
             onClick={resetAndCloseModal}
-            className="rounded-full p-2 text-xl leading-none text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+            className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
             aria-label="Close modal"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         <div className={inline ? "mt-6" : ""}>
@@ -987,16 +989,16 @@ export function AnnouncementManager({
   }
 
   return (
-    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-[#dfdbd1] bg-white p-6 sm:p-8 lg:p-10">
+    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-sand-line bg-white p-6 sm:p-8 lg:p-10">
       {/* Top Header */}
-      <div className="shrink-0 border-b border-[#dfdbd1] pb-6">
+      <div className="shrink-0 border-b border-sand-line pb-6">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#26352f] sm:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
               Announcements Management
             </h1>
-            <p className="mt-1 text-sm text-[#617068]">
+            <p className="mt-1 text-sm text-moss">
               Manage published church bulletins, announcements, and member notifications.
             </p>
           </div>
@@ -1004,7 +1006,7 @@ export function AnnouncementManager({
       </div>
 
       {/* Announcements — ledger-style table container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
         {/* The announcement board is cards at every width — a bulletin reads as
             a bulletin, not as a ledger row. */}
         <RecordList
@@ -1014,26 +1016,26 @@ export function AnnouncementManager({
           cardsOnly
           loadingLabel="Loading announcements..."
           cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
-          cardsStateClassName="col-span-full py-12 text-center text-sm text-[#617068]"
+          cardsStateClassName="col-span-full py-12 text-center text-sm text-moss"
           cardsEmpty={
             <>
-              <span className="text-4xl">📢</span>
-              <p className="mt-3 text-sm font-semibold text-[#26352f]">No announcements available.</p>
-              <p className="mt-1 text-xs text-[#617068]">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
+              <Megaphone size={36} className="text-moss-faint" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold text-bark">No announcements available.</p>
+              <p className="mt-1 text-xs text-moss">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
             </>
           }
           renderCard={(item) => (
             <article
               key={item.id}
-              className="flex flex-col gap-2.5 rounded-2xl border border-[#dfdbd1] bg-white p-4 text-xs shadow-sm"
+              className="flex flex-col gap-2.5 rounded-2xl border border-sand-line bg-white p-4 text-xs shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-[#26352f]">{item.title}</h4>
+                <h4 className="text-sm font-bold text-bark">{item.title}</h4>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
                     onClick={() => handleEdit(item)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-sand hover:text-ember"
                     title="Edit Announcement"
                     aria-label="Edit Announcement"
                   >
@@ -1054,7 +1056,7 @@ export function AnnouncementManager({
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] leading-relaxed text-[#415047]">{item.text}</p>
+              <p className="text-[11px] leading-relaxed text-moss-mid">{item.text}</p>
               <AnnouncementAttachment
                 attachment={item.attachment}
                 name={item.attachment_name}
@@ -1063,10 +1065,10 @@ export function AnnouncementManager({
                 className="mt-1"
               />
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold text-[#3d5148] capitalize">
+                <span className="rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold text-moss-dark capitalize">
                   {item.visibility}
                 </span>
-                <span className="rounded-full bg-[#b36b3c]/10 px-2 py-0.5 text-[10px] font-bold text-[#b36b3c]">
+                <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
                   Via {channelsLabel(item.sharing_option)}
                 </span>
                 {item.announcement_type && item.announcement_type !== "awareness" && (
@@ -1086,42 +1088,42 @@ export function AnnouncementManager({
                 )}
               </div>
               {eventLabel(item) && (
-                <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
+                <p className="text-[10px] font-semibold text-ember">Event: {eventLabel(item)}</p>
               )}
               <PollTally item={item} />
               <PledgePanel item={item} />
               {item.href && (
                 <p className="text-[10px]">
-                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">
-                    Open link ↗
+                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-ember underline underline-offset-2">
+                    Open link <ArrowUpRight size={10} className="inline" aria-hidden="true" />
                   </a>
                 </p>
               )}
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#eeeae2] pt-2 text-[10px] text-[#617068]">
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-sand-soft pt-2 text-[10px] text-moss">
                 <span className="flex items-center gap-2">
                   Posted {dayLabel(item.created_at.slice(0, 10))}
                   {item.announcement_type === "opinion" && (
                     <button
                       type="button"
                       onClick={() => handleExportAnswers(item)}
-                      className="rounded-lg border border-[#c9c5bb] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
+                      className="rounded-lg border border-sand-mute bg-white px-2 py-0.5 text-[10px] font-semibold text-bark transition hover:border-ember hover:bg-sand"
                       title="Download the answers as CSV, respondent names included"
                     >
-                      ⬇ Export answers
+                      <Download size={10} className="inline" aria-hidden="true" /> Export answers
                     </button>
                   )}
                 </span>
-                <span className="font-semibold text-[#3d5148]">{windowLabel(item)}</span>
+                <span className="font-semibold text-moss-dark">{windowLabel(item)}</span>
               </div>
             </article>
           )}
           />
 
         {/* Sticky Footer */}
-        <div className="shrink-0 border-t-2 border-[#c9c5bb] bg-[#f7f4ee] font-bold text-[#26352f]">
+        <div className="shrink-0 border-t-2 border-sand-mute bg-sand font-bold text-bark">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <span className="text-xs text-[#617068] sm:text-sm">
-              Showing <strong className="text-[#26352f]">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
+            <span className="text-xs text-moss sm:text-sm">
+              Showing <strong className="text-bark">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
             </span>
             <button
               type="button"
@@ -1129,7 +1131,7 @@ export function AnnouncementManager({
                 setMessage("");
                 setShowCreateModal(true);
               }}
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#b36b3c] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[#96552e] sm:px-3.5"
+              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />

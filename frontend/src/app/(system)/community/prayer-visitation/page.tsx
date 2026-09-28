@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { CalendarDays, HandHelping, Home, Phone, X } from "lucide-react";
 import { RequestsSidebar } from "@/components/sidebars/requests-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -291,8 +292,8 @@ function PrayerVisitationContent() {
       onClick={() => setFilter(value)}
       className={`h-8 rounded-lg px-3 text-[11px] font-semibold capitalize transition ${
         filter === value
-          ? "bg-[#26352f] text-white shadow-sm"
-          : "text-[#617068] hover:text-[#26352f]"
+          ? "bg-bark text-white shadow-sm"
+          : "text-moss hover:text-bark"
       }`}
     >
       {label}
@@ -300,14 +301,14 @@ function PrayerVisitationContent() {
   );
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-white text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <RequestsSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Prayer &amp; Visitation Requests</h1>
-              <p className="mt-1 text-sm text-[#617068]">
+              <p className="mt-1 text-sm text-moss">
                 Send a prayer request or ask for a pastoral visit — the church walks with you through both.
               </p>
               {/* The two actions, side by side on every screen. */}
@@ -315,14 +316,14 @@ function PrayerVisitationContent() {
                 <button
                   type="button"
                   onClick={() => setActiveForm("prayer")}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#b36b3c] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#96552e]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-ember px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-ember-dark"
                 >
                   Request Prayer
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveForm("visitation")}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#5f8067] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4d6d55]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-sage px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sage-deep"
                 >
                   Request Visitation
                 </button>
@@ -332,7 +333,7 @@ function PrayerVisitationContent() {
             {message && (
               <div
                 className={`rounded-2xl p-4 text-sm font-medium ${
-                  message.type === "success" ? "bg-[#eef2ed] text-[#26352f]" : "bg-red-50 text-red-700"
+                  message.type === "success" ? "bg-mist-select text-bark" : "bg-red-50 text-red-700"
                 }`}
               >
                 {message.text}
@@ -342,15 +343,15 @@ function PrayerVisitationContent() {
             {/* ── Prayer modal ── */}
             {activeForm === "prayer" && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-                <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-2xl sm:p-8">
-                  <div className="mb-6 flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-                    <h2 className="text-xl font-semibold text-[#26352f]">Request Prayer</h2>
+                <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
+                  <div className="mb-6 flex items-center justify-between border-b border-sand-line pb-4">
+                    <h2 className="text-xl font-semibold text-bark">Request Prayer</h2>
                     <button
                       type="button"
                       onClick={() => setActiveForm(null)}
-                      className="rounded-lg p-1.5 text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                      className="rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-bark"
                     >
-                      ✕
+                      <X size={14} aria-hidden="true" />
                     </button>
                   </div>
 
@@ -364,7 +365,7 @@ function PrayerVisitationContent() {
                           onClick={() => setAnonymous(!anonymous)}
                           onKeyDown={(e) => e.key === " " && setAnonymous(!anonymous)}
                           className={`relative h-6 w-11 rounded-full transition-colors ${
-                            anonymous ? "bg-[#b36b3c]" : "bg-[#c9c5bb]"
+                            anonymous ? "bg-ember" : "bg-sand-mute"
                           }`}
                         >
                           <span
@@ -378,20 +379,20 @@ function PrayerVisitationContent() {
                     )}
 
                     {isLoggedIn && !anonymous && profileName && (
-                      <p className="rounded-xl bg-[#f7f4ee] px-4 py-2.5 text-xs text-[#617068]">
-                        Submitting as <span className="font-semibold text-[#26352f]">{profileName}</span>
+                      <p className="rounded-xl bg-sand px-4 py-2.5 text-xs text-moss">
+                        Submitting as <span className="font-semibold text-bark">{profileName}</span>
                       </p>
                     )}
 
                     {!isLoggedIn && (
-                      <label className="block text-xs font-medium text-[#26352f]">
-                        Your Name <span className="font-normal text-[#617068]">(optional — leave blank to submit anonymously)</span>
+                      <label className="block text-xs font-medium text-bark">
+                        Your Name <span className="font-normal text-moss">(optional — leave blank to submit anonymously)</span>
                         <input
                           type="text"
                           value={optionalName}
                           onChange={(e) => setOptionalName(e.target.value)}
                           placeholder="e.g. John Doe (or leave blank)"
-                          className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-4 py-2 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1 w-full rounded-xl border border-sand-mute px-4 py-2 text-sm outline-none focus:border-ember"
                         />
                       </label>
                     )}
@@ -403,7 +404,7 @@ function PrayerVisitationContent() {
                         rows={5}
                         value={requestText}
                         onChange={(event) => setRequestText(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]"
+                        className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember"
                         placeholder="Share what is on your heart..."
                       />
                     </label>
@@ -412,14 +413,14 @@ function PrayerVisitationContent() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className="flex-1 rounded-full bg-[#b36b3c] px-6 py-3.5 font-semibold text-white transition hover:bg-[#96552e] disabled:opacity-60"
+                        className="flex-1 rounded-full bg-ember px-6 py-3.5 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
                       >
                         {loading ? "Sending..." : "Send Prayer Request"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveForm(null)}
-                        className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                        className="rounded-full border border-sand-mute px-6 py-3.5 font-semibold text-bark transition hover:bg-sand"
                       >
                         Cancel
                       </button>
@@ -432,22 +433,22 @@ function PrayerVisitationContent() {
             {/* ── Visitation modal ── */}
             {activeForm === "visitation" && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-[#dfdbd1] bg-white p-6 shadow-2xl sm:p-8">
-                  <div className="mb-6 flex items-center justify-between border-b border-[#dfdbd1] pb-4">
-                    <h2 className="text-xl font-semibold text-[#26352f]">Request a Visit</h2>
+                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
+                  <div className="mb-6 flex items-center justify-between border-b border-sand-line pb-4">
+                    <h2 className="text-xl font-semibold text-bark">Request a Visit</h2>
                     <button
                       type="button"
                       onClick={() => setActiveForm(null)}
-                      className="rounded-lg p-1.5 text-[#617068] transition hover:bg-[#f7f4ee] hover:text-[#26352f]"
+                      className="rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-bark"
                     >
-                      ✕
+                      <X size={14} aria-hidden="true" />
                     </button>
                   </div>
 
                   <form onSubmit={submitVisitationRequest} className="space-y-5">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Full Name</label>
+                        <label className="block text-sm font-semibold text-bark">Full Name</label>
                         <input
                           type="text"
                           required
@@ -455,12 +456,12 @@ function PrayerVisitationContent() {
                           value={visitationForm.requester_name}
                           onChange={(e) => setVisitationForm({ ...visitationForm, requester_name: e.target.value })}
                           placeholder="Your full name"
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Phone / Contact Number</label>
+                        <label className="block text-sm font-semibold text-bark">Phone / Contact Number</label>
                         <input
                           type="tel"
                           inputMode="numeric"
@@ -482,14 +483,14 @@ function PrayerVisitationContent() {
                             }
                           }}
                           placeholder="07XXXXXXXX"
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                         />
                       </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Email (Optional)</label>
+                        <label className="block text-sm font-semibold text-bark">Email (Optional)</label>
                         <input
                           type="email"
                           value={visitationForm.email}
@@ -500,16 +501,16 @@ function PrayerVisitationContent() {
                             }
                           }}
                           placeholder="name@example.com"
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Type of Visit</label>
+                        <label className="block text-sm font-semibold text-bark">Type of Visit</label>
                         <select
                           value={visitationForm.visitation_type}
                           onChange={(e) => setVisitationForm({ ...visitationForm, visitation_type: e.target.value })}
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-[#f7f4ee] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute bg-sand px-4 py-2.5 text-sm outline-none focus:border-ember"
                         >
                           <option value="pastoral">Pastoral Visit</option>
                           <option value="home">Home / Family Visit</option>
@@ -522,29 +523,29 @@ function PrayerVisitationContent() {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Preferred Date (Optional)</label>
+                        <label className="block text-sm font-semibold text-bark">Preferred Date (Optional)</label>
                         <input
                           type="date"
                           value={visitationForm.preferred_date}
                           onChange={(e) => setVisitationForm({ ...visitationForm, preferred_date: e.target.value })}
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-[#26352f]">Preferred Time (Optional)</label>
+                        <label className="block text-sm font-semibold text-bark">Preferred Time (Optional)</label>
                         <input
                           type="time"
                           value={visitationForm.preferred_time}
                           onChange={(e) => setVisitationForm({ ...visitationForm, preferred_time: e.target.value })}
-                          className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                          className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-[#26352f]">Location Coordinates (Click map to pin)</label>
-                      <div className="mt-2 overflow-hidden rounded-2xl border border-[#c9c5bb]">
+                      <label className="block text-sm font-semibold text-bark">Location Coordinates (Click map to pin)</label>
+                      <div className="mt-2 overflow-hidden rounded-2xl border border-sand-mute">
                         <LocationMapPicker
                           latitude={visitationForm.latitude}
                           longitude={visitationForm.longitude}
@@ -555,13 +556,13 @@ function PrayerVisitationContent() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-[#26352f]">Notes or Special Instructions (Optional)</label>
+                      <label className="block text-sm font-semibold text-bark">Notes or Special Instructions (Optional)</label>
                       <textarea
                         rows={3}
                         value={visitationForm.notes}
                         onChange={(e) => setVisitationForm({ ...visitationForm, notes: e.target.value })}
                         placeholder="Add any additional details, directions, or prayer needs..."
-                        className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                        className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
                       />
                     </div>
 
@@ -569,14 +570,14 @@ function PrayerVisitationContent() {
                       <button
                         type="button"
                         onClick={() => setActiveForm(null)}
-                        className="rounded-full border border-[#c9c5bb] px-6 py-3.5 font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+                        className="rounded-full border border-sand-mute px-6 py-3.5 font-semibold text-bark transition hover:bg-sand"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={loading}
-                        className="flex-1 rounded-full bg-[#5f8067] py-3.5 text-center font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+                        className="flex-1 rounded-full bg-sage py-3.5 text-center font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
                       >
                         {loading ? "Submitting..." : "Submit Request"}
                       </button>
@@ -590,7 +591,7 @@ function PrayerVisitationContent() {
             <section>
               {/* Filter: all, or one of the two kinds. */}
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex h-9 items-center rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5" role="group" aria-label="Filter requests">
+                <div className="flex h-9 items-center rounded-xl border border-sand-line bg-sand p-0.5" role="group" aria-label="Filter requests">
                   {filterButton("all", `All (${prayerCount + visitationCount})`)}
                   {filterButton("prayer", `Prayer (${prayerCount})`)}
                   {filterButton("visitation", `Visitation (${visitationCount})`)}
@@ -598,16 +599,16 @@ function PrayerVisitationContent() {
               </div>
 
               {fetchingList ? (
-                <div className="rounded-3xl border border-[#dfdbd1] bg-white p-8 text-center text-sm text-[#617068]">
+                <div className="rounded-3xl border border-sand-line bg-white p-8 text-center text-sm text-moss">
                   Loading requests...
                 </div>
               ) : rows.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-[#c9c5bb] bg-white p-8 text-center sm:p-12">
-                  <span className="text-4xl" aria-hidden="true">🙏</span>
-                  <h3 className="mt-3 text-lg font-semibold text-[#26352f]">
+                <div className="rounded-3xl border border-dashed border-sand-mute bg-white p-8 text-center sm:p-12">
+                  <HandHelping size={36} className="text-moss-faint" aria-hidden="true" />
+                  <h3 className="mt-3 text-lg font-semibold text-bark">
                     {filter === "all" ? "No requests yet" : filter === "prayer" ? "No prayer requests yet" : "No visitation requests yet"}
                   </h3>
-                  <p className="mt-1 text-sm text-[#617068]">
+                  <p className="mt-1 text-sm text-moss">
                     Use the buttons above to send a prayer request or arrange a pastoral visit.
                   </p>
                 </div>
@@ -615,46 +616,46 @@ function PrayerVisitationContent() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   {rows.map((row) =>
                     row.kind === "prayer" ? (
-                      <div key={`p-${row.id}`} className="flex flex-col justify-between space-y-3 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
+                      <div key={`p-${row.id}`} className="flex flex-col justify-between space-y-3 rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
                         <div>
-                          <div className="flex items-center justify-between text-xs text-[#617068]">
-                            <span className="rounded-full bg-[#b36b3c]/10 px-2.5 py-1 font-semibold text-[#b36b3c]">Prayer</span>
+                          <div className="flex items-center justify-between text-xs text-moss">
+                            <span className="rounded-full bg-ember/10 px-2.5 py-1 font-semibold text-ember">Prayer</span>
                             {row.created_at && <span>{new Date(row.created_at).toLocaleDateString()}</span>}
                           </div>
-                          <p className="mt-2 text-sm leading-6 text-[#26352f]">{row.request_text}</p>
+                          <p className="mt-2 text-sm leading-6 text-bark">{row.request_text}</p>
                         </div>
-                        <div className="flex items-center justify-between border-t border-[#dfdbd1] pt-2 text-xs text-[#617068]">
+                        <div className="flex items-center justify-between border-t border-sand-line pt-2 text-xs text-moss">
                           <span>
                             {row.anonymous ? "Anonymous" : row.name || "Church member"} ·{" "}
-                            <strong className="capitalize text-[#5f8067]">{row.status || "Received"}</strong>
+                            <strong className="capitalize text-sage">{row.status || "Received"}</strong>
                           </span>
-                          <span>🙏 Praying</span>
+                          <span className="inline-flex items-center gap-1"><HandHelping size={12} aria-hidden="true" /> Praying</span>
                         </div>
                       </div>
                     ) : (
-                      <div key={`v-${row.id}`} className="flex flex-col justify-between space-y-3 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
+                      <div key={`v-${row.id}`} className="flex flex-col justify-between space-y-3 rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
                         <div>
-                          <div className="flex items-center justify-between text-xs text-[#617068]">
-                            <span className="rounded-full bg-[#5f8067]/10 px-2.5 py-1 font-semibold capitalize text-[#2d5d39]">
+                          <div className="flex items-center justify-between text-xs text-moss">
+                            <span className="rounded-full bg-sage/10 px-2.5 py-1 font-semibold capitalize text-sage-bright">
                               {row.visitation_type} visit
                             </span>
                             {row.created_at && <span>{new Date(row.created_at).toLocaleDateString()}</span>}
                           </div>
-                          <p className="mt-2 text-sm font-semibold text-[#26352f]">{row.requester_name}</p>
-                          <p className="mt-0.5 text-xs text-[#617068]">
-                            📞 {row.phone_number}
+                          <p className="mt-2 text-sm font-semibold text-bark">{row.requester_name}</p>
+                          <p className="mt-0.5 text-xs text-moss">
+                            <Phone size={11} className="inline" aria-hidden="true" /> {row.phone_number}
                             {(row.preferred_date || row.preferred_time) &&
-                              ` · 📅 ${row.preferred_date || ""} ${row.preferred_time || ""}`}
+                              ` · ${row.preferred_date || ""} ${row.preferred_time || ""}`}
                           </p>
                           {row.notes && (
-                            <p className="mt-2 text-xs italic leading-relaxed text-[#26352f]">&ldquo;{row.notes}&rdquo;</p>
+                            <p className="mt-2 text-xs italic leading-relaxed text-bark">&ldquo;{row.notes}&rdquo;</p>
                           )}
                         </div>
-                        <div className="flex items-center justify-between border-t border-[#dfdbd1] pt-2 text-xs text-[#617068]">
+                        <div className="flex items-center justify-between border-t border-sand-line pt-2 text-xs text-moss">
                           <span>
-                            Status: <strong className="capitalize text-[#b36b3c]">{row.status || "Pending care team"}</strong>
+                            Status: <strong className="capitalize text-ember">{row.status || "Pending care team"}</strong>
                           </span>
-                          <span>🏠 Visit</span>
+                          <span className="inline-flex items-center gap-1"><Home size={12} aria-hidden="true" /> Visit</span>
                         </div>
                       </div>
                     )
@@ -663,9 +664,9 @@ function PrayerVisitationContent() {
               )}
             </section>
 
-            <blockquote className="border-l-2 border-[#b36b3c] pl-6 text-lg leading-7 text-[#3d5148]">
+            <blockquote className="border-l-2 border-ember pl-6 text-lg leading-7 text-moss-dark">
               &ldquo;Prayer is the opening of the heart to God as to a friend.&rdquo;
-              <footer className="mt-2 text-sm font-semibold text-[#b36b3c]">
+              <footer className="mt-2 text-sm font-semibold text-ember">
                 &mdash; Ellen G. White, <cite>Steps to Christ</cite>
               </footer>
             </blockquote>
@@ -680,7 +681,7 @@ export default function PrayerVisitationPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-white px-6 py-16 text-center text-[#617068]">
+        <main className="min-h-screen bg-white px-6 py-16 text-center text-moss">
           Loading requests...
         </main>
       }

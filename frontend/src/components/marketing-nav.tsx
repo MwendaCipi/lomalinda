@@ -82,7 +82,7 @@ export function MarketingNav() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#26352f] text-white shadow-md">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-bark text-white shadow-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
         {/* Brand — signed-in members land on their dashboard, visitors on the landing page */}
         <Link href={signedIn ? "/dashboard" : "/"} className="flex items-center gap-2.5 min-w-0 sm:gap-3">
@@ -128,7 +128,7 @@ export function MarketingNav() {
           <AccessibilityMenu buttonClassName="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors focus:outline-none" />
           <Link
             href={accountHref}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#f1c89e] px-3.5 py-2 text-xs font-bold text-[#26352f] transition-colors hover:bg-white sm:text-sm"
+            className="inline-flex items-center gap-1.5 rounded-full bg-gold px-3.5 py-2 text-xs font-bold text-bark transition-colors hover:bg-white sm:text-sm"
           >
             <AccountIcon className="h-3.5 w-3.5" />
             <span>{accountLabel}</span>
@@ -147,7 +147,7 @@ export function MarketingNav() {
 
       {/* Mobile dropdown menu */}
       {menuOpen && (
-        <nav className="border-t border-white/10 bg-[#26352f] px-4 pb-4 pt-2 md:hidden" aria-label="Website mobile">
+        <nav className="border-t border-white/10 bg-bark px-4 pb-4 pt-2 md:hidden" aria-label="Website mobile">
           <div className="flex flex-col">
             {marketingLinks.map((link) => (
               <Link
@@ -167,7 +167,7 @@ export function MarketingNav() {
           <div className="mt-3 border-t border-white/10 pt-3">
             <Link
               href={signedIn ? "/dashboard" : "/login"}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#f1c89e] px-4 py-2.5 text-sm font-bold text-[#26352f] transition-colors hover:bg-white"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-gold px-4 py-2.5 text-sm font-bold text-bark transition-colors hover:bg-white"
             >
               <AccountIcon className="h-4 w-4" />
               <span>{accountLabel}</span>

@@ -10,7 +10,7 @@ export default function ShareBibleSopRedirect() {
   }, [router]);
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 py-16 text-center text-[#617068]">
+    <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
       Redirecting to Holy Bible &amp; Spirit of Prophecy...
     </main>
   );

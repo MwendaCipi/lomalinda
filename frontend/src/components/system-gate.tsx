@@ -38,13 +38,13 @@ export function SystemGate({ children }: { children: React.ReactNode }) {
 
   return (
     <main className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="text-sm font-semibold text-[#617068]">
+      <p className="text-sm font-semibold text-moss">
         {status === "checking" ? "Checking your session…" : "Taking you to sign in…"}
       </p>
       {status === "signed-out" && (
-        <p className="text-xs text-[#617068]">
+        <p className="text-xs text-moss">
           Not redirected?{" "}
-          <Link className="font-semibold text-[#b36b3c] hover:underline" href={`/login?next=${encodeURIComponent(pathname || "/")}`}>
+          <Link className="font-semibold text-ember hover:underline" href={`/login?next=${encodeURIComponent(pathname || "/")}`}>
             Sign in here
           </Link>
         </p>

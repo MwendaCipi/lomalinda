@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { Sparkles } from "lucide-react";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -31,12 +32,12 @@ function EmptyTestimonies({
   onShare: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white px-6 py-10 text-center shadow-sm sm:py-12">
-      <span aria-hidden="true" className="text-4xl">✨</span>
-      <h2 className="mt-3 text-base font-bold text-[#26352f] sm:text-lg">
+    <div className="rounded-2xl border border-dashed border-sand-mute bg-white px-6 py-10 text-center shadow-sm sm:py-12">
+      <Sparkles size={36} className="text-moss-faint" aria-hidden="true" />
+      <h2 className="mt-3 text-base font-bold text-bark sm:text-lg">
         {searching ? "No testimonies match your search" : "No testimonies yet"}
       </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#617068]">
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-moss">
         {searching
           ? "Try a different name or word, or clear the search to read every testimony on the board."
           : "Be the first to tell the church family what God has done. Share it here now, or ask for a slot during fellowship."}
@@ -45,14 +46,14 @@ function EmptyTestimonies({
         <button
           type="button"
           onClick={onRequest}
-          className="rounded-full bg-[#b36b3c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]"
+          className="rounded-full bg-ember px-4 py-3 text-sm font-semibold text-white transition hover:bg-ember-dark"
         >
           Request
         </button>
         <button
           type="button"
           onClick={onShare}
-          className="rounded-full bg-[#5f8067] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4d6d55]"
+          className="rounded-full bg-sage px-4 py-3 text-sm font-semibold text-white transition hover:bg-sage-deep"
         >
           Share Now
         </button>
@@ -167,7 +168,7 @@ export default function TestimoniesPage() {
   }
 
   return (
-    <main className="min-h-screen md:h-screen bg-[#f7f4ee] text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
@@ -177,7 +178,7 @@ export default function TestimoniesPage() {
         <section className="mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="block text-sm font-medium sm:w-72">Search testimonies
-              <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by name or words" className="mt-2 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-3 outline-none focus:border-[#b36b3c]" />
+              <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by name or words" className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 outline-none focus:border-ember" />
             </label>
           </div>
           <div className="mt-4">
@@ -190,12 +191,12 @@ export default function TestimoniesPage() {
             ) : (
               <>
               {/* PC Desktop Table View (visible on md and up) */}
-              <div className="hidden md:block overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
+              <div className="hidden md:block overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
                 <div className="overflow-x-auto custom-table-scrollbar">
                   <table className="w-full min-w-[42rem] text-left text-sm">
-                    <thead className="bg-[#f7f4ee] text-xs uppercase tracking-wide text-[#617068]"><tr><th className="px-5 py-3 font-semibold">Name</th><th className="px-5 py-3 font-semibold">Testimony</th><th className="px-5 py-3 font-semibold">Date</th></tr></thead>
-                    <tbody className="divide-y divide-[#dfdbd1]">
-                      {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-[#617068]">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</td></tr>)}
+                    <thead className="bg-sand text-xs uppercase tracking-wide text-moss"><tr><th className="px-5 py-3 font-semibold">Name</th><th className="px-5 py-3 font-semibold">Testimony</th><th className="px-5 py-3 font-semibold">Date</th></tr></thead>
+                    <tbody className="divide-y divide-sand-line">
+                      {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-moss">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-moss">{new Date(item.created_at).toLocaleDateString()}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -204,12 +205,12 @@ export default function TestimoniesPage() {
               {/* Mobile Testimonies Cards View (visible on mobile only) */}
               <div className="grid gap-4 md:hidden">
                 {filteredTestimonies.map((item) => (
-                  <div key={item.id} className="rounded-2xl bg-white p-5 border border-[#dfdbd1] shadow-sm space-y-2">
+                  <div key={item.id} className="rounded-2xl bg-white p-5 border border-sand-line shadow-sm space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-sm text-[#26352f]">{item.name || "Church Member"}</h3>
-                      <span className="text-[11px] text-[#617068]">{new Date(item.created_at).toLocaleDateString()}</span>
+                      <h3 className="font-bold text-sm text-bark">{item.name || "Church Member"}</h3>
+                      <span className="text-[11px] text-moss">{new Date(item.created_at).toLocaleDateString()}</span>
                     </div>
-                    <p className="text-xs leading-relaxed text-[#617068]">{item.testimony_text}</p>
+                    <p className="text-xs leading-relaxed text-moss">{item.testimony_text}</p>
                   </div>
                 ))}
               </div>
@@ -222,37 +223,37 @@ export default function TestimoniesPage() {
             it is not printed twice in a row. */}
         {filteredTestimonies.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <button type="button" onClick={startRequest} className="rounded-full bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552e]">Request</button>
-            <button type="button" onClick={startSharing} className="rounded-full bg-[#5f8067] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4d6d55]">Share Now</button>
+            <button type="button" onClick={startRequest} className="rounded-full bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-dark">Request</button>
+            <button type="button" onClick={startSharing} className="rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white transition hover:bg-sage-deep">Share Now</button>
           </div>
         )}
 
-        {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#26352f]/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
+        {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-bark/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
           <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-            <div className="flex items-start justify-between gap-4"><div><h2 id="request-testimony-title" className="text-xl font-semibold sm:text-2xl">Request to share</h2><p className="mt-2 text-sm leading-6 text-[#617068]">Tell us when you would like to share during fellowship.</p></div><button type="button" onClick={() => setRequestModalOpen(false)} className="text-xl text-[#617068]" aria-label="Close">&times;</button></div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label><label className="block text-sm font-medium">Phone number<input required maxLength={10} minLength={10} type="tel" inputMode="numeric" pattern="[0-9]{10}" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="07XXXXXXXX" /></label><label className="block text-sm font-medium">Preferred date<input type="date" value={requestedDate} onChange={(event) => setRequestedDate(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label><label className="block text-sm font-medium">Preferred time<input type="time" value={requestedTime} onChange={(event) => setRequestedTime(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" /></label></div>
-            <label className="mt-4 block text-sm font-medium">Additional message<textarea rows={3} maxLength={1000} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Add any details for the church team..." /></label>
-            <button disabled={loading} className="mt-5 w-full rounded-full bg-[#b36b3c] px-5 py-3 font-semibold text-white disabled:opacity-60">{loading ? "Sending..." : "Request"}</button>
-            {message && <p className="mt-4 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
+            <div className="flex items-start justify-between gap-4"><div><h2 id="request-testimony-title" className="text-xl font-semibold sm:text-2xl">Request to share</h2><p className="mt-2 text-sm leading-6 text-moss">Tell us when you would like to share during fellowship.</p></div><button type="button" onClick={() => setRequestModalOpen(false)} className="text-xl text-moss" aria-label="Close">&times;</button></div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" /></label><label className="block text-sm font-medium">Phone number<input required maxLength={10} minLength={10} type="tel" inputMode="numeric" pattern="[0-9]{10}" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="07XXXXXXXX" /></label><label className="block text-sm font-medium">Preferred date<input type="date" value={requestedDate} onChange={(event) => setRequestedDate(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" /></label><label className="block text-sm font-medium">Preferred time<input type="time" value={requestedTime} onChange={(event) => setRequestedTime(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" /></label></div>
+            <label className="mt-4 block text-sm font-medium">Additional message<textarea rows={3} maxLength={1000} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Add any details for the church team..." /></label>
+            <button disabled={loading} className="mt-5 w-full rounded-full bg-ember px-5 py-3 font-semibold text-white disabled:opacity-60">{loading ? "Sending..." : "Request"}</button>
+            {message && <p className="mt-4 rounded-2xl bg-sand p-4 text-sm leading-6 text-moss">{message}</p>}
           </form>
         </div>}
-        {shareModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#26352f]/50 px-5" role="dialog" aria-modal="true" aria-labelledby="share-testimony-title">
+        {shareModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-bark/50 px-5" role="dialog" aria-modal="true" aria-labelledby="share-testimony-title">
           <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-            <div className="flex items-start justify-between gap-4"><div><h2 id="share-testimony-title" className="text-xl font-semibold sm:text-2xl">Share testimony</h2><p className="mt-2 text-sm leading-6 text-[#617068]">Tell the church family what God has done in your life.</p></div><button type="button" onClick={() => { setShareModalOpen(false); setMessage(""); }} className="text-xl text-[#617068]" aria-label="Close">&times;</button></div>
-            <label className="mt-5 block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Enter your name" /></label>
+            <div className="flex items-start justify-between gap-4"><div><h2 id="share-testimony-title" className="text-xl font-semibold sm:text-2xl">Share testimony</h2><p className="mt-2 text-sm leading-6 text-moss">Tell the church family what God has done in your life.</p></div><button type="button" onClick={() => { setShareModalOpen(false); setMessage(""); }} className="text-xl text-moss" aria-label="Close">&times;</button></div>
+            <label className="mt-5 block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Enter your name" /></label>
             <div className="mt-4">
               <div className="flex items-center justify-between text-sm font-medium">
                 <label htmlFor="share-testimony-text">Your Testimony</label>
-                <span className="text-xs text-[#617068]">{testimony.length} / 1000 characters</span>
+                <span className="text-xs text-moss">{testimony.length} / 1000 characters</span>
               </div>
-              <textarea id="share-testimony-text" required maxLength={1000} rows={5} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-[#c9c5bb] px-4 py-3 outline-none focus:border-[#b36b3c]" placeholder="Tell us what God has done in your life..." />
+              <textarea id="share-testimony-text" required maxLength={1000} rows={5} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Tell us what God has done in your life..." />
             </div>
-            <button disabled={loading} className="mt-5 w-full rounded-full bg-[#5f8067] px-5 py-3 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60">{loading ? "Sending..." : "Share testimony"}</button>
-            {message && <p className="mt-4 rounded-2xl bg-[#f7f4ee] p-4 text-sm leading-6 text-[#617068]">{message}</p>}
+            <button disabled={loading} className="mt-5 w-full rounded-full bg-sage px-5 py-3 font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60">{loading ? "Sending..." : "Share testimony"}</button>
+            {message && <p className="mt-4 rounded-2xl bg-sand p-4 text-sm leading-6 text-moss">{message}</p>}
           </form>
         </div>}
         {message && !requestModalOpen && !shareModalOpen && (
-          <p className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-[#617068] shadow-sm ring-1 ring-[#dfdbd1]">{message}</p>
+          <p className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-moss shadow-sm ring-1 ring-sand-line">{message}</p>
         )}
           </div>
         </div>

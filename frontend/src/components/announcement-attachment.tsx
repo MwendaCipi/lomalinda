@@ -143,7 +143,7 @@ export function AnnouncementAttachment({
           <button
             type="button"
             onClick={shareTo}
-            className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-bark transition hover:bg-sand"
           >
             {nativeShareAvailable() ? (
               <>
@@ -189,7 +189,7 @@ export function AnnouncementAttachment({
             src={url}
             alt={fileName}
             loading="lazy"
-            className={`w-full rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] object-contain shadow-sm ${
+            className={`w-full rounded-2xl border border-sand-line bg-sand object-contain shadow-sm ${
               compact ? "max-h-28" : "max-h-72"
             }`}
           />
@@ -203,29 +203,29 @@ export function AnnouncementAttachment({
   }
 
   const extension = (fileName.split(".").pop() || "file").toUpperCase();
-  const tile = DOCUMENT_TILES.find((entry) => entry.pattern.test(extension))?.tile ?? "bg-[#3d5148]";
+  const tile = DOCUMENT_TILES.find((entry) => entry.pattern.test(extension))?.tile ?? "bg-moss-dark";
   const sizeLabel = typeof size === "number" && size > 0 ? ` \u00b7 ${formatSize(size)}` : "";
 
   const card = (
     <span
-      className={`flex items-center gap-3 rounded-2xl border border-[#dfdbd1] bg-[#f7f4ee] p-3 transition ${
-        linked ? "hover:border-[#b36b3c] hover:bg-white" : ""
+      className={`flex items-center gap-3 rounded-2xl border border-sand-line bg-sand p-3 transition ${
+        linked ? "hover:border-ember hover:bg-white" : ""
       } ${compact ? "max-w-[17rem]" : "max-w-sm"}`}
     >
       <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white ${tile}`}>
         <FileText className="h-5 w-5" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-[#26352f]">{fileName}</span>
-        <span className="mt-0.5 block text-xs font-bold uppercase tracking-wide text-[#617068]">
+        <span className="block truncate text-sm font-semibold text-bark">{fileName}</span>
+        <span className="mt-0.5 block text-xs font-bold uppercase tracking-wide text-moss">
           {extension}
           {sizeLabel}
         </span>
       </span>
       {linked ? (
-        <Download className="h-4 w-4 shrink-0 text-[#b36b3c]" aria-hidden />
+        <Download className="h-4 w-4 shrink-0 text-ember" aria-hidden />
       ) : (
-        <ChevronRight className="h-4 w-4 shrink-0 text-[#b36b3c]" aria-hidden />
+        <ChevronRight className="h-4 w-4 shrink-0 text-ember" aria-hidden />
       )}
     </span>
   );

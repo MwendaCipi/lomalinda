@@ -77,8 +77,8 @@ export function DensityToggle({
       title={dense ? "Back to the roomier rows" : "Fit more rows on the screen"}
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition ${
         dense
-          ? "border-[#26352f] bg-[#26352f] text-white"
-          : "border-[#dfdbd1] bg-[#f7f4ee] text-[#617068] hover:border-[#b36b3c] hover:text-[#b36b3c]"
+          ? "border-bark bg-bark text-white"
+          : "border-sand-line bg-sand text-moss hover:border-ember hover:text-ember"
       } ${className}`}
     >
       <Rows3 className="h-3.5 w-3.5" />

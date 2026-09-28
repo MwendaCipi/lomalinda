@@ -5,9 +5,141 @@
   --font-mono: "Courier New", Courier, monospace;
 }
 
+/* ==========================================================================
+   Brand palette — the single source of truth for the app's colors.
+
+   Every utility class below resolves to one of these tokens, so a rebrand is
+   an edit here, not a hunt through 100+ components. `scripts/tokenize-colors.mjs`
+   maps hexes to these names; run it with --check to find any stray literals.
+
+   Names describe the role, not the shade: bark (green-black chrome), moss
+   (muted green-gray text), ember (terracotta action), gold (warm highlight),
+   sand (the paper and its lines), sage (green success/positive), mist (cool
+   selected surfaces), alert/brick (destructive reds).
+   ========================================================================== */
+@theme {
+  /* Deep green-black chrome: header, hero, footer, primary buttons */
+  --color-bark: #26352f;
+  --color-bark-900: #1e2a25;
+  --color-bark-950: #1a2420;
+  --color-bark-hover: #1c2924;
+  --color-bark-raised: #31483e;
+
+  /* Muted green-gray body text on sand */
+  --color-moss: #617068;
+  --color-moss-dark: #3d5148;
+  --color-moss-mid: #415047;
+  --color-moss-soft: #4a5851;
+  --color-moss-dim: #4a564f;
+  --color-moss-hover: #3a4a43;
+  --color-moss-faint: #8b9790;
+  --color-graydim: #a1a1a1;
+  --color-graymuted: #9ca3af;
+  --color-grayui: #6b7280;
+  --color-moss-faint2: #8a948d;
+  --color-warmgray: #8a8378;
+
+  /* Terracotta: buttons, badges, active accents */
+  --color-ember: #b36b3c;
+  --color-ember-dark: #96552e;
+  --color-ember-deep: #96552c;
+  --color-ember-shade: #a35622;
+  --color-ember-soft: #8c572b;
+  --color-ember-rust: #8c4b18;
+
+  /* Warm golds & tans: highlights on dark, notice tints */
+  --color-gold: #f1c89e;
+  --color-gold-soft: #e0c9a8;
+  --color-gold-pale: #f7e3d2;
+  --color-gold-bright: #f5d0a9;
+  --color-gold-blush: #f0e6dc;
+  --color-gold-deep: #9a741c;
+  --color-gold-shadow: #7c5d16;
+  --color-gold-olive: #8a7a5c;
+  --color-gold-brown: #5c3a1c;
+  --color-gold-sand: #e2d5b6;
+
+  /* Sand: the paper of the app, its cards and hairlines */
+  --color-sand: #f7f4ee;
+  --color-sand-line: #dfdbd1;
+  --color-sand-mute: #c9c5bb;
+  --color-sand-deep: #e5dfd2;
+  --color-sand-edge: #cfc9bd;
+  --color-sand-hoverline: #b9b3a6;
+  --color-sand-tint: #eae6de;
+  --color-sand-soft: #eeeae2;
+  --color-sand-warm: #e8e2d5;
+  --color-sand-shade: #eae4d8;
+  --color-sand-wash: #e9e5dd;
+  --color-sand-sheen: #e6e2d8;
+  --color-sand-light: #f2efe8;
+  --color-sand-paper: #f0ece3;
+  --color-sand-grain: #ede8dc;
+  --color-sand-card: #faf9f5;
+  --color-sand-plate: #fcfbf9;
+  --color-sand-vellum: #faf9f6;
+  --color-sand-silk: #faf8f3;
+  --color-sand-linen: #faf7f2;
+  --color-sand-veil: #faf7f0;
+  --color-sand-mist: #fdfbf7;
+  --color-sand-cream: #fdf8ef;
+  --color-sand-sheer: #fdf3eb;
+  --color-sand-airy: #fbf6f0;
+  --color-sand-glow: #fdf6ec;
+  --color-sand-bright: #fff7ec;
+  --color-sand-hover: #dfd9cb;
+  --color-sand-haze: #f0ede6;
+  --color-sand-film: #f4f1ea;
+
+  /* Sage greens: success, positive amounts, gentle accents */
+  --color-sage: #5f8067;
+  --color-sage-deep: #4d6d55;
+  --color-sage-strong: #3d7146;
+  --color-sage-shade: #335e3a;
+  --color-sage-bright: #2d5d39;
+  --color-sage-deepest: #2e5735;
+  --color-sage-deep2: #305a38;
+  --color-sage-mid: #4a7256;
+  --color-sage-soft: #4e6b55;
+  --color-sage-rich: #3d6b4f;
+  --color-sage-gray: #4a5b52;
+  --color-sage-slate: #6d7a71;
+  --color-sage-lime: #7a8c56;
+  --color-sage-wash: #d5dfd7;
+  --color-sage-mist: #c9d5ca;
+  --color-sage-line: #c1d0c4;
+  --color-sage-mild: #c4d6c8;
+  --color-sage-light: #88b393;
+  --color-sage-pale: #a9bcae;
+  --color-sage-breathe: #dce6da;
+  --color-sage-air: #c1d7c9;
+  --color-sage-tint: #dce9df;
+  --color-sage-fog: #8a968d;
+  --color-leaf: #d0ddca;
+  --color-leaf-wash: #dce9dd;
+
+  /* Cool near-white greens: selected/active surfaces */
+  --color-mist: #f4f7f4;
+  --color-mist-tint: #f4f7f2;
+  --color-mist-soft: #e8f3ec;
+  --color-mist-veil: #f0f7f2;
+  --color-mist-select: #eef2ed;
+
+  /* Destructive reds (alert) and its darker brand-red (brick) */
+  --color-brick: #8c2e2e;
+  --color-alert: #b91c1c;
+  --color-alert-deep: #991b1b;
+  --color-alert-soft: #a05252;
+  --color-alert-shade: #8c3a3a;
+  --color-alert-wash: #fdf2f2;
+  --color-alert-pale: #fde8e8;
+  --color-alert-film: #f3e8e8;
+  --color-alert-veil: #efe3e3;
+}
+
 body {
-  background: #f7f4ee;
-  color: #26352f;
+  background: var(--color-sand);
+  color: var(--color-bark);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -402,7 +534,7 @@ html[data-reduced-motion="true"] *::after {
 /* 7. Always-Visible Table Scrollbar */
 .custom-table-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #c9c5bb transparent;
+  scrollbar-color: var(--color-sand-mute) transparent;
   -ms-overflow-style: auto;
 }
 .custom-table-scrollbar::-webkit-scrollbar {

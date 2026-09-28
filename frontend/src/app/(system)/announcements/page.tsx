@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { GiveNowModal } from "@/components/give-now-modal";
@@ -144,7 +145,7 @@ export default function AnnouncementsPage() {
   });
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-white text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
@@ -156,8 +157,8 @@ export default function AnnouncementsPage() {
               <DensityToggle dense={dense} onToggle={toggleDensity} />
             </div>
 
-            {loading ? <p className="text-sm text-[#617068]">Loading announcements…</p> : items.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-10 text-center text-[#617068]">No announcements found.</div>
+            {loading ? <p className="text-sm text-moss">Loading announcements…</p> : items.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-sand-mute bg-white p-10 text-center text-moss">No announcements found.</div>
             ) : (
               <div className={`grid ${dense ? "gap-3" : "gap-6"} md:grid-cols-2`}>
                 {items.map((item) => {
@@ -166,7 +167,7 @@ export default function AnnouncementsPage() {
                   // A support-account post carries its own giving actions —
                   // the same Pledge / In-kind / Give Money row a drive gets.
                   const supportGives = !isDrive && Boolean(item.support_account_display);
-                  const cardClasses = `flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white shadow-sm ${dense ? "p-4" : "p-6 sm:p-7"}`;
+                  const cardClasses = `flex flex-col justify-between rounded-2xl border border-sand-line bg-white shadow-sm ${dense ? "p-4" : "p-6 sm:p-7"}`;
                   const content = (
                     <>
                       <div>
@@ -175,17 +176,17 @@ export default function AnnouncementsPage() {
                             and the words are the whole story. */}
                         <h2 className={dense ? "text-base font-semibold" : "text-xl font-semibold sm:text-2xl"}>{item.title}</h2>
                         {eventLabel(item) && (
-                          <p className={`text-sm font-semibold text-[#b36b3c] ${dense ? "mt-1" : "mt-2"}`}>Event date: {eventLabel(item)}</p>
+                          <p className={`text-sm font-semibold text-ember ${dense ? "mt-1" : "mt-2"}`}>Event date: {eventLabel(item)}</p>
                         )}
-                        <p className={`text-[#26352f] ${dense ? "mt-2 text-sm leading-6" : "mt-3 text-base leading-7"}`}>{item.text}</p>
+                        <p className={`text-bark ${dense ? "mt-2 text-sm leading-6" : "mt-3 text-base leading-7"}`}>{item.text}</p>
                         {item.href && (
                           <a
                             href={item.href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-3 inline-flex text-sm font-semibold text-[#b36b3c] underline underline-offset-2"
+                            className="mt-3 inline-flex text-sm font-semibold text-ember underline underline-offset-2"
                           >
-                            Open link ↗
+                            Open link <ArrowUpRight size={12} className="inline" aria-hidden="true" />
                           </a>
                         )}
 
@@ -193,9 +194,9 @@ export default function AnnouncementsPage() {
                             the answer arrives in the shape the officer chose
                             — free text, or a pick among the posted options. */}
                         {item.announcement_type === "opinion" && (
-                          <div className="mt-5 border-t border-[#dfdbd1] pt-4">
+                          <div className="mt-5 border-t border-sand-line pt-4">
                             {opinionDone.includes(item.id) ? (
-                              <p className="text-sm font-semibold text-[#3d7146]">Thank you — your response has been recorded.</p>
+                              <p className="text-sm font-semibold text-sage-strong">Thank you — your response has been recorded.</p>
                             ) : opinionId === item.id ? (
                               <div className="space-y-3">
                                 {item.response_mode === "closed" && item.response_options ? (
@@ -205,7 +206,7 @@ export default function AnnouncementsPage() {
                                         key={option}
                                         type="button"
                                         onClick={() => setOpinionChoice(option)}
-                                        className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${opinionChoice === option ? "border-[#b36b3c] bg-[#fbf6f0] text-[#26352f]" : "border-[#c9c5bb] bg-white text-[#415047] hover:border-[#b36b3c]"}`}
+                                        className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${opinionChoice === option ? "border-ember bg-sand-airy text-bark" : "border-sand-mute bg-white text-moss-mid hover:border-ember"}`}
                                       >
                                         {option}
                                       </button>
@@ -217,7 +218,7 @@ export default function AnnouncementsPage() {
                                     value={opinionText}
                                     onChange={(event) => setOpinionText(event.target.value)}
                                     placeholder="Write your response..."
-                                    className="w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2.5 text-sm outline-none focus:border-[#b36b3c]"
+                                    className="w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-sm outline-none focus:border-ember"
                                   />
                                 )}
                                 <div className="flex items-center gap-3">
@@ -225,14 +226,14 @@ export default function AnnouncementsPage() {
                                     type="button"
                                     disabled={opinionBusy || (item.response_mode === "closed" ? !opinionChoice : !opinionText.trim())}
                                     onClick={() => submitOpinion(item)}
-                                    className="rounded-full bg-[#b36b3c] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+                                    className="rounded-full bg-ember px-5 py-2 text-sm font-bold text-white transition hover:bg-ember-dark disabled:opacity-50"
                                   >
                                     {opinionBusy ? "Submitting..." : "Send response"}
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => { setOpinionId(null); setOpinionText(""); setOpinionChoice(""); }}
-                                    className="text-sm font-semibold text-[#617068] hover:underline"
+                                    className="text-sm font-semibold text-moss hover:underline"
                                   >
                                     Cancel
                                   </button>
@@ -242,7 +243,7 @@ export default function AnnouncementsPage() {
                               <button
                                 type="button"
                                 onClick={() => { setOpinionId(item.id); setOpinionChoice(""); setOpinionText(""); }}
-                                className="rounded-full bg-[#b36b3c] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#96552e]"
+                                className="rounded-full bg-ember px-6 py-2.5 text-sm font-bold text-white transition hover:bg-ember-dark"
                               >
                                 Respond
                               </button>
@@ -251,21 +252,21 @@ export default function AnnouncementsPage() {
                         )}
 
                         {isDrive && drive && (
-                          <div className="mt-5 rounded-2xl bg-[#f7f4ee] p-4">
-                            <div className="flex items-center justify-between text-sm font-semibold text-[#26352f]">
+                          <div className="mt-5 rounded-2xl bg-sand p-4">
+                            <div className="flex items-center justify-between text-sm font-semibold text-bark">
                               <span>KES {Number(drive.total_raised || 0).toLocaleString("en-KE")}</span>
-                              <span className="text-[#617068]">
+                              <span className="text-moss">
                                 of KES {Number(drive.target_amount || 0).toLocaleString("en-KE")} · {Number(drive.percentage_raised || 0).toFixed(1)}%
                               </span>
                             </div>
-                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#dfdbd1]">
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-sand-line">
                               <div
-                                className="h-full rounded-full bg-[#b36b3c]"
+                                className="h-full rounded-full bg-ember"
                                 style={{ width: `${Math.min(100, Math.max(0, Number(drive.percentage_raised || 0)))}%` }}
                               />
                             </div>
                             {drive.end_date && (
-                              <p className="mt-2 text-xs text-[#617068]">
+                              <p className="mt-2 text-xs text-moss">
                                 Closes {new Date(`${drive.end_date}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric", year: "numeric" })}
                               </p>
                             )}
@@ -274,7 +275,7 @@ export default function AnnouncementsPage() {
                       </div>
 
                       {item.attachment && (
-                        <div className={`border-t border-[#dfdbd1] pt-4 ${dense ? "mt-4" : "mt-6"}`}>
+                        <div className={`border-t border-sand-line pt-4 ${dense ? "mt-4" : "mt-6"}`}>
                           <AnnouncementAttachment
                             attachment={item.attachment}
                             name={item.attachment_name}
@@ -289,26 +290,26 @@ export default function AnnouncementsPage() {
                           chosen; a drive opens straight into its own giving
                           modal. */}
                       {supportGives && (
-                        <div className={`border-t border-[#dfdbd1] pt-5 ${dense ? "mt-4" : "mt-6"}`}>
+                        <div className={`border-t border-sand-line pt-5 ${dense ? "mt-4" : "mt-6"}`}>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
                               onClick={() => setPledgeTarget(pledgeTargetFor(item))}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                              className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                             >
                               Pledge
                             </button>
                             <button
                               type="button"
                               onClick={() => setInKindFor(item)}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                              className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                             >
                               In-kind
                             </button>
                             <button
                               type="button"
                               onClick={() => setSupportAccount(item.support_account_display ?? null)}
-                              className="rounded-full bg-[#3d7146] px-2 py-2.5 text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                              className="rounded-full bg-sage-strong px-2 py-2.5 text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
                             >
                               Give Money
                             </button>
@@ -317,25 +318,25 @@ export default function AnnouncementsPage() {
                       )}
 
                       {isDrive && drive && (
-                        <div className={`border-t border-[#dfdbd1] pt-5 ${dense ? "mt-4" : "mt-6"}`}>
+                        <div className={`border-t border-sand-line pt-5 ${dense ? "mt-4" : "mt-6"}`}>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
                               onClick={() => setPledgeTarget(pledgeTargetFor(item))}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                              className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                             >
                               Pledge
                             </button>
                             <button
                               type="button"
                               onClick={() => setInKindFor(item)}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                              className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                             >
                               In-kind
                             </button>
                             <Link
                               href={driveGiveHref(drive)}
-                              className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
+                              className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
                             >
                               Give Money
                             </Link>
@@ -348,7 +349,7 @@ export default function AnnouncementsPage() {
                           announcement's responses, where the CSV export
                           reaches it. The card keeps the confirmation. */}
                       {pledgeDone.includes(item.id) && (
-                        <p className="mt-3 text-sm font-semibold text-[#3d7146]">Thank you — your pledge has been recorded.</p>
+                        <p className="mt-3 text-sm font-semibold text-sage-strong">Thank you — your pledge has been recorded.</p>
                       )}
                     </>
                   );

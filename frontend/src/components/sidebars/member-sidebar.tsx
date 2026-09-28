@@ -18,14 +18,14 @@ export function MemberSidebar() {
   const pathname = normalizePath(usePathname());
 
   return (
-    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-[#dfdbd1] bg-[#ede8dc] lg:block">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-sand-line bg-sand-grain lg:block">
       <div className="h-full min-h-0 flex flex-col justify-between p-5 overflow-y-auto custom-hover-scrollbar scrollbar-thin">
         <div className="space-y-6">
-          <div className="border-b border-[#dfdbd1] pb-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-[#b36b3c]">
+          <div className="border-b border-sand-line pb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-ember">
               Member Workspace
             </p>
-            <p className="mt-1 text-xs text-[#617068]">
+            <p className="mt-1 text-xs text-moss">
               Manage profile details, giving history &amp; church engagement.
             </p>
           </div>
@@ -40,8 +40,8 @@ export function MemberSidebar() {
                   href={item.href}
                   className={`flex items-center justify-between rounded-xl px-3.5 py-3 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-[#26352f] text-white shadow-sm"
-                      : "text-[#26352f] hover:bg-[#f7f4ee]"
+                      ? "bg-bark text-white shadow-sm"
+                      : "text-bark hover:bg-sand"
                   }`}
                 >
                   <div className="flex items-center gap-3 truncate">
@@ -55,17 +55,17 @@ export function MemberSidebar() {
           </nav>
         </div>
 
-        <div className="pt-4 border-t border-[#dfdbd1]">
+        <div className="pt-4 border-t border-sand-line">
           <button
             type="button"
             onClick={triggerPwaInstall}
-            className="w-full flex items-center justify-between rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#26352f] hover:bg-[#f7f4ee] transition shadow-xs"
+            className="w-full flex items-center justify-between rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-xs"
           >
             <div className="flex items-center gap-2">
-              <Download className="h-4 w-4 text-[#b36b3c]" />
+              <Download className="h-4 w-4 text-ember" />
               <span>Install App</span>
             </div>
-            <span className="text-[10px] font-bold text-[#b36b3c]">PWA</span>
+            <span className="text-[10px] font-bold text-ember">PWA</span>
           </button>
         </div>
       </div>
