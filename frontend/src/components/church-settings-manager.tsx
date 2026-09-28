@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
-import { Landmark, Mail, MapPin, Megaphone, Scale, Shield, Smartphone, Stamp, UserPlus, HandHelping } from "lucide-react";
+import { Landmark, Mail, MapPin, Megaphone, Scale, Shield, Smartphone, Stamp, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { ROLE_OPTIONS } from "./roles-combobox";
 
@@ -219,7 +219,7 @@ export function ChurchSettingsManager() {
           </div>
         </div>
         <span className="rounded-full bg-bark px-3 py-1 text-xs font-semibold text-white">
-          Admin Portal
+          Administration
         </span>
       </div>
 

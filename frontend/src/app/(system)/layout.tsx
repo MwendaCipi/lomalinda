@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { SiteHeader } from "@/components/site-header";
 import { SystemGate } from "@/components/system-gate";
 
@@ -18,10 +19,12 @@ export default function SystemLayout({ children }: { children: React.ReactNode }
           tab bar. The bottom padding keeps content clear of that tab bar. */}
       <SiteHeader />
       {/* `app-shell` is what locks outer scrolling on desktop (see globals.css) —
-          only the system's own panels scroll, never the public website. */}
-      <div className="app-shell flex-1 min-h-0 flex flex-col pb-24 md:pb-0">
+          only the system's own panels scroll, never the public website. The
+          scroll mode (document / panel / pinned) is stamped by route inside
+          AppShell; pages carry no scroll classes of their own. */}
+      <AppShell>
         <SystemGate>{children}</SystemGate>
-      </div>
+      </AppShell>
     </>
   );
 }

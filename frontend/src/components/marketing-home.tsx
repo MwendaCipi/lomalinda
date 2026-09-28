@@ -12,6 +12,7 @@ import { ChurchMission } from "@/components/church-mission";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { WeeklySchedule } from "@/components/weekly-schedule";
 import { useHeaderData } from "@/hooks/use-header-data";
+import { footerColumns, footerLinkOf } from "@/config/navigation";
 
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
 
@@ -45,33 +46,11 @@ const ways = [
   },
 ];
 
-const footerColumns = [
-  {
-    heading: "Worship",
-    links: [
-      { href: "/calendar", label: "Church calendar" },
-      { href: "/materials", label: "Sabbath School material" },
-      { href: "/share", label: "Share & fellowship" },
-      { href: "/requests", label: "Prayer & care" },
-    ],
-  },
-  {
-    heading: "Giving",
-    links: [
-      { href: "/give", label: "Give" },
-      { href: "/about", label: "About the church" },
-    ],
-  },
-  {
-    heading: "Church",
-    links: [
-      { href: "#beliefs", label: "What we believe" },
-      { href: "#contact", label: "Contact & directions" },
-      { href: "/privacy", label: "Privacy Policy" },
-      { href: "/terms", label: "Terms of Use" },
-    ],
-  },
-];
+// The footer's columns come from the nav registry (config/navigation.ts):
+// every "key" entry's label and href are the destination's canonical ones,
+// so the footer cannot rename a place the bars and tiles call something else.
+// Raw href entries are page anchors and legal pages, which are not
+// destinations.
 
 export function MarketingHome() {
   // A signed-in member who lands on the public home page — opening the app
@@ -285,13 +264,16 @@ export function MarketingHome() {
               <div key={column.heading}>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">{column.heading}</p>
                 <ul className="mt-4 space-y-3 text-sm">
-                  {column.links.map((link) => (
-                    <li key={link.href}>
-                      <Link href={link.href} className="text-white/75 transition hover:text-white">
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
+                  {column.links.map((link) => {
+                    const { href, label } = footerLinkOf(link);
+                    return (
+                      <li key={href + label}>
+                        <Link href={href} className="text-white/75 transition hover:text-white">
+                          {label}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

@@ -9,8 +9,8 @@
    Brand palette — the single source of truth for the app's colors.
 
    Every utility class below resolves to one of these tokens, so a rebrand is
-   an edit here, not a hunt through 100+ components. `scripts/tokenize-colors.mjs`
-   maps hexes to these names; run it with --check to find any stray literals.
+   an edit here, not a hunt through 100+ components. `npm run check:colors`
+   (scripts/tokenize-colors.mjs) maps hexes to these names; run it with --check to find any stray literals.
 
    Names describe the role, not the shade: bark (green-black chrome), moss
    (muted green-gray text), ember (terracotta action), gold (warm highlight),
@@ -143,208 +143,144 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Inside the signed-in system the viewport is fixed on desktop and only the
-   shell's own panels scroll. The lock is desktop-only: on phones the document
-   scrolls naturally, because nested internal scrollers collapse on small
-   viewports (the My Givings table could not scroll at all). */
+/* ==========================================================================
+   Scroll architecture.
+
+   Three scroll modes, decided once by the layouts — which own the chrome —
+   and stamped on the app shell as `data-scroll-mode`. Pages carry no scroll
+   classes of their own: a new page works by default, and a page that owns
+   its scrolling gets that by route, not by remembering an incantation.
+
+   - `document`  the page is a normal scrolling document at every width
+                 (the dashboard). No viewport lock anywhere.
+   - `panel`     the default. Desktop is a fixed viewport and the page's own
+                 `md:h-screen md:overflow-hidden` panel scrolls inside it;
+                 on a phone the document scrolls naturally, with a trailing
+                 reserve so the last card clears the tab bar.
+   - `pinned`    app-like at every width (administration, the contributions
+                 ledger, the giving page): the document never scrolls; the
+                 shell is the viewport minus the header, and the record
+                 lists and card areas inside it scroll. The tab-bar reserve
+                 is trimmed to exactly the bar, so pinned footers touch it.
+   ========================================================================== */
+
+/* Desktop: panel and pinned pages own their scrolling inside the viewport,
+   so the document itself must not scroll. Nested internal scrollers collapse
+   on phones, so there the document scrolls — except for pinned pages. */
 @media (min-width: 768px) {
-  html:has(.app-shell),
-  body:has(.app-shell) {
+  html:has(.app-shell[data-scroll-mode="panel"]),
+  html:has(.app-shell[data-scroll-mode="pinned"]),
+  body:has(.app-shell[data-scroll-mode="panel"]),
+  body:has(.app-shell[data-scroll-mode="pinned"]) {
     overflow: hidden;
     height: 100%;
   }
 }
 
-/* The dashboard is a plain scrolling page, the way the public site is: its
-   greeting, analytics and announcements run longer than a viewport, and an
-   officer reads them by scrolling. The lock above would freeze it on desktop,
-   so the dashboard opts out and the document scrolls — which is what phones
-   already did. */
-html:has(.dashboard-page),
-body:has(.dashboard-page) {
-  overflow: auto;
-  height: auto;
+@media (max-width: 767px) {
+  html:has(.app-shell[data-scroll-mode="pinned"]),
+  body:has(.app-shell[data-scroll-mode="pinned"]) {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* Document and panel pages lay out in normal flow on a phone: the shell's
+     flex height chain would clamp the page to the viewport while overflowing
+     cards paint past it — the tab bar then covers the last card with nothing
+     able to scroll to it. Block flow stacks the content and the trailing
+     reserve in order. */
+  .app-shell[data-scroll-mode="document"],
+  .app-shell[data-scroll-mode="panel"] {
+    display: block;
+    height: auto;
+  }
+  /* The tab-bar reserve as a trailing in-flow spacer: bar height + the device
+     gesture-bar inset + a small gap. (The bar itself grows by the same env()
+     — see SiteNav.) */
+  .app-shell[data-scroll-mode="document"]::after,
+  .app-shell[data-scroll-mode="panel"]::after {
+    content: "";
+    display: block;
+    height: calc(3.5625rem + env(safe-area-inset-bottom, 0px) + 0.625rem);
+  }
+
+  /* Pinned pages keep the height chain: the shell is exactly the space below
+     the header, the page fills it, and its inner lists scroll. The reserve is
+     trimmed to the bar plus the device inset, so pinned action footers sit
+     tight above the bar instead of floating a gap above it. */
+  .app-shell[data-scroll-mode="pinned"] {
+    height: calc(100vh - 4rem);
+    height: calc(100dvh - 4rem);
+    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
+  }
+  .app-shell[data-scroll-mode="pinned"] > :last-child {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
 }
 
-/* The giving page is app-like at every width: heading and the footer actions
-   stay pinned while the givings list scrolls inside the card, so the document
-   itself never scrolls here. */
-html:has(.authenticated-giving-page),
-body:has(.authenticated-giving-page) {
-  overflow: hidden;
-  height: 100%;
+/* Pinned pages, every width: the page is a flex column that fills the shell
+   and stretches its own children, so sticky footers and inner scrollers can
+   find a definite height. */
+.app-shell[data-scroll-mode="pinned"] > * {
+  min-height: 0;
+}
+.app-shell[data-scroll-mode="pinned"] > :last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell[data-scroll-mode="pinned"] > :last-child > * {
+  flex: 1;
+  min-height: 0;
 }
 
-/* From lg up the shell shows the page's own sidebar, so the landing-page
-   section cards would be a duplicate. On phones there is no sidebar at all —
-   the same cards are the page's only way to reach its other destinations — so
-   they stay visible there. */
+/* Pinned pages inside the signed-in public shell (the giving page): the
+   shell is a fixed panel at every width — a definite height below the
+   header, the tab-bar reserve trimmed to exactly the bar, the page and its
+   inner scrollers filling it. */
+.authenticated-public-shell[data-scroll-mode="pinned"] {
+  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
+}
+@media (max-width: 767px) {
+  .authenticated-public-shell[data-scroll-mode="pinned"] {
+    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
+  }
+  .authenticated-public-shell[data-scroll-mode="pinned"]::after {
+    content: none;
+  }
+}
+
+/* From lg up the authenticated shell shows the page's own sidebar, so the
+   landing-page section cards would be a duplicate. On phones the cards stay:
+   outside the pinned giving page they are the only way to reach the other
+   destinations. (The giving page pins at every width, so its cards would sit
+   below the locked viewport — they stay hidden there too.) */
 @media (min-width: 1024px) {
   .authenticated-public-shell .public-section-nav {
     display: none;
   }
 }
-
-/* The giving page is a pinned app panel at every width; its section cards would
-   sit below the locked viewport, so they stay out of the way on phones too. */
 @media (max-width: 1023px) {
-  html:has(.authenticated-giving-page) .authenticated-public-shell .public-section-nav {
+  .authenticated-public-shell[data-scroll-mode="pinned"] .public-section-nav {
     display: none;
   }
-}
-
-/* The giving page is a fixed panel at every width. The shell itself needs a
-   definite height (flex-1 alone is auto-height — body is not a flex
-   container), sized to the space below SiteNav's 4rem header spacer; the
-   shell's pb-24 then keeps the footer clear of the mobile tab bar. On the
-   giving page the tab bar reserve is trimmed to just clear the bar so the
-   pinned action buttons sit tight above it instead of floating high. */
-html:has(.authenticated-giving-page) .authenticated-public-shell {
-  height: calc(100vh - 4rem);
-  height: calc(100dvh - 4rem);
-}
-/* On phones the tab bar is the only thing below these panels, so the shell
-   reserves exactly its height plus the device gesture-bar inset (the bar
-   itself grows by the same env() — see SiteNav). Every app-shell page keeps a
-   small gap above the bar; the pinned giving/admin panels touch it instead of
-   floating high. (Desktop keeps pb-0 — there is no bar.) */
-@media (max-width: 767px) {
-  /* On document-scrolling pages the shell must lay out in normal flow: its
-     flex column (with a flex-basis-0 content child) hides the content height
-     from the shell, so nothing after it can extend the document and the tab
-     bar covered the last card. Block layout stacks content and the trailing
-     spacer in order. Only the signed-in public shells (give, materials,
-     requests, about) are converted — the pinned workspaces (giving, admin)
-     keep the flex height chain their inner scrollers depend on. */
-  html:not(:has(.authenticated-giving-page)) .authenticated-public-shell.app-shell.pb-24 {
-    display: block;
-    padding-bottom: 0;
-  }
-  /* The tab-bar reserve as a trailing in-flow spacer: bar height + the device
-     gesture-bar inset + a small gap, so the last card always clears the bar. */
-  .authenticated-public-shell.app-shell.pb-24::after {
-    content: "";
-    display: block;
-    height: calc(3.5625rem + env(safe-area-inset-bottom, 0px) + 0.625rem);
-  }
-  html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24,
-  html:has(.administration-workspace) .app-shell {
-    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
-  }
-  html:has(.authenticated-giving-page) .authenticated-public-shell.pb-24::after {
-    content: none;
-  }
-  /* Plain (system) pages — the Fellowship hub, Announcements, the support
-     and community pages — scroll the document on a phone. Their flex height
-     chain (shell 780px → main stretched → inner h-full) clamps the page to
-     the viewport while the overflowing cards paint past it, so the last
-     card hides behind the fixed tab bar and the shell's pb-24 reserve never
-     applies (it sits inside the shell box, under the overflow). On a phone
-     the page must simply grow with its content: release every level of the
-     chain to natural height and let the main's own bottom padding — bar +
-     device inset + a small gap — be the reserve.
-
-     Pinned workspaces keep the chain. A page that owns its scrolling marks
-     its <main> with `pinned-workspace` (the administration workspace and the
-     contributions ledger), and the whole rule below skips those: the admin
-     workspace's mobile card grid has no always-on inner scroller, so the
-     sniffing guard used to let this rule release its chain — which left the
-     grid taller than the shell and clipped, with the tab bar stopping anyone
-     from scrolling to the last cards. The scan also skips anything inside the
-     page's <aside> sidebars, whose own scroll containers are always plain
-     overflow-y-auto (sidebars are hidden on phones, so they can't justify
-     a desktop-style height chain there). */
-  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) {
-    height: auto;
-    padding-bottom: 0;
-  }
-  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) {
-    flex: 0 0 auto;
-    min-height: 0;
-    height: auto;
-    padding-bottom: calc(4.1875rem + env(safe-area-inset-bottom, 0px));
-  }
-  .app-shell:not(.authenticated-public-shell):not(:has(.pinned-workspace)) > main.min-h-screen:not(:has(> div [class*="overflow-y-auto"]:not([class*="md:overflow"]):not(aside *))) > div {
-    height: auto;
-  }
-}
-
-/* The hub pages' marketing section cards keep a smaller bottom margin on a
-   signed-in phone, so the gap above the tab bar stays small. */
-@media (max-width: 767px) {
   .authenticated-public-shell .public-section-nav {
     padding-bottom: 1.25rem;
   }
 }
-html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child {
+
+/* The giving page pins inside the authenticated public shell: heading and
+   footer actions stay put while the givings list scrolls the full height of
+   the space below the header. */
+.authenticated-public-shell[data-scroll-mode="pinned"] > div:last-child {
   overflow: hidden;
   height: 100%;
 }
-html:has(.authenticated-giving-page) .authenticated-public-shell > div:last-child > div {
+.authenticated-public-shell[data-scroll-mode="pinned"] > div:last-child > div {
   height: 100%;
-}
-
-/* The administration workspace (users, leaders, accounts, expenditures,
-   finance, refunds) is a fixed panel at every width too: its inner tables
-   and mobile card lists scroll, so the shell needs the same definite
-   height chain the giving page gets. */
-html:has(.administration-workspace) .app-shell {
-  height: calc(100vh - 4rem);
-  height: calc(100dvh - 4rem);
-}
-
-/* The contributions ledger is its own pinned workspace (not an
-   administration-workspace tab), so the shell's generic pb-24 reserve would
-   leave a visible gap between its sticky totals panel and the tab bar. Trim
-   the reserve to exactly the bar plus the device inset, like the giving page,
-   so the bottom buttons touch the navigation. The announcements manager gets
-   the same treatment: its Add Announcement bar is the page's footer. */
-@media (max-width: 767px) {
-  html:has(.contributions-ledger-page) .app-shell,
-  html:has(.announcements-manager-page) .app-shell {
-    height: calc(100vh - 4rem);
-    height: calc(100dvh - 4rem);
-    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
-  }
-}
-
-/* Phones: these workspaces are app-like at every width, so the document is
-   locked here too — the page itself never scrolls, the record lists and card
-   areas inside scroll. (The lock above is desktop-only; without this the
-   browser could scroll the whole panel on a small viewport.)
-
-   Every page that owns its scrolling marks its <main> with `pinned-workspace`
-   — the administration workspace and the contributions ledger both do — so
-   these rules are keyed on that marker and not on one page's class. The ledger
-   was written against the workspace's rule instead, and it showed: its <main>
-   kept the utility `min-h-screen` below the app shell's own tab-bar reserve,
-   so the panel was 100vh tall inside a box that ends at the bar and every
-   sticky footer inside it pinned to the wrong bottom. Its Print/Add Receipt
-   buttons sat underneath the tab bar, unreachable. */
-@media (max-width: 767px) {
-  html:has(.pinned-workspace),
-  body:has(.pinned-workspace) {
-    overflow: hidden;
-    height: 100%;
-  }
-
-  html:has(.pinned-workspace) .pinned-workspace {
-    overflow: hidden;
-    min-height: 0;
-    height: 100%;
-  }
-}
-html:has(.pinned-workspace) .app-shell > * {
-  min-height: 0;
-}
-html:has(.pinned-workspace) .app-shell > :last-child {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-html:has(.pinned-workspace) .app-shell > :last-child > * {
-  flex: 1;
-  min-height: 0;
 }
 
 @keyframes hero-image-in {

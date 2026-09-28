@@ -551,14 +551,14 @@ function GivePageContent() {
   else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
-    <main className={signedIn ? "authenticated-giving-page flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
+    <main className={signedIn ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
       {/* No bottom padding while signed in: the pinned footer bar meets the
           mobile tab bar directly (the shell already reserves the bar height). */}
       <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 pb-0 pt-3 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className={signedIn ? "flex min-h-0 flex-1 flex-col space-y-4" : "space-y-6"}>
             {/* Hidden on phones: vertical space there belongs to the givings list. */}
             <h1 className="mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block">
-              Money Giving
+              Giving
             </h1>
 
             {/* ── My Givings (signed-in members) ── */}
@@ -827,7 +827,7 @@ function GivePageContent() {
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
                 {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Money Giving</p>
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
                 <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
               </div>
               <button

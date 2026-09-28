@@ -1,15 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Baby,
-  BarChart3,
   Book,
   BookOpen,
   Building2,
   Calendar,
   Camera,
-  CreditCard,
   FileText,
-  Gift,
   Handshake,
   Heart,
   Lightbulb,
@@ -17,13 +14,11 @@ import {
   Music,
   ShieldCheck,
   Sparkles,
-  Sprout,
-  Target,
-  TrendingUp,
   Users,
 } from "lucide-react";
 
 import { MINISTRIES } from "@/config/ministries";
+import { destinations as navDestinations } from "@/config/navigation";
 
 /**
  * The destinations the website's public pages point to.
@@ -169,56 +164,30 @@ export const requestsAndCareLinks: SectionLink[] = [
  * Stewardship & Support: how to give, what the church is raising for, and the
  * treasury's published figures.
  *
- * This is the section's only list. It backs the Stewardship & Support sidebar,
- * the mobile cards on the hub itself, the giving page, and a fund drive's page —
- * those used to be hand-copied lists, which is how the mobile hub ended up
- * showing a destination (Ideas & Suggestions) that had already moved to
- * Fellowship while missing two that still belonged to it.
+ * Built from the nav registry (config/navigation.ts), so a label or path
+ * cannot drift from what the bars, tiles and footer call the same place —
+ * this sidebar used to say "Money Giving" while every other surface said
+ * "Giving".
  */
-export const stewardshipLinks: SectionLink[] = [
-  {
-    key: "give",
-    href: "/give",
-    label: "Money Giving",
-    description: "Give tithes and offerings by M-Pesa or bank transfer.",
-    icon: CreditCard,
-  },
-  {
-    key: "campaigns",
-    href: "/support/campaigns",
-    label: "Fund Drives",
-    description: "Active fund drives and how far along they are.",
-    icon: Target,
-  },
-  {
-    key: "in-kind",
-    href: "/support/in-kind",
-    label: "In-Kind Giving",
-    description: "Offer goods, equipment, services or time instead of money.",
-    icon: Gift,
-  },
-  {
-    key: "budget",
-    href: "/support/budget",
-    label: "Church Budget",
-    description: "Published annual budgets and how departments plan to use them.",
-    icon: BarChart3,
-  },
-  {
-    key: "reports",
-    href: "/support/reports",
-    label: "Live Reports",
-    description: "Real-time, transparent tracking of contributions by category.",
-    icon: TrendingUp,
-  },
-  {
-    key: "periodical-reports",
-    href: "/support/periodical-reports",
-    label: "Periodic Reports",
-    description: "Weekly, monthly, quarterly and annual published statements.",
-    icon: FileText,
-  },
-];
+export const stewardshipLinks: SectionLink[] = (
+  [
+    "give",
+    "fundDrives",
+    "inKind",
+    "budget",
+    "liveReports",
+    "periodicalReports",
+  ] as const
+).map((key) => {
+  const dest = navDestinations[key];
+  return {
+    key,
+    href: dest.href,
+    label: dest.label,
+    description: dest.description ?? "",
+    icon: dest.icon,
+  };
+});
 
 /**
  * Beside Fellowship & Community: what the church family is saying and doing.

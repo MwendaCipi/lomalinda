@@ -4,26 +4,28 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
-  Users,
-  Home,
-  BookOpen,
-  CircleDollarSign,
-  Info,
   Bell,
+  Home,
   User as UserIcon,
   LogOut,
   LogIn,
-  ShieldCheck,
-  HeartHandshake,
   ChevronRight,
   CheckCircle2,
-  Calendar,
   X,
   UserPlus,
   Download,
   Inbox
 } from "lucide-react";
+import {
+  accountMenuKeys,
+  barKeys,
+  destinationOf,
+  isActive,
+  isStaffRole,
+  tabKeys,
+} from "@/config/navigation";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { triggerPwaInstall } from "./pwa-register";
 import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
@@ -41,18 +43,6 @@ import {
 } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-const staffRoles = [
-  "admin",
-  "clerk",
-  "elder",
-  "youth_leader",
-  "choir_director",
-  "children_ministry",
-  "men_ministry",
-  "women_ministry",
-  "chaplaincy",
-  "treasurer"
-];
 
 export function SiteNav({ navigationLocked = false }: { navigationLocked?: boolean } = {}) {
   // Normalised once, here: the build's trailing slash makes every exact-path
@@ -351,86 +341,64 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     router.refresh();
   };
 
-  const isStaff = userState.roles.length > 0 ? userState.roles.some((r) => staffRoles.includes(r)) : staffRoles.includes(userState.role);
+  const isStaff = isStaffRole(userState.roles);
 
-  // Desktop navigation items. There is no Dashboard link: the logo on the
-  // left already takes a signed-in member to their dashboard, and the links
-  // sit right beside the logo rather than floating at the centre of the bar.
-  const desktopNavItems = [
-    {
-      href: "/announcements",
-      label: "Fellowship",
-      active: pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements"),
-    },
-    { href: "/materials", label: "Materials", active: pathname.startsWith("/materials") },
-    { href: "/give", label: "Giving", active: pathname.startsWith("/support") || pathname.startsWith("/give") },
-    { href: "/about", label: "About", active: pathname.startsWith("/about") },
-    ...(isStaff
-      ? [
-          {
-            href: "/administration",
-            label: "Admin",
-            active: pathname.startsWith("/administration"),
-          },
-        ]
-      : []),
-  ];
+  // Desktop navigation items, straight from the nav registry. There is no
+  // Dashboard link: the logo on the left already takes a signed-in member to
+  // their dashboard, and the links sit beside the logo rather than floating
+  // at the centre of the bar.
+  const desktopNavItems = barKeys
+    .filter(({ staffOnly }) => !staffOnly || isStaff)
+    .map(({ key }) => destinationOf(key));
 
-  // Mobile bottom tab navigation items, in the order a member moves through the
-  // app on a phone: home, the fellowship hub, study materials, then giving.
-  //
-  // These point at the same *app* destinations the desktop bar uses, not at the
-  // public website's hubs: the Giving tab has always opened /support, while
-  // Fellowship and Requests used to open /share and /requests — marketing pages
-  // a member had no reason to see from the app's own tab bar, and a different
-  // place from where the same label took them on a laptop. The public website
-  // still links its own hubs from the marketing header.
-  const mobileBottomNavItems = [
-    {
-      // Same destination as the header logo: a signed-in member lands on their
-      // dashboard, everyone else on the public home page. Going home replaces
-      // the current entry instead of stacking, so back from home does not
-      // replay every page tapped since.
-      href: userState.isLoggedIn ? "/dashboard" : "/",
-      label: "Home",
-      icon: Home,
-      active: pathname === "/" || pathname.startsWith("/dashboard"),
-      replace: true,
-      // Home is the floor of the app: tapping it drops everything stacked
-      // above, so the next Back leaves the app (see lib/app-history).
-      collapseHistory: true,
-    },
-    {
-      href: "/fellowship",
-      label: "Fellowship",
-      icon: Users,
-      active: pathname.startsWith("/fellowship") || pathname.startsWith("/share") || pathname.startsWith("/spiritual") || pathname.startsWith("/announcements") || pathname.startsWith("/services"),
-    },
-    {
-      href: "/materials",
-      label: "Materials",
-      icon: BookOpen,
-      active: pathname.startsWith("/materials"),
-    },
-    {
-      href: "/support",
-      label: "Giving",
-      icon: CircleDollarSign,
-      active: pathname.startsWith("/support") || pathname.startsWith("/give"),
-    },
-    // About moved into the user menu; the office reaches its console from the
-    // tab bar instead.
-    ...(isStaff
-      ? [
-          {
-            href: "/administration",
-            label: "Admin",
-            icon: ShieldCheck,
-            active: pathname.startsWith("/administration"),
-          },
-        ]
-      : []),
-  ];
+  // Mobile bottom tab navigation items, in the order a member moves through
+  // the app on a phone: home, the fellowship hub, study materials, then
+  // giving — straight from the nav registry, so a tab can never drift from
+  // the bar or the dashboard's tiles. "home" is chrome, not a destination: a
+  // signed-in member lands on their dashboard, everyone else on the public
+  // home page. The Giving tab now opens /give, the destination's canonical
+  // href — it used to open /support while the desktop bar's same-named link
+  // opened /give, which is exactly the drift this config exists to end.
+  // About lives in the user menu; the office reaches its console from the
+  // tab bar instead.
+  type TabItem = {
+    key: string;
+    href: string;
+    label: string;
+    icon: LucideIcon;
+    active: boolean;
+    replace?: boolean;
+    collapseHistory?: boolean;
+  };
+
+  const mobileTabItems = tabKeys.flatMap((entry): TabItem[] => {
+    if (entry === "home") {
+      return [
+        {
+          key: "home",
+          href: userState.isLoggedIn ? "/dashboard" : "/",
+          label: "Home",
+          icon: Home,
+          active: pathname === "/" || pathname.startsWith("/dashboard"),
+          replace: true,
+          // Home is the floor of the app: tapping it drops everything stacked
+          // above, so the next Back leaves the app (see lib/app-history).
+          collapseHistory: true,
+        },
+      ];
+    }
+    if (entry.staffOnly && !isStaff) return [];
+    const dest = destinationOf(entry.key);
+    return [
+      {
+        key: entry.key,
+        href: dest.href,
+        label: dest.short ?? dest.label,
+        icon: dest.icon,
+        active: isActive(dest, pathname),
+      },
+    ];
+  });
 
   return (
     <>
@@ -462,17 +430,17 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
 
         {/* Desktop Navigation Menu, beside the logo on the left */}
         <nav hidden={navigationLocked} className="hidden md:flex items-center gap-1 lg:gap-1.5" aria-label="Main navigation">
-          {desktopNavItems.map((item) => (
+          {desktopNavItems.map((dest) => (
             <Link
-              key={item.href}
-              href={item.href}
+              key={dest.href}
+              href={dest.href}
               className={`rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium transition ${
-                item.active
+                isActive(dest, pathname)
                   ? "bg-white/15 text-white font-semibold shadow-xs"
                   : "text-white/80 hover:bg-white/10 hover:text-gold"
               }`}
             >
-              {item.label}
+              {dest.label}
             </Link>
           ))}
         </nav>
@@ -702,69 +670,29 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                       </div>
                     </div>
 
-                    {/* Quick Menu Links */}
+                    {/* Quick Menu Links — the member's own places, from the nav
+                        registry, so these cannot drift from the bars. */}
                     <div className="space-y-1">
-                      <Link
-                        href="/member"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <UserIcon className="w-4 h-4 text-slate-500" />
-                          <span>My Account &amp; Giving</span>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                      </Link>
-
-                      <Link
-                        href="/give"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <HeartHandshake className="w-4 h-4 text-slate-500" />
-                          <span>Give / Money Giving</span>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                      </Link>
-
-                      <Link
-                        href="/calendar"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Calendar className="w-4 h-4 text-slate-500" />
-                          <span>Church Calendar</span>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                      </Link>
-
-                      <Link
-                        href="/about"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Info className="w-4 h-4 text-slate-500" />
-                          <span>About the Church</span>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                      </Link>
-
-                      {isStaff && (
-                        <Link
-                          href="/administration"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-bark hover:bg-bark/10 transition"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <ShieldCheck className="w-4 h-4 text-bark" />
-                            <span>Admin Portal</span>
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                        </Link>
-                      )}
+                      {accountMenuKeys
+                        .filter(({ staffOnly }) => !staffOnly || isStaff)
+                        .map(({ key }) => {
+                          const dest = destinationOf(key);
+                          const Icon = dest.icon;
+                          return (
+                            <Link
+                              key={key}
+                              href={dest.href}
+                              onClick={() => setShowUserMenu(false)}
+                              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <Icon className="w-4 h-4 text-slate-500" />
+                                <span>{dest.label}</span>
+                              </div>
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                            </Link>
+                          );
+                        })}
                       <button
                         type="button"
                         onClick={() => {
@@ -851,24 +779,23 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
         }`}
         aria-label="Mobile Bottom Navigation"
       >
-        {mobileBottomNavItems.map((item) => {
+        {mobileTabItems.map((item) => {
           const Icon = item.icon;
-          const isActive = item.active;
           return (
             <Link
-              key={item.href}
+              key={item.key}
               href={item.href}
-              replace={"replace" in item && item.replace}
-              onClick={"collapseHistory" in item && item.collapseHistory ? goHome : undefined}
+              replace={item.replace}
+              onClick={item.collapseHistory ? goHome : undefined}
               className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-colors text-center min-w-[46px] min-h-[44px] ${
-                isActive
+                item.active
                   ? "text-white font-bold bg-white/20 border border-white/30 shadow-xs"
                   : "text-white/75 hover:text-white"
               }`}
             >
               <Icon
                 className={`w-5 h-5 mb-0.5 transition-colors ${
-                  isActive ? "text-gold" : "text-white/80"
+                  item.active ? "text-gold" : "text-white/80"
                 }`}
               />
               <span className="text-[10px] tracking-tight leading-none truncate max-w-[52px]">

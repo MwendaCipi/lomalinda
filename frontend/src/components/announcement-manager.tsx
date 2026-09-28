@@ -989,7 +989,7 @@ export function AnnouncementManager({
   }
 
   return (
-    <section className="announcements-manager-page flex h-full min-h-0 w-full flex-col gap-6 border-b border-sand-line bg-white p-6 sm:p-8 lg:p-10">
+    <section className="flex h-full min-h-0 w-full flex-col gap-6 border-b border-sand-line bg-white p-6 sm:p-8 lg:p-10">
       {/* Top Header */}
       <div className="shrink-0 border-b border-sand-line pb-6">
         <div className="flex items-center gap-1">

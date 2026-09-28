@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { ScrollMode } from "./app-shell";
 import { AboutSidebar } from "./sidebars/about-sidebar";
 import { MaterialsSidebar } from "./materials-destinations";
 import { SupportSidebar } from "./sidebars/support-sidebar";
@@ -22,6 +23,10 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
     pathname.startsWith("/requests")
   );
 
+  // The signed-in giving page is app-like at every width (pinned); the other
+  // sidebar sections are documents on a phone and panels on desktop.
+  const mode: ScrollMode = pathname.startsWith("/give") ? "pinned" : "panel";
+
   if (!showSidebar) {
     return <>{children}</>;
   }
@@ -35,7 +40,10 @@ export function AuthenticatedPublicShell({ children }: { children: React.ReactNo
         : SupportSidebar;
 
   return (
-    <div className="authenticated-public-shell app-shell flex min-h-0 flex-1 pb-24 md:overflow-hidden md:pb-0">
+    <div
+      className="authenticated-public-shell app-shell flex min-h-0 flex-1 pb-24 md:overflow-hidden md:pb-0"
+      data-scroll-mode={mode}
+    >
       <Sidebar />
       {/* Mobile: the document itself scrolls (no internal scroller to collapse).
           Desktop: the shell is a fixed viewport and this panel scrolls. */}

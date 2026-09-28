@@ -167,3 +167,7 @@ for (const file of files) {
 for (const [count, file] of perFile.sort((a, b) => b[0] - a[0]))
   console.log(`${String(count).padStart(4)}  ${file}`);
 console.error(`\n${touched} files, ${total} replacements ${CHECK ? "pending" : "written"}.`);
+
+// `--check` is a guard: a pending replacement fails the run so pre-deploy
+// checks and CI catch untokenized brand hexes before they ship.
+if (CHECK && total > 0) process.exit(1);

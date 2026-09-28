@@ -22,6 +22,20 @@ if [[ -n $(git status --porcelain) ]]; then
 fi
 echo "✨ Workspace clean."
 
+# 1.5. Local pre-deploy checklist: typecheck, the token-color guard, lint on
+#      changed files (fails only on NEW errors vs the committed baseline),
+#      and a production build. Cheaper to fail here than halfway through the
+#      remote pipeline. With no new commits and a clean tree this is a no-op.
+echo "🔍 Running the local pre-deploy checklist (typecheck, color tokens, lint, build)..."
+# The checklist builds Next.js locally, which needs Node >= 20.9 — prefer the
+# nvm-managed version when the system one is older.
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  . "$HOME/.nvm/nvm.sh" && nvm use --silent node
+fi
+(cd frontend && npm run predeploy)
+
+echo "🚀 Checklist passed."
+
 # 2. Push to GitHub repository
 echo "⬆️ Pushing latest code to GitHub (main branch)..."
 git push origin main

@@ -13,6 +13,10 @@ import { useTableDensity, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** A department this signed-in account belongs to — its roll, or the office
+    that leads it — as /me reports it, with the audience code its posts carry. */
+type MyDepartment = { code: string; label: string; audience_code: string };
+
 type FundDrive = {
   id: number;
   name: string;
@@ -77,6 +81,19 @@ export default function AnnouncementsPage() {
   const [opinionBusy, setOpinionBusy] = useState(false);
   const [opinionDone, setOpinionDone] = useState<number[]>([]);
 
+  // The departments this account belongs to, from /me, and which one the
+  // feed is narrowed to. "All" (null) is the whole live feed; picking a
+  // department shows only the posts addressed to that group.
+  const [myDepartments, setMyDepartments] = useState<MyDepartment[]>([]);
+  const [deptFilter, setDeptFilter] = useState<string | null>(null);
+
+  // My departments: only the posts addressed to the chosen department. A
+  // card's department is its audience's ``dept_*`` code; posts addressed to
+  // no department are whole-congregation and appear only under All.
+  const visibleItems = deptFilter
+    ? items.filter((item) => (item.audience ?? []).includes(deptFilter))
+    : items;
+
   // The feed is what is live right now, nearest event first. Each announcement
   // carries the window it is displayed for, so there is no From/To to pick and
   // nothing that has finished its run is served.
@@ -96,9 +113,18 @@ export default function AnnouncementsPage() {
   // of the page already reads.
   const setAnnouncements = (rows: FeedItem[]) => setItems(rows);
 
-  // One load: nothing on the page narrows the feed any more.
+  // One load: the feed, plus the departments this account belongs to (so the
+  // addressed tab exists only for members of at least one department).
   useEffect(() => {
     loadFeed();
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.my_departments)) setMyDepartments(data.my_departments);
+      })
+      .catch(() => setMyDepartments([]));
   }, [loadFeed]);
 
   /** Submit an opinion answer, then confirm inline on the card. */
@@ -145,23 +171,50 @@ export default function AnnouncementsPage() {
   });
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-bark md:overflow-hidden">
+    <main className="min-h-screen bg-white text-bark">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
             {/* Just the heading and the density toggle: the feed below is what
-                the page is for, and nothing is served but what is live now. */}
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
-              <DensityToggle dense={dense} onToggle={toggleDensity} />
+                the page is for, and nothing is served but what is live now.
+                Members of a department also get tabs: All, or the posts
+                addressed to each group they belong to. */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+                <DensityToggle dense={dense} onToggle={toggleDensity} />
+              </div>
+              {myDepartments.length > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setDeptFilter(null)}
+                    aria-pressed={deptFilter === null}
+                    className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${deptFilter === null ? "bg-bark text-white" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-ember"}`}
+                  >
+                    All
+                  </button>
+                  {myDepartments.map((dept) => (
+                    <button
+                      key={dept.audience_code}
+                      type="button"
+                      onClick={() => setDeptFilter(dept.audience_code)}
+                      aria-pressed={deptFilter === dept.audience_code}
+                      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${deptFilter === dept.audience_code ? "bg-bark text-white" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-ember"}`}
+                    >
+                      {dept.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {loading ? <p className="text-sm text-moss">Loading announcements…</p> : items.length === 0 ? (
+            {loading ? <p className="text-sm text-moss">Loading announcements…</p> : visibleItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-sand-mute bg-white p-10 text-center text-moss">No announcements found.</div>
             ) : (
               <div className={`grid ${dense ? "gap-3" : "gap-6"} md:grid-cols-2`}>
-                {items.map((item) => {
+                {visibleItems.map((item) => {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;
                   // A support-account post carries its own giving actions —

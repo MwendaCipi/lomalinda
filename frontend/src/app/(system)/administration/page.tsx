@@ -239,7 +239,7 @@ function AdministrationContent() {
   if (status === "denied") return null;
 
   return (
-    <main className="administration-workspace pinned-workspace min-h-screen md:h-[calc(100dvh-4rem)] bg-sand text-bark md:overflow-hidden">
+    <main className="min-h-screen md:h-[calc(100dvh-4rem)] bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {/* DESKTOP CONTEXTUAL SIDEBAR (Permanently Sticky on Desktop, Touching Header) */}
         <AdminSidebar

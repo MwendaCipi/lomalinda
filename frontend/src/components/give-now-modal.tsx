@@ -340,7 +340,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
-            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Money Giving</p>
+            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
             <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
           </div>
           <button

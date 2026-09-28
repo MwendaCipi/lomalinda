@@ -1,63 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Megaphone, Camera, Heart, Sparkles, Lightbulb, ChevronRight, Baby, Handshake } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useTableDensity, DensityToggle } from "@/lib/table-density";
+import { destinationOf, fellowshipHubKeys } from "@/config/navigation";
 
 /**
- * The Fellowship hub the phone tab bar opens.
- *
- * The desktop bar takes a signed-in member straight into the announcements
- * feed, where the Fellowship sidebar offers the other destinations; a phone
- * has no sidebar, so the tab opens this hub instead and the same destinations
- * are the cards. Requests and Care merged into Fellowship here: prayer and
- * visitation are one desk, child dedication and membership are part of the
- * same walk-with-you set, and partnership requests were retired.
+ * The Fellowship hub the tab bar opens — on phones as a bottom tab, on
+ * desktop through the same bar entry. The cards are the nav registry's
+ * Fellowship destinations (config/navigation.ts), so they can never drift
+ * from what the user menu or footer call the same place. Requests and Care
+ * merged into Fellowship here: prayer and visitation are one desk, child
+ * dedication and membership are part of the same walk-with-you set, and
+ * partnership requests were retired.
  */
-const cards = [
-  {
-    href: "/announcements",
-    label: "Announcements",
-    description: "Notices and updates shared with the church family.",
-    icon: Megaphone,
-  },
-  {
-    href: "/services",
-    label: "Live Services",
-    description: "Join worship online, or catch up on a service you missed.",
-    icon: Camera,
-  },
-  {
-    href: "/community/prayer-visitation",
-    label: "Prayer & Visitation Requests",
-    description: "Request prayer or a pastoral visit — one desk for both.",
-    icon: Heart,
-  },
-  {
-    href: "/spiritual/testimonies",
-    label: "Testimonies",
-    description: "Read and share how God is at work among us.",
-    icon: Sparkles,
-  },
-  {
-    href: "/community/child-dedication",
-    label: "Child Dedication",
-    description: "Begin a conversation about dedicating your child during worship.",
-    icon: Baby,
-  },
-  {
-    href: "/enroll",
-    label: "Membership",
-    description: "Join through baptism or transfer, or request a transfer out.",
-    icon: Handshake,
-  },
-  {
-    href: "/support/ideas",
-    label: "Ideas & Suggestions",
-    description: "Offer an idea that could help the church.",
-    icon: Lightbulb,
-  },
-];
+const cards = fellowshipHubKeys.map(destinationOf);
 
 export default function FellowshipHubPage() {
   // The desk-wide compact preference, shared with the roster and every other

@@ -4,18 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen,
-  Calendar,
-  CalendarClock,
   ClipboardList,
-  HandHeart,
-  Megaphone,
-  ShieldCheck,
-  UserRound,
   UserRoundCheck,
-  Users,
-  Wallet,
 } from "lucide-react";
+import {
+  dashboardTiles,
+  destinationOf,
+  REQUESTS_TILE,
+  type TileSpec,
+} from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
@@ -82,38 +79,41 @@ export function MemberHome() {
   // badge and the Requests manager read — the three can never disagree.
   const pendingRequests = usePendingRequestCounts(isDesk);
 
-  // ── Role-tailored quick tiles ─────────────────────────────────────────────
-  const tiles = [
-    // Announcements lead: the church's news is what a member opens first.
-    { href: "/announcements", label: "Announcements", desc: "Church news and notices", icon: Megaphone },
-    { href: "/give", label: "Tithes & Offerings", desc: "Tithe, offerings and funds", icon: HandHeart },
-    { href: "/calendar", label: "Calendar", desc: "Programme and events", icon: Calendar },
-    { href: "/materials", label: "Lessons & Materials", desc: "Sabbath School readings", icon: BookOpen },
-    { href: "/member", label: "My Profile", desc: "Details and giving history", icon: UserRound },
+  // ── Role-tailored quick tiles ───────────────────────────────────────────
+  // Built from the nav registry: every tile's label, description, icon and
+  // href come from one canonical entry, so a tile cannot rename a place the
+  // bars and footer call something else. Requests keeps its two faces — the
+  // desk for the offices that answer them, the forms for everyone else.
+  const tileList = [
+    ...dashboardTiles
+      .filter((spec) => !spec.audience || spec.audience.some((r) => roles.includes(r)))
+      .map((spec: TileSpec) => {
+        const dest = destinationOf(spec.key);
+        const href = spec.tab ? `${dest.href}?tab=${spec.tab}` : dest.href;
+        return {
+          href,
+          label: spec.task ?? dest.label,
+          desc: spec.description ?? dest.description ?? "",
+          icon: dest.icon,
+          badge: undefined as number | undefined,
+        };
+      }),
+    // The Requests tile: leadership goes to the desk (badge = waiting count),
+    // members to the forms.
     isDesk
       ? {
-          href: "/administration?tab=requests",
-          label: "Requests",
-          desc: "Join, prayer, visitation, dedication",
+          href: REQUESTS_TILE.deskHref,
+          label: REQUESTS_TILE.label,
+          desc: REQUESTS_TILE.deskDescription,
           icon: ClipboardList,
           badge: pendingRequests.total,
         }
-      : { href: "/requests", label: "Requests", desc: "Prayer, visitation, dedication", icon: ClipboardList },
-    // Leadership: deeper tools first-class on the dashboard. Treasury opens the
-    // accounts desk — the tab is "accounts", and a tile pointing at a tab that
-    // does not exist left the workspace blank.
-    ...(hasAny(["treasurer", "admin"])
-      ? [{ href: "/administration?tab=accounts", label: "Treasury", desc: "Accounts, receipts, refunds", icon: Wallet }]
-      : []),
-    ...(hasAny(["elder", "admin", "clerk"])
-      ? [{ href: "/administration?tab=users", label: "Members", desc: "Directory, roles, invites", icon: Users }]
-      : []),
-    ...(hasAny(["elder", "admin"])
-      ? [{ href: "/administration?tab=board", label: "Board Meetings", desc: "Agendas and minutes", icon: CalendarClock }]
-      : []),
-    ...(hasAny(["elder", "admin"])
-      ? [{ href: "/administration?tab=settings", label: "Church Settings", desc: "Configuration", icon: ShieldCheck }]
-      : []),
+      : {
+          href: REQUESTS_TILE.memberHref,
+          label: REQUESTS_TILE.label,
+          desc: REQUESTS_TILE.memberDescription,
+          icon: ClipboardList,
+        },
   ];
 
   const FIELD_LABELS: Record<string, string> = {
@@ -154,7 +154,7 @@ export function MemberHome() {
   };
 
   return (
-    <main className="dashboard-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
       {/* The week's announcements lead the page: the whole card opens the
           Fellowship feed, and each announcement carries its own action —
           Support, Give input, or its conference platform. When nothing is
@@ -210,7 +210,7 @@ export function MemberHome() {
 
           {/* Quick tiles */}
           <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {tiles.map((t) => (
+            {tileList.map((t) => (
               <Link
                 key={t.href}
                 href={t.href}
