@@ -1066,7 +1066,6 @@ export function UserManagement() {
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingTypeId, setUpdatingTypeId] = useState<number | null>(null);
   // The row whose activate/deactivate call is in flight.
-  const [updatingActivationId, setUpdatingActivationId] = useState<number | null>(null);
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -1516,7 +1515,6 @@ export function UserManagement() {
 
   // ── Actions dropdown state ────────────────────────────────────────────────
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
-  const actionMenuRef = useRef<HTMLDivElement>(null);
 
   const openProfile = async (member: MemberUser) => {
     setProfileMemberId(member.id);
@@ -1560,12 +1558,19 @@ export function UserManagement() {
 
   // Removal request modal
 
-  // Close action menu on outside click
+  // Close the action menu on an outside click.
+  //
+  // This used to test a single ref, and both the table row's menu and the phone
+  // card's menu attach `ref` for the same member — so only the last one
+  // rendered was "inside" and a mousedown on the other closed the menu before
+  // its click could fire. On a desktop that meant the row's actions did
+  // nothing at all, while the phone's cards worked. Identifying the open menu
+  // by its own marker recognises either of them.
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
-        setOpenActionMenuId(null);
-      }
+      const target = e.target as Element | null;
+      if (target?.closest?.("[data-action-menu]")) return;
+      setOpenActionMenuId(null);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -1770,69 +1775,6 @@ export function UserManagement() {
       setMessage({ type: "error", text: "Network error updating the record type." });
     } finally {
       setUpdatingTypeId(null);
-    }
-  };
-
-  /** True when the office itself switched this login off (see the API). */
-  const isDeactivated = (member: MemberUser) => member.is_active === false && Boolean(member.deactivated_at);
-
-  /**
-   * Switch a login off, or back on. Nothing about the person changes — the
-   * record, roles, roll membership and giving history all stay; only the
-   * ability to sign in does. A confirmation stands in front of it because an
-   * accidental tap would lock a member out of their own account.
-   */
-  const handleToggleActivation = async (member: MemberUser) => {
-    const deactivating = !isDeactivated(member);
-    const name = member.first_name || member.last_name
-      ? `${member.first_name} ${member.last_name}`.trim()
-      : member.username;
-    const result = await showAlert(
-      deactivating ? "Deactivate this account?" : "Activate this account?",
-      deactivating
-        ? `${name} will no longer be able to sign in, and any session already open will end. Their record, roles, roll membership and giving history stay exactly as they are.`
-        : `${name} will be able to sign in again with their usual password.`,
-      deactivating ? "warning" : "question",
-      {
-        showCancelButton: true,
-        confirmButtonText: deactivating ? "Deactivate" : "Activate",
-        cancelButtonText: "Cancel",
-        confirmButtonColor: deactivating ? "#b36b3c" : "#26352f",
-      },
-    );
-    if (!result.isConfirmed) return;
-
-    setUpdatingActivationId(member.id);
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/users/${member.id}/activation/`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: deactivating ? false : true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        // The API answers with the saved record, so the row cannot drift.
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.id === member.id
-              ? { ...m, is_active: data.is_active, deactivated_at: data.deactivated_at ?? null }
-              : m
-          )
-        );
-        showAlert(
-          deactivating ? "Account deactivated" : "Account activated",
-          data.detail || (deactivating ? "They can no longer sign in." : "They can sign in again."),
-          "success",
-          { toast: true, timer: 4500, showConfirmButton: false, position: "top-end" },
-        );
-      } else {
-        showAlert("Could not update the account", data.detail || data.is_active || "The change was not saved.", "error");
-      }
-    } catch {
-      showAlert("Could not update the account", "Network error updating the account.", "error");
-    } finally {
-      setUpdatingActivationId(null);
     }
   };
 
@@ -2137,7 +2079,7 @@ export function UserManagement() {
                     </td>
                     <td className={`py-3 text-[#617068] pl-6 ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`py-3 text-right ${COL_ACTIONS}`}>
-                      <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
+                      <div className="relative inline-block" data-action-menu>
                         <button
                           onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
                           className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
@@ -2181,7 +2123,7 @@ export function UserManagement() {
                                 disabled={updatingTypeId === m.id}
                                 className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
                               >
-                                ↩ Restore to Membership
+                                ↩ Restore
                               </button>
                             ) : (
                               <button
@@ -2189,20 +2131,9 @@ export function UserManagement() {
                                 disabled={updatingTypeId === m.id}
                                 className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
                               >
-                                🗑 Remove from Membership
+                                🗑 Remove
                               </button>
                             )}
-                            <button
-                              onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
-                              disabled={updatingActivationId === m.id}
-                              className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
-                                isDeactivated(m) || m.is_active === false
-                                  ? "text-[#26352f] hover:bg-[#f7f4ee]"
-                                  : "text-[#8c3a3a] hover:bg-[#faf1f1]"
-                              }`}
-                            >
-                              {m.is_active === false ? "✅ Activate Account" : "🚫 Deactivate Account"}
-                            </button>
                           </div>
                         )}
                       </div>
@@ -2241,7 +2172,7 @@ export function UserManagement() {
                     </div>
                     {/* The card's actions live in one menu, anchored to this
                         button — nothing shows until it is asked for. */}
-                    <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
+                    <div className="relative inline-block" data-action-menu>
                       <button
                         onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
                         aria-expanded={openActionMenuId === m.id}
@@ -2287,7 +2218,7 @@ export function UserManagement() {
                               disabled={updatingTypeId === m.id}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
                             >
-                              ↩ Restore to Membership
+                              ↩ Restore
                             </button>
                           ) : (
                             <button
@@ -2295,20 +2226,9 @@ export function UserManagement() {
                               disabled={updatingTypeId === m.id}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
                             >
-                              🗑 Remove from Membership
+                              🗑 Remove
                             </button>
                           )}
-                          <button
-                            onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
-                            disabled={updatingActivationId === m.id}
-                            className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
-                              m.is_active === false
-                                ? "text-[#26352f] hover:bg-[#f7f4ee]"
-                                : "text-[#8c3a3a] hover:bg-[#faf1f1]"
-                            }`}
-                          >
-                            {m.is_active === false ? "✅ Activate Account" : "🚫 Deactivate Account"}
-                          </button>
                         </div>
                       )}
                     </div>
@@ -2945,33 +2865,23 @@ export function UserManagement() {
                 or ask the clerk to propose a change — the member approves it on their dashboard before anything is applied.
               </p>
 
-              {/* The two account decisions sit where an officer reviewing a
-                  record looks for them, instead of only in the roster menu. */}
+              {/* Where an officer reviewing a record looks for the roster's own
+                  decision, instead of only in the row's menu. Removal is the
+                  one account act here: an account is either on the membership
+                  roll or off it — there is no separate "switched off" state to
+                  reach for. */}
               {(() => {
                 const member = members.find((m) => m.id === profileMemberId);
                 if (!member || member.is_superuser) return null;
-                const off = member.is_active === false;
                 return (
                   <div className="flex flex-wrap items-center gap-2 border-t border-[#dfdbd1] pt-3">
-                    <button
-                      type="button"
-                      disabled={updatingActivationId === member.id}
-                      onClick={() => handleToggleActivation(member)}
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
-                        off
-                          ? "border-[#5f8067] bg-white text-[#3d5148] hover:bg-[#f2f6f2]"
-                          : "border-[#c9c5bb] bg-white text-[#8c3a3a] hover:border-[#b91c1c]"
-                      }`}
-                    >
-                      {off ? "✅ Activate account" : "🚫 Deactivate account"}
-                    </button>
                     <button
                       type="button"
                       disabled={updatingTypeId === member.id}
                       onClick={() => handleMembershipChange(member, !member.is_disfellowshipped)}
                       className="rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] disabled:opacity-50"
                     >
-                      {member.is_disfellowshipped ? "↩ Restore to membership" : "🗑 Remove from membership"}
+                      {member.is_disfellowshipped ? "↩ Restore" : "🗑 Remove"}
                     </button>
                   </div>
                 );
