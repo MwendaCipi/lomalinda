@@ -228,6 +228,129 @@ class RoleHistory(models.Model):
         return f"{self.member.get_username()} — {self.get_role_display()}"
 
 
+#: The offices every area is seeded with — an area can add more (Eldership
+#: gets First/Second/Third Elder; the choir a Pianist).
+DEFAULT_POSITION_TITLES = ('Leader', 'Assistant', 'Secretary', 'Treasurer')
+
+#: The leadership areas the church runs. The church itself is the first area
+#: — its offices are the church-wide roles — and every department and office
+#: body (Eldership, Clerkship, Deaconate) is an area, so assigning a role
+#: always means filling an office somewhere.
+SEED_AREAS = (
+    # (code, name, kind, sort) — the church carries no roll, so its people
+    # are exactly the holders of its offices.
+    ('church', 'The Church', 'church', 0),
+    ('eldership', 'Eldership', 'office', 1),
+    ('clerkship', 'Clerkship', 'office', 2),
+    ('deaconate', 'Deaconate', 'office', 3),
+    ('amm', 'Adventist Men Ministries (AMM)', 'department', 10),
+    ('awm', 'Adventist Women Ministries (AWM)', 'department', 11),
+    ('aym', 'Adventist Youth (AYM)', 'department', 12),
+    ('children', 'Children Ministry', 'department', 13),
+    ('ambassadors', 'Ambassadors', 'department', 14),
+    ('apm', 'Adventist Possibility Ministries (APM)', 'department', 15),
+    ('chaplaincy', 'Chaplaincy Ministry', 'department', 16),
+)
+
+#: The offices each seeded area starts with. The church's offices mirror the
+#: church-wide roles the register already had; Eldership gets the three
+#: elders' seats; areas without an entry take the four-office template.
+SEED_AREA_ROLES = {
+    'church': (
+        'First Elder', 'Elder', 'Church Clerk', 'Church Treasurer', 'Head Deacon',
+        'Head Deaconess', 'PM Leader', 'AWM Leader', 'AYM Leader', 'Children Leader',
+        'Ambassadors Leader', 'APM Leader', 'Chaplaincy Leader', 'Health Leader',
+        'Education Leader', 'Family Life Leader', 'Publishing Head', 'Welfare Leader',
+        'Interest Coordinator', 'Development', 'Choir Director',
+    ),
+    'eldership': ('First Elder', 'Second Elder', 'Third Elder'),
+    'clerkship': ('Church Clerk',),
+    'deaconate': ('Head Deacon', 'Head Deaconess'),
+}
+
+
+class Role(models.Model):
+    """A church role in the register the office assigns from.
+
+    Seeded from the church-wide roles and department leads the role-flag
+    system carried, extendable in Settings; the code is the stable key the
+    permission checks and announcement audiences still read.
+    """
+
+    code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used by permissions and audiences")
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=240, blank=True)
+    is_system = models.BooleanField(default=False, help_text="Seeded role the church runs on; protected from deletion")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('name',)
+
+    def __str__(self):
+        return self.name
+
+
+class LeadershipArea(models.Model):
+    """A body of the church that holds roles: the church itself, Eldership,
+    Clerkship, Deaconate, or a department.
+
+    One register of "where a role can be held". Assigning leadership always
+    means filling an office in an area — Eldership's First Elder, the AYM's
+    Treasurer — so there is one way to appoint people and one place their
+    service is recorded. Department areas keep their rolls, calendars and
+    budgets; the announcement audience ``dept_<code>`` addresses a
+    department area's roll plus its office holders.
+    """
+
+    KIND_CHOICES = [
+        ('church', 'The church'),
+        ('office', 'Church office'),
+        ('department', 'Department / ministry'),
+    ]
+
+    code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used in API paths and audience codes")
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=240, blank=True)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='department')
+    icon = models.CharField(max_length=40, blank=True, help_text="Lucide icon name shown beside the area")
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=100)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('sort_order', 'name')
+
+    def __str__(self):
+        return self.name
+
+
+class AreaRole(models.Model):
+    """One office in an area, and who holds it.
+
+    A role filled in a place: First Elder in Eldership, Treasurer in the
+    AYM. The same office title can sit in several areas (every department
+    has a Treasurer) because each row is one office, not a global flag.
+    Filling or clearing ``holder`` IS appointing or releasing — the member's
+    role-flag list is derived for compatibility, never edited by hand.
+    """
+
+    area = models.ForeignKey(LeadershipArea, on_delete=models.CASCADE, related_name='positions')
+    title = models.CharField(max_length=80)
+    holder = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='area_roles')
+    position_order = models.PositiveIntegerField(default=0)
+    is_custom = models.BooleanField(default=False, help_text="Added by the office beyond the seeded offices")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('position_order', 'id')
+        constraints = [
+            models.UniqueConstraint(fields=('area', 'title'), name='uniq_area_role_title'),
+        ]
+
+    def __str__(self):
+        return f"{self.area.name} — {self.title}"
+
+
 class DepartmentMembership(models.Model):
     """A member's place on a department's roll.
 
@@ -238,7 +361,7 @@ class DepartmentMembership(models.Model):
     """
 
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_memberships')
-    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    department = models.CharField(max_length=100)
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_memberships_added')
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -249,7 +372,7 @@ class DepartmentMembership(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.member.get_username()} — {self.get_department_display()}"
+        return f"{self.member.get_username()} — {self.department}"
 
 
 class DepartmentEvent(models.Model):
@@ -260,7 +383,7 @@ class DepartmentEvent(models.Model):
     elder's desk is visible to the congregation without a rebuild.
     """
 
-    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    department = models.CharField(max_length=100)
     title = models.CharField(max_length=160)
     event_date = models.DateField()
     event_time = models.CharField(max_length=20, blank=True, help_text="Free-text, e.g. '09:00 AM' or 'during divine service'")
@@ -275,7 +398,7 @@ class DepartmentEvent(models.Model):
         indexes = [models.Index(fields=['department', 'event_date'])]
 
     def __str__(self):
-        return f"{self.get_department_display()} — {self.title} ({self.event_date})"
+        return f"{self.department} — {self.title} ({self.event_date})"
 
 
 class EnrollmentRequest(models.Model):
@@ -875,7 +998,7 @@ class DepartmentBudget(models.Model):
     equipment), which is why this is a table and not a field.
     """
 
-    department = models.CharField(max_length=30, choices=DEPARTMENT_CHOICES)
+    department = models.CharField(max_length=100)
     year = models.PositiveIntegerField()
     title = models.CharField(max_length=160, help_text="What the money is for, e.g. 'Camp fees subsidy'")
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -888,7 +1011,7 @@ class DepartmentBudget(models.Model):
         constraints = [models.UniqueConstraint(fields=['department', 'year', 'title'], name='unique_department_budget_line')]
 
     def __str__(self):
-        return f"{self.get_department_display()} {self.year}: {self.title}"
+        return f"{self.department} {self.year}: {self.title}"
 
 
 class PrayerRequest(models.Model):

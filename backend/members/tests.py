@@ -58,7 +58,7 @@ from rest_framework import status
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, DepartmentBudget, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import AreaRole, BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, DepartmentBudget, DepartmentMembership, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, LeadershipArea, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -6108,11 +6108,15 @@ class DepartmentApiTests(APITestCase):
         self.elder = User.objects.create_user('dept.elder', 'dept.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
         MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
         self.leader = User.objects.create_user('dept.leader', 'dept.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
-        self.leader_profile = MemberProfile.objects.create(user=self.leader, role='men_ministry', roles='member,men_ministry')
+        self.leader_profile = MemberProfile.objects.create(user=self.leader, role='member', roles='member')
         self.assistant = User.objects.create_user('dept.assistant', 'dept.assistant@example.com', 'StrongPass#2026', first_name='Asha', last_name='Assistant')
-        MemberProfile.objects.create(user=self.assistant, role='men_ministry', roles='member,men_ministry', assistant_roles='men_ministry')
+        MemberProfile.objects.create(user=self.assistant, role='member', roles='member')
         self.plain = User.objects.create_user('dept.plain', 'dept.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
         MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        # Leadership is offices: the AMM area's Leader and Assistant seats.
+        self.amm = LeadershipArea.objects.get(code='amm')
+        AreaRole.objects.filter(area=self.amm, title='Leader').update(holder=self.leader)
+        AreaRole.objects.filter(area=self.amm, title='Assistant').update(holder=self.assistant)
 
     def _auth(self, user):
         self.client.force_authenticate(user)
@@ -6128,6 +6132,26 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(amm['member_count'], 0)
         # Contacts ride along for the contact buttons.
         self.assertTrue(amm['leader']['email'] or amm['leader']['phone_number'])
+
+    def test_me_reports_the_departments_an_account_belongs_to(self):
+        """The feed's addressed tab keys off /me: roll membership plus lead
+        and assistant roles, the same relationships a ``dept_*`` audience
+        resolves. Labels ride along so tabs read as members see them."""
+        DepartmentMembership.objects.create(member=self.plain, department='amm')
+        self._auth(self.plain)
+        res = self.client.get('/api/members/me/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['my_departments'], [
+            {'code': 'amm', 'label': 'Adventist Men Ministries (AMM)', 'audience_code': 'dept_amm'},
+        ])
+
+        # A lead role belongs to its department even without a roll entry.
+        self._auth(self.leader)
+        res = self.client.get('/api/members/me/')
+        self.assertEqual(
+            [(row['code'], row['audience_code']) for row in res.data['my_departments']],
+            [('amm', 'dept_amm')],
+        )
 
     def test_roll_add_remove_and_permission(self):
         self._auth(self.leader)
@@ -6167,17 +6191,59 @@ class DepartmentApiTests(APITestCase):
         res = self.client.get('/api/members/departments/awm/events/')
         self.assertEqual(res.data['events'], [])
 
-    def test_role_replace_via_existing_endpoint(self):
-        # The department view replaces leadership through the same endpoint the
-        # users table uses; the leader-then-assistant ordering holds.
+    def test_leadership_put_fills_and_clears_offices(self):
+        """The leadership modal saves the whole board in one PUT: offices get
+        holders, cleared offices release them, and the derived role flags
+        follow (an AMM Leader office grants the men_ministry flag the
+        permission system reads)."""
         self._auth(self.elder)
-        res = self.client.patch('/api/members/users/%d/role/' % self.assistant.id, {
-            'roles': ['member', 'men_ministry'], 'assistant_roles': ['men_ministry'],
+        directory = self.client.get('/api/members/departments/').json()['departments']
+        amm_row = next(d for d in directory if d['code'] == 'amm')
+        positions = {p['title']: p for p in amm_row['positions']}
+        res = self.client.put('/api/members/departments/amm/leadership/', {
+            'positions': [
+                {'id': positions['Leader']['id'], 'holder_id': self.plain.id},
+                {'id': positions['Secretary']['id'], 'holder_id': None},
+            ],
         }, format='json')
         self.assertEqual(res.status_code, 200)
-        # Letters and notifications read "Assistant AMM Leader" for a holder
-        # flagged as an assistant — matching what the UI shows.
-        self.assertEqual(res.data['role_display'], 'Member, Assistant AMM Leader')
+        self.leader.refresh_from_db()
+        self.leader_profile.refresh_from_db()
+        self.plain.refresh_from_db()
+        # The old leader's men_ministry flag was withdrawn with the office;
+        # the new leader gained it.
+        self.assertNotIn('men_ministry', self.leader_profile.get_roles())
+        self.assertIn('men_ministry', MemberProfile.objects.get(user=self.plain).get_roles())
+
+    def test_office_add_and_remove(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/amm/leadership/', {'title': 'Pianist'}, format='json')
+        self.assertEqual(res.status_code, 201)
+        res = self.client.delete('/api/members/departments/amm/leadership/', {
+            'position_id': res.data['id'],
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+        # Seeded offices cannot be removed.
+        leader_row = AreaRole.objects.get(area=self.amm, title='Leader')
+        res = self.client.delete('/api/members/departments/amm/leadership/', {
+            'position_id': leader_row.id,
+        }, format='json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_create_area_seeds_default_offices(self):
+        self._auth(self.elder)
+        res = self.client.post('/api/members/departments/create/', {
+            'name': 'Pathfinders', 'kind': 'department',
+        }, format='json')
+        self.assertEqual(res.status_code, 201)
+        area = LeadershipArea.objects.get(code=res.data['code'])
+        self.assertEqual(
+            list(area.positions.values_list('title', flat=True)),
+            ['Leader', 'Assistant', 'Secretary', 'Treasurer'],
+        )
+        # Duplicate names are refused.
+        res = self.client.post('/api/members/departments/create/', {'name': 'pathfinders'}, format='json')
+        self.assertEqual(res.status_code, 400)
 
 
 class RequestBellNotificationTests(APITestCase):
@@ -6722,8 +6788,12 @@ class DepartmentBudgetTests(APITestCase):
         MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
         self.pastor = User.objects.create_user('bud.pastor', 'bud.pastor@example.com', 'StrongPass#2026', first_name='Peter', last_name='Pastor')
         MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        # The AMM Leader office, held through the area — the office is the
+        # appointment, and the derived role flag follows from it.
         self.leader = User.objects.create_user('bud.leader', 'bud.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
-        MemberProfile.objects.create(user=self.leader, role='men_ministry', roles='member,men_ministry')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        amm = LeadershipArea.objects.get(code='amm')
+        AreaRole.objects.filter(area=amm, title='Leader').update(holder=self.leader)
         self.plain = User.objects.create_user('bud.plain', 'bud.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
         MemberProfile.objects.create(user=self.plain, role='member', roles='member')
 

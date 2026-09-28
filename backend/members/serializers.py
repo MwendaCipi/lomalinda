@@ -8,7 +8,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, FundraisingCampaign, Invitation,
+    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, LeadershipArea, EnrollmentRequest, FundraisingCampaign, Invitation,
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
@@ -416,11 +416,23 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     def validate_audience(self, value):
         codes = value or []
-        unknown = unknown_audience_codes(codes)
+        # ``dept_*`` codes are the department table's own — a department the
+        # desk added announces like the originals — so they validate against
+        # it, not the fixed vocabulary.
+        fixed = [code for code in codes if not code.startswith('dept_')]
+        unknown = unknown_audience_codes(fixed)
         if unknown:
             raise serializers.ValidationError(
-                f'Unknown ministry: {unknown_audience_codes(codes)[0].replace("_", " ")}.'
+                f'Unknown ministry: {unknown[0].replace("_", " ")}.'
             )
+        dept_codes = {code.removeprefix('dept_') for code in codes if code.startswith('dept_')}
+        if dept_codes:
+            known = set(LeadershipArea.objects.filter(code__in=dept_codes, kind='department', is_active=True).values_list('code', flat=True))
+            missing = dept_codes - known
+            if missing:
+                raise serializers.ValidationError(
+                    f'Unknown department: {sorted(missing)[0].replace("_", " ")}.'
+                )
         # Duplicates would double-count an addressing; a list of codes is a set.
         return list(dict.fromkeys(codes))
 

@@ -1,17 +1,16 @@
 "use client";
 
 /**
- * Church Departments — the elder's desk view of the church's departments.
+ * Church Departments — the desk's view of every leadership area: The
+ * Church, the office bodies (Eldership, Clerkship, Deaconate) and each
+ * department. Opening one shows its leadership — named offices with a
+ * holder each, no assistant flags — plus, for departments, its roll and
+ * calendar (stored server-side and read by the public ministry pages).
  *
- * One card per department; opening one shows its leadership (leader and
- * assistants with contacts, replaceable through the shared role picker), its
- * roll of members (addable, removable), and its calendar (stored server-side
- * and read by the public ministry pages).
- *
- * Backend: /api/members/departments/ (directory), …/members/ (roll CRUD),
- * …/events/ (calendar CRUD). Role changes ride the existing
- * /api/members/users/<id>/role/ endpoint, so every surface that can change
- * roles shares one set of rules and one notification path.
+ * Backend: /api/members/departments/ (directory), …/leadership/ (offices
+ * PUT/POST/DELETE), …/members/ (roll CRUD), …/events/ (calendar CRUD).
+ * Filling an office reconciles the derived role flags server-side, so
+ * permissions and audiences follow without a second save.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,9 +22,12 @@ import {
   CalendarDays,
   ChevronDown,
   Church,
+  Handshake,
   Heart,
   Landmark,
   Mail,
+  PenLine,
+  Plus,
   Megaphone,
   Pencil,
   Phone,
@@ -37,18 +39,18 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+
 import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
-import { roleLabel } from "./roles-combobox";
 import { AnnouncementManager } from "./announcement-manager";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type DepartmentCode = "amm" | "awm" | "aym" | "children" | "ambassadors" | "apm" | "chaplaincy";
+type DepartmentCode = string;
 
-/** Visual identity carried from the department screens this view replaces.
-    Lucide marks rather than emojis, so the desk reads as the rest of the app. */
-const DEPARTMENT_STYLES: Record<DepartmentCode, { icon: React.ReactNode; accent: string; chip: string }> = {
+/** Visual identity per known area code; anything the desk adds gets a
+    neutral mark so the table stays coherent. */
+const DEPARTMENT_STYLES: Record<string, { icon: React.ReactNode; accent: string; chip: string }> = {
   amm: { icon: <Users className="h-4 w-4" />, accent: "text-blue-800", chip: "bg-blue-50 text-blue-800" },
   awm: { icon: <Heart className="h-4 w-4" />, accent: "text-rose-800", chip: "bg-rose-50 text-rose-800" },
   aym: { icon: <Sun className="h-4 w-4" />, accent: "text-amber-800", chip: "bg-amber-50 text-amber-800" },
@@ -56,7 +58,16 @@ const DEPARTMENT_STYLES: Record<DepartmentCode, { icon: React.ReactNode; accent:
   ambassadors: { icon: <Volume2 className="h-4 w-4" />, accent: "text-orange-800", chip: "bg-orange-50 text-orange-800" },
   apm: { icon: <Accessibility className="h-4 w-4" />, accent: "text-teal-800", chip: "bg-teal-50 text-teal-800" },
   chaplaincy: { icon: <Church className="h-4 w-4" />, accent: "text-indigo-900", chip: "bg-indigo-50 text-indigo-900" },
+  church: { icon: <Church className="h-4 w-4" />, accent: "text-stone-800", chip: "bg-stone-100 text-stone-800" },
+  eldership: { icon: <Landmark className="h-4 w-4" />, accent: "text-violet-800", chip: "bg-violet-50 text-violet-800" },
+  clerkship: { icon: <PenLine className="h-4 w-4" />, accent: "text-cyan-800", chip: "bg-cyan-50 text-cyan-800" },
+  deaconate: { icon: <Handshake className="h-4 w-4" />, accent: "text-emerald-800", chip: "bg-emerald-50 text-emerald-800" },
 };
+
+/** A row's style, with a shared neutral look for areas the desk added. */
+function areaStyle(code: string) {
+  return DEPARTMENT_STYLES[code] ?? { icon: <Users className="h-4 w-4" />, accent: "text-bark", chip: "bg-sand text-moss" };
+}
 
 /**
  * The row's actions behind one ⋯ button — Edit leadership, Budget, Calendar,
@@ -94,8 +105,11 @@ function DepartmentActionsMenu({
     { label: "Edit leadership", icon: <Pencil className="h-4 w-4" />, run: onEditLeadership },
     { label: "Budget", icon: <Landmark className="h-4 w-4" />, run: onBudget },
     { label: "Calendar", icon: <CalendarDays className="h-4 w-4" />, run: onCalendar },
-    { label: "Members", icon: <Users className="h-4 w-4" />, run: onMembers },
-    { label: "Communicate", icon: <Megaphone className="h-4 w-4" />, run: onCommunicate },
+    // Only department areas carry a roll to open.
+    ...(department.kind === "department" ? [{ label: "Members", icon: <Users className="h-4 w-4" />, run: onMembers }] : []),
+    // Announcements address departments (their roll plus leadership); a
+    // church-office body has no roll to address.
+    ...(department.kind === "department" ? [{ label: "Communicate", icon: <Megaphone className="h-4 w-4" />, run: onCommunicate }] : []),
   ];
 
   return (
@@ -137,17 +151,6 @@ function DepartmentActionsMenu({
   );
 }
 
-/** The role that leads each department, matching the backend's DEPARTMENT_LEAD_ROLE. */
-const DEPARTMENT_LEAD_ROLE: Record<DepartmentCode, string> = {
-  amm: "men_ministry",
-  awm: "women_ministry",
-  aym: "youth_leader",
-  children: "children_ministry",
-  ambassadors: "ambassadors_leader",
-  apm: "apm_leader",
-  chaplaincy: "chaplaincy",
-};
-
 type Holder = {
   id: number;
   name: string;
@@ -158,14 +161,28 @@ type Holder = {
   /** The holder's full role set, sent along so the picker edits in place. */
   roles?: string[];
   assistant_roles?: string[];
+  /** The office this holder fills, e.g. "Leader" or "Secretary". */
+  position?: string;
+};
+
+/** One office in an area, as the directory returns it. */
+type AreaPosition = {
+  id: number;
+  title: string;
+  is_custom: boolean;
+  holder: { id: number; name: string; username: string } | null;
 };
 
 type DepartmentRow = {
   code: DepartmentCode;
   label: string;
-  lead_role: string;
+  /** "church" (The Church), "office" (Eldership, Deaconate…) or
+      "department" (a ministry with its own roll). */
+  kind: "church" | "office" | "department";
+  description: string;
   leader: Holder | null;
   assistants: Holder[];
+  positions: AreaPosition[];
   member_count: number;
   event_count: number;
 };
@@ -484,50 +501,24 @@ function AddEventModal({
 
 /** Someone staged in the leadership modal: how they hold the department's
     lead role, plus the role sets the save needs. */
-type LeadershipPick = {
+/** One office staged for the save: who holds it now, and who should. */
+type OfficeDraft = {
   id: number;
-  name: string;
-  username: string;
-  assistant: boolean;
-  roles: string[];
-  assistantRoles: string[];
-  /** True when they were already set when the modal opened. */
-  existing: boolean;
+  title: string;
+  is_custom: boolean;
+  holder: { id: number; name: string; username: string } | null;
 };
 
-/** The department's leadership as staged, before any save. */
-function departmentPicks(department: DepartmentRow, leadRole: string): LeadershipPick[] {
-  return [
-    ...(department.leader
-      ? [{
-          id: department.leader.id,
-          name: department.leader.name,
-          username: department.leader.username,
-          assistant: false,
-          roles: department.leader.roles ?? [leadRole],
-          assistantRoles: department.leader.assistant_roles ?? [],
-          existing: true,
-        }]
-      : []),
-    ...department.assistants.map((a) => ({
-      id: a.id,
-      name: a.name,
-      username: a.username,
-      assistant: true,
-      roles: a.roles ?? [leadRole],
-      assistantRoles: a.assistant_roles ?? [],
-      existing: true,
-    })),
-  ];
-}
-
 /**
- * Edit leadership: set the department's leader and assistants in one modal.
+ * Edit leadership: fill the area's named offices in one modal.
  *
- * The save rides the same role endpoint the roster uses, so the rules (an
- * assistant must hold the role; a holder cannot also be its assistant) and
- * the notifications are shared. People dropped from the list keep their
- * other roles — only this department's lead role is taken away.
+ * Each office row holds exactly one person, chosen from the roster — the
+ * office someone sits in IS their role here, so there is no assistant
+ * checkbox to remember. Appointing into a filled office replaces its
+ * holder (with a word of warning), clearing an office releases them, and
+ * the desk can add or remove offices beyond the seeded ones. One PUT saves
+ * the whole board; the server reconciles the derived role flags so
+ * permissions and announcement audiences follow.
  */
 function LeadershipEditModal({
   department,
@@ -538,12 +529,20 @@ function LeadershipEditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const leadRole = DEPARTMENT_LEAD_ROLE[department.code];
-  const [picks, setPicks] = useState<LeadershipPick[]>(() => departmentPicks(department, leadRole));
+  const [draft, setDraft] = useState<OfficeDraft[]>(() =>
+    department.positions.map((p) => ({
+      id: p.id,
+      title: p.title,
+      is_custom: p.is_custom,
+      holder: p.holder,
+    }))
+  );
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ id: number; name: string; username: string; roles: string[] }[]>([]);
+  const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [addingOffice, setAddingOffice] = useState(false);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -563,11 +562,10 @@ function LeadershipEditModal({
                 `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
               )
               .slice(0, 8)
-              .map((u: { id: number; first_name?: string; last_name?: string; username: string; roles?: string[] }) => ({
+              .map((u: { id: number; first_name?: string; last_name?: string; username: string }) => ({
                 id: u.id,
                 name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
                 username: u.username,
-                roles: Array.isArray(u.roles) ? u.roles : ["member"],
               }))
           );
         })
@@ -577,51 +575,76 @@ function LeadershipEditModal({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  const save = async () => {
-    const original = departmentPicks(department, leadRole);
-    const removed = original.filter((o) => !picks.some((p) => p.id === o.id));
-    const plan = [
-      ...picks.map((p) => ({
-        id: p.id,
-        roles: p.roles.includes(leadRole) ? p.roles : [...p.roles, leadRole],
-        assistants: p.assistant
-          ? [...new Set([...p.assistantRoles, leadRole])]
-          : p.assistantRoles.filter((c) => c !== leadRole),
-      })),
-      // Dropped from leadership: keep their other roles, hand back this one.
-      ...removed.map((p) => ({
-        id: p.id,
-        roles: p.roles.filter((c) => c !== leadRole),
-        assistants: p.assistantRoles.filter((c) => c !== leadRole),
-      })),
-    ];
-    const summary = [
-      ...picks.map((p) => `${p.name} — ${p.assistant ? "Assistant" : "Leader"}`),
-      ...removed.map((p) => `${p.name} — removed from leadership`),
-    ].join("\n");
-    const answer = await showAlert("Update leadership?", summary, "question", {
+  const addOffice = async () => {
+    if (!newTitle.trim() || addingOffice) return;
+    setAddingOffice(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.title || data.detail || "Could not add the office.");
+      setDraft((current) => [...current, { id: data.id, title: data.title, is_custom: true, holder: null }]);
+      setNewTitle("");
+    } catch (error) {
+      showAlert("Could not add office", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setAddingOffice(false);
+    }
+  };
+
+  const removeOffice = async (office: OfficeDraft) => {
+    const answer = await showAlert("Remove this office?", `"${office.title}" will be taken off ${department.label}'s leadership board.` + (office.holder ? ` ${office.holder.name} will no longer hold it.` : ""), "warning", {
       showCancelButton: true,
-      confirmButtonText: "Save",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: brand.ember,
+      confirmButtonText: "Remove",
+      cancelButtonText: "Keep",
+      confirmButtonColor: brand.alert,
     });
+    if (!answer.isConfirmed) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
+        method: "DELETE",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ position_id: office.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not remove the office.");
+      setDraft((current) => current.filter((p) => p.id !== office.id));
+    } catch (error) {
+      showAlert("Could not remove office", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  const save = async () => {
+    const replaced = department.positions
+      .map((before) => {
+        const after = draft.find((p) => p.id === before.id);
+        return after && before.holder && after.holder && before.holder.id !== after.holder.id ? before.holder.name : null;
+      })
+      .filter(Boolean) as string[];
+    const summary = draft
+      .map((p) => `${p.title}: ${p.holder ? p.holder.name : "open"}`)
+      .join("\n");
+    const answer = await showAlert(
+      "Update leadership?",
+      summary + (replaced.length ? `\n\nReplacing: ${replaced.join(", ")}` : ""),
+      "question",
+      { showCancelButton: true, confirmButtonText: "Save", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
+    );
     if (!answer.isConfirmed) return;
     setSaving(true);
     try {
-      const responses = await Promise.all(
-        plan.map((entry) =>
-          fetch(`${API_URL}/api/members/users/${entry.id}/role/`, {
-            method: "PATCH",
-            headers: { ...authHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify({ roles: entry.roles, assistant_roles: entry.assistants }),
-          })
-        )
-      );
-      const failed = responses.find((r) => !r.ok);
-      if (failed) {
-        const data = await failed.json().catch(() => ({}));
-        throw new Error(data.detail || "One of the role changes was not saved.");
-      }
+      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          positions: draft.map((p) => ({ id: p.id, holder_id: p.holder?.id ?? null })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not save the leadership board.");
       showAlert("Leadership updated", `${department.label}'s leadership has been saved.`, "success", {
         toast: true,
         timer: 4000,
@@ -646,51 +669,56 @@ function LeadershipEditModal({
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             <h3 className="text-lg font-bold text-bark">{department.label} — Leadership</h3>
-            <p className="text-[11px] text-moss">Set the leader and assistants; contacts stay on their accounts.</p>
+            <p className="text-[11px] text-moss">One person per office; the office is the role. Contacts stay on their accounts.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* The staged leadership, editable in place. */}
+        {/* The offices, each holding one person or open. */}
         <div className="mt-4 space-y-2">
-          {picks.length === 0 && (
-            <p className="rounded-xl border border-dashed border-sand-line p-3 text-xs text-moss">
-              No leader set yet. Search below to appoint one.
-            </p>
-          )}
-          {picks.map((pick) => (
-            <div key={pick.id} className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-bark">{pick.name}</p>
-                <p className="truncate text-[11px] text-moss-faint">@{pick.username}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-moss">
-                  <input
-                    type="checkbox"
-                    checked={pick.assistant}
-                    onChange={() =>
-                      setPicks((current) => current.map((p) => (p.id === pick.id ? { ...p, assistant: !p.assistant } : p)))
-                    }
-                    className="h-3.5 w-3.5 accent-ember"
-                  />
-                  Assistant
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setPicks((current) => current.filter((p) => p.id !== pick.id))}
-                  className="rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                >
-                  Remove
-                </button>
+          {draft.map((office) => (
+            <div key={office.id} className="rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-bark">{office.title}</p>
+                  <p className="truncate text-[11px] text-moss">
+                    {office.holder ? `${office.holder.name} · @${office.holder.username}` : "Open — search below to appoint"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {office.holder && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft((current) => current.map((p) => (p.id === office.id ? { ...p, holder: null } : p)))}
+                      className="rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:text-bark"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {office.is_custom && (
+                    <button
+                      type="button"
+                      onClick={() => removeOffice(office)}
+                      title="Remove this office"
+                      className="rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
+          {draft.length === 0 && (
+            <p className="rounded-xl border border-dashed border-sand-line p-3 text-xs text-moss">
+              No offices yet. Add one below.
+            </p>
+          )}
         </div>
 
-        {/* Appoint someone new: search the roster, add them as leader. */}
+        {/* Appoint into an office: pick the office, then the person. */}
         <div className="relative mt-4">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
           <input
@@ -706,34 +734,79 @@ function LeadershipEditModal({
           {!searching && query.trim().length >= 2 && results.length === 0 && (
             <p className="py-3 text-center text-xs text-moss">No members match that search.</p>
           )}
-          {results.map((member) => {
-            const staged = picks.some((p) => p.id === member.id);
-            return (
-              <button
-                key={member.id}
-                type="button"
-                disabled={staged}
-                onClick={() => {
-                  setPicks((current) => [
-                    ...current,
-                    { id: member.id, name: member.name, username: member.username, assistant: false, roles: member.roles, assistantRoles: [], existing: false },
-                  ]);
-                  setQuery("");
-                  setResults([]);
-                }}
-                className={`flex w-full items-center justify-between gap-2 py-2 text-left text-xs transition ${
-                  staged ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
-                }`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-bark">{member.name}</span>
-                  <span className="block truncate text-[11px] text-moss-faint">@{member.username}</span>
-                </span>
-                <span className="shrink-0 text-[11px] font-semibold text-ember">{staged ? "Added" : "Appoint"}</span>
-              </button>
-            );
-          })}
+          {results.map((member) => (
+            <div key={member.id} className="py-2">
+              <p className="text-xs">
+                <span className="font-semibold text-bark">{member.name}</span>
+                <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {draft.map((office) => {
+                  const already = draft.some((p) => p.holder?.id === member.id);
+                  return (
+                    <button
+                      key={office.id}
+                      type="button"
+                      onClick={() => {
+                        if (office.holder && office.holder.id !== member.id) {
+                          showAlert(
+                            "Office is filled",
+                            `${office.title} is held by ${office.holder.name}. Appointing ${member.name} replaces them.`,
+                            "warning",
+                            { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
+                          ).then((answer) => {
+                            if (answer.isConfirmed) {
+                              setDraft((current) => current.map((p) => (p.id === office.id ? { ...p, holder: { id: member.id, name: member.name, username: member.username } } : p)));
+                              setQuery("");
+                              setResults([]);
+                            }
+                          });
+                          return;
+                        }
+                        setDraft((current) => current.map((p) => (p.id === office.id ? { ...p, holder: { id: member.id, name: member.name, username: member.username } } : p)));
+                        setQuery("");
+                        setResults([]);
+                      }}
+                      disabled={already && !draft.some((p) => p.holder?.id === member.id && p.id === office.id)}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                        office.holder?.id === member.id
+                          ? "bg-ember text-white"
+                          : already
+                            ? "cursor-not-allowed border border-sand-line bg-white text-moss-faint"
+                            : "border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
+                      }`}
+                    >
+                      {office.holder?.id === member.id ? `${office.title} ✓` : `Appoint as ${office.title}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
+
+        {/* Add an office beyond the seeded ones. */}
+        <form
+          className="mt-4 flex items-center gap-2 border-t border-sand-line pt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addOffice();
+          }}
+        >
+          <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="New office, e.g. Pianist"
+            className="min-w-0 flex-1 rounded-xl border border-sand-line px-3 py-2 text-xs focus:border-ember focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={addingOffice || !newTitle.trim()}
+            className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add office
+          </button>
+        </form>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
           <button
@@ -756,7 +829,6 @@ function LeadershipEditModal({
     </div>
   );
 }
-
 function DepartmentDetail({
   department,
   onBack,
@@ -768,8 +840,7 @@ function DepartmentDetail({
   onChanged: () => void;
   initialTab?: "members" | "calendar";
 }) {
-  const style = DEPARTMENT_STYLES[department.code];
-  const leadRole = DEPARTMENT_LEAD_ROLE[department.code];
+  const style = areaStyle(department.code);
   const [roll, setRoll] = useState<RollMember[]>([]);
   const [events, setEvents] = useState<DeptEvent[]>([]);
   const [loadingRoll, setLoadingRoll] = useState(true);
@@ -802,9 +873,11 @@ function DepartmentDetail({
   }, [department.code]);
 
   useEffect(() => {
-    loadRoll();
+    // Only department areas carry a roll; office bodies (Eldership,
+    // Clerkship, Deaconate) are roles without members of their own.
+    if (department.kind === "department") loadRoll();
     loadEvents();
-  }, [loadRoll, loadEvents]);
+  }, [loadRoll, loadEvents, department.kind]);
 
   const addMember = async (member: { id: number; name: string }) => {
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/`, {
@@ -910,20 +983,27 @@ function DepartmentDetail({
                 <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
               </div>
               <p className="mt-1 text-xs text-moss">
-                {roll.length} member{roll.length === 1 ? "" : "s"} on the roll · {events.length} calendar event{events.length === 1 ? "" : "s"}
+                {department.kind === "department" && (
+                  <>
+                    {roll.length} member{roll.length === 1 ? "" : "s"} on the roll ·{" "}
+                  </>
+                )}
+                {events.length} calendar event{events.length === 1 ? "" : "s"}
               </p>
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => setSubTab("members")}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                subTab === "members" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
-              }`}
-            >
-              <Users className="mr-1 inline h-3.5 w-3.5" /> Members
-            </button>
+            {department.kind === "department" && (
+              <button
+                type="button"
+                onClick={() => setSubTab("members")}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                  subTab === "members" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
+                }`}
+              >
+                <Users className="mr-1 inline h-3.5 w-3.5" /> Members
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setSubTab("calendar")}
@@ -936,36 +1016,49 @@ function DepartmentDetail({
           </div>
         </div>
 
-        {/* Leadership */}
+        {/* Leadership: every named office, filled or open — the same board
+            the leadership modal edits. */}
         <div className="mt-4 border-t border-sand-line pt-4">
           <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Leadership</p>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            {department.leader ? (
-              <HolderCard
-                holder={department.leader}
-                roleCaption={roleLabel(leadRole) || "Leader"}
-                onContact={() => contactHolder(department.leader!)}
-              />
-            ) : (
+            {department.positions.map((position) =>
+              position.holder ? (
+                <HolderCard
+                  key={position.id}
+                  holder={{
+                    id: position.holder.id,
+                    name: position.holder.name,
+                    username: position.holder.username,
+                    email: "",
+                    phone_number: "",
+                  }}
+                  roleCaption={position.title}
+                  onContact={() => contactHolder({
+                    id: position.holder!.id,
+                    name: position.holder!.name,
+                    username: position.holder!.username,
+                    email: "",
+                    phone_number: "",
+                  })}
+                />
+              ) : (
+                <div key={position.id} className="rounded-2xl border border-dashed border-sand-line p-4 text-xs text-moss">
+                  <span className="font-semibold">{position.title}</span> — open. Use Edit leadership to appoint someone.
+                </div>
+              )
+            )}
+            {department.positions.length === 0 && (
               <div className="rounded-2xl border border-dashed border-sand-line p-4 text-xs text-moss">
-                No {roleLabel(leadRole) || "leader"} is set. Use Edit leadership to appoint one.
+                No offices yet. Use Edit leadership to add them.
               </div>
             )}
-            {department.assistants.map((assistant) => (
-              <HolderCard
-                key={assistant.id}
-                holder={assistant}
-                roleCaption={`Assistant ${roleLabel(leadRole) || "Leader"}`}
-                onContact={() => contactHolder(assistant)}
-              />
-            ))}
           </div>
         </div>
       </div>
 
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. */}
-      {subTab === "members" && (
+      {subTab === "members" && department.kind === "department" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
             <h3 className="text-sm font-bold text-bark">Department roll</h3>
@@ -1135,6 +1228,8 @@ export function DepartmentHub() {
   const [communicateSet, setCommunicateSet] = useState<DepartmentRow[] | null>(null);
   // The table's checked rows.
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  // The Add area modal.
+  const [showAddArea, setShowAddArea] = useState(false);
 
   const loadDirectory = useCallback(() => {
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
@@ -1191,11 +1286,20 @@ export function DepartmentHub() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-      <div className="shrink-0">
-        <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
-        <p className="mt-0.5 text-xs text-moss">
-          Each row: the department's leadership, and its calendar, roll, budget and announcements. Tick rows to address several departments at once.
-        </p>
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
+          <p className="mt-0.5 text-xs text-moss">
+            Every leadership area — the church's offices and each department — with its roles filled office by office. Tick rows to address several departments at once.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAddArea(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Department
+        </button>
       </div>
 
       {/* One table, one row per department — the directory a desk scans, not
@@ -1216,14 +1320,14 @@ export function DepartmentHub() {
               </th>
               <th className="px-4 py-3 font-bold">Department</th>
               <th className="px-4 py-3 font-bold">Leader</th>
-              <th className="px-4 py-3 font-bold">Assistant</th>
+              <th className="px-4 py-3 font-bold">Other offices</th>
               <th className="px-4 py-3 text-center font-bold">Roll</th>
               <th className="px-4 py-3 text-right font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {departments.map((department) => {
-              const style = DEPARTMENT_STYLES[department.code];
+              const style = areaStyle(department.code);
               return (
                 <tr key={department.code} className="border-b border-sand-soft last:border-0 hover:bg-sand/60">
                   <td className="px-3 py-3">
@@ -1310,7 +1414,7 @@ export function DepartmentHub() {
       {/* Phones: the same directory as cards. */}
       <div className="space-y-3 md:hidden">
         {departments.map((department) => {
-          const style = DEPARTMENT_STYLES[department.code];
+          const style = areaStyle(department.code);
           return (
             <div key={department.code} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
@@ -1345,11 +1449,11 @@ export function DepartmentHub() {
                   )}
                 </p>
                 <p className="text-bark">
-                  <span className="font-semibold text-moss">Assistant:</span>{" "}
+                  <span className="font-semibold text-moss">Other offices:</span>{" "}
                   {department.assistants.length > 0 ? (
-                    <span className="font-semibold">{department.assistants.map((a) => a.name).join(", ")}</span>
+                    <span className="font-semibold">{department.assistants.map((a) => `${a.name}${a.position ? ` (${a.position})` : ""}`).join(", ")}</span>
                   ) : (
-                    <span className="italic text-moss-faint">not set</span>
+                    <span className="italic text-moss-faint">none</span>
                   )}
                 </p>
                 <p className="text-[11px] text-moss">
@@ -1365,6 +1469,12 @@ export function DepartmentHub() {
         <DepartmentBudgetModal
           department={budgetDept}
           onClose={() => setBudgetDept(null)}
+        />
+      )}
+      {showAddArea && (
+        <AddAreaModal
+          onClose={() => setShowAddArea(false)}
+          onCreated={loadDirectory}
         />
       )}
       {leadershipDept && (
@@ -1610,6 +1720,135 @@ function CommunicateModal({
             onDone={onClose}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Add Department: a new leadership area — a department with its own roll
+ * (AMM, Youth…) or a church office body (Eldership-style) — created with
+ * the four seeded offices, fillable the moment it exists. Its audience
+ * code (`dept_<code>`) rides the same announcement machinery as the
+ * original departments.
+ */
+function AddAreaModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"department" | "office">("department");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/create/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), kind, description: description.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.name || data.detail || "Could not create the area.");
+      showAlert(
+        "Area created",
+        `${data.name} now has its own leadership board. Open it to appoint its officers.`,
+        "success",
+        { toast: true, timer: 4500, showConfirmButton: false }
+      );
+      onCreated();
+      onClose();
+    } catch (error) {
+      showAlert("Could not create area", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add a leadership area"
+        className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-bark">Add Department</h3>
+            <p className="text-[11px] text-moss">A new leadership area with its own offices and, for departments, a roll.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <label className="block text-xs font-semibold text-bark">
+            Name *
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Pathfinders, Music Department"
+              required
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+            />
+          </label>
+          <div className="text-xs font-semibold text-bark">
+            Kind
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setKind("department")}
+                className={`rounded-xl border px-3 py-2 text-left text-[11px] transition ${kind === "department" ? "border-ember bg-sand-airy text-bark" : "border-sand-line bg-white text-moss hover:border-ember"}`}
+              >
+                <span className="block font-bold">Department</span>
+                Has its own member roll, calendar and budget.
+              </button>
+              <button
+                type="button"
+                onClick={() => setKind("office")}
+                className={`rounded-xl border px-3 py-2 text-left text-[11px] transition ${kind === "office" ? "border-ember bg-sand-airy text-bark" : "border-sand-line bg-white text-moss hover:border-ember"}`}
+              >
+                <span className="block font-bold">Church office</span>
+                An office body like Eldership — roles only, no roll.
+              </button>
+            </div>
+          </div>
+          <label className="block text-xs font-semibold text-bark">
+            Description
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="One line about what this area does (optional)"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+            />
+          </label>
+          <p className="text-[11px] text-moss">
+            Created with Leader, Assistant, Secretary and Treasurer offices — add or rename offices when editing leadership.
+          </p>
+          <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {saving ? "Creating…" : "Create area"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

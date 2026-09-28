@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Briefcase, Check, ChevronDown, Crown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
+import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
 import {
   accountTypeOf,
   accountTypeLabel,
   ACCOUNT_TYPE_OPTIONS,
   type AccountTypeOption,
-  RolesCombobox,
-  refreshRoleRegister,
   formatRoles,
-  heldSystemRoles,
   roleDisplayLabel,
   orderRolesBySeniority,
-  SYSTEM_ROLE_HELP,
 } from "./roles-combobox";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { showAlert } from "@/lib/alerts";
@@ -1782,12 +1778,8 @@ export function UserManagement() {
   const [remainFriend, setRemainFriend] = useState(true);
   const [transferSubmitting, setTransferSubmitting] = useState(false);
 
-  // Leadership modal
+  // Roles modal (read-only): appointments live in Departments & Ministries.
   const [leadershipMember, setLeadershipMember] = useState<MemberUser | null>(null);
-  const [newRoles, setNewRoles] = useState<string[]>(["member"]);
-  // The subset of those roles the member would share as an assistant.
-  const [newAssistants, setNewAssistants] = useState<string[]>([]);
-  const [leadershipSubmitting, setLeadershipSubmitting] = useState(false);
 
   // Removal request modal
 
@@ -1932,36 +1924,6 @@ export function UserManagement() {
       setMessage({ type: "error", text: "Network error." });
     } finally {
       setTransferSubmitting(false);
-    }
-  };
-
-  // ── Leadership handler ───────────────────────────────────────────────────
-  const handleLeadershipSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!leadershipMember || newRoles.length === 0) return;
-    setLeadershipSubmitting(true);
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/users/${leadershipMember.id}/role/`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ roles: newRoles, assistant_roles: newAssistants }),
-      });
-      if (res.ok) {
-        setMessage({ type: "success", text: `Roles updated for ${leadershipMember.first_name || leadershipMember.username}.` });
-        setLeadershipMember(null);
-        setNewRoles(["member"]);
-        setNewAssistants([]);
-        refreshRoleRegister();
-        fetchMembers();
-      } else {
-        const d = await res.json();
-        setMessage({ type: "error", text: d.detail || d.roles || "Failed to update roles." });
-      }
-    } catch {
-      setMessage({ type: "error", text: "Network error." });
-    } finally {
-      setLeadershipSubmitting(false);
     }
   };
 
@@ -2432,17 +2394,6 @@ export function UserManagement() {
                               <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
                             </button>
                             <button
-                              onClick={() => {
-                                setLeadershipMember(m);
-                                setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]);
-                                setNewAssistants(m.assistant_roles || []);
-                                setOpenActionMenuId(null);
-                              }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
-                            >
-                              <Crown size={12} aria-hidden="true" /> Assign Leadership
-                            </button>
-                            <button
                               onClick={() => openAccountTypeModal(m)}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
@@ -2534,17 +2485,6 @@ export function UserManagement() {
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
                             <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
-                          </button>
-                          <button
-                            onClick={() => {
-                              setLeadershipMember(m);
-                              setNewRoles(m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]);
-                              setNewAssistants(m.assistant_roles || []);
-                              setOpenActionMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
-                          >
-                            <Crown size={12} aria-hidden="true" /> Assign Leadership
                           </button>
                           <button
                             onClick={() => openAccountTypeModal(m)}
@@ -3016,12 +2956,9 @@ export function UserManagement() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-bark">Access / Roles</label>
-                  <RolesCombobox
-                    selected={inviteFormData.roles}
-                    onChange={(roles) => setInviteFormData({ ...inviteFormData, roles })}
-                    align="left"
-                    hiddenRoles={["member"]}
-                  />
+                  <p className="mt-1 rounded-xl border border-sand-line bg-white px-3 py-2.5 text-[11px] text-moss">
+                    Roles are given in Departments &amp; Ministries — each area fills its own offices.
+                  </p>
                 </div>
               </div>
 
@@ -3450,42 +3387,29 @@ export function UserManagement() {
           <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="text-base font-bold text-bark">
-                Assign Role — {leadershipMember.first_name || leadershipMember.username}
+                Roles — {leadershipMember.first_name || leadershipMember.username}
               </h3>
               <button onClick={() => setLeadershipMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
-            <form onSubmit={handleLeadershipSubmit} className="mt-4 space-y-4">
+            <div className="mt-4 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-bark">Leadership Roles *</label>
+                <label className="block text-xs font-semibold text-bark">Roles held</label>
                 <p className="mt-0.5 text-[10px] text-moss">
-                  Tick every role this person holds. A person can hold several roles. {SYSTEM_ROLE_HELP}
+                  Roles are appointments, filled office by office in Departments &amp; Ministries — Eldership's First Elder, the choir's Director, a department's Treasurer.
                 </p>
-                <div className="mt-2">
-                  <RolesCombobox
-                    selected={newRoles}
-                    onChange={(roles, assists) => {
-                      setNewRoles(roles);
-                      setNewAssistants(assists);
-                    }}
-                    lockedRoles={heldSystemRoles(leadershipMember.roles, leadershipMember.role)}
-                    memberId={leadershipMember.id}
-                    assistants={newAssistants}
-                    showAssistants
-                    align="left"
-                  />
+                <div className="mt-2 rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5 text-xs text-bark">
+                  {orderRolesBySeniority(leadershipMember.roles && leadershipMember.roles.length > 0 ? leadershipMember.roles : [leadershipMember.role || "member"])
+                    .map((code) => roleDisplayLabel(code, leadershipMember.assistant_roles || []))
+                    .join(", ") || "Member"}
                 </div>
               </div>
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={leadershipSubmitting}
-                  className="rounded-xl bg-bark px-5 py-2 text-xs font-semibold text-white hover:bg-ember">
-                  {leadershipSubmitting ? "Saving..." : "Assign Role"}
-                </button>
+              <div className="flex justify-end gap-3 pt-1">
                 <button type="button" onClick={() => setLeadershipMember(null)}
                   className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
-                  Cancel
+                  Close
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
