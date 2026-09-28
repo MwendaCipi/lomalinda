@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquar
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -109,6 +110,9 @@ export default function ReconciliationPage() {
   const [purposeGivings, setPurposeGivings] = useState<Record<string, IndividualGiving[]>>({});
   const [loadingPurpose, setLoadingPurpose] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  // The desk-wide compact-rows preference, shared with the other tables.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [contactModalGiver, setContactModalGiver] = useState<IndividualGiving | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
@@ -702,21 +706,21 @@ export default function ReconciliationPage() {
                                 ) : (
                                   filteredList.map((g, gIdx) => (
                                     <tr key={g.id} className="hover:bg-[#faf7f2]">
-                                      <td className="px-4 py-3 text-xs font-semibold font-mono text-[#617068]">{gIdx + 1}</td>
-                                      <td className="px-4 py-3 text-xs text-[#617068]">
+                                      <td className={`px-4 ${rowPad} text-xs font-semibold font-mono text-[#617068]`}>{gIdx + 1}</td>
+                                      <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>
                                         {g.received_at ? new Date(g.received_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                                       </td>
-                                      <td className="px-4 py-3 font-semibold text-[#26352f]">{g.donor_name}</td>
-                                      <td className="px-4 py-3">
+                                      <td className={`px-4 ${rowPad} font-semibold text-[#26352f]`}>{g.donor_name}</td>
+                                      <td className={`px-4 ${rowPad}`}>
                                         <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#5f8067]">
                                           {g.payment_method}
                                         </span>
                                       </td>
-                                      <td className="px-4 py-3 font-mono text-xs text-[#617068]">{g.receipt_number || "—"}</td>
-                                      <td className="px-4 py-3 text-right font-semibold text-[#26352f]">
+                                      <td className={`px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{g.receipt_number || "—"}</td>
+                                      <td className={`px-4 ${rowPad} text-right font-semibold text-[#26352f]`}>
                                         {money(g.amount)}
                                       </td>
-                                      <td className="px-4 py-3">
+                                      <td className={`px-4 ${rowPad}`}>
                                         {g.receipt_sent_at ? (
                                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#3d7146]">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -732,7 +736,7 @@ export default function ReconciliationPage() {
                                           </span>
                                         )}
                                       </td>
-                                      <td className="px-4 py-3 text-center">
+                                      <td className={`px-4 ${rowPad} text-center`}>
                                         <div className="flex items-center justify-center gap-2">
                                           {(g.giver_phone || g.giver_email) && (
                                             <button
@@ -767,6 +771,7 @@ export default function ReconciliationPage() {
                                 <span className="text-xs text-[#617068]">
                                   Showing <strong className="text-[#26352f]">{filteredList.length}</strong> of <strong className="text-[#26352f]">{rawList.length}</strong> entries
                                 </span>
+                                <DensityToggle dense={dense} onToggle={toggleDensity} />
                                 <span className="font-bold text-[#26352f]">
                                   {expandedPurpose} Total: <span className="text-[#b36b3c]">{money(purposeTotal)}</span>
                                 </span>
@@ -872,20 +877,20 @@ export default function ReconciliationPage() {
                                 onClick={() => toggleExpandPurpose(row.purpose)}
                                 className="group cursor-pointer hover:bg-[#faf7f2] transition"
                               >
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#617068] font-mono">
+                                <td className={`px-4 ${rowPad} text-xs font-semibold text-[#617068] font-mono`}>
                                   {idx + 1}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#26352f] w-56 shrink-0 truncate">
+                                <td className={`px-4 ${rowPad} font-medium text-[#26352f] w-56 shrink-0 truncate`}>
                                   <div className="flex items-center justify-between gap-2 pr-2">
                                     <span className="font-semibold text-[#26352f] group-hover:text-[#b36b3c] transition">{row.purpose}</span>
                                     <ChevronRight className="h-4 w-4 text-[#617068] group-hover:text-[#b36b3c] group-hover:translate-x-0.5 transition shrink-0" />
                                   </div>
                                 </td>
-                                <td className="px-4 py-3.5 text-right text-[#617068]">{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</td>
-                                <td className="px-4 py-3.5 text-right text-[#617068]">{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</td>
-                                <td className="px-4 py-3.5 text-right text-[#617068]">{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</td>
-                                <td className="px-4 py-3.5 text-right font-semibold text-[#3d7146]">{Number(row.cash) > 0 ? money(row.cash) : "—"}</td>
-                                <td className="px-4 py-3.5 text-right font-bold text-[#26352f]">{money(row.total)}</td>
+                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right text-[#617068]`}>{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right font-semibold text-[#3d7146]`}>{Number(row.cash) > 0 ? money(row.cash) : "—"}</td>
+                                <td className={`px-4 ${rowPad} text-right font-bold text-[#26352f]`}>{money(row.total)}</td>
                               </tr>
                             ))
                           )}

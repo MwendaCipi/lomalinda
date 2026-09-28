@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { TransferManagement } from "./transfer-management";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -203,6 +204,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [isElder, setIsElder] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // One desk-wide row density, shared with the roster and the other tables.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   // The one request a notification email pointed at, so the desk can show it
   // rather than leaving an elder to hunt through every desk for it.
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
@@ -700,13 +704,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
       {/* The metrics sit on the toolbar row's far right; the table beneath
           is the scrolling region. */}
-      <div className="flex shrink-0 items-center justify-end pb-1 text-xs text-[#617068]">
+      <div className="flex shrink-0 items-center justify-end gap-2 pb-1 text-xs text-[#617068]">
         <span className="text-right">
           {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
           {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
           {statusFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
           {search.trim() ? ` · matching “${search.trim()}”` : ""}
         </span>
+        <DensityToggle dense={dense} onToggle={toggleDensity} />
       </div>
       </div>
 
@@ -746,28 +751,28 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                   : "hover:bg-[#faf9f5]"
               }`}
             >
-              <td className="max-w-[220px] px-4 py-3">
+              <td className={`max-w-[220px] px-4 ${rowPad}`}>
                 <p className="truncate font-semibold text-[#26352f]">{row.title}</p>
-                <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>
+                {!dense && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.contact}</p>}
               </td>
-              <td className="px-4 py-3">
+              <td className={`px-4 ${rowPad}`}>
                 <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
                   {KIND_META[row.kind].label}
                 </span>
               </td>
-              <td className="max-w-[280px] px-4 py-3">
+              <td className={`max-w-[280px] px-4 ${rowPad}`}>
                 <p className="line-clamp-2 text-[#415047]">{row.summary}</p>
-                {row.meta && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
+                {row.meta && !dense && <p className="mt-0.5 truncate text-xs text-[#617068]">{row.meta}</p>}
               </td>
-              <td className="px-4 py-3">
+              <td className={`px-4 ${rowPad}`}>
                 <span
                   className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPillClass(row.status)}`}
                 >
                   {row.statusLabel}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">{formatDate(row.created_at)}</td>
-              <td className="px-4 py-3">
+              <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-[#617068]`}>{formatDate(row.created_at)}</td>
+              <td className={`px-4 ${rowPad}`}>
                 {row.reviewable && isElder && (
                   <div className="flex justify-end gap-2">
                     {row.join && (
@@ -818,7 +823,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           renderCard={(row) => (
             <div
               data-request-row={row.key}
-              className={`space-y-2 rounded-2xl border bg-white p-4 shadow-sm ${
+              className={`space-y-2 rounded-2xl border bg-white shadow-sm ${dense ? "p-2.5" : "p-4"} ${
                 highlightKey === row.key
                   ? "border-[#b36b3c]/40 bg-[#fff7ec] ring-1 ring-inset ring-[#b36b3c]/40"
                   : "border-[#dfdbd1]"

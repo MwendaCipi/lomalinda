@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 export type DepartmentKey = "amm" | "awm" | "aym" | "apm" | "chaplaincy";
 
@@ -227,6 +228,9 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // The desk-wide compact-rows preference, shared with the other tables.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [events, setEvents] = useState<DeptEvent[]>(SAMPLE_EVENTS[deptKey] || []);
 
   // Event Modal State
@@ -340,9 +344,12 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                 className="w-full rounded-xl border border-[#dfdbd1] bg-[#faf9f5] pl-9 pr-3 py-2 text-xs font-medium text-[#26352f] focus:border-[#b36b3c] focus:outline-none"
               />
             </div>
-            <p className="text-xs text-[#617068]">
-              Showing <span className="font-bold text-[#26352f]">{filteredMembers.length}</span> members automatically assigned to this department.
-            </p>
+            <div className="flex items-center gap-3">
+              <DensityToggle dense={dense} onToggle={toggleDensity} />
+              <p className="text-xs text-[#617068]">
+                Showing <span className="font-bold text-[#26352f]">{filteredMembers.length}</span> members automatically assigned to this department.
+              </p>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm">
@@ -379,14 +386,14 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
 
                       return (
                         <tr key={m.id} className="transition hover:bg-[#faf8f3]">
-                          <td className="px-4 py-3">
+                          <td className={`px-4 ${rowPad}`}>
                             <p className="font-bold text-[#26352f]">
                               {m.first_name || m.last_name ? `${m.first_name || ""} ${m.last_name || ""}` : m.username}
                             </p>
-                            <p className="text-[11px] text-[#617068]">{m.email}</p>
+                            {!dense && <p className="text-[11px] text-[#617068]">{m.email}</p>}
                           </td>
-                          <td className="px-4 py-3 text-[#26352f] font-semibold">{m.gender || "—"}</td>
-                          <td className="px-4 py-3">
+                          <td className={`px-4 ${rowPad} text-[#26352f] font-semibold`}>{m.gender || "—"}</td>
+                          <td className={`px-4 ${rowPad}`}>
                             {ageVal !== undefined ? (
                               <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
                                 {ageVal} yrs ({ageVal < 18 ? "Child" : ageVal <= 35 ? "Youth" : "Adult"})
@@ -395,7 +402,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                               <span className="text-[#a1a1a1]">Not recorded</span>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className={`px-4 ${rowPad}`}>
                             {hasDis ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-0.5 text-[10px] font-bold text-teal-800">
                                 <Accessibility className="h-3 w-3" />
@@ -405,7 +412,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                               <span className="text-[#a1a1a1]">None</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-[#617068]">
+                          <td className={`px-4 ${rowPad} text-[#617068]`}>
                             {m.phone_number ? (
                               <span className="flex items-center gap-1">
                                 <Phone className="h-3 w-3 text-[#b36b3c]" />
@@ -415,7 +422,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                               <span className="text-[#a1a1a1]">No Phone</span>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className={`px-4 ${rowPad}`}>
                             <span className="rounded-md bg-[#26352f] px-2 py-0.5 text-[10px] font-bold text-white capitalize">
                               {m.account_type === "friend" ? "Friend of Church" : m.role || "Member"}
                             </span>

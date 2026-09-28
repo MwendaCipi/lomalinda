@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -66,6 +67,8 @@ function StatusPill({ status }: { status: string }) {
 export function MpesaRefundManager() {
   const [contributions, setContributions] = useState<RefundableContribution[]>([]);
   const [refunds, setRefunds] = useState<MpesaRefund[]>([]);
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
@@ -213,9 +216,12 @@ export function MpesaRefundManager() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dfdbd1] bg-white">
         <div className="flex items-center justify-between border-b border-[#dfdbd1] px-4 py-3 sm:px-5">
           <h3 className="text-sm font-bold text-[#26352f]">Recent M-Pesa Contributions</h3>
-          <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
-            {refundableCount} refundable
-          </span>
+          <div className="flex items-center gap-2">
+            <DensityToggle dense={dense} onToggle={toggleDensity} />
+            <span className="rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+              {refundableCount} refundable
+            </span>
+          </div>
         </div>
 
         {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
@@ -249,7 +255,7 @@ export function MpesaRefundManager() {
           }
           cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
           renderCard={(c) => (
-              <div key={c.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
+              <div key={c.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">
@@ -290,18 +296,18 @@ export function MpesaRefundManager() {
             )}
           renderRow={(c, idx) => (
                   <tr key={c.id} className="transition hover:bg-[#faf7f2]">
-                    <td className="px-4 py-3 text-xs text-[#617068]">{idx + 1}</td>
-                    <td className="px-4 py-3">
+                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{idx + 1}</td>
+                    <td className={`px-4 ${rowPad}`}>
                       <p className="font-semibold text-[#26352f]">{c.donor_name}</p>
                       {c.mpesa_receipt_number && (
                         <p className="font-mono text-[11px] text-[#617068]">{c.mpesa_receipt_number}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[#617068]">{c.purpose}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[#617068]">{c.phone_number || "—"}</td>
-                    <td className="px-4 py-3 text-right font-bold text-[#26352f]">{formatKes(c.amount)}</td>
-                    <td className="px-4 py-3 text-xs text-[#617068]">{formatDateTime(c.paid_at)}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{c.purpose}</td>
+                    <td className={`px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{c.phone_number || "—"}</td>
+                    <td className={`px-4 ${rowPad} text-right font-bold text-[#26352f]`}>{formatKes(c.amount)}</td>
+                    <td className={`px-4 ${rowPad} text-xs text-[#617068]`}>{formatDateTime(c.paid_at)}</td>
+                    <td className={`px-4 ${rowPad} text-center`}>
                       {c.refund ? (
                         <span className="inline-flex items-center gap-1.5">
                           <span className="text-[11px] font-semibold text-[#617068]">Refunded</span>

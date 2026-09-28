@@ -6,6 +6,7 @@ import { showAlert } from "@/lib/alerts";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -83,6 +84,9 @@ export function CampaignManagement({
   // The table search: drives are few, but the desk still wants to find one
   // by name or account reference without reading the whole list.
   const [search, setSearch] = useState("");
+  // Compact rows for the drive table — the one shared desk preference.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowDrive = densityCellPad(dense);
 
   // New Campaign Form state
   const todayStr = new Date().toISOString().split("T")[0];
@@ -594,14 +598,17 @@ export function CampaignManagement({
                     : "Follow the church's active fund drives, see progress toward each goal, and support a cause."}
                 </p>
               </div>
-              <input
-                type="text"
-                placeholder="Search by drive or account..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-64"
-                aria-label="Search fund drives"
-              />
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <DensityToggle dense={dense} onToggle={toggleDensity} className="shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search by drive or account..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-64"
+                  aria-label="Search fund drives"
+                />
+              </div>
             </div>
           </div>
 
@@ -1095,7 +1102,7 @@ export function CampaignManagement({
                   cardsClassName="grid gap-4"
                   renderRow={(c) => (
                           <tr key={c.id} className="transition hover:bg-[#fcfbf9]">
-                            <td className="px-5 py-4 align-middle">
+                            <td className={`px-5 ${rowDrive} align-middle`}>
                               <Link
                                 href={`/support/campaigns/${c.id}`}
                                 className="group block"
@@ -1105,12 +1112,12 @@ export function CampaignManagement({
                                 </div>
                               </Link>
                             </td>
-                            <td className="px-4 py-4 align-middle whitespace-nowrap">
+                            <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap`}>
                               <code className="rounded-md bg-[#f7f4ee] px-2 py-1 font-mono text-xs font-bold text-[#b36b3c] border border-[#dfdbd1]">
                                 {c.account_name || c.name}
                               </code>
                             </td>
-                            <td className="px-4 py-4 align-middle min-w-[180px]">
+                            <td className={`px-4 ${rowDrive} align-middle min-w-[180px]`}>
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="font-bold text-[#5f8067]">
@@ -1131,7 +1138,7 @@ export function CampaignManagement({
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-4 align-middle whitespace-nowrap text-xs text-[#617068]">
+                            <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap text-xs text-[#617068]`}>
                               <div>
                                 <span className="font-medium text-[#26352f]">{c.start_date}</span>
                               </div>
@@ -1140,13 +1147,13 @@ export function CampaignManagement({
                               </div>
                             </td>
                             {isAdminMode && (
-                              <td className="px-3 py-4 align-middle text-center whitespace-nowrap">
+                              <td className={`px-3 ${rowDrive} align-middle text-center whitespace-nowrap`}>
                                 <span className="inline-flex items-center gap-1 rounded-full bg-[#f7f4ee] px-2.5 py-1 text-xs font-semibold text-[#26352f] border border-[#dfdbd1]">
                                   🎴 {c.assigned_cards_count || 0}
                                 </span>
                               </td>
                             )}
-                            <td className="px-3 py-4 align-middle text-center whitespace-nowrap">
+                            <td className={`px-3 ${rowDrive} align-middle text-center whitespace-nowrap`}>
                               <span
                                 className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
                                   c.is_active
@@ -1157,7 +1164,7 @@ export function CampaignManagement({
                                 {c.is_active ? "Active" : "Ended"}
                               </span>
                             </td>
-                            <td className="px-5 py-4 align-middle text-right whitespace-nowrap relative">
+                            <td className={`px-5 ${rowDrive} align-middle text-right whitespace-nowrap relative`}>
                               <div className="relative inline-block text-left">
                                 <button
                                   type="button"

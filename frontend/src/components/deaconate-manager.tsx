@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 
@@ -166,6 +167,8 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   // Inventory state (server-backed: this is the real property register)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
@@ -181,7 +184,6 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
 
   // Row actions menu
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
-  const actionMenuRef = useRef<HTMLDivElement>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
 
   // Duty rota (session-only until the rota gets a backend)
@@ -211,12 +213,16 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
     loadInventory();
   }, []);
 
-  // Close the row actions menu when the click lands anywhere else.
+  // Close the row actions menu when the press lands anywhere else. The open
+  // menu is found by a marker on its own wrapper, not by a ref — the table row
+  // and the phone card both render, and a single ref only attaches to whichever
+  // mounted last, so a press on the other surface closed the menu before its
+  // click could land (the roster and treasury had the same bug).
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
-        setOpenActionMenuId(null);
-      }
+      const target = e.target as Element | null;
+      if (target?.closest?.("[data-action-menu]")) return;
+      setOpenActionMenuId(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -385,6 +391,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                     <option key={state.value} value={state.value}>{state.label}</option>
                   ))}
                 </select>
+                <DensityToggle dense={dense} onToggle={toggleDensity} />
                 <div className="relative min-w-0 sm:w-64">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#617068]" />
                   <input
@@ -420,22 +427,22 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               cardsEmpty={inventory.length === 0 ? "No property items registered yet." : "No property items match these filters."}
               renderRow={(item) => (
                 <tr key={item.id} className="hover:bg-[#f7f4ee]">
-                  <td className="py-3 font-mono font-bold text-[#b36b3c]">{item.tag_number || "—"}</td>
-                  <td className="py-3">
+                  <td className={rowPad + " font-mono font-bold text-[#b36b3c]"}>{item.tag_number || "—"}</td>
+                  <td className={rowPad}>
                     <p className="font-bold text-[#26352f]">{item.name}</p>
-                    {item.notes && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
+                    {item.notes && !dense && <p className="text-[11px] italic text-[#617068]">{item.notes}</p>}
                   </td>
-                  <td className="py-3">
+                  <td className={rowPad}>
                     <span className="rounded-md bg-[#ede8dc] px-2 py-0.5 text-[10px] font-bold text-[#26352f]">
                       {item.category_display}
                     </span>
                   </td>
-                  <td className="py-3 text-[#617068]">{item.location || "—"}</td>
-                  <td className="py-3 text-center font-bold text-[#26352f]">{item.quantity}</td>
-                  <td className="py-3">{inventoryStateBadge(item)}</td>
-                  <td className="py-3 text-[#617068]">{custodyCell(item)}</td>
-                  <td className="py-3 text-right">
-                    <div className="relative inline-block" ref={openActionMenuId === item.id ? actionMenuRef : undefined}>
+                  <td className={rowPad + " text-[#617068]"}>{item.location || "—"}</td>
+                  <td className={rowPad + " text-center font-bold text-[#26352f]"}>{item.quantity}</td>
+                  <td className={rowPad}>{inventoryStateBadge(item)}</td>
+                  <td className={rowPad + " text-[#617068]"}>{custodyCell(item)}</td>
+                  <td className={rowPad + " text-right"}>
+                    <div className="relative inline-block" data-action-menu>
                       <button
                         onClick={(e) => toggleActionMenu(item.id, e.currentTarget)}
                         className="rounded-lg border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:bg-[#f7f4ee]"
@@ -463,7 +470,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 </tr>
               )}
               renderCard={(item) => (
-                <div key={item.id} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm space-y-2">
+                <div key={item.id} className={`rounded-2xl border border-[#dfdbd1] bg-white shadow-sm space-y-2 ${dense ? "p-3" : "p-4"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-mono text-[11px] font-bold text-[#b36b3c]">{item.tag_number || "No tag"}</p>

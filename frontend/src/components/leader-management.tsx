@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS, refreshRoleRegister } from "./roles-combobox";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -27,6 +28,9 @@ export function LeaderManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  // The desk-wide compact-rows preference, shared with the other tables.
+  const { dense } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -269,18 +273,18 @@ export function LeaderManagement() {
           )}
         renderRow={(m, idx) => (
                 <tr key={m.id} className="hover:bg-[#f7f4ee]">
-                  <td className="py-3.5 font-medium text-[#617068]">
+                  <td className={`${rowPad} font-medium text-[#617068]`}>
                     {idx + 1}
                   </td>
-                  <td className="py-3.5 font-semibold text-[#26352f]">
+                  <td className={`${rowPad} font-semibold text-[#26352f]`}>
                     {m.first_name || m.last_name
                       ? `${m.first_name} ${m.last_name}`.trim()
                       : m.username}
                   </td>
-                  <td className="py-3.5 text-[#617068]">
+                  <td className={`${rowPad} text-[#617068]`}>
                     {m.phone_number || m.email || "—"}
                   </td>
-                  <td className="py-3.5 pr-2">
+                  <td className={`${rowPad} pr-2`}>
                     <RolesCombobox
                       selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
                       onChange={(newRoles, newAssistants) => handleRolesChange(m.id, newRoles, newAssistants)}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -45,6 +46,9 @@ export function TreasuryAccountsManager() {
   const router = useRouter();
   const [view, setView] = useState<"accounts" | "transactions">("accounts");
   const [loading, setLoading] = useState(false);
+  // One desk-wide row density, shared with the roster and the other tables.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // Modals
@@ -52,13 +56,18 @@ export function TreasuryAccountsManager() {
   // The row actions menu, and the account being edited in its dialog.
   const [openMenuAccountId, setOpenMenuAccountId] = useState<number | null>(null);
   const [editAccount, setEditAccount] = useState<TreasuryAccount | null>(null);
-  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
+  // Close the row actions menu on an outside click. The open menu is found by
+  // a marker on its own wrapper, not by a ref: the roster and the phone cards
+  // both render for every account, and a single ref only attaches to whichever
+  // mounted last — so a press on the other surface was judged an outside
+  // click, closing the menu before its click could land (the roster had the
+  // same bug; see its handler for the fuller note).
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
-        setOpenMenuAccountId(null);
-      }
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-action-menu]")) return;
+      setOpenMenuAccountId(null);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -425,6 +434,7 @@ export function TreasuryAccountsManager() {
             className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:w-60"
             aria-label={view === "accounts" ? "Search treasury accounts" : "Search account transactions"}
           />
+          <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
           <div
             className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:self-auto"
             role="group"
@@ -497,8 +507,7 @@ export function TreasuryAccountsManager() {
             </>
           }
           cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
-          renderCard={(acc) => (
-              <div key={acc.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
+          renderCard={(acc) => (                <div key={acc.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">{getAccountIcon(acc.account_type)}</div>
@@ -520,7 +529,7 @@ export function TreasuryAccountsManager() {
                   </span>
                 </div>
                 {acc.description && <p className="text-[11px] leading-relaxed text-[#617068]">{acc.description}</p>}
-                <div className="mt-2 rounded-2xl border border-[#dfdbd1] bg-white p-1.5">
+                <div className="mt-2 rounded-2xl border border-[#dfdbd1] bg-white p-1.5" data-action-menu>
                   <button
                     onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
                     aria-expanded={openMenuAccountId === acc.id}
@@ -558,8 +567,8 @@ export function TreasuryAccountsManager() {
               </div>            )}
           renderRow={(acc, idx) => (
                   <tr key={acc.id} className="hover:bg-[#faf7f2]">
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-[#617068]">{idx + 1}</td>
-                    <td className="px-4 py-3">
+                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-[#617068]`}>{idx + 1}</td>
+                    <td className={`px-4 ${rowPad}`}>
                       <div className="flex items-center gap-2.5">
                         <div className="shrink-0 rounded-lg bg-[#f7f4ee] p-1.5">{getAccountIcon(acc.account_type)}</div>
                         <span className="font-semibold text-[#26352f]" title={acc.description || acc.name}>
@@ -567,20 +576,20 @@ export function TreasuryAccountsManager() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-[#617068]" title="Shown in the M-Pesa prompt (max 12 characters)">
+                    <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-[#617068]`} title="Shown in the M-Pesa prompt (max 12 characters)">
                       {acc.name}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-[#617068]">{acc.account_number || "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-[#617068]`}>{acc.account_number || "—"}</td>
+                    <td className={`whitespace-nowrap px-4 ${rowPad}`}>
                       <span className="rounded-full bg-[#eef2ed] px-2.5 py-0.5 text-xs font-semibold text-[#5f8067]">
                         {acc.account_type_display || acc.account_type}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-[#26352f]">
+                    <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold text-[#26352f]`}>
                       KES {Number(acc.balance || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="relative flex items-center justify-center" ref={openMenuAccountId === acc.id ? actionsMenuRef : undefined}>
+                    <td className={`px-4 ${rowPad}`}>
+                      <div className="relative flex items-center justify-center" data-action-menu>
                         <button
                           onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
                           aria-expanded={openMenuAccountId === acc.id}
@@ -663,7 +672,7 @@ export function TreasuryAccountsManager() {
             renderCard={(tx) => {
               const isCredit = isCreditMovement(tx);
               return (
-                <div key={tx.id} className="space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] p-3.5 text-xs">
+                <div key={tx.id} className={`space-y-2 rounded-xl border border-[#dfdbd1] bg-[#faf7f2] text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-bold text-[#26352f]">{tx.account_name}</h4>
@@ -697,11 +706,11 @@ export function TreasuryAccountsManager() {
               const isCredit = isCreditMovement(tx);
               return (
                 <tr key={tx.id} className="hover:bg-[#faf7f2]">
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-[#617068]">
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-[#617068]`}>
                     {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-[#26352f]">{tx.account_name}</td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className={`whitespace-nowrap px-4 ${rowPad} font-semibold text-[#26352f]`}>{tx.account_name}</td>
+                  <td className={`whitespace-nowrap px-4 ${rowPad}`}>
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
                         isCredit ? "bg-[#eef2ed] text-[#3d7146]" : "bg-[#fdf2f2] text-[#b91c1c]"
@@ -711,18 +720,18 @@ export function TreasuryAccountsManager() {
                     </span>
                   </td>
                   <td
-                    className={`whitespace-nowrap px-4 py-3 text-right font-semibold ${
+                    className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold ${
                       isCredit ? "text-[#3d7146]" : "text-[#b91c1c]"
                     }`}
                   >
                     {isCredit ? "+" : "−"}
                     {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="max-w-[280px] truncate px-4 py-3 text-xs text-[#26352f]" title={tx.description || undefined}>
+                  <td className={`max-w-[280px] truncate px-4 ${rowPad} text-xs text-[#26352f]`} title={tx.description || undefined}>
                     {tx.description}
                     {tx.related_account_name && <span className="ml-1 text-[#617068]">({tx.related_account_name})</span>}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-[#617068]">
+                  <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-[#617068]`}>
                     {tx.reference || "—"}
                   </td>
                 </tr>

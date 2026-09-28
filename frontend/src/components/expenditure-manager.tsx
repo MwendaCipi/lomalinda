@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Receipt, Filter, Search, Trash2 } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -38,6 +39,9 @@ export function ExpenditureManager() {
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  // The desk-wide compact-rows preference, shared with the other tables.
+  const { dense, toggleDensity } = useTableDensity();
+  const rowPad = densityCellPad(dense);
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -243,6 +247,7 @@ export function ExpenditureManager() {
               <option key={c.key} value={c.key}>{c.label}</option>
             ))}
           </select>
+          <DensityToggle dense={dense} onToggle={toggleDensity} />
         </div>
       </div>
 
@@ -279,33 +284,33 @@ export function ExpenditureManager() {
                 ) : (
                   filteredExpenditures.map((exp) => (
                     <tr key={exp.id} className="hover:bg-[#faf9f6]">
-                      <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#617068]">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs text-[#617068]`}>
                         {exp.expenditure_date}
                       </td>
-                      <td className="px-5 py-3.5 font-bold text-[#26352f]">
+                      <td className={`px-5 ${rowPad} font-bold text-[#26352f]`}>
                         {exp.title}
-                        {exp.notes && (
+                        {exp.notes && !dense && (
                           <p className="text-[11px] font-normal text-[#617068] mt-0.5">{exp.notes}</p>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5">
+                      <td className={`whitespace-nowrap px-5 ${rowPad}`}>
                         <span className="inline-flex rounded-full bg-[#f7f4ee] px-2.5 py-0.5 text-[10px] font-bold text-[#617068] uppercase">
                           {exp.category_display || exp.category}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-xs font-semibold text-[#26352f]">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs font-semibold text-[#26352f]`}>
                         {exp.account_name || "—"}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#617068]">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs text-[#617068]`}>
                         {exp.vendor_payee || "—"}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-xs font-mono text-[#617068]">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs font-mono text-[#617068]`}>
                         {exp.receipt_number || "—"}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-right font-black text-[#b91c1c]">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-right font-black text-[#b91c1c]`}>
                         KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-center">
+                      <td className={`whitespace-nowrap px-5 ${rowPad} text-center`}>
                         <button
                           onClick={() => handleDeleteExpenditure(exp.id)}
                           className="rounded-lg p-1.5 text-[#617068] hover:bg-[#fdf2f2] hover:text-[#b91c1c] transition"
