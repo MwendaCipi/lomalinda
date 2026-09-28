@@ -5,6 +5,8 @@ import Link from "next/link";
 import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { GiveNowModal } from "@/components/give-now-modal";
+import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
+import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { eventLabel } from "@/lib/announcement-dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -59,10 +61,10 @@ export default function AnnouncementsPage() {
   const [supportAccount, setSupportAccount] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  // Pledging: which card's pledge form is open, and what is pledged in it.
-  const [pledgeFor, setPledgeFor] = useState<number | null>(null);
-  const [pledgeAmount, setPledgeAmount] = useState("");
-  const [pledgeBusy, setPledgeBusy] = useState(false);
+  // Pledging and in-kind giving happen in modals over the feed, so a member
+  // never loses their place to give.
+  const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
+  const [inKindFor, setInKindFor] = useState<FeedItem | null>(null);
   const [pledgeDone, setPledgeDone] = useState<number[]>([]);
   // Opinion answering: which card's form is open, what is typed or picked.
   const [opinionId, setOpinionId] = useState<number | null>(null);
@@ -130,33 +132,15 @@ export default function AnnouncementsPage() {
     }
   }
 
-  /** Record a pledge against a giving announcement, then confirm on the card. */
-  async function submitPledge(item: FeedItem) {
-    if (pledgeBusy || !pledgeAmount) return;
-    setPledgeBusy(true);
-    try {
-      const token = localStorage.getItem("access_token");
-      const response = await fetch(`${API_URL}/api/members/announcements/${item.id}/action/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          action_type: item.kind === "fund_drive" ? "respond" : item.action_type || "none",
-          pledge_amount: parseFloat(pledgeAmount),
-        }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "Unable to record your pledge.");
-      }
-      setPledgeDone((current) => [...current, item.id]);
-      setPledgeFor(null);
-      setPledgeAmount("");
-    } catch {
-      // The form stays open so the pledge is not lost; the member can retry.
-    } finally {
-      setPledgeBusy(false);
-    }
-  }
+  /** One giving card's pledge target — a drive pledges as a response. */
+  const pledgeTargetFor = (item: FeedItem): PledgeTarget => ({
+    id: item.id,
+    title: item.title,
+    action_type: item.kind === "fund_drive" ? "respond" : item.action_type || "none",
+    support_account_display: item.support_account_display || item.fund_drive?.title || null,
+    event_date_from: item.event_date_from,
+    event_date_to: item.event_date_to,
+  });
 
   return (
     <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
@@ -316,18 +300,18 @@ export default function AnnouncementsPage() {
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
-                              disabled={pledgeDone.includes(item.id)}
-                              onClick={() => { setPledgeFor(item.id); setPledgeAmount(""); }}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] disabled:opacity-50 sm:text-sm"
+                              onClick={() => setPledgeTarget(pledgeTargetFor(item))}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                             >
                               Pledge
                             </button>
-                            <Link
-                              href="/support/in-kind"
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                            <button
+                              type="button"
+                              onClick={() => setInKindFor(item)}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                             >
                               In-kind
-                            </Link>
+                            </button>
                             <button
                               type="button"
                               onClick={() => setSupportAccount(item.support_account_display ?? null)}
@@ -348,18 +332,18 @@ export default function AnnouncementsPage() {
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
-                              disabled={pledgeDone.includes(item.id)}
-                              onClick={() => { setPledgeFor(item.id); setPledgeAmount(""); }}
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] disabled:opacity-50 sm:text-sm"
+                              onClick={() => setPledgeTarget(pledgeTargetFor(item))}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                             >
                               Pledge
                             </button>
-                            <Link
-                              href="/support/in-kind"
-                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
+                            <button
+                              type="button"
+                              onClick={() => setInKindFor(item)}
+                              className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                             >
                               In-kind
-                            </Link>
+                            </button>
                             <Link
                               href={driveGiveHref(drive)}
                               className="rounded-full bg-[#3d7146] px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-[#335e3a] sm:text-sm"
@@ -370,39 +354,10 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
-                      {/* The pledge form, opened by the card's Pledge button;
-                          the pledge lands in the announcement's responses,
-                          where the CSV export reaches it. */}
-                      {pledgeFor === item.id && (
-                        <div className="mt-4 rounded-2xl border border-[#e5dfd2] bg-[#faf7f0] p-4">
-                          <label className="block text-xs font-semibold text-[#26352f]">Pledge Amount (KES)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="e.g. 5000"
-                            value={pledgeAmount}
-                            onChange={(event) => setPledgeAmount(event.target.value)}
-                            className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm outline-none focus:border-[#b36b3c]"
-                          />
-                          <div className="mt-3 flex items-center gap-3">
-                            <button
-                              type="button"
-                              disabled={pledgeBusy || !pledgeAmount}
-                              onClick={() => submitPledge(item)}
-                              className="rounded-full bg-[#b36b3c] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
-                            >
-                              {pledgeBusy ? "Submitting..." : "Record pledge"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setPledgeFor(null); setPledgeAmount(""); }}
-                              className="text-sm font-semibold text-[#617068] hover:underline"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      {/* The pledge itself is recorded in the modal the card's
+                          Pledge button opens; the pledge lands in the
+                          announcement's responses, where the CSV export
+                          reaches it. The card keeps the confirmation. */}
                       {pledgeDone.includes(item.id) && (
                         <p className="mt-3 text-sm font-semibold text-[#3d7146]">Thank you — your pledge has been recorded.</p>
                       )}
@@ -423,6 +378,23 @@ export default function AnnouncementsPage() {
         open={Boolean(supportAccount)}
         onClose={() => setSupportAccount(null)}
         presetAccount={supportAccount ?? undefined}
+      />
+
+      {/* Pledging and in-kind giving open over the feed, so a member gives
+          from the card that asked without losing their place in it. */}
+      <PledgeModal
+        open={Boolean(pledgeTarget)}
+        onClose={() => setPledgeTarget(null)}
+        target={pledgeTarget}
+        onPledged={() => {
+          if (pledgeTarget) setPledgeDone((current) => [...current, pledgeTarget.id]);
+        }}
+      />
+      <InKindGiftModal
+        open={Boolean(inKindFor)}
+        onClose={() => setInKindFor(null)}
+        defaultPurpose={inKindFor?.support_account_display || inKindFor?.fund_drive?.title || undefined}
+        announcementTitle={inKindFor?.title}
       />
     </main>
   );

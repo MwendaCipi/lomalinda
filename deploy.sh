@@ -62,6 +62,15 @@ backend/venv/bin/python backend/manage.py migrate_schemas
 echo "🏗️ Building Next.js production web app..."
 (cd frontend && npm run build)
 
+echo "⏰ Ensuring the daily pledge-reminder cron is installed..."
+# A pledge is reminded about the day before it falls due, which only works if
+# something runs without anyone opening the site. Idempotent: the line is
+# rewritten, never duplicated, so re-running the deploy changes nothing.
+CRON_LINE="0 3 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_pledge_reminders >> /var/log/loma_linda_pledge_reminders.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'send_pledge_reminders' || true; echo "$CRON_LINE" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'send_pledge_reminders' > /dev/null \
+  || fail "the pledge-reminder cron entry could not be installed."
+
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 

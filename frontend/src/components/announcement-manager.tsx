@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { eventLabel } from "@/lib/announcement-dates";
@@ -164,6 +164,121 @@ function PollTally({ item }: { item: Announcement }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/** One pledge, as the office's list reads it. */
+type PledgeRow = {
+  id: number;
+  member_name: string;
+  member_email: string;
+  amount: number | null;
+  due_date: string | null;
+  redeemed: boolean;
+  redeemed_via: string;
+};
+
+function pledgeDay(iso: string | null) {
+  if (!iso) return "no date promised";
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+/**
+ * The pledges a giving announcement drew, for the officer who has to close
+ * them.
+ *
+ * Most pledges close themselves — the member gives, and the church's own
+ * records match the gift to the promise — so this list is about the ones that
+ * do not: a cash gift recorded without a name, or a promise the office knows
+ * came in. Each row can be marked given, and reopened if that was a mistake;
+ * the member can do the same from their own side.
+ */
+function PledgePanel({ item }: { item: Announcement }) {
+  const isGiving = item.announcement_type === "promotion";
+  const [rows, setRows] = useState<PledgeRow[]>([]);
+  const [totals, setTotals] = useState({ outstanding: 0, pledged: 0 });
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const loadPledges = useCallback(() => {
+    if (!isGiving) return;
+    const token = localStorage.getItem("access_token");
+    fetch(`${API_URL}/api/members/announcements/${item.id}/pledges/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setRows(Array.isArray(data.pledges) ? data.pledges : []);
+        setTotals({ outstanding: data.outstanding ?? 0, pledged: data.pledged_total ?? 0 });
+      })
+      .catch(() => {});
+  }, [item.id, isGiving]);
+
+  useEffect(() => { loadPledges(); }, [loadPledges]);
+
+  if (!isGiving) return null;
+
+  const markPledge = async (pledge: PledgeRow) => {
+    setBusyId(pledge.id);
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_URL}/api/members/pledges/${pledge.id}/redeem/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ redeemed: !pledge.redeemed }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not update the pledge.");
+      }
+      loadPledges();
+    } catch (error) {
+      showAlert("Could not update", error instanceof Error ? error.message : "Could not update the pledge.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-1 rounded-xl border border-[#eeeae2] bg-[#f7f4ee] p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[#617068]">
+        {totals.outstanding === 0
+          ? `All ${rows.length} pledge${rows.length === 1 ? "" : "s"} honoured`
+          : `${totals.outstanding} of ${rows.length} pledge${rows.length === 1 ? "" : "s"} still owed · KES ${totals.pledged.toLocaleString()}`}
+      </p>
+      <div className="mt-1.5 space-y-1.5">
+        {rows.map((pledge) => (
+          <div key={pledge.id} className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className={`truncate text-[11px] ${pledge.redeemed ? "text-[#617068]" : "font-semibold text-[#26352f]"}`}>
+                {pledge.member_name}
+                {pledge.amount ? ` · KES ${pledge.amount.toLocaleString()}` : ""}
+              </p>
+              <p className="truncate text-[10px] text-[#617068]">
+                {pledge.redeemed
+                  ? `Given${pledge.redeemed_via === "giving" ? " — matched to their giving" : pledge.redeemed_via === "member" ? " — ticked off by them" : " — marked here"}`
+                  : `promised by ${pledgeDay(pledge.due_date)}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => markPledge(pledge)}
+              disabled={busyId === pledge.id}
+              className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition disabled:opacity-50 ${
+                pledge.redeemed
+                  ? "border-[#c9c5bb] bg-white text-[#617068] hover:border-[#b36b3c]"
+                  : "border-[#5f8067] bg-[#5f8067] text-white hover:bg-[#4e6b55]"
+              }`}
+            >
+              {pledge.redeemed ? "Reopen" : "Mark given"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -629,7 +744,7 @@ export function AnnouncementManager({
                                   ? "Through SMS"
                                   : channel === "email"
                                     ? "Through Email"
-                                    : "As Phone Notification"}
+                                    : "As a Notification"}
                             </span>
                           </button>
                         );
@@ -974,6 +1089,7 @@ export function AnnouncementManager({
                 <p className="text-[10px] font-semibold text-[#b36b3c]">Event: {eventLabel(item)}</p>
               )}
               <PollTally item={item} />
+              <PledgePanel item={item} />
               {item.href && (
                 <p className="text-[10px]">
                   <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#b36b3c] underline underline-offset-2">

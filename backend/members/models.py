@@ -545,6 +545,26 @@ class AnnouncementResponse(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='announcement_responses')
     action_type = models.CharField(max_length=40, choices=ACTION_TYPE_CHOICES)
     pledge_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # A pledge is a promise with a date. The member says what they will give
+    # and the day they will have given it by, and that day never runs past the
+    # event the announcement is about — a gift promised after the drive has
+    # closed is no help to the drive. Blank means a promise with no day, which
+    # is simply never reminded about.
+    pledge_due_date = models.DateField(null=True, blank=True, help_text='The day this pledge was promised to be redeemed by')
+    # A pledge closes when the gift arrives. Three doors lead there — the
+    # member's own giving is matched, or they tick it off, or the office does —
+    # and how it closed is kept so the office can tell a gift from a promise
+    # somebody merely struck out.
+    PLEDGE_REDEEMED_VIA_CHOICES = [
+        ('giving', 'Matched to their giving'),
+        ('member', 'Ticked off by the member'),
+        ('office', 'Marked by the office'),
+    ]
+    pledge_redeemed_at = models.DateTimeField(null=True, blank=True)
+    pledge_redeemed_via = models.CharField(max_length=10, choices=PLEDGE_REDEEMED_VIA_CHOICES, blank=True, default='')
+    # The one-day-before nudge goes out once. The stamp is what makes a re-run
+    # (or a second cron entry by mistake) harmless instead of a second email.
+    pledge_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     response_text = models.TextField(blank=True)
     # The option a member picked on a closed-response opinion post, stored
     # exactly as the officer wrote it. Free-text answers keep using

@@ -46,6 +46,13 @@ from .models import DEPARTMENT_CHOICES, DepartmentBudget, DepartmentEvent, Depar
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
+from .pledges import (
+    redeem_due_pledges,
+    redeem_pledges_matched_by_giving,
+    reopen_pledge,
+    REDEEMED_BY_MEMBER,
+    REDEEMED_BY_OFFICE,
+)
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .requests import notify_request_safely, send_membership_approval_email
 from .treasury import credit_account, credit_contribution_lines
@@ -1846,6 +1853,29 @@ class AnnouncementActionView(APIView):
 
         action_type = request.data.get('action_type', announcement.action_type)
         pledge_amount = request.data.get('pledge_amount')
+        # A pledge carries the day the member promises to redeem it by, and it
+        # never runs past the event the announcement is about: the drive needs
+        # the gift while the drive is still on. A pledge sent without a day
+        # (an older client) is still recorded — it simply earns no reminder.
+        pledge_due_date = None
+        if request.data.get('pledge_due_date'):
+            pledge_due_date = parse_date(str(request.data.get('pledge_due_date')))
+            if pledge_due_date is None:
+                return Response(
+                    {'pledge_due_date': 'Give the day you will give by as YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            event_end = announcement.event_date_to or announcement.event_date_from
+            if event_end and pledge_due_date > event_end:
+                return Response(
+                    {'pledge_due_date': f'Choose a day on or before the event date, {event_end.strftime("%d %B %Y")}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if pledge_due_date < timezone.localdate():
+                return Response(
+                    {'pledge_due_date': 'The day you will give by cannot be in the past.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         response_text = request.data.get('response_text', '')
         respondent_name = request.data.get('respondent_name', '')
         respondent_phone = request.data.get('respondent_phone', '')
@@ -1869,6 +1899,7 @@ class AnnouncementActionView(APIView):
             user=user,
             action_type=action_type,
             pledge_amount=pledge_amount if pledge_amount else None,
+            pledge_due_date=pledge_due_date if pledge_amount else None,
             response_text=response_text,
             response_choice=response_choice,
             respondent_name=respondent_name,
@@ -1880,6 +1911,141 @@ class AnnouncementActionView(APIView):
             'id': response_obj.id,
             'action_type': response_obj.action_type,
         }, status=status.HTTP_201_CREATED)
+
+
+def pledge_payload(pledge):
+    """One pledge, shaped for the member's modal and the office's list."""
+    member = pledge.user
+    return {
+        'id': pledge.id,
+        'announcement': pledge.announcement_id,
+        'member_id': pledge.user_id,
+        'member_name': (member.get_full_name() or member.username) if member else (pledge.respondent_name or 'Guest'),
+        'member_email': (member.email if member else '') or '',
+        'amount': float(pledge.pledge_amount) if pledge.pledge_amount is not None else None,
+        'due_date': pledge.pledge_due_date,
+        'redeemed': pledge.pledge_redeemed_at is not None,
+        'redeemed_at': pledge.pledge_redeemed_at,
+        'redeemed_via': pledge.pledge_redeemed_via,
+        'reminded_at': pledge.pledge_reminder_sent_at,
+        'created_at': pledge.created_at,
+    }
+
+
+class AnnouncementPledgeView(APIView):
+    """The member's own pledge against one announcement, if there is one.
+
+    The pledge modal opens on somebody who may have pledged weeks ago, so it
+    asks this first: what they promised, the day they promised it by, and
+    whether it has been honoured. That is what lets the modal read "Mark as
+    given" instead of asking them to pledge the same thing twice.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        pledge = (
+            AnnouncementResponse.objects.filter(
+                announcement_id=pk, user=request.user, pledge_amount__isnull=False,
+            )
+            .select_related('user', 'announcement')
+            .order_by('-created_at')
+            .first()
+        )
+        return Response({'pledge': pledge_payload(pledge) if pledge else None})
+
+
+class AnnouncementPledgeListView(APIView):
+    """Every pledge a giving announcement drew — the office's list."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not can_manage_announcements(request.user):
+            return Response(
+                {'detail': 'Only officers who manage announcements can read pledges.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        announcement = Announcement.objects.filter(pk=pk).first()
+        if announcement is None:
+            return Response({'detail': 'Announcement not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Close whatever the members' giving has already honoured, so the list
+        # the office reads is current rather than as it stood yesterday.
+        all_pledges = AnnouncementResponse.objects.filter(announcement=announcement)
+        redeem_pledges_matched_by_giving(all_pledges)
+        rows = (
+            AnnouncementResponse.objects.filter(announcement=announcement, pledge_amount__isnull=False)
+            .select_related('user')
+            .order_by('pledge_redeemed_at', 'pledge_due_date')
+        )
+        pledges = [pledge_payload(row) for row in rows]
+        return Response({
+            'pledges': pledges,
+            'outstanding': sum(1 for row in pledges if not row['redeemed']),
+            'pledged_total': sum(row['amount'] or 0 for row in pledges),
+        })
+
+
+class PledgeRedeemView(APIView):
+    """Close a pledge — by the member who made it, or by the church office.
+
+    Both doors matter. A member who gave in cash wants their own record to
+    agree with the church's; the office needs to close a pledge whose gift was
+    recorded without a name on it. Only the office may *reopen* one, because
+    undoing somebody else's closure is a correction, not a preference.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        pledge = (
+            AnnouncementResponse.objects.filter(pk=pk, pledge_amount__isnull=False)
+            .select_related('announcement', 'user')
+            .first()
+        )
+        if pledge is None:
+            return Response({'detail': 'Pledge not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = getattr(request.user, 'member_profile', None)
+        is_owner = pledge.user_id is not None and pledge.user_id == request.user.pk
+        is_office = bool(profile and profile.has_role('admin', 'elder', 'clerk', 'treasurer'))
+        if not (is_owner or is_office):
+            return Response(
+                {'detail': 'Only the member who pledged, or the church office, can close a pledge.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        redeemed = request.data.get('redeemed', True)
+        if isinstance(redeemed, str):
+            word = redeemed.strip().lower()
+            if word in ('true', '1', 'yes'):
+                redeemed = True
+            elif word in ('false', '0', 'no'):
+                redeemed = False
+            else:
+                redeemed = None
+        if not isinstance(redeemed, bool):
+            return Response(
+                {'redeemed': 'Send redeemed as true (given) or false (still owed).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not redeemed and not is_office:
+            return Response(
+                {'detail': 'Only the church office can reopen a pledge that has been closed.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if redeemed:
+            via = REDEEMED_BY_OFFICE if is_office else REDEEMED_BY_MEMBER
+            redeem_due_pledges(pledge, via)
+        else:
+            reopen_pledge(pledge)
+
+        data = pledge_payload(pledge)
+        data['detail'] = (
+            'Pledge marked as given.' if redeemed else 'Pledge reopened — it will be reminded about again.'
+        )
+        return Response(data)
 
 
 class MissionReadingRedirectView(APIView):
@@ -6823,7 +6989,13 @@ class AnnouncementResponsesCsvView(APIView):
         if is_opinion:
             header = ['Respondent', 'Phone', 'Answer', 'Answered on']
         else:
-            header = ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Answered on']
+            # A pledge's promise day and whether it has been honoured ride
+            # along: the office takes this sheet to the board, and a pledge
+            # nobody has heard about is exactly what it needs to see.
+            header = [
+                'Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)',
+                'Promised by', 'Pledge status', 'Closed by', 'Answered on',
+            ]
         writer.writerow(header)
 
         for response in announcement.responses.select_related('user').order_by('created_at'):
@@ -6840,6 +7012,9 @@ class AnnouncementResponsesCsvView(APIView):
                     name or 'Anonymous', phone, response.get_action_type_display(),
                     response.response_text or '',
                     str(response.pledge_amount) if response.pledge_amount is not None else '',
+                    response.pledge_due_date.strftime('%Y-%m-%d') if response.pledge_due_date else '',
+                    ('Redeemed' if response.pledge_redeemed_at else 'Outstanding') if response.pledge_amount is not None else '',
+                    response.get_pledge_redeemed_via_display() if response.pledge_redeemed_via else '',
                     when,
                 ])
 

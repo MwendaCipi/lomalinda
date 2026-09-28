@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, RotateCw } from "lucide-react";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { showAlert } from "@/lib/alerts";
+import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -38,14 +39,8 @@ const IN_KIND_PURPOSES = [
 ];
 
 function GiveInKindPageContent() {
-  const [items, setItems] = useState("");
-  const [purpose, setPurpose] = useState("In-Kind Offering");
-  const [donorName, setDonorName] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [records, setRecords] = useState<InKindRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
-  const [message, setMessage] = useState("");
   // The giving form lives in a modal, opened by Give Now — the page itself is
   // the record of what has been given, mirroring the money-giving page.
   const [showGiveModal, setShowGiveModal] = useState(false);
@@ -108,15 +103,6 @@ function GiveInKindPageContent() {
       // A member who revealed the record keeps it revealed on their next
       // visit; sign-out clears the key so shared devices start private.
       if (localStorage.getItem(GIVINGS_VISIBLE_KEY) === "1") setGivingsVisible(true);
-      fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((me) => {
-          if (me) {
-            const full = `${me.first_name} ${me.last_name}`.trim();
-            setDonorName(full || me.username || "");
-          }
-        })
-        .catch(() => {});
     }
   }, []);
 
@@ -130,59 +116,12 @@ function GiveInKindPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromDate, toDate, purposeFilter, reportSearch]);
 
-  // Opening the form never wears the previous attempt's message.
-  useEffect(() => {
-    if (showGiveModal) setMessage("");
-  }, [showGiveModal]);
-
   const totalPages = Math.max(1, Math.ceil(serverCount / PAGE_SIZE));
 
   const goToPage = (target: number) => {
     const clamped = Math.min(Math.max(1, target), totalPages);
     setPage(clamped);
     fetchRecords(clamped);
-  };
-
-  const itemCount = items.split("\n").filter((l) => l.trim()).length;
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setMessage("");
-    setSubmitting(true);
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/in-kind/`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items,
-          purpose,
-          donor_name: donorName,
-          notes,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setShowGiveModal(false);
-        showAlert("Gift Recorded", "Thank you! Your in-kind giving has been recorded.", "success");
-        setItems("");
-        setNotes("");
-        setPage(1);
-        fetchRecords(1);
-      } else {
-        const detail = data.detail || Object.values(data).flat().join(" ") || "Failed to record in-kind giving.";
-        setMessage(detail);
-        showAlert("Not Submitted", detail, "error");
-      }
-    } catch {
-      setMessage("Network error. Please try again.");
-      showAlert("Network Error", "Could not reach the server. Please try again.", "error");
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   // ── In-Kind Report ──────────────────────────────────────────
@@ -519,99 +458,13 @@ function GiveInKindPageContent() {
         </div>
       </div>
 
-      {/* ── Give Now modal (in-kind) ── */}
-      {showGiveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="in-kind-modal-title"
-            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-[#dfdbd1] sm:p-8"
-          >
-            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
-              <div>
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-[#b36b3c] sm:block">In-Kind Giving</p>
-                <h3 id="in-kind-modal-title" className="text-lg font-bold text-[#26352f]">Give Now</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowGiveModal(false)}
-                disabled={submitting}
-                className="text-xl leading-none text-[#617068] hover:text-[#26352f]"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-              {message && (
-                <p className="rounded-xl p-3 text-xs font-semibold bg-red-50 text-red-700">
-                  {message}
-                </p>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">
-                  Items donated <span className="text-[#617068]">({itemCount} item{itemCount === 1 ? "" : "s"})</span> *
-                </label>
-                <textarea
-                  required
-                  rows={5}
-                  value={items}
-                  onChange={(e) => setItems(e.target.value)}
-                  placeholder={"One item per row, e.g.\n2 bags of maize flour\n1 carton of cooking oil\n50 exercise books"}
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-3 text-sm focus:border-[#b36b3c] focus:outline-none"
-                />
-                <p className="mt-1 text-[11px] text-[#617068]">Write each item on its own line.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Account</label>
-                  <select
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  >
-                    {IN_KIND_PURPOSES.map((p) => (
-                      <option key={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#26352f]">Your name</label>
-                  <input
-                    type="text"
-                    value={donorName}
-                    onChange={(e) => setDonorName(e.target.value)}
-                    placeholder="Leave blank to give anonymously"
-                    className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#26352f]">Notes (optional)</label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Anything the stewardship team should know"
-                  className="mt-1.5 w-full rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting || itemCount === 0}
-                className="w-full rounded-xl bg-[#b36b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#96552c] disabled:opacity-60"
-              >
-                {submitting ? "Recording…" : "Record In-Kind Gift"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* The giving form, the same modal the announcements open — one form,
+          so a gift is filed identically wherever it is given. */}
+      <InKindGiftModal
+        open={showGiveModal}
+        onClose={() => setShowGiveModal(false)}
+        onRecorded={() => { setPage(1); fetchRecords(1); }}
+      />
     </main>
   );
 }

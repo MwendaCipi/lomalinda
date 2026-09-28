@@ -2637,6 +2637,277 @@ class InvitationExpiryTests(APITestCase):
         self.assertGreater(stale.expires_at, timezone.now())
 
 
+class PledgeLifecycleTests(APITestCase):
+    """A pledge is a promise with a date, and it closes when the gift arrives.
+
+    The date is capped at the event the announcement is about, a gift already
+    recorded closes the pledge without anyone remembering anything, and the
+    member or the office can close one the match cannot see. The reminder for
+    a standing pledge goes out the day before — once.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('pledge.admin', 'pledge.admin@example.com', 'ChurchAdmin#2026')
+        self.admin.first_name = 'Ruth'
+        self.admin.save()
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+
+        self.member = User.objects.create_user('pledge.member', 'pledge.member@example.com', 'MemberPass#2026')
+        self.member.first_name = 'Peter'
+        self.member.last_name = 'Mwangi'
+        self.member.save()
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+        self.other = User.objects.create_user('pledge.other', 'pledge.other@example.com', 'OtherPass#2026')
+        MemberProfile.objects.create(user=self.other, role='member', roles='member')
+
+        self.today = timezone.localdate()
+        self.announcement = Announcement.objects.create(
+            title='Roof repair fund', text='Help us replace the roof.',
+            visibility='members_only', announcement_type='promotion',
+            support_account='Building Fund', action_type='local_church_budget',
+            event_date_from=self.today, event_date_to=self.today + timedelta(days=30),
+        )
+
+    def _pledge(self, amount='5000', due=None, user=None):
+        self.client.force_authenticate(user or self.member)
+        payload = {'action_type': 'local_church_budget', 'pledge_amount': amount}
+        if due is not None:
+            payload['pledge_due_date'] = due
+        return self.client.post(
+            f'/api/members/announcements/{self.announcement.id}/action/', payload, format='json'
+        )
+
+    def _standing_pledge(self, due=None, amount='5000'):
+        self._pledge(amount=amount, due=due if due is not None else (self.today + timedelta(days=10)).isoformat())
+        return AnnouncementResponse.objects.filter(announcement=self.announcement, user=self.member).latest('created_at')
+
+    def test_a_pledge_keeps_the_day_the_member_promised(self):
+        due = (self.today + timedelta(days=10)).isoformat()
+
+        response = self._pledge(due=due)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        pledge = AnnouncementResponse.objects.get(announcement=self.announcement, user=self.member)
+        self.assertEqual(pledge.pledge_due_date.isoformat(), due)
+        self.assertIsNone(pledge.pledge_redeemed_at)
+
+    def test_a_promise_beyond_the_event_date_is_refused(self):
+        """The drive needs the gift while the drive is still on."""
+        beyond = (self.today + timedelta(days=45)).isoformat()
+
+        response = self._pledge(due=beyond)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('pledge_due_date', response.data)
+        self.assertFalse(AnnouncementResponse.objects.filter(announcement=self.announcement).exists())
+
+    def test_the_event_date_itself_is_allowed(self):
+        response = self._pledge(due=(self.today + timedelta(days=30)).isoformat())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_a_day_in_the_past_is_refused(self):
+        response = self._pledge(due=(self.today - timedelta(days=1)).isoformat())
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_date_that_is_not_a_date_is_refused(self):
+        response = self._pledge(due='next sabbath')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_pledge_with_no_day_is_still_recorded(self):
+        """An older client sends none; the promise is kept, the reminder is not."""
+        response = self._pledge()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        pledge = AnnouncementResponse.objects.get(announcement=self.announcement, user=self.member)
+        self.assertIsNone(pledge.pledge_due_date)
+
+    def test_the_member_reads_back_their_own_pledge(self):
+        self._standing_pledge()
+        self.client.force_authenticate(self.member)
+
+        response = self.client.get(f'/api/members/announcements/{self.announcement.id}/pledge/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pledge']['amount'], 5000.0)
+        self.assertFalse(response.data['pledge']['redeemed'])
+
+    def test_another_member_sees_no_pledge_of_their_own(self):
+        self._standing_pledge()
+        self.client.force_authenticate(self.other)
+
+        response = self.client.get(f'/api/members/announcements/{self.announcement.id}/pledge/')
+
+        self.assertIsNone(response.data['pledge'])
+
+    def test_the_member_closes_their_own_pledge(self):
+        pledge = self._standing_pledge()
+        self.client.force_authenticate(self.member)
+
+        response = self.client.patch(f'/api/members/pledges/{pledge.id}/redeem/', {'redeemed': True}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pledge.refresh_from_db()
+        self.assertIsNotNone(pledge.pledge_redeemed_at)
+        self.assertEqual(pledge.pledge_redeemed_via, 'member')
+
+    def test_a_stranger_cannot_close_somebody_elses_pledge(self):
+        pledge = self._standing_pledge()
+        self.client.force_authenticate(self.other)
+
+        response = self.client.patch(f'/api/members/pledges/{pledge.id}/redeem/', {'redeemed': True}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.pledge_redeemed_at)
+
+    def test_only_the_office_can_reopen_a_closed_pledge(self):
+        pledge = self._standing_pledge()
+        self.client.force_authenticate(self.member)
+        self.client.patch(f'/api/members/pledges/{pledge.id}/redeem/', {'redeemed': True}, format='json')
+
+        refused = self.client.patch(f'/api/members/pledges/{pledge.id}/redeem/', {'redeemed': False}, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.admin)
+        reopened = self.client.patch(f'/api/members/pledges/{pledge.id}/redeem/', {'redeemed': False}, format='json')
+        self.assertEqual(reopened.status_code, status.HTTP_200_OK)
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.pledge_redeemed_at)
+
+    def test_a_gift_already_given_closes_the_pledge_by_itself(self):
+        pledge = self._standing_pledge()
+        Contribution.objects.create(
+            member=self.member, amount=Decimal('5000.00'), purpose='Building Fund',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+        )
+
+        from .pledges import redeem_pledges_matched_by_giving
+        self.assertEqual(redeem_pledges_matched_by_giving(), 1)
+
+        pledge.refresh_from_db()
+        self.assertEqual(pledge.pledge_redeemed_via, 'giving')
+
+    def test_a_gift_for_something_else_does_not_close_the_pledge(self):
+        pledge = self._standing_pledge()
+        Contribution.objects.create(
+            member=self.member, amount=Decimal('5000.00'), purpose='Tithe',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+        )
+
+        from .pledges import redeem_pledges_matched_by_giving
+        self.assertEqual(redeem_pledges_matched_by_giving(), 0)
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.pledge_redeemed_at)
+
+    def test_a_gift_that_has_not_arrived_does_not_close_the_pledge(self):
+        pledge = self._standing_pledge()
+        Contribution.objects.create(
+            member=self.member, amount=Decimal('5000.00'), purpose='Building Fund',
+            status='pending', paid_at=None, payment_method='mpesa',
+        )
+
+        from .pledges import redeem_pledges_matched_by_giving
+        self.assertEqual(redeem_pledges_matched_by_giving(), 0)
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.pledge_redeemed_at)
+
+    def test_the_office_sees_the_outstanding_pledges(self):
+        self._standing_pledge()
+        from .pledges import redeem_due_pledges, REDEEMED_BY_OFFICE
+        redeem_due_pledges(AnnouncementResponse.objects.latest('created_at'), REDEEMED_BY_OFFICE)
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(f'/api/members/announcements/{self.announcement.id}/pledges/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['outstanding'], 0)
+        self.assertEqual(response.data['pledged_total'], 5000.0)
+        self.assertEqual(response.data['pledges'][0]['redeemed_via'], 'office')
+
+    def test_a_plain_member_cannot_read_the_pledge_list(self):
+        self._standing_pledge()
+        self.client.force_authenticate(self.member)
+
+        response = self.client.get(f'/api/members/announcements/{self.announcement.id}/pledges/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def _run_reminders(self, **options):
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('send_pledge_reminders', stdout=out, stderr=out, **options)
+        return out.getvalue()
+
+    def test_the_nudge_goes_out_the_day_before_the_promise(self):
+        pledge = self._standing_pledge(due=(self.today + timedelta(days=1)).isoformat())
+        mail.outbox.clear()
+
+        self._run_reminders()
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('pledge.member@example.com', mail.outbox[0].to)
+        self.assertIn('5,000', mail.outbox[0].body)
+        pledge.refresh_from_db()
+        self.assertIsNotNone(pledge.pledge_reminder_sent_at)
+
+    def test_a_second_run_sends_nothing_again(self):
+        pledge = self._standing_pledge(due=(self.today + timedelta(days=1)).isoformat())
+        self._run_reminders()
+        mail.outbox.clear()
+
+        self._run_reminders()
+
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_pledge_due_later_in_the_month_is_left_alone(self):
+        self._standing_pledge(due=(self.today + timedelta(days=5)).isoformat())
+        mail.outbox.clear()
+
+        self._run_reminders()
+
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_pledge_already_honoured_is_not_reminded_about(self):
+        pledge = self._standing_pledge(due=(self.today + timedelta(days=1)).isoformat())
+        Contribution.objects.create(
+            member=self.member, amount=Decimal('5000.00'), purpose='Building Fund',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+        )
+        mail.outbox.clear()
+
+        self._run_reminders()
+
+        self.assertEqual(mail.outbox, [])
+        pledge.refresh_from_db()
+        self.assertEqual(pledge.pledge_redeemed_via, 'giving')
+        self.assertIsNone(pledge.pledge_reminder_sent_at)
+
+    def test_a_dry_run_lists_without_sending_or_stamping(self):
+        pledge = self._standing_pledge(due=(self.today + timedelta(days=1)).isoformat())
+        mail.outbox.clear()
+
+        output = self._run_reminders(dry_run=True)
+
+        self.assertEqual(mail.outbox, [])
+        self.assertIn('would remind', output)
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.pledge_reminder_sent_at)
+
+    def test_the_office_csv_carries_the_promise_and_its_state(self):
+        self._standing_pledge(due=(self.today + timedelta(days=10)).isoformat())
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(f'/api/members/announcements/{self.announcement.id}/answers.csv')
+
+        body = response.content.decode()
+        self.assertIn('Promised by', body)
+        self.assertIn('Outstanding', body)
+
+
 class AnnouncementEventDatesAPITests(APITestCase):
     """Event windows date an announcement; the nearest event leads the feed."""
 
@@ -2693,9 +2964,13 @@ class AnnouncementEventDatesAPITests(APITestCase):
         self.assertLess(titles.index('Sooner event'), titles.index('Later event'))
 
     def test_event_dates_and_link_round_trip(self):
+        # The link belongs to a web conference: since posts carry a type, a
+        # plain notice has its link cleared (see the serializer's type rules),
+        # so a round-tripping link is asserted where a link is what the post is.
         response = self.client.post('/api/members/announcements/', {
             'title': 'Town hall',
             'text': 'Join us for the town hall.',
+            'announcement_type': 'web_conference',
             'visibility': 'members_only',
             'sharing_option': 'site',
             'href': 'https://meet.example.com/town-hall',
@@ -2708,6 +2983,21 @@ class AnnouncementEventDatesAPITests(APITestCase):
         self.assertEqual(response.data['href'], 'https://meet.example.com/town-hall')
         self.assertEqual(response.data['event_date_from'], '2026-10-01')
         self.assertEqual(response.data['event_date_to'], '2026-10-02')
+
+    def test_a_plain_notice_keeps_no_link(self):
+        """The companion rule: awareness posts are notices, not invitations."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Quiet notice',
+            'text': 'A notice with a stray link.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'href': 'https://meet.example.com/left-over',
+            'event_date_from': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['href'], '')
 
     def test_event_window_cannot_end_before_it_starts(self):
         response = self.client.post('/api/members/announcements/', {

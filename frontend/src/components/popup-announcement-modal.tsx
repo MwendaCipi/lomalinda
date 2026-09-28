@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
+import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -26,6 +28,9 @@ type Announcement = {
   response_mode?: "open" | "closed" | "";
   response_options?: string;
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  support_account_display?: string | null;
+  event_date_from?: string | null;
+  event_date_to?: string | null;
   is_popup: boolean;
   action_prompt?: string;
   attachment?: string | null;
@@ -42,8 +47,10 @@ export function PopupAnnouncementModal() {
   const router = useRouter();
   const [queue, setQueue] = useState<Announcement[]>([]);
   const [current, setCurrent] = useState<Announcement | null>(null);
-  const [pledgeAmount, setPledgeAmount] = useState("");
-  const [pledgeOpen, setPledgeOpen] = useState(false);
+  // Pledging and in-kind giving open over the popup, so the member gives from
+  // the announcement that asked instead of being sent to another page.
+  const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
+  const [inKindOpen, setInKindOpen] = useState(false);
   const [responseText, setResponseText] = useState("");
   const [responseChoice, setResponseChoice] = useState("");
   const [name, setName] = useState("");
@@ -75,10 +82,10 @@ export function PopupAnnouncementModal() {
       .catch(() => undefined);
   }, []);
 
-  // Each announcement starts with its pledge field closed.
+  // Each announcement starts with its forms closed.
   useEffect(() => {
-    setPledgeOpen(false);
-    setPledgeAmount("");
+    setPledgeTarget(null);
+    setInKindOpen(false);
     setResponseText("");
     setResponseChoice("");
   }, [current?.id]);
@@ -110,10 +117,10 @@ export function PopupAnnouncementModal() {
   async function handleActionSubmit(e: FormEvent) {
     e.preventDefault();
     if (!current) return;
-    // A giving announcement submitted with no amount pledged is just a read
-    // confirmation — mark it handled and move on rather than storing an
-    // empty pledge.
-    if (isContributionAction && !pledgeAmount) {
+    // A giving announcement asks nothing of the footer: its pledge, in-kind
+    // and money actions are their own buttons, so submitting just means the
+    // member is done reading it.
+    if (isContributionAction) {
       dismissCurrent();
       return;
     }
@@ -129,7 +136,6 @@ export function PopupAnnouncementModal() {
 
       const payload = {
         action_type: actionType,
-        pledge_amount: pledgeAmount ? parseFloat(pledgeAmount) : null,
         response_text: responseText,
         response_choice: responseChoice,
         respondent_name: name,
@@ -149,7 +155,6 @@ export function PopupAnnouncementModal() {
 
       localStorage.setItem(`announcement-handled-${current.id}`, "true");
 
-      setPledgeAmount("");
       setResponseText("");
       setResponseChoice("");
       setName("");
@@ -232,21 +237,28 @@ export function PopupAnnouncementModal() {
             )}
 
             {isContributionAction && (
-              <div className="mt-3 space-y-3">
+              <div className="mt-3">
                 {/* The giving actions, one row, left to right: Pledge,
-                    In-kind, Give Money. Pledge opens the amount field in
-                    place; the other two leave for their pages. */}
+                    In-kind, Give Money. Pledge and In-kind open over this
+                    popup; Give Money leaves for the giving page. */}
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPledgeOpen((open) => !open)}
-                    className={`rounded-full border px-2 py-2.5 text-xs font-bold transition sm:text-sm ${pledgeOpen ? "border-[#b36b3c] bg-[#fbf6f0] text-[#b36b3c]" : "border-[#c9c5bb] bg-white text-[#26352f] hover:border-[#b36b3c] hover:text-[#b36b3c]"}`}
+                    onClick={() => setPledgeTarget({
+                      id: current.id,
+                      title: current.title,
+                      action_type: actionType,
+                      support_account_display: current.support_account_display ?? null,
+                      event_date_from: current.event_date_from ?? null,
+                      event_date_to: current.event_date_to ?? null,
+                    })}
+                    className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                   >
                     Pledge
                   </button>
                   <button
                     type="button"
-                    onClick={() => leaveFor("/support/in-kind")}
+                    onClick={() => setInKindOpen(true)}
                     className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2.5 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] sm:text-sm"
                   >
                     In-kind
@@ -259,20 +271,8 @@ export function PopupAnnouncementModal() {
                     Give Money
                   </button>
                 </div>
-                {pledgeOpen && (
-                  <div>
-                    <label className="block text-xs font-semibold text-[#26352f]">
-                      Pledge Amount (KES)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 1000"
-                      value={pledgeAmount}
-                      onChange={(e) => setPledgeAmount(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
-                    />
-                  </div>
+                {statusMessage && (
+                  <p className="mt-2 text-xs font-semibold text-[#3d7146]">{statusMessage}</p>
                 )}
               </div>
             )}
@@ -361,13 +361,25 @@ export function PopupAnnouncementModal() {
                   : isOpinion
                   ? "Submit Response"
                   : isContributionAction
-                  ? "Record pledge"
+                  ? "Done"
                   : "Submit Response & Continue"}
               </button>
             )}
           </div>
         </form>
       </div>
+
+      <PledgeModal
+        open={Boolean(pledgeTarget)}
+        onClose={() => setPledgeTarget(null)}
+        target={pledgeTarget}
+      />
+      <InKindGiftModal
+        open={inKindOpen}
+        onClose={() => setInKindOpen(false)}
+        defaultPurpose={current.support_account_display || undefined}
+        announcementTitle={current.title}
+      />
     </div>
   );
 }
