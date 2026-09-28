@@ -306,10 +306,6 @@ export default function AnnouncementsPage() {
                               Give Money
                             </button>
                           </div>
-                          <span className="mt-2 block text-center text-xs text-[#617068]">
-                            towards {item.support_account_display}
-                            {item.support_account && item.support_account !== item.support_account_display ? ` (${item.support_account})` : ""}
-                          </span>
                         </div>
                       )}
 
