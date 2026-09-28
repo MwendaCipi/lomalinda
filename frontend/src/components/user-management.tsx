@@ -2211,6 +2211,13 @@ export function UserManagement() {
               )}
             </select>
           </div>
+          <input
+            type="text"
+            placeholder="Search by name, email, phone, gifts..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:min-w-[180px] sm:max-w-sm sm:flex-1"
+          />
           {/* The roster's third question — which list is showing decides what it
               asks. Confirmed tabs by account state; Pending tabs by what the
               person is joining as. Same slot, same look, so the page's
@@ -2254,13 +2261,6 @@ export function UserManagement() {
               );
             })}
           </div>
-          <input
-            type="text"
-            placeholder="Search by name, email, phone, gifts..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] px-4 py-2.5 text-xs focus:border-[#b36b3c] focus:outline-none sm:min-w-[180px] sm:max-w-sm sm:flex-1"
-          />
         </div>
       </div>
 
