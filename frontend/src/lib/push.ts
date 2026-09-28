@@ -4,7 +4,7 @@
  * Web Push on the client: ask, subscribe, store, unsubscribe.
  *
  * The browser must grant permission from a real user gesture, so this is only
- * ever called from the "Turn on phone notifications" button in the bell. The
+ * ever called from the "Turn on notifications" button in the bell. The
  * flow: request permission → get the server's VAPID public key → subscribe
  * the service worker's push manager → POST the subscription to the API so the
  * office audience's devices can be woken when a request lands.

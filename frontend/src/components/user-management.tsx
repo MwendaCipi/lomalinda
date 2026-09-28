@@ -28,14 +28,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * columns keeps the same grid for every roster.
  */
 const COL_INDEX = "w-8";
-// Name is the flexible column: it absorbs the table's surplus width, so the
-// leftover never pools between Sex and the pinned Actions column on the
-// right — the dropdown overlays Sex, and a wide screen simply widens Name.
-const COL_NAME = "min-w-[11rem]";
+// Every column carries a width hint, Name included. Leaving Name flexible let
+// it swallow the whole surplus on a wide screen — one enormous gap after the
+// name while Role, Type and Sex sat crowded together on the right. With a hint
+// on each column the browser spreads the leftover room across all of them, so
+// the roster keeps the same even rhythm at any width.
+const COL_NAME = "w-[13rem]";
 const COL_CONTACT = "w-[12rem]";
+const COL_STATUS = "w-[7rem]";
 const COL_ROLE = "w-[10rem]";
-const COL_TYPE = "w-[9rem]";
-const COL_SEX = "w-[4rem]";
+const COL_TYPE = "w-[8.5rem]";
+const COL_SEX = "w-[4.5rem]";
 const COL_ACTIONS = "w-[7rem]";
 
 export type MemberUser = {
@@ -60,7 +63,8 @@ export type MemberUser = {
   gifts?: string;
   disability?: string;
   is_disfellowshipped?: boolean;
-  /** False while leadership has not yet approved a friend/Sabbath School joining. */
+  /** False while leadership has not yet approved a friend/Sabbath School joining,
+      or after an officer switched the account off. */
   is_active?: boolean;
   /**
    * Set when an officer switched the account off. An inactive account with no
@@ -82,6 +86,51 @@ type RoleHistoryRow = {
   started_at: string;
   ended_at: string | null;
 };
+
+/**
+ * Whether an account can sign in, as the roster's Status column reads it.
+ *
+ * Three states share the cell, because "inactive" on its own is not enough to
+ * act on: a switched-off login is the office's to switch back on, while a
+ * join request nobody has approved belongs to the Requests desk. An account
+ * that can sign in says so plainly, and the dates ride in the tooltip.
+ */
+function AccountStatus({ member }: { member: MemberUser }) {
+  if (member.is_active !== false) {
+    return (
+      <span
+        title="This account can sign in"
+        className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2ed] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#3d5148]"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-[#5f8067]" aria-hidden="true" />
+        Active
+      </span>
+    );
+  }
+  if (member.deactivated_at) {
+    const when = new Date(member.deactivated_at).toLocaleDateString(undefined, {
+      day: "numeric", month: "short", year: "numeric",
+    });
+    return (
+      <span
+        title={`An officer switched this account off on ${when}. The record, roles and history are intact, and Actions can switch it back on.`}
+        className="inline-flex items-center gap-1.5 rounded-full bg-[#efe3e3] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-[#a05252]" aria-hidden="true" />
+        Inactive
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Waiting for leadership approval on the Requests desk — they cannot sign in yet"
+      className="inline-flex items-center gap-1.5 rounded-full bg-[#f7e3d2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-[#b36b3c]" aria-hidden="true" />
+      Awaiting
+    </span>
+  );
+}
 
 /** The read-only payload behind See Profile: roster fields plus history. */
 type MemberProfileData = Partial<MemberUser> & {
@@ -1787,6 +1836,74 @@ export function UserManagement() {
     }
   };
 
+  /**
+   * Take someone off the membership roll, or put them back on it.
+   *
+   * This is the removal the desk lost sight of, and it runs on exactly the
+   * logic the Type column uses: the person is recorded as an ex-member (their
+   * roles fall away, they stay on the church record and their giving history
+   * is untouched) or restored to a member. Removing is not deleting, and it is
+   * not the same as deactivating — a removed member can still sign in; a
+   * deactivated one cannot.
+   */
+  const handleMembershipChange = async (member: MemberUser, remove: boolean) => {
+    const name = member.first_name || member.last_name
+      ? `${member.first_name} ${member.last_name}`.trim()
+      : member.username;
+    const answer = await showAlert(
+      remove ? "Remove this person from membership?" : "Restore this person to membership?",
+      remove
+        ? `${name} will be recorded as an ex-member: no longer counted as a member, and their church roles fall away. They stay on the church record, keep their giving history, and can be restored at any time.`
+        : `${name} will be recorded as a member of the church again, and the office can hand them roles as before.`,
+      remove ? "warning" : "question",
+      {
+        showCancelButton: true,
+        confirmButtonText: remove ? "Remove" : "Restore",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: remove ? "#b91c1c" : "#26352f",
+      },
+    );
+    if (!answer.isConfirmed) return;
+
+    setUpdatingTypeId(member.id);
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/users/${member.id}/account-type/`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ account_type: remove ? "ex_member" : "member" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === member.id
+              ? {
+                  ...m,
+                  is_disfellowshipped: remove,
+                  account_type: remove ? m.account_type : (data.account_type ?? "member"),
+                  roles: data.roles ?? m.roles,
+                  role: data.role ?? m.role,
+                }
+              : m
+          )
+        );
+        showAlert(
+          remove ? "Removed from membership" : "Restored to membership",
+          data.detail || `${name} has been recorded as ${remove ? "an ex-member" : "a member"}.`,
+          "success",
+          { toast: true, timer: 4500, showConfirmButton: false, position: "top-end" },
+        );
+      } else {
+        showAlert("Could not update", data.detail || data.account_type || "The change was not saved.", "error");
+      }
+    } catch {
+      showAlert("Could not update", "Network error updating the record.", "error");
+    } finally {
+      setUpdatingTypeId(null);
+    }
+  };
+
   const handleContactMember = (member: MemberUser) => {
     if (member.phone_number) {
       window.location.href = `tel:${member.phone_number}`;
@@ -1973,6 +2090,7 @@ export function UserManagement() {
             { label: "#", className: COL_INDEX },
             { label: "Name", className: COL_NAME },
             { label: "Contact", className: COL_CONTACT },
+            { label: "Status", className: COL_STATUS },
             { label: "Role", className: COL_ROLE },
             { label: "Type", className: COL_TYPE },
             { label: "Sex", className: COL_SEX },
@@ -1989,27 +2107,13 @@ export function UserManagement() {
                         <div className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</div>
                         <div className="truncate text-[11px] font-normal text-[#8b9790]">@{m.username}</div>
                       </div>
-                      {m.is_active === false && (
-                        isDeactivated(m) ? (
-                          <span
-                            title="An officer switched this account off. The record is intact and it can be switched back on from Actions"
-                            className="mt-0.5 inline-block rounded-full bg-[#efe3e3] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
-                          >
-                            Deactivated
-                          </span>
-                        ) : (
-                          <span
-                            title="Email confirmed but this account is waiting for leadership approval — they cannot sign in yet"
-                            className="mt-0.5 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
-                          >
-                            Not approved
-                          </span>
-                        )
-                      )}
                     </td>
                     <td className={`py-3 text-[#617068] ${COL_CONTACT}`}>
                       <div className="truncate">{m.phone_number || m.email || "—"}</div>
                       {m.phone_number && m.email && <div className="truncate text-[11px]">{m.email}</div>}
+                    </td>
+                    <td className={`py-3 ${COL_STATUS}`}>
+                      <AccountStatus member={m} />
                     </td>
                     <td className={`py-3 ${COL_ROLE}`}>
                       <RolesCombobox
@@ -2071,28 +2175,34 @@ export function UserManagement() {
                             >
                               👑 Assign Leadership
                             </button>
-                            {m.is_active === false && !isDeactivated(m) ? (
-                              // A join request nobody has approved yet: the
-                              // Requests desk owns that decision, not this menu.
-                              <div
-                                title="This account is waiting for leadership approval on the Requests desk"
-                                className="flex w-full cursor-default items-center gap-2 px-4 py-2 text-xs text-[#8b9790]"
+                            {m.is_disfellowshipped ? (
+                              <button
+                                onClick={() => { handleMembershipChange(m, false); setOpenActionMenuId(null); }}
+                                disabled={updatingTypeId === m.id}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
                               >
-                                ⏳ Awaiting approval
-                              </div>
+                                ↩ Restore to Membership
+                              </button>
                             ) : (
                               <button
-                                onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
-                                disabled={updatingActivationId === m.id}
-                                className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
-                                  isDeactivated(m)
-                                    ? "text-[#26352f] hover:bg-[#f7f4ee]"
-                                    : "text-[#8c3a3a] hover:bg-[#faf1f1]"
-                                }`}
+                                onClick={() => { handleMembershipChange(m, true); setOpenActionMenuId(null); }}
+                                disabled={updatingTypeId === m.id}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
                               >
-                                {isDeactivated(m) ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                                🗑 Remove from Membership
                               </button>
                             )}
+                            <button
+                              onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
+                              disabled={updatingActivationId === m.id}
+                              className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
+                                isDeactivated(m) || m.is_active === false
+                                  ? "text-[#26352f] hover:bg-[#f7f4ee]"
+                                  : "text-[#8c3a3a] hover:bg-[#faf1f1]"
+                              }`}
+                            >
+                              {m.is_active === false ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2108,20 +2218,7 @@ export function UserManagement() {
                     <div>
                       <h3 className="font-bold text-sm text-[#26352f]">
                         {name}
-                        {m.is_active === false && (
-                          isDeactivated(m) ? (
-                            <span
-                              title="An officer switched this account off. The record is intact and it can be switched back on from Actions"
-                              className="ml-2 inline-block rounded-full bg-[#efe3e3] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
-                            >
-                              Deactivated
-                            </span>
-                          ) : (
-                            <span className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]">
-                              Not approved
-                            </span>
-                          )
-                        )}
+
                       </h3>
                       <p className="text-[11px] text-[#8b9790] mt-0.5">@{m.username}</p>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
@@ -2136,9 +2233,12 @@ export function UserManagement() {
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1]/60 pt-2">
-                    {m.gender ? (
-                      <p className="min-w-0 flex-1 truncate text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>
-                    ) : <span className="flex-1" />}
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <AccountStatus member={m} />
+                      {m.gender ? (
+                        <p className="min-w-0 truncate text-xs text-[#617068]"><span className="font-semibold text-[#26352f]">Sex:</span> {m.gender}</p>
+                      ) : null}
+                    </div>
                     {/* The card's actions live in one menu, anchored to this
                         button — nothing shows until it is asked for. */}
                     <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
@@ -2181,28 +2281,34 @@ export function UserManagement() {
                           >
                             👑 Assign Leadership
                           </button>
-                          {m.is_active === false && !isDeactivated(m) ? (
-                            // A join request nobody has approved yet: the Requests
-                            // desk owns that decision, not this menu.
-                            <div
-                              title="This account is waiting for leadership approval on the Requests desk"
-                              className="flex w-full cursor-default items-center gap-2 px-4 py-2 text-xs text-[#8b9790]"
+                          {m.is_disfellowshipped ? (
+                            <button
+                              onClick={() => { handleMembershipChange(m, false); setOpenActionMenuId(null); }}
+                              disabled={updatingTypeId === m.id}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee] disabled:opacity-60"
                             >
-                              ⏳ Awaiting approval
-                            </div>
+                              ↩ Restore to Membership
+                            </button>
                           ) : (
                             <button
-                              onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
-                              disabled={updatingActivationId === m.id}
-                              className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
-                                isDeactivated(m)
-                                  ? "text-[#26352f] hover:bg-[#f7f4ee]"
-                                  : "text-[#8c3a3a] hover:bg-[#faf1f1]"
-                              }`}
+                              onClick={() => { handleMembershipChange(m, true); setOpenActionMenuId(null); }}
+                              disabled={updatingTypeId === m.id}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#b91c1c] hover:bg-[#fdf2f2] disabled:opacity-60"
                             >
-                              {isDeactivated(m) ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                              🗑 Remove from Membership
                             </button>
                           )}
+                          <button
+                            onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
+                            disabled={updatingActivationId === m.id}
+                            className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
+                              m.is_active === false
+                                ? "text-[#26352f] hover:bg-[#f7f4ee]"
+                                : "text-[#8c3a3a] hover:bg-[#faf1f1]"
+                            }`}
+                          >
+                            {m.is_active === false ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -2781,6 +2887,18 @@ export function UserManagement() {
                   <ProfileField label="Residence" value={profileData.residence} />
                   <ProfileField label="Profession" value={profileData.profession} />
                   <ProfileField label="Type" value={profileData.account_type ? accountTypeLabel(profileData.account_type) : ""} />
+                  {/* The account's own state, so a deactivation can be confirmed
+                      here and not only in the roster's Status column. */}
+                  <ProfileField
+                    label="Status"
+                    value={
+                      profileData.is_active === false
+                        ? profileData.deactivated_at
+                          ? `Inactive — switched off on ${fmtDate(profileData.deactivated_at)}`
+                          : "Inactive — awaiting approval"
+                        : "Active"
+                    }
+                  />
                   <ProfileField label="Ministry" value={profileData.ministry_label} />
                   <ProfileField label="Baptismal status" value={profileData.baptismal_status_label || profileData.baptismal_status} />
                   <ProfileField label="Disability / special needs" value={profileData.disability} />
@@ -2826,6 +2944,38 @@ export function UserManagement() {
                 To correct any of these details, use <strong className="text-[#26352f]">Assign Leadership</strong> for roles,
                 or ask the clerk to propose a change — the member approves it on their dashboard before anything is applied.
               </p>
+
+              {/* The two account decisions sit where an officer reviewing a
+                  record looks for them, instead of only in the roster menu. */}
+              {(() => {
+                const member = members.find((m) => m.id === profileMemberId);
+                if (!member || member.is_superuser) return null;
+                const off = member.is_active === false;
+                return (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[#dfdbd1] pt-3">
+                    <button
+                      type="button"
+                      disabled={updatingActivationId === member.id}
+                      onClick={() => handleToggleActivation(member)}
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                        off
+                          ? "border-[#5f8067] bg-white text-[#3d5148] hover:bg-[#f2f6f2]"
+                          : "border-[#c9c5bb] bg-white text-[#8c3a3a] hover:border-[#b91c1c]"
+                      }`}
+                    >
+                      {off ? "✅ Activate account" : "🚫 Deactivate account"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingTypeId === member.id}
+                      onClick={() => handleMembershipChange(member, !member.is_disfellowshipped)}
+                      className="rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] disabled:opacity-50"
+                    >
+                      {member.is_disfellowshipped ? "↩ Restore to membership" : "🗑 Remove from membership"}
+                    </button>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center gap-3 pb-1">
                 <button type="button"

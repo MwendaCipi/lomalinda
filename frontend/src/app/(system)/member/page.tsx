@@ -182,7 +182,7 @@ export default function MemberPage() {
                 {pushSupport?.supported ? (
                   <label className="flex items-center justify-between gap-4 rounded-2xl bg-[#f7f4ee] px-4 py-3 text-sm font-medium cursor-pointer">
                     <span>
-                      Announcements as phone notifications
+                      Announcements as notifications
                       <span className="block text-xs font-normal text-[#617068]">A notification on this device when an announcement is posted.</span>
                     </span>
                     <input
@@ -194,7 +194,7 @@ export default function MemberPage() {
                   </label>
                 ) : (
                   <div className="rounded-2xl bg-[#f7f4ee] px-4 py-3 text-sm font-medium">
-                    Announcements as phone notifications
+                    Announcements as notifications
                     <span className="mt-0.5 block text-xs font-normal text-[#617068]">
                       Not available in this browser. On iPhone, add the app to your Home Screen first.
                     </span>
@@ -203,7 +203,7 @@ export default function MemberPage() {
               </div>
               {pushSupport?.supported && !pushSupport.enabled && announcePrefs.push && (
                 <p className="mt-3 text-xs text-[#617068]">
-                  To receive them on <em>this</em> device, also tap <strong>Turn on phone notifications</strong> in the bell at the top of the page — that grants the browser permission.
+                  To receive them on <em>this</em> device, also tap <strong>Turn on notifications</strong> in the bell at the top of the page — that grants the browser permission.
                 </p>
               )}
               {prefMessage && <p className="mt-3 text-sm text-[#617068]">{prefMessage}</p>}

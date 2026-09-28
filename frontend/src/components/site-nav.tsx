@@ -238,9 +238,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       .catch(() => setServerNotifications([]));
   }, [pathname]);
 
-  // Whether this device can take phone notifications (and whether they're on),
-  // plus the member's announcement channel preferences. Only asked once signed
-  // in — the bell gains its toggles for signed-in users.
+  // Whether this device can take browser notifications (and whether they're
+  // on), plus the member's announcement channel preferences. Only asked once
+  // signed in — the bell gains its toggles for signed-in users.
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) {
@@ -289,7 +289,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     const timer = setTimeout(() => {
       Swal.fire({
         title: "Notifications on this device?",
-        text: "Turn on phone notifications and the church can reach you here even with the app closed — announcements, and requests waiting for your office if you serve. You can change this anytime under Notification preferences on your profile.",
+        text: "Turn on notifications and the church can reach you on this device even with the app closed — announcements, and requests waiting for your office if you serve. You can change this anytime under Notification preferences on your profile.",
         icon: "question",
         showCancelButton: true,
         showDenyButton: true,
@@ -307,7 +307,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
           const outcome = result.value as { ok: boolean; error?: string } | undefined;
           if (outcome?.ok) {
             setPushState({ supported: true, enabled: true });
-            showAlert("Phone notifications on", "You will now be alerted on this device when something needs you.", "success");
+            showAlert("Notifications on", "You will now be alerted on this device when something needs you.", "success");
           } else {
             showAlert("Not enabled", outcome?.error || "This browser would not allow notifications.", "warning");
           }
@@ -324,7 +324,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     return () => clearTimeout(timer);
   }, [userState.isLoggedIn, pushState]);
 
-  const handleTogglePhoneNotifications = async () => {
+  const handleToggleDeviceNotifications = async () => {
     if (!pushState?.supported) return;
     if (pushState.enabled) {
       await disablePush();
@@ -334,7 +334,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     const result = await enablePush();
     if (result.ok) {
       setPushState({ supported: true, enabled: true });
-      showAlert("Phone notifications on", "You will now be alerted on this device when a request is waiting for the office.", "success");
+      showAlert("Notifications on", "You will now be alerted on this device when a request is waiting for the office.", "success");
     } else {
       showAlert("Not enabled", result.error || "This browser would not allow notifications.", "warning");
     }
@@ -663,14 +663,14 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                   {pushState?.supported && userState.isLoggedIn && (
                     <button
                       type="button"
-                      onClick={handleTogglePhoneNotifications}
+                      onClick={handleToggleDeviceNotifications}
                       className={`flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
                         pushState.enabled
                           ? "border-[#dfdbd1] bg-white text-[#617068] hover:bg-[#f7f4ee]"
                           : "border-[#b36b3c] bg-[#b36b3c] text-white hover:bg-[#96552e]"
                       }`}
                     >
-                      {pushState.enabled ? "Turn off phone notifications" : "Turn on phone notifications"}
+                      {pushState.enabled ? "Turn off notifications" : "Turn on notifications"}
                     </button>
                   )}
                   {announcePrefs && (
@@ -687,7 +687,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
                       </label>
                       {pushState?.supported && (
                         <label className="flex items-center justify-between text-xs text-[#26352f] cursor-pointer">
-                          <span>Phone notification</span>
+                          <span>Notifications</span>
                           <input
                             type="checkbox"
                             checked={announcePrefs.push}

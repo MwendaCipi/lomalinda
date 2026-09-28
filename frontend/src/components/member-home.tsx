@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
+import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { DashboardQuarterlyGiving } from "@/components/dashboard-quarterly-giving";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -72,23 +73,43 @@ export function MemberHome() {
 
   const hasAny = (list: string[]) => list.some((r) => roles.includes(r));
 
+  // Leadership lands on the desks, not on the member-facing pages: a clerk or
+  // elder tapping Requests wants the desk that answers requests, and the desk
+  // carries the number still waiting so the tile says whether it needs them.
+  const isDesk = hasAny(["elder", "admin", "clerk", "pastor", "chaplaincy", "welfare_leader", "children_ministry"]);
+
+  // What leadership still owes an answer on, from the same hook the sidebar's
+  // badge and the Requests manager read — the three can never disagree.
+  const pendingRequests = usePendingRequestCounts(isDesk);
+
   // ── Role-tailored quick tiles ─────────────────────────────────────────────
   const tiles = [
-    { href: "/give", label: "Tithes & Offerings", desc: "Tithe, offerings and funds", icon: HandHeart },
+    // Announcements lead: the church's news is what a member opens first.
     { href: "/announcements", label: "Announcements", desc: "Church news and notices", icon: Megaphone },
+    { href: "/give", label: "Tithes & Offerings", desc: "Tithe, offerings and funds", icon: HandHeart },
     { href: "/calendar", label: "Calendar", desc: "Programme and events", icon: Calendar },
     { href: "/materials", label: "Lessons & Materials", desc: "Sabbath School readings", icon: BookOpen },
     { href: "/member", label: "My Profile", desc: "Details and giving history", icon: UserRound },
-    { href: "/requests", label: "Requests", desc: "Prayer, visitation, dedication", icon: ClipboardList },
-    // Leadership: deeper tools first-class on the dashboard.
+    isDesk
+      ? {
+          href: "/administration?tab=requests",
+          label: "Requests",
+          desc: "Join, prayer, visitation, dedication",
+          icon: ClipboardList,
+          badge: pendingRequests.total,
+        }
+      : { href: "/requests", label: "Requests", desc: "Prayer, visitation, dedication", icon: ClipboardList },
+    // Leadership: deeper tools first-class on the dashboard. Treasury opens the
+    // accounts desk — the tab is "accounts", and a tile pointing at a tab that
+    // does not exist left the workspace blank.
     ...(hasAny(["treasurer", "admin"])
-      ? [{ href: "/administration?tab=finance", label: "Treasury", desc: "Accounts, receipts, refunds", icon: Wallet }]
+      ? [{ href: "/administration?tab=accounts", label: "Treasury", desc: "Accounts, receipts, refunds", icon: Wallet }]
       : []),
     ...(hasAny(["elder", "admin", "clerk"])
       ? [{ href: "/administration?tab=users", label: "Members", desc: "Directory, roles, invites", icon: Users }]
       : []),
     ...(hasAny(["elder", "admin"])
-      ? [{ href: "/administration?tab=board", label: "Board & Meetings", desc: "Agendas and minutes", icon: CalendarClock }]
+      ? [{ href: "/administration?tab=board", label: "Board Meetings", desc: "Agendas and minutes", icon: CalendarClock }]
       : []),
     ...(hasAny(["elder", "admin"])
       ? [{ href: "/administration?tab=settings", label: "Church Settings", desc: "Configuration", icon: ShieldCheck }]
@@ -198,7 +219,17 @@ export function MemberHome() {
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef2ed] text-[#26352f] transition group-hover:bg-[#f1c89e]">
                   <t.icon className="h-4 w-4" />
                 </span>
-                <h2 className="mt-2.5 text-sm font-bold text-[#26352f]">{t.label}</h2>
+                <span className="mt-2.5 flex items-center gap-1.5">
+                  <h2 className="text-sm font-bold text-[#26352f]">{t.label}</h2>
+                  {"badge" in t && t.badge ? (
+                    <span
+                      title={`${t.badge} request${t.badge === 1 ? "" : "s"} awaiting review`}
+                      className="rounded-full bg-[#b36b3c] px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    >
+                      {t.badge}
+                    </span>
+                  ) : null}
+                </span>
                 <p className="mt-0.5 text-[11px] leading-snug text-[#617068]">{t.desc}</p>
               </Link>
             ))}

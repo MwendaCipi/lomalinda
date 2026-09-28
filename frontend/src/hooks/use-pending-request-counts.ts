@@ -42,7 +42,7 @@ async function fetchJsonArray(url: string, headers: Record<string, string>): Pro
   }
 }
 
-export function usePendingRequestCounts(): PendingRequestCounts {
+export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
   const [counts, setCounts] = useState<PendingRequestCounts>({
     joins: 0,
     prayer: 0,
@@ -55,6 +55,10 @@ export function usePendingRequestCounts(): PendingRequestCounts {
   });
 
   useEffect(() => {
+    // A member with no desk to answer for is not asked: the requests endpoints
+    // would refuse every call, and six refused calls per dashboard visit is a
+    // cost with nothing to show for it.
+    if (!enabled) return;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
@@ -93,7 +97,7 @@ export function usePendingRequestCounts(): PendingRequestCounts {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [enabled]);
 
   return counts;
 }
