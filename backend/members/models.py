@@ -276,7 +276,15 @@ class DepartmentEvent(models.Model):
 
 class EnrollmentRequest(models.Model):
     STATUS_CHOICES = [('verification_pending', 'Verification pending'), ('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('completed', 'Completed'), ('expired', 'Expired')]
-    JOINING_MODE_CHOICES = [('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')]
+    # A church member arriving on our roll asks nothing further; a membership
+    # transfer is leaving a named church, so its previous church is required.
+    JOINING_MODE_CHOICES = [
+        ('baptism', 'Baptism'),
+        ('membership_transfer', 'A church member'),
+        ('transfer_in', 'Membership transfer'),
+        ('friend', 'Friend of SDA Loma Linda'),
+        ('sabbath_school', 'Sabbath School'),
+    ]
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)

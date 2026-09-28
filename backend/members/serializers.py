@@ -204,8 +204,17 @@ class EnrollmentRequestSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        if attrs.get('joining_mode') == 'friend' and not attrs.get('current_church', '').strip():
-            raise serializers.ValidationError({'current_church': 'Enter your current church.'})
+        # Two paths arrive from a named church: a friend, and a membership
+        # transfer that is leaving one. A plain "a church member" request is
+        # asking to be added to this roll and names no church.
+        mode = attrs.get('joining_mode')
+        if mode in ('friend', 'transfer_in') and not attrs.get('current_church', '').strip():
+            message = (
+                'Enter the church you are transferring from.'
+                if mode == 'transfer_in'
+                else 'Enter your current church.'
+            )
+            raise serializers.ValidationError({'current_church': message})
         return attrs
 
 

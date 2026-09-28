@@ -5385,6 +5385,23 @@ class ExistingMemberEnrollmentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('current_church', response.data)
 
+    def test_a_membership_transfer_must_name_the_church_it_comes_from(self):
+        response = self._post(email='transfer.no.church@example.com', joining_mode='transfer_in')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn('current_church', response.data)
+
+    def test_a_membership_transfer_records_the_church_it_comes_from(self):
+        response = self._post(
+            email='transfer.named@example.com',
+            joining_mode='transfer_in',
+            current_church='SDA Kaaga',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        request_row = EnrollmentRequest.objects.get(email='transfer.named@example.com')
+        self.assertEqual(request_row.joining_mode, 'transfer_in')
+        self.assertEqual(request_row.current_church, 'SDA Kaaga')
+
 
 class EnrollmentVerifiesByEmailTests(APITestCase):
     """The join form verifies by email alone; its old Google endpoint is gone."""
