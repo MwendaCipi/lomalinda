@@ -11,6 +11,7 @@ import {
   formatRoles,
   heldSystemRoles,
   roleDisplayLabel,
+  orderRolesBySeniority,
   SYSTEM_ROLE_HELP,
 } from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
@@ -79,6 +80,35 @@ export type MemberUser = {
 
 type MemberFilter = "all" | "members" | "friends" | "ex_members";
 type InvitationFilter = "confirmed" | "pending";
+/**
+ * Whether an account can sign in, and why not when it cannot.
+ *
+ * Two different things are stored: an account switched off by an officer, and
+ * one nobody has approved yet. Both are inactive and only one of them is the
+ * office's to act on, so they are told apart here rather than merged.
+ */
+type StatusFilter = "all" | "active" | "inactive" | "awaiting";
+
+const STATUS_TABS: { key: StatusFilter; label: string; help: string }[] = [
+  { key: "all", label: "All", help: "Every confirmed record" },
+  { key: "active", label: "Active", help: "These accounts can sign in" },
+  {
+    key: "inactive",
+    label: "Inactive",
+    help: "An officer switched these accounts off. The record, roles and giving history are intact, and Actions can switch them back on.",
+  },
+  {
+    key: "awaiting",
+    label: "Awaiting",
+    help: "Join requests leadership has not approved yet — they cannot sign in until then",
+  },
+];
+
+/** Which of the three account states a roster row is in. */
+function statusOf(member: MemberUser): Exclude<StatusFilter, "all"> {
+  if (member.is_active !== false) return "active";
+  return member.deactivated_at ? "inactive" : "awaiting";
+}
 
 /** One served-in stretch of a role, from the member's role history. */
 type RoleHistoryRow = {
@@ -143,7 +173,9 @@ function AccountStatus({ member }: { member: MemberUser }) {
  */
 function roleSummary(roles: string[], assistants: string[] = []): string {
   if (!roles || roles.length === 0) return "Member";
-  const first = roleDisplayLabel(roles[0], assistants);
+  // Senior office leads: the stored order is the register's, which would
+  // introduce a first elder who also clerks as "Church Clerk" instead.
+  const first = roleDisplayLabel(orderRolesBySeniority(roles)[0], assistants);
   const others = roles.length - 1;
   if (others <= 0) return first;
   return `${first} + ${others} other${others === 1 ? "" : "s"}`;
@@ -152,7 +184,9 @@ function roleSummary(roles: string[], assistants: string[] = []): string {
 function RoleCell({ member }: { member: MemberUser }) {
   const roles = member.roles && member.roles.length > 0 ? member.roles : [member.role || "member"];
   const assistants = member.assistant_roles || [];
-  const full = roles.map((code) => roleDisplayLabel(code, assistants)).join(", ");
+  const full = orderRolesBySeniority(roles)
+    .map((code) => roleDisplayLabel(code, assistants))
+    .join(", ");
   return (
     <span className="block truncate text-xs text-[#26352f]" title={full}>
       {roleSummary(roles, assistants)}
@@ -1069,6 +1103,7 @@ export function UserManagement() {
   const [search, setSearch] = useState("");
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [churchName, setChurchName] = useState("this church");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStep, setAddStep] = useState<1 | 2>(1);
@@ -1655,21 +1690,38 @@ export function UserManagement() {
     return true;
   };
 
+  const matchesStatusFilter = (member: MemberUser) =>
+    statusFilter === "all" || statusOf(member) === statusFilter;
+
+  const matchesSearchQuery = (m: MemberUser) => {
+    const query = search.toLowerCase();
+    return Boolean(
+      m.username.toLowerCase().includes(query) ||
+        m.email.toLowerCase().includes(query) ||
+        (`${m.first_name} ${m.last_name}`).toLowerCase().includes(query) ||
+        (m.phone_number && m.phone_number.includes(search)) ||
+        (m.whatsapp_number && m.whatsapp_number.includes(search)) ||
+        (m.profession && m.profession.toLowerCase().includes(query)) ||
+        (m.gifts && m.gifts.toLowerCase().includes(query)) ||
+        (m.disability && m.disability.toLowerCase().includes(query))
+    );
+  };
+
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
 
-  const filteredMembers = visibleMembers.filter((m) => {
-    const query = search.toLowerCase();
-    const matchesSearch =
-      m.username.toLowerCase().includes(query) ||
-      m.email.toLowerCase().includes(query) ||
-      (`${m.first_name} ${m.last_name}`).toLowerCase().includes(query) ||
-      (m.phone_number && m.phone_number.includes(search)) ||
-      (m.whatsapp_number && m.whatsapp_number.includes(search)) ||
-      (m.profession && m.profession.toLowerCase().includes(query)) ||
-      (m.gifts && m.gifts.toLowerCase().includes(query)) ||
-      (m.disability && m.disability.toLowerCase().includes(query));
-    return matchesMemberFilter(m) && matchesSearch;
-  });
+  // The status tabs count within what the type filter and the search leave, so
+  // a tab never looks busy and then opens on an empty list.
+  const rosterScoped = visibleMembers.filter((m) => matchesMemberFilter(m) && matchesSearchQuery(m));
+
+  const statusCounts = rosterScoped.reduce(
+    (counts, member) => {
+      counts[statusOf(member)] += 1;
+      return counts;
+    },
+    { active: 0, inactive: 0, awaiting: 0 },
+  );
+
+  const filteredMembers = rosterScoped.filter(matchesStatusFilter);
 
   // ── Transfer handler ─────────────────────────────────────────────────────
   const handleTransferSubmit = async (e: React.FormEvent) => {
@@ -1960,6 +2012,41 @@ export function UserManagement() {
               </select>
             )}
           </div>
+          {/* The roster's third question: can this account sign in, and if not,
+              why. It filters members, so it steps aside for the invitation
+              list. On a phone the group scrolls rather than wraps, which keeps
+              the filter block to the same two lines. */}
+          {invitationFilter === "confirmed" && (
+            <div
+              className="flex h-[38px] w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-xl border border-[#dfdbd1] bg-[#f7f4ee] p-0.5 sm:w-auto"
+              role="group"
+              aria-label="Account status filter"
+            >
+              {STATUS_TABS.map((tab) => {
+                const count = tab.key === "all" ? rosterScoped.length : statusCounts[tab.key];
+                const isActive = statusFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.key)}
+                    title={tab.help}
+                    aria-pressed={isActive}
+                    className={`flex h-8 flex-1 shrink-0 items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition sm:flex-none ${
+                      isActive ? "bg-[#26352f] text-white shadow-sm" : "text-[#617068] hover:text-[#26352f]"
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`text-[10px] font-bold ${isActive ? "text-white/70" : "text-[#8b9790]"}`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <input
             type="text"
             placeholder="Search by name, email, phone, gifts..."
@@ -2065,8 +2152,8 @@ export function UserManagement() {
             { label: "Actions", className: `${COL_ACTIONS} text-right` },
           ]}
           loadingLabel="Loading members..."
-          tableEmpty="No members found matching your search."
-          cardsEmpty="No members found."
+          tableEmpty="No members match these filters."
+          cardsEmpty="No members match these filters."
           renderRow={(m, idx) => (
                   <tr key={m.id} className={`hover:bg-[#f7f4ee] ${m.is_disfellowshipped ? "opacity-70" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
                     <td className={`py-3 text-[#617068] ${COL_INDEX}`}>{idx + 1}</td>
@@ -2089,7 +2176,9 @@ export function UserManagement() {
                     <td className={`py-3 ${COL_TYPE}`}>
                       <AccountTypeCell member={m} />
                     </td>
-                    <td className={`py-3 text-[#617068] pl-6 ${COL_SEX}`}>{m.gender || "—"}</td>
+                    {/* No extra left padding: the value lines up under its own
+                        SEX heading rather than sitting a nudge to the right. */}
+                    <td className={`py-3 text-[#617068] ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`py-3 text-right ${COL_ACTIONS}`}>
                       <div className="relative inline-block" data-action-menu>
                         <button
