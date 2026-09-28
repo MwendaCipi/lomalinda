@@ -30,6 +30,10 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "first_elder", label: "First Elder", group: "Church Leaders" },
   { value: "second_elder", label: "Second Elder", group: "Church Leaders" },
   { value: "third_elder", label: "Third Elder", group: "Church Leaders" },
+  // The congregation's shepherd. It was in the backend's role list all along
+  // but missing here, which left the picker unable to grant it and every
+  // label falling back to a lower-case "pastor".
+  { value: "pastor", label: "Church Pastor", group: "Church Leaders" },
   { value: "head_deacon", label: "Head Deacon", group: "Church Leaders", assistant: true },
   { value: "head_deaconess", label: "Head Deaconess", group: "Church Leaders", assistant: true },
   { value: "treasurer", label: "Treasurer", group: "Treasury", assistant: true },
@@ -169,11 +173,78 @@ export function roleDisplayLabel(code: string, assistantRoles: string[] = []): s
   return assistantRoles.includes(code) ? `Assistant ${roleLabel(code)}` : roleLabel(code);
 }
 
+/**
+ * Church seniority, most senior office first.
+ *
+ * The register's order is a picker order: it reads well as a list of choices
+ * and badly as a hierarchy, so it ends with Administrator and starts with
+ * Member — the two worst possible leads. A summary that names one role needs
+ * the hierarchy instead, which is this list.
+ *
+ * The reasoning: the church-wide offices first (the shepherd, then the elders,
+ * then the clerk and treasurer, whose briefs cover the whole church), then the
+ * department and ministry leads, and `member` last — that is the everyone
+ * state, not an office, so it can never be what someone is introduced as.
+ */
+const ROLE_SENIORITY: string[] = [
+  "admin",
+  "pastor",
+  "first_elder",
+  "second_elder",
+  "third_elder",
+  "elder",
+  "clerk",
+  "treasurer",
+  "head_deacon",
+  "head_deaconess",
+  "pm_leader",
+  "apm_leader",
+  "men_ministry",
+  "women_ministry",
+  "youth_leader",
+  "chaplaincy",
+  "children_ministry",
+  "health_leader",
+  "ambassadors_leader",
+  "education_leader",
+  "family_life",
+  "pathfinders_leader",
+  "adventurers_leader",
+  "publishing_head",
+  "welfare_leader",
+  "interest_coordinator",
+  "development",
+  "choir_director",
+  "member",
+];
+
+/** How senior a role is; anything unrecognised sinks below every known office. */
+export function roleSeniorityRank(code: string): number {
+  const index = ROLE_SENIORITY.indexOf(code);
+  return index === -1 ? ROLE_SENIORITY.length : index;
+}
+
+/**
+ * The same roles, most senior first.
+ *
+ * Ties — including unknown codes, which share the lowest standing — keep the
+ * order they arrived in, so this never reshuffles what it cannot rank.
+ */
+export function orderRolesBySeniority(codes: string[]): string[] {
+  return (codes || [])
+    .map((code, index) => ({ code, index }))
+    .sort(
+      (a, b) => roleSeniorityRank(a.code) - roleSeniorityRank(b.code) || a.index - b.index
+    )
+    .map((entry) => entry.code);
+}
+
 /** Human summary of a role list: "Clerk, Treasurer", "Clerk +2" or
-    "Assistant Choir Director +1" when assistants are given. */
+    "Assistant Choir Director +1" when assistants are given. The senior office
+    leads, so the summary never introduces a first elder as a member. */
 export function formatRoles(roles: string[], assistantRoles: string[] = []): string {
   if (!roles || roles.length === 0) return "Member";
-  const labels = roles.map((code) => roleDisplayLabel(code, assistantRoles));
+  const labels = orderRolesBySeniority(roles).map((code) => roleDisplayLabel(code, assistantRoles));
   if (labels.length <= 2) return labels.join(", ");
   return `${labels[0]} +${labels.length - 1}`;
 }
@@ -438,15 +509,18 @@ export function RolesCombobox({
         disabled={disabled}
         onClick={() => setIsOpen((o) => !o)}
         className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
-        title={selected.map((code) => roleDisplayLabel(code, assistants)).join(", ")}
+        title={orderRolesBySeniority(selected)
+          .map((code) => roleDisplayLabel(code, assistants))
+          .join(", ")}
       >
-        {/* Compact on purpose: the first role plus a count — "Elder +2
+        {/* Compact on purpose: the senior role plus a count — "Elder +2
             others", "Assistant Choir Director" — keeps the column narrow;
-            the full list lives in the tooltip. */}
+            the full list lives in the tooltip. Display only: what the picker
+            hands back is the list as chosen, which the API orders itself. */}
         <span className="min-w-0 truncate">
           {selected.length
             ? selected.length > 1
-              ? `${roleDisplayLabel(selected[0], assistants)} +${selected.length - 1} other${selected.length - 1 === 1 ? "" : "s"}`
+              ? `${roleDisplayLabel(orderRolesBySeniority(selected)[0], assistants)} +${selected.length - 1} other${selected.length - 1 === 1 ? "" : "s"}`
               : roleDisplayLabel(selected[0], assistants)
             : "Select access"}
         </span>
