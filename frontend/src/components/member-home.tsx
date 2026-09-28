@@ -39,13 +39,26 @@ export function MemberHome() {
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [loading, setLoading] = useState(true);
+  /** False until the hook's first pass has looked at localStorage. */
+  const [tokenChecked, setTokenChecked] = useState(false);
 
   useEffect(() => {
+    setTokenChecked(true);
+  }, []);
+
+  useEffect(() => {
+    // The hook's hasToken flips inside its layout effect, one tick after this
+    // effect can run — bailing on its first render would bounce an entirely
+    // valid session to /login, which would then find the token and bounce
+    // back: the "Taking you in…" loop. So wait it out and only redirect when
+    // the check has actually completed signed-out.
+    if (!tokenChecked) return;
     if (!hasToken) {
       router.replace("/login?next=/dashboard");
       return;
     }
     const token = localStorage.getItem("access_token");
+    if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
 
     // A proposed profile edit waits here for the member's own yes or no.
@@ -54,7 +67,7 @@ export function MemberHome() {
       .then((data) => setProfileChange(data?.pending ? (data.change_request as ProfileChange) : null))
       .catch(() => setProfileChange(null))
       .finally(() => setLoading(false));
-  }, [hasToken, router]);
+  }, [hasToken, tokenChecked, router]);
 
   const roles = me?.roles && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
