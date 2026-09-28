@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { ComboboxPopover } from "./combobox-popover";
 
 export type RoleOption = {
   value: string;
@@ -188,13 +189,19 @@ interface AccountTypeComboboxProps {
 /** Single-choice twin of RolesCombobox, for the Type column. */
 export function AccountTypeCombobox({ value, onChange, disabled = false, fill = false }: AccountTypeComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body (see ComboboxPopover), so outside-click
+  // must count it as inside or the first click on it would close the picker.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
@@ -216,16 +223,7 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
       <button
         type="button"
         disabled={disabled}
-        onClick={() =>
-          setIsOpen((open) => {
-            // Open upward near the bottom of the viewport, like the role picker.
-            if (!open && containerRef.current) {
-              const rect = containerRef.current.getBoundingClientRect();
-              setDropUp(window.innerHeight - rect.bottom < 220);
-            }
-            return !open;
-          })
-        }
+        onClick={() => setIsOpen((open) => !open)}
         title={current.help}
         className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
       >
@@ -235,11 +233,14 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
         </svg>
       </button>
 
-      {isOpen && (
-        <div
-          role="listbox"
-          className={`absolute z-50 w-52 rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg ${dropUp ? "bottom-full mb-1" : "mt-1"} left-0`}
-        >
+      <ComboboxPopover
+        anchorRef={containerRef}
+        panelRef={panelRef}
+        open={isOpen}
+        minW={208}
+        panelClassName="rounded-xl border border-[#dfdbd1] bg-white py-1 shadow-lg"
+      >
+        <div role="listbox">
           {ACCOUNT_TYPE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -260,7 +261,7 @@ export function AccountTypeCombobox({ value, onChange, disabled = false, fill = 
             </button>
           ))}
         </div>
-      )}
+      </ComboboxPopover>
     </div>
   );
 }
@@ -302,7 +303,6 @@ export function RolesCombobox({
   showAssistants = false,
 }: RolesComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
   const [register, setRegister] = useState<Record<string, RoleRegisterRow>>({});
   // Drafts: ticks and assistant flags made inside the open picker stay local
   // until Done confirms them, so a stray click outside reads as a cancel
@@ -310,6 +310,9 @@ export function RolesCombobox({
   const [draftRoles, setDraftRoles] = useState<string[]>(selected);
   const [draftAssistants, setDraftAssistants] = useState<string[]>(assistants);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body (see ComboboxPopover), so outside-click
+  // must count it as inside or the first click on it would close the picker.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Roles read alphabetically in the picker — the definition order is the
   // org chart's, which is nobody's guess when looking for a role.
@@ -343,7 +346,11 @@ export function RolesCombobox({
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
@@ -429,17 +436,7 @@ export function RolesCombobox({
       <button
         type="button"
         disabled={disabled}
-        onClick={() =>
-          setIsOpen((o) => {
-            // Open upward when near the bottom of the viewport so the list
-            // is not clipped by the table's scroll area or the bottom bar.
-            if (!o && containerRef.current) {
-              const rect = containerRef.current.getBoundingClientRect();
-              setDropUp(window.innerHeight - rect.bottom < 280);
-            }
-            return !o;
-          })
-        }
+        onClick={() => setIsOpen((o) => !o)}
         className={`${fill ? "flex w-full justify-between" : "inline-flex"} items-center gap-1.5 rounded-xl border border-[#dfdbd1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#26352f] transition hover:border-[#b36b3c] focus:border-[#b36b3c] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50`}
         title={selected.map((code) => roleDisplayLabel(code, assistants)).join(", ")}
       >
@@ -458,15 +455,17 @@ export function RolesCombobox({
         </svg>
       </button>
 
-      {isOpen && (
+      <ComboboxPopover
+        anchorRef={containerRef}
+        panelRef={panelRef}
+        open={isOpen}
+        minW={288}
+        panelClassName="rounded-xl border border-[#dfdbd1] bg-white shadow-lg overflow-hidden"
+      >
         <div
           role="listbox"
           aria-multiselectable="true"
-          className={`absolute z-50 max-h-72 w-72 overflow-y-auto rounded-xl border border-[#dfdbd1] bg-white shadow-lg ${
-            dropUp ? "bottom-full mb-1" : "mt-1"
-          } ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
+          className="max-h-72 w-72 overflow-y-auto"
         >
           {/* Roles are shared; the second column marks assistants where the
               role takes one. */}
@@ -569,7 +568,7 @@ export function RolesCombobox({
             </button>
           </div>
         </div>
-      )}
+      </ComboboxPopover>
     </div>
   );
 }

@@ -185,7 +185,7 @@ function EnrollmentConfirmContent() {
   const heading = "Set up your church account";
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-[#f7f4ee] px-6 pt-16 text-[#26352f]">
+    <main className="flex min-h-screen items-center justify-center bg-[#f7f4ee] px-6 py-16 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-[#dfdbd1] sm:p-10">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{heading}</h1>
         {email && verified && <p className="mt-3 text-sm text-[#617068]">Account email: {email}</p>}

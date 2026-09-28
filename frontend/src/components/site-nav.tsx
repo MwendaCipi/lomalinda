@@ -472,11 +472,14 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
   const mobileBottomNavItems = [
     {
       // Same destination as the header logo: a signed-in member lands on their
-      // dashboard, everyone else on the public home page.
+      // dashboard, everyone else on the public home page. Going home replaces
+      // the current entry instead of stacking, so back from home does not
+      // replay every page tapped since.
       href: userState.isLoggedIn ? "/dashboard" : "/",
       label: "Home",
       icon: Home,
       active: pathname === "/" || pathname.startsWith("/dashboard"),
+      replace: true,
     },
     {
       href: "/fellowship",
@@ -933,6 +936,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
             <Link
               key={item.href}
               href={item.href}
+              replace={"replace" in item && item.replace}
               className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-colors text-center min-w-[46px] min-h-[44px] ${
                 isActive
                   ? "text-white font-bold bg-white/20 border border-white/30 shadow-xs"

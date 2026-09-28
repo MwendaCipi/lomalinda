@@ -1386,6 +1386,40 @@ class ChurchRoleTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('Administrators', self.member_user.groups.values_list('name', flat=True))
 
+    def test_manual_member_with_a_ministry_is_not_made_its_leader(self):
+        """Adding a member to a ministry must file them as a member of it.
+
+        An earlier form bound the Ministry select to the role field, so
+        picking "Adventist Youth" quietly made the person the youth leader —
+        a full leadership role with its group and tools. Ministry membership
+        and a leadership role are different things; only the Role picker
+        hands out roles.
+        """
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post('/api/members/users/', {
+            'name': 'Nathan Ministry',
+            'email': 'nathan.ministry@example.com',
+            'username': 'nathan.ministry',
+            'gender': 'Male',
+            'ministry': 'young_adults',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = User.objects.get(username='nathan.ministry')
+        profile = MemberProfile.objects.get(user=created)
+        self.assertEqual(profile.ministry, 'young_adults')
+        # A plain member — no youth_leader, no men/women ministry leader role.
+        self.assertEqual(profile.get_roles(), ['member'])
+        self.assertEqual(profile.role, 'member')
+
+    def test_manual_member_rejects_an_unknown_ministry_code(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post('/api/members/users/', {
+            'name': 'Bad Ministry', 'email': 'bad.ministry@example.com',
+            'ministry': 'knights_of_the_round_table',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(username='bad.ministry').exists())
+
 
 class ChurchRoleRegistryTests(TestCase):
     """The hard-coded role registry, the admin tick list and full admin access."""
@@ -3179,6 +3213,152 @@ class AccountTypeChangeTests(APITestCase):
         response = self._set_type('friend', user=self.owner)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AccountActivationTests(APITestCase):
+    """Switching a login off, and back on, without touching the person.
+
+    A deactivated account is not a removed one: the record, roles, roll
+    membership and giving history all stay. What goes away is the ability to
+    sign in — including any session already open. The deactivated_at stamp is
+    what tells this apart from a join request nobody has approved yet, which is
+    inactive too but belongs to the Requests desk.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('active.admin', 'active.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        self.clerk = User.objects.create_user('active.clerk', 'active.clerk@example.com', 'ClerkPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        self.person = User.objects.create_user('active.person', 'active.person@example.com', 'PersonPass#2026')
+        self.person.first_name = 'Peter'
+        self.person.save()
+        MemberProfile.objects.create(user=self.person, role='member', roles='member')
+        self.plain = User.objects.create_user('active.plain', 'active.plain@example.com', 'PlainPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.owner = User.objects.create_superuser('active.owner', 'active.owner@example.com', 'OwnerPass#2026')
+        self.other_admin = User.objects.create_user('active.other', 'active.other@example.com', 'OtherPass#2026')
+        MemberProfile.objects.create(user=self.other_admin, role='admin', roles='admin')
+        self.client.force_authenticate(self.admin)
+
+    def _set_activation(self, is_active, user=None):
+        return self.client.patch(
+            f'/api/members/users/{(user or self.person).id}/activation/',
+            {'is_active': is_active},
+            format='json',
+        )
+
+    def _can_sign_in(self, user, password):
+        """Ask the real sign-in endpoint, as the phone app does.
+
+        A client of its own, so clearing the forced authentication for the
+        anonymous sign-in does not unauthenticate the office's own requests.
+        """
+        from rest_framework.test import APIClient
+
+        return APIClient().post(
+            '/api/auth/token/', {'username': user.username, 'password': password}, format='json'
+        )
+
+    def test_deactivating_keeps_the_record_and_stops_the_login(self):
+        self.assertEqual(self._can_sign_in(self.person, 'PersonPass#2026').status_code, status.HTTP_200_OK)
+
+        response = self._set_activation(False)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.get(pk=self.person.pk).is_active)
+        profile = MemberProfile.objects.get(user=self.person)
+        self.assertIsNotNone(profile.deactivated_at)
+        # Nothing else about the person changed.
+        self.assertEqual(profile.get_roles(), ['member'])
+        self.assertEqual(self.person.first_name, 'Peter')
+        blocked = self._can_sign_in(self.person, 'PersonPass#2026')
+        self.assertEqual(blocked.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_activating_clears_the_stamp_and_lets_them_back_in(self):
+        self._set_activation(False)
+
+        response = self._set_activation(True)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(User.objects.get(pk=self.person.pk).is_active)
+        self.assertIsNone(MemberProfile.objects.get(user=self.person).deactivated_at)
+        self.assertEqual(self._can_sign_in(self.person, 'PersonPass#2026').status_code, status.HTTP_200_OK)
+
+    def test_the_roster_says_which_inactive_account_is_which(self):
+        self._set_activation(False)
+        self.client.force_authenticate(self.admin)
+        row = next(
+            r for r in self.client.get('/api/members/users/').data
+            if r['username'] == 'active.person'
+        )
+        self.assertFalse(row['is_active'])
+        self.assertIsNotNone(row['deactivated_at'])
+
+    def test_a_deactivated_member_is_dropped_from_the_announcement_audience(self):
+        from .views import roster_queryset
+
+        self._set_activation(False)
+        self.assertNotIn(self.person, roster_queryset().filter(is_active=True))
+
+    def test_nobody_can_deactivate_their_own_account(self):
+        response = self._set_activation(False, user=self.admin)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(User.objects.get(pk=self.admin.pk).is_active)
+
+    def test_a_clerk_cannot_deactivate_an_administrator(self):
+        self.client.force_authenticate(self.clerk)
+
+        response = self._set_activation(False, user=self.other_admin)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.get(pk=self.other_admin.pk).is_active)
+
+    def test_an_administrator_can_deactivate_another_administrator(self):
+        response = self._set_activation(False, user=self.other_admin)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.get(pk=self.other_admin.pk).is_active)
+
+    def test_a_member_without_office_cannot_switch_anyone_off(self):
+        self.client.force_authenticate(self.plain)
+
+        response = self._set_activation(False)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.get(pk=self.person.pk).is_active)
+
+    def test_a_system_account_is_not_a_church_member(self):
+        response = self._set_activation(False, user=self.owner)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_switching_on_an_unstamped_inactive_account_writes_no_stamp(self):
+        """Only a deactivation stamps an account; approval never does.
+
+        The roster hides its Activate action for an inactive account with no
+        stamp, because that account belongs to the Requests desk — the stamp is
+        the roster's evidence that this is a switched-off login it may restore.
+        """
+        self.person.is_active = False
+        self.person.save(update_fields=['is_active'])
+
+        response = self._set_activation(True)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(User.objects.get(pk=self.person.pk).is_active)
+        self.assertIsNone(MemberProfile.objects.get(user=self.person).deactivated_at)
+
+    def test_a_meaningless_is_active_is_rejected(self):
+        response = self.client.patch(
+            f'/api/members/users/{self.person.id}/activation/',
+            {'is_active': 'maybe'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(User.objects.get(pk=self.person.pk).is_active)
 
 
 class MeetingInvitationTests(APITestCase):
@@ -6530,3 +6710,58 @@ class AnnouncementResponsesCsvTests(APITestCase):
         self.assertEqual(rows[0], ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Answered on'])
         self.assertEqual(rows[1][2], 'Tithe')
         self.assertEqual(rows[1][4], '1500.00')
+
+
+class AnnouncementAttachmentRemovalTests(APITestCase):
+    """Editing an announcement can clear its existing flyer.
+
+    The compose form shows the current attachment with a Remove option; the
+    PATCH carries remove_attachment=true and the view empties the attachment
+    fields (and deletes the file from storage) instead of leaving the old
+    flyer dangling with no way to take it down.
+    """
+
+    def setUp(self):
+        from django.utils import timezone
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .models import Announcement
+
+        self.admin = User.objects.create_user(
+            'ann.attach.admin', 'ann.attach.admin@example.com', 'ChurchPass#2026',
+            is_staff=True, is_superuser=True,
+        )
+        MemberProfile.objects.create(user=self.admin, role='member', roles='member')
+        self.announcement = Announcement.objects.create(
+            title='Harvest flyer',
+            text='Bring your contribution on Saturday.',
+            visibility='members_only',
+            attachment=SimpleUploadedFile('flyer.pdf', b'%PDF-1.4 test flyer', content_type='application/pdf'),
+            starts_at=timezone.localdate(),
+            expires_at=timezone.localdate() + timedelta(days=30),
+        )
+
+    def test_remove_attachment_flag_clears_the_flyer(self):
+        self.client.force_authenticate(self.admin)
+        self.assertTrue(self.announcement.attachment)
+        response = self.client.patch(
+            f'/api/members/announcements/{self.announcement.pk}/',
+            {'remove_attachment': 'true'},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.announcement.refresh_from_db()
+        self.assertFalse(self.announcement.attachment)
+        self.assertEqual(self.announcement.attachment.name, '')
+
+    def test_patch_without_the_flag_keeps_the_flyer(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f'/api/members/announcements/{self.announcement.pk}/',
+            {'title': 'Harvest flyer, updated'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.announcement.refresh_from_db()
+        self.assertTrue(self.announcement.attachment)
+        self.assertIn('flyer', self.announcement.attachment.name)

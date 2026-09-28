@@ -775,58 +775,153 @@ export function DepartmentHub() {
           Each row: the department's leadership, and its calendar, roll, budget and announcements.
         </p>
       </div>
-      {departments.map((department) => {
-        const style = DEPARTMENT_STYLES[department.code];
-        return (
-          <div
-            key={department.code}
-            className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm sm:p-5"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              {/* Identity + the two offices, inline: leader, then assistant. */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg" aria-hidden="true">{style.icon}</span>
-                  <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
-                </div>
-                <div className="mt-2 space-y-1 text-xs">
-                  <p className="text-[#26352f]">
-                    <span className="font-semibold text-[#617068]">Leader:</span>{" "}
-                    {department.leader ? (
-                      <>
-                        <span className="font-semibold">{department.leader.name}</span>
-                        {department.leader.phone_number && <span className="text-[#617068]"> · {department.leader.phone_number}</span>}
-                      </>
-                    ) : (
-                      <span className="italic text-[#8b9790]">not set</span>
-                    )}
-                  </p>
-                  <p className="text-[#26352f]">
-                    <span className="font-semibold text-[#617068]">Assistant:</span>{" "}
-                    {department.assistants.length > 0 ? (
-                      <>
-                        <span className="font-semibold">{department.assistants.map((a) => a.name).join(", ")}</span>
-                        {department.assistants[0].phone_number && <span className="text-[#617068]"> · {department.assistants[0].phone_number}</span>}
-                      </>
-                    ) : (
-                      <span className="italic text-[#8b9790]">not set</span>
-                    )}
-                  </p>
-                  <p className="text-[11px] text-[#617068]">
-                    {department.member_count} on roll · {department.event_count} event{department.event_count === 1 ? "" : "s"}
-                  </p>
-                </div>
-              </div>
 
-              {/* Actions: open the full view, or work on one strand directly. */}
-              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+      {/* One table, one row per department — the directory a desk scans, not
+          a stack of cards. On phones the same rows are cards. */}
+      <div className="hidden overflow-hidden rounded-2xl border border-[#dfdbd1] bg-white shadow-sm md:block">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[#dfdbd1] bg-[#faf7f0] text-[10px] uppercase tracking-wider text-[#617068]">
+              <th className="px-4 py-3 font-bold">Department</th>
+              <th className="px-4 py-3 font-bold">Leader</th>
+              <th className="px-4 py-3 font-bold">Assistant</th>
+              <th className="px-4 py-3 text-center font-bold">Roll</th>
+              <th className="px-4 py-3 text-right font-bold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {departments.map((department) => {
+              const style = DEPARTMENT_STYLES[department.code];
+              return (
+                <tr key={department.code} className="border-b border-[#eeeae2] last:border-0 hover:bg-[#f7f4ee]/60">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg" aria-hidden="true">{style.icon}</span>
+                      <span className={`text-sm font-bold ${style.accent}`}>{department.label}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {department.leader ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-[#26352f]">{department.leader.name}</p>
+                        <p className="truncate text-[11px] text-[#617068]">{department.leader.phone_number || department.leader.email || ""}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs italic text-[#8b9790]">not set</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {department.assistants.length > 0 ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-[#26352f]">{department.assistants.map((a) => a.name).join(", ")}</p>
+                        <p className="truncate text-[11px] text-[#617068]">{department.assistants[0].phone_number || department.assistants[0].email || ""}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs italic text-[#8b9790]">not set</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs text-[#617068]">
+                    {department.member_count}
+                    <span className="block text-[10px] text-[#8b9790]">{department.event_count} event{department.event_count === 1 ? "" : "s"}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailTab("members");
+                          setSelected(department);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
+                      >
+                        Open <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Budget"
+                        onClick={() => setBudgetDept(department)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      >
+                        <Landmark className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Calendar"
+                        onClick={() => {
+                          setDetailTab("calendar");
+                          setSelected(department);
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      >
+                        <CalendarDays className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Members"
+                        onClick={() => {
+                          setDetailTab("members");
+                          setSelected(department);
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      >
+                        <Users className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Communicate — post an announcement to this department"
+                        onClick={() => setCommunicateDept(department)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                      >
+                        <Megaphone className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Phones: the same directory as cards. */}
+      <div className="space-y-3 md:hidden">
+        {departments.map((department) => {
+          const style = DEPARTMENT_STYLES[department.code];
+          return (
+            <div key={department.code} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-lg" aria-hidden="true">{style.icon}</span>
+                <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
+              </div>
+              <div className="mt-2 space-y-1 text-xs">
+                <p className="text-[#26352f]">
+                  <span className="font-semibold text-[#617068]">Leader:</span>{" "}
+                  {department.leader ? (
+                    <span className="font-semibold">{department.leader.name}</span>
+                  ) : (
+                    <span className="italic text-[#8b9790]">not set</span>
+                  )}
+                </p>
+                <p className="text-[#26352f]">
+                  <span className="font-semibold text-[#617068]">Assistant:</span>{" "}
+                  {department.assistants.length > 0 ? (
+                    <span className="font-semibold">{department.assistants.map((a) => a.name).join(", ")}</span>
+                  ) : (
+                    <span className="italic text-[#8b9790]">not set</span>
+                  )}
+                </p>
+                <p className="text-[11px] text-[#617068]">
+                  {department.member_count} on roll · {department.event_count} event{department.event_count === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="mt-3 flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
                     setDetailTab("members");
                     setSelected(department);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
+                  className="inline-flex items-center gap-1 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
                 >
                   Open <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -851,18 +946,7 @@ export function DepartmentHub() {
                 </button>
                 <button
                   type="button"
-                  title="Members"
-                  onClick={() => {
-                    setDetailTab("members");
-                    setSelected(department);
-                  }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                >
-                  <Users className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  title="Communicate — post an announcement to this department"
+                  title="Communicate"
                   onClick={() => setCommunicateDept(department)}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
                 >
@@ -870,9 +954,9 @@ export function DepartmentHub() {
                 </button>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       {budgetDept && (
         <DepartmentBudgetModal

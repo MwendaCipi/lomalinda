@@ -107,6 +107,14 @@ class MemberProfile(models.Model):
         help_text="Ministry the member belongs to, self-declared at profile update",
     )
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
+    # When the office switched this account off. An inactive account is not
+    # always a deactivated one — a join request nobody has approved yet is
+    # inactive too — so the stamp is what tells the roster which of the two it
+    # is looking at. Null means never deactivated.
+    deactivated_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When an officer deactivated this account; null if never deactivated",
+    )
     # Notification preferences. Mass communication (announcements) respects
     # these; duty notices (a request waiting for the office) always arrive.
     announce_email = models.BooleanField(default=True, help_text="Receive announcement broadcasts by email")

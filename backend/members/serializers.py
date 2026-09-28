@@ -66,6 +66,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
     # Friends and Sabbath School attendees join as inactive accounts; leadership
     # sees this on the roster so "Confirmed" never reads as "can sign in".
     is_active = serializers.BooleanField(read_only=True)
+    # Set when an officer switched the account off, which tells the roster a
+    # deactivated member from one merely waiting for approval — both are
+    # inactive, and only one of them can be switched back on.
+    deactivated_at = serializers.DateTimeField(
+        source='member_profile.deactivated_at', read_only=True, default=None,
+    )
     # True when a proposed profile edit is waiting for this member's approval;
     # the roster shows a badge so the office knows the ball is in their court.
     pending_profile_change = serializers.SerializerMethodField()
@@ -98,6 +104,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'disability',
             'is_disfellowshipped',
             'is_active',
+            'deactivated_at',
             'pending_profile_change',
             # The installation's owner account is not a member; the roster
             # endpoints filter it out and the clients use this to be sure.

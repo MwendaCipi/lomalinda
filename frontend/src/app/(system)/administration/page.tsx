@@ -198,6 +198,19 @@ function AdministrationContent() {
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
   const isFinance = hasAnyRole("treasurer", "admin");
+  // The deaconate desk belongs to the deacons and the admin; elders and
+  // clerks reach their work from the Elders' Desk.
+  const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
+  const isElderOnly = isElder && !isAdmin;
+  // Mobile overview: an office spanning more than one role — and the admin,
+  // who spans all of them — lands on the sidebar's section headings and drills
+  // in; a single-role desk opens its items directly.
+  const useSectionCards = isAdmin || userRoles.filter((r) => r !== "member").length > 1;
+  // Which section's cards the phone overview is showing (null = the headings).
+  const [overviewSection, setOverviewSection] = useState<"elders" | "finance" | "deaconate" | null>(null);
+  const showEldersItems = (isElder || isClerk || isAdmin) && (!useSectionCards || overviewSection === "elders");
+  const showFinanceItems = isFinance && (!useSectionCards || overviewSection === "finance");
+  const showDeaconateItems = isDeaconate && !isElderOnly && (!useSectionCards || overviewSection === "deaconate");
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
@@ -260,8 +273,48 @@ function AdministrationContent() {
             {/* Overview / Card Grid View (Mobile Only) */}
             {activeTab === "overview" && (
               <div className="space-y-6 p-4 sm:p-6 lg:hidden">
+                {useSectionCards && overviewSection === null ? (
+                  /* The section headings, one card each — the phone's front
+                     page of the sidebar. */
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {(isElder || isClerk || isAdmin) && (
+                      <SectionHeadingCard
+                        icon="🪑"
+                        label="Elders' Desk"
+                        description="Users, departments, meetings, announcements and requests."
+                        onClick={() => setOverviewSection("elders")}
+                      />
+                    )}
+                    {isFinance && (
+                      <SectionHeadingCard
+                        icon="🏦"
+                        label="Treasury & Finance"
+                        description="Accounts, ledger, fund drives, expenditure and refunds."
+                        onClick={() => setOverviewSection("finance")}
+                      />
+                    )}
+                    {isDeaconate && !isElderOnly && (
+                      <SectionHeadingCard
+                        icon="📦"
+                        label="Deaconate Ministry"
+                        description="Inventory, duty rota, team and ordinances calendar."
+                        onClick={() => setOverviewSection("deaconate")}
+                      />
+                    )}
+                  </div>
+                ) : (
+                <>
+                {useSectionCards && (
+                  <button
+                    type="button"
+                    onClick={() => setOverviewSection(null)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#c9c5bb] bg-white px-4 py-2 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c]"
+                  >
+                    &larr; All sections
+                  </button>
+                )}
                 <div className="grid gap-5 sm:grid-cols-2">
-                  {isClerk && (
+                  {showEldersItems && (
                     <>
                       <div
                         onClick={() => {
@@ -386,7 +439,7 @@ function AdministrationContent() {
                     </div>
                   )}
 
-                  {isFinance && (
+                  {showFinanceItems && (
                     <>
                       {/* The finances' own desk. It was only reachable from the
                           desktop sidebar, so a treasurer on a phone had no card
@@ -462,8 +515,9 @@ function AdministrationContent() {
                     </>
                   )}
 
-                  {/* The deaconate desk, on phones as in the desktop sidebar. */}
-                  {isElder || isClerk || isAdmin ? (
+                  {/* The deaconate desk, on phones as in the desktop sidebar —
+                      deacons and admin; elders and clerks are not shown it. */}
+                  {showDeaconateItems ? (
                     <div
                       onClick={() => {
                         setActiveTab("inventory");
@@ -517,6 +571,8 @@ function AdministrationContent() {
                     </div>
                   ) : null}
                 </div>
+                </>
+                )}
               </div>
             )}
 
@@ -630,6 +686,37 @@ function AdministrationContent() {
         </div>
       </div>
     </main>
+  );
+}
+
+/** One section heading in the phone overview: the front page for anyone whose
+    office spans more than one role — the sidebar's sections as cards. */
+function SectionHeadingCard({
+  icon,
+  label,
+  description,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
+      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#b36b3c]/50"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-[#26352f]">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">{description}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
+    </div>
   );
 }
 

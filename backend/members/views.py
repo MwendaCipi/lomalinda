@@ -1810,9 +1810,17 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not can_manage_announcements(self.request.user):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church administrators, clerks or elders can edit announcements.')
+        # A PATCH carrying remove_attachment=true clears the flyer: the file
+        # is deleted from storage and the row's attachment fields emptied.
+        remove_attachment = str(self.request.data.get('remove_attachment', '')).strip().lower() in ('1', 'true', 'yes')
         # Editing the sharing channels re-decides site visibility, so an
         # announcement whose channels gain or lose "site" flips accordingly.
         announcement = serializer.save()
+        if remove_attachment:
+            if announcement.attachment:
+                announcement.attachment.delete(save=False)
+            announcement.attachment = None
+            announcement.save(update_fields=['attachment'])
         sharing_raw = (announcement.sharing_option or '').lower()
         channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
         show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
@@ -4809,6 +4817,9 @@ class UserManagementView(generics.ListCreateAPIView):
         account_type = request.data.get('account_type') or 'member'
         if account_type not in ('member', 'friend', 'sabbath_school'):
             account_type = 'member'
+        ministry = (request.data.get('ministry') or '').strip()
+        if ministry and ministry not in {code for code, _label in MemberProfile.MINISTRY_CHOICES}:
+            return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
         current_church = (request.data.get('current_church') or '').strip()
         baptismal_status = (request.data.get('baptismal_status') or '').strip()
         if account_type == 'friend':
@@ -4884,6 +4895,7 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj.baptismal_status = baptismal_status
         profile_obj.profession = profession
         profile_obj.gender = gender
+        profile_obj.ministry = ministry
         profile_obj.gifts = str(gifts or '').strip()
         profile_obj.disability = str(disability or '').strip()
         if date_of_birth:
@@ -5430,6 +5442,111 @@ ACCOUNT_TYPE_LABELS = {
     'sabbath_school': 'a Sabbath School attendee',
     'ex_member': 'an ex-member',
 }
+
+
+class UserActivationView(APIView):
+    """Switch an account off, or back on again.
+
+    Deactivating is the gentler sibling of removing someone: the record, the
+    roles, the giving history and the roll membership all stay, but the login
+    stops working — the JWT authentication rule refuses an inactive account, so
+    even a session already signed in dies on its next request. It is meant for
+    the accounts that should not sign in right now (someone who has left the
+    area, a duplicate registration, an account under review), never as a way to
+    erase a person: that is the Remove action's job.
+
+    Reactivating clears the stamp, so the roster can tell a switched-off
+    account from one that is merely still waiting for leadership approval —
+    both are inactive, and only the switched-off one has anything to restore.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        current_profile = getattr(request.user, 'member_profile', None)
+        if not current_profile or not current_profile.has_role('admin', 'elder', 'clerk'):
+            return Response(
+                {'detail': 'Only church administrators, elders or clerks can activate or deactivate an account.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        requested = request.data.get('is_active')
+        # A JSON boolean, or one of the words a plain form would send. A string
+        # outside that list is refused rather than read as "off": a typo must
+        # never lock a member out of their own account.
+        if isinstance(requested, str):
+            word = requested.strip().lower()
+            if word in ('true', '1', 'yes'):
+                requested = True
+            elif word in ('false', '0', 'no'):
+                requested = False
+            else:
+                requested = None
+        if not isinstance(requested, bool):
+            return Response(
+                {'is_active': 'Send is_active as true (activate) or false (deactivate).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            target_user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if target_user.is_superuser:
+            return Response(
+                {'detail': 'This is a system account, not a church member.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_profile, _ = MemberProfile.objects.get_or_create(user=target_user)
+
+        if not requested:
+            if target_user.pk == request.user.pk:
+                return Response(
+                    {'detail': 'You cannot deactivate your own account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Deactivating an administrator is an administrators' decision, the
+            # same rule that governs handing the role out.
+            if target_profile.has_role('admin') and not current_profile.has_role('admin'):
+                return Response(
+                    {'detail': 'Only an administrator can deactivate another administrator.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if not target_user.is_active and target_profile.deactivated_at:
+                return Response({'detail': f'{target_user.username} is already deactivated.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if target_user.is_active and not target_profile.deactivated_at:
+                return Response({'detail': f'{target_user.username} is already active.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        target_user.is_active = requested
+        target_user.save(update_fields=['is_active'])
+        target_profile.deactivated_at = None if requested else timezone.now()
+        target_profile.save(update_fields=['deactivated_at'])
+
+        # An account switched back on has a member who can read a note; one
+        # switched off cannot sign in to read anything.
+        if requested:
+            ChurchNotification.objects.create(
+                user=target_user,
+                title='Your account is active again',
+                message=(
+                    f"Your account at {current_church_name()} has been reactivated. "
+                    "You can sign in again with your usual password."
+                ),
+            )
+
+        serializer = UserDetailSerializer(target_user)
+        data = dict(serializer.data)
+        data['detail'] = (
+            f"{target_user.username} can sign in again."
+            if requested
+            else f"{target_user.username} can no longer sign in. Their record and history are untouched."
+        )
+        return Response(data)
 
 
 class MemberLookupView(APIView):

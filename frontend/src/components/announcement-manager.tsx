@@ -211,6 +211,10 @@ export function AnnouncementManager({
   // wording members read on the giving form.
   const [accounts, setAccounts] = useState<{ id: number; name: string; description?: string }[]>([]);
   const [attachment, setAttachment] = useState<File | null>(null);
+  // Editing shows the post's existing flyer; "Remove" clears it server-side
+  // via the remove_attachment flag.
+  const [existingAttachment, setExistingAttachment] = useState<{ name?: string | null; size?: number | null } | null>(null);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSharingDropdown, setShowSharingDropdown] = useState(false);
@@ -330,6 +334,8 @@ export function AnnouncementManager({
     setEditingId(item.id);
     setMessage("");
     setAttachment(null);
+    setExistingAttachment(item.attachment ? { name: item.attachment_name, size: item.attachment_size } : null);
+    setRemoveAttachment(false);
     const postTo = parsePostTo(item.visibility, item.audience);
     setForm({
       title: item.title,
@@ -367,6 +373,8 @@ export function AnnouncementManager({
     });
     setEditingId(null);
     setAttachment(null);
+    setExistingAttachment(null);
+    setRemoveAttachment(false);
     setMessage("");
     if (composerOnly) {
       // Communicate mode: posted (or cancelled) — hand control back to the host.
@@ -440,6 +448,7 @@ export function AnnouncementManager({
         payload.append(key, String(value));
       });
       if (attachment) payload.append("attachment", attachment);
+      if (editingId && removeAttachment) payload.append("remove_attachment", "true");
       const response = await fetch(
         editingId ? `${API_URL}/api/members/announcements/${editingId}/` : `${API_URL}/api/members/announcements/`,
         {
@@ -729,14 +738,36 @@ export function AnnouncementManager({
                 </label>
               </div>
 
-              <label className="block text-xs font-semibold text-[#26352f]">
+              <div className="text-xs font-semibold text-[#26352f]">
                 Attachment (optional)
-                <input
-                  type="file"
-                  onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-                  className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 text-xs text-[#26352f] outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f] focus:border-[#b36b3c]"
-                />
-              </label>
+                {existingAttachment && !removeAttachment && (
+                  <p className="mt-1 flex flex-wrap items-center gap-2 rounded-xl border border-[#e5dfd2] bg-[#faf7f0] px-3 py-2 text-xs font-normal text-[#415047]">
+                    <span className="truncate">{existingAttachment.name || "Current attachment"}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setRemoveAttachment(true); setAttachment(null); }}
+                      className="ml-auto shrink-0 text-[11px] font-bold text-red-700 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </p>
+                )}
+                {removeAttachment && (
+                  <p className="mt-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-normal text-red-700">
+                    Current attachment will be removed when you save.
+                  </p>
+                )}
+                {!removeAttachment && (
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      setAttachment(e.target.files?.[0] ?? null);
+                      if (e.target.files?.[0]) setRemoveAttachment(false);
+                    }}
+                    className="mt-1 w-full rounded-xl border border-[#c9c5bb] px-3.5 py-2 font-normal text-[#26352f] outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#f7f4ee] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#26352f] focus:border-[#b36b3c]"
+                  />
+                )}
+              </div>
 
               {/* Other types keep the ordinary body field; an opinion poll's
                   body is its question, collected in the poll block above. */}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { nextGathering, gatheringLabel, type ChurchTimes } from "@/lib/gathering";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -13,6 +13,9 @@ type Announcement = {
   detail?: string;
   href?: string | null;
   announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  support_account?: string | null;
+  support_account_display?: string | null;
 };
 
 /** The join button names the platform the link points at, so a member knows
@@ -42,6 +45,14 @@ export function DashboardAnnouncements() {
   const [slide, setSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
+  // Pledging straight from the rail: the Pledge button opens a small amount
+  // field in place, and the pledge records against the announcement — the
+  // same endpoint the Fellowship feed uses.
+  const [pledgeOpen, setPledgeOpen] = useState(false);
+  const [pledgeAmount, setPledgeAmount] = useState("");
+  const [pledgeBusy, setPledgeBusy] = useState(false);
+  const [pledgeDone, setPledgeDone] = useState<number[]>([]);
+  const [pledgeMessage, setPledgeMessage] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -80,6 +91,42 @@ export function DashboardAnnouncements() {
   const isGiving = current?.announcement_type === "promotion";
   const isOpinion = current?.announcement_type === "opinion";
   const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
+  const giveMoneyHref = `/give?purpose=${encodeURIComponent(current?.support_account_display || current?.title || "")}`;
+
+  // A new slide starts with its pledge field closed.
+  useEffect(() => {
+    setPledgeOpen(false);
+    setPledgeAmount("");
+    setPledgeMessage("");
+  }, [current?.id]);
+
+  /** Record the pledge against the announcement, then confirm in place. */
+  async function submitPledge(event: FormEvent) {
+    event.preventDefault();
+    if (!current || pledgeBusy || !pledgeAmount) return;
+    setPledgeBusy(true);
+    setPledgeMessage("");
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_URL}/api/members/announcements/${current.id}/action/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action_type: current.action_type || "none", pledge_amount: parseFloat(pledgeAmount) }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Unable to record your pledge.");
+      }
+      setPledgeDone((ids) => [...ids, current.id]);
+      setPledgeMessage("Thank you — your pledge has been recorded.");
+      setPledgeOpen(false);
+      setPledgeAmount("");
+    } catch (error) {
+      setPledgeMessage(error instanceof Error ? error.message : "Submission failed.");
+    } finally {
+      setPledgeBusy(false);
+    }
+  }
 
   return (
     <div
@@ -140,39 +187,73 @@ export function DashboardAnnouncements() {
         </div>
 
         {/* The rail's height is constant whatever the slide carries: the
-            title holds one line, the body always has room for two, and the
-            detail line keeps its slot even when empty — so the panels below
-            never jump as the slides turn. */}
+            title holds one line, the body always has room for three lines
+            and the detail line keeps its slot even when empty — so the
+            panels below never jump as the slides turn. The action row sits
+            tight under the text so the extra line costs no height. */}
         <div className="mt-2.5">
           <h2 className="line-clamp-1 text-lg font-bold leading-snug text-[#26352f] sm:text-xl">
             {current ? current.title : gatheringLabel(gathering, now)}
           </h2>
-          <p className="mt-1.5 line-clamp-2 min-h-[3rem] text-sm leading-6 text-[#415047]">
+          <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-[#415047]">
             {current ? current.text : `${gathering.time} · ${gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}`}
           </p>
-          <p className="mt-1 line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-[#617068]">
+          <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-[#617068]">
             {current?.detail || ""}
           </p>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href="/announcements"
-            className="text-sm font-semibold text-[#b36b3c] transition hover:underline"
-          >
-            See more &rarr;
-          </Link>
-
-          {/* The announcement's own action: a giving call asks for support,
-              an opinion question asks for input, a web conference names its
-              platform. The gathering slide keeps its calendar link. */}
+        {/* The announcement's own actions. Clicking the card opens the full
+            announcement in the feed; a giving call carries the giving row
+            itself — Pledge, In-kind, Give Money, left to right. */}
+        <div className="flex items-center justify-between gap-3">
           {isGiving && (
-            <Link
-              href="/announcements"
-              className="rounded-full bg-[#3d7146] px-5 py-2 text-xs font-bold text-white transition hover:bg-[#335e3a]"
-            >
-              Support
-            </Link>
+            <div className="flex-1">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  disabled={pledgeDone.includes(current?.id ?? -1)}
+                  onClick={() => { setPledgeOpen((open) => !open); setIsInteracting(true); }}
+                  className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2 text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c] disabled:opacity-50"
+                >
+                  Pledge
+                </button>
+                <Link
+                  href="/support/in-kind"
+                  className="rounded-full border border-[#c9c5bb] bg-white px-2 py-2 text-center text-xs font-bold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+                >
+                  In-kind
+                </Link>
+                <Link
+                  href={giveMoneyHref}
+                  className="rounded-full bg-[#3d7146] px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-[#335e3a]"
+                >
+                  Give Money
+                </Link>
+              </div>
+              {pledgeOpen && (
+                <form onSubmit={submitPledge} className="mt-2 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Amount (KES)"
+                    value={pledgeAmount}
+                    onChange={(event) => setPledgeAmount(event.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-[#c9c5bb] bg-white px-3 py-1.5 text-xs outline-none focus:border-[#b36b3c]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={pledgeBusy || !pledgeAmount}
+                    className="shrink-0 rounded-full bg-[#b36b3c] px-4 py-1.5 text-xs font-bold text-white transition hover:bg-[#96552e] disabled:opacity-50"
+                  >
+                    {pledgeBusy ? "Saving..." : "Record"}
+                  </button>
+                </form>
+              )}
+              {pledgeMessage && (
+                <p className="mt-1.5 text-xs font-semibold text-[#3d7146]">{pledgeMessage}</p>
+              )}
+            </div>
           )}
           {isOpinion && (
             <Link

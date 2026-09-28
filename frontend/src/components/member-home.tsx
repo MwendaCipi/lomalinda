@@ -10,7 +10,6 @@ import {
   ClipboardList,
   HandHeart,
   Megaphone,
-  Receipt,
   ShieldCheck,
   UserRound,
   UserRoundCheck,
@@ -20,7 +19,6 @@ import {
 import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardQuarterlyGiving } from "@/components/dashboard-quarterly-giving";
-import { GroupedBarChart } from "@/components/mini-charts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -32,15 +30,6 @@ type Me = {
   role?: string;
 };
 
-type Contribution = {
-  id: number;
-  amount: string;
-  purpose: string;
-  created_at: string;
-  paid_at?: string;
-  status?: string;
-};
-
 type ProfileChange = {
   id: number;
   changes: Record<string, string | null>;
@@ -48,38 +37,9 @@ type ProfileChange = {
   proposed_at: string;
 };
 
-/** A member's own giving, bucketed into the last `months` calendar months. */
-function monthlyGiving(contributions: Contribution[], months = 6) {
-  const now = new Date();
-  const firstMonth = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
-  const buckets = Array.from({ length: months }, (_, index) => {
-    const month = new Date(now.getFullYear(), now.getMonth() - (months - 1 - index), 1);
-    return { label: month.toLocaleDateString("en-GB", { month: "short" }), total: 0 };
-  });
-
-  contributions.forEach((row) => {
-    const stamp = new Date(row.paid_at || row.created_at);
-    if (Number.isNaN(stamp.getTime()) || stamp < firstMonth) return;
-    const index =
-      (stamp.getFullYear() - firstMonth.getFullYear()) * 12 + (stamp.getMonth() - firstMonth.getMonth());
-    if (index >= 0 && index < buckets.length) buckets[index].total += Number(row.amount || 0);
-  });
-
-  return buckets;
-}
-
-/** Short chart labels: KES 12k, KES 1.2M, KES 850. */
-function fmtCompactKes(value: number) {
-  const amount = Number(value || 0);
-  if (amount >= 1_000_000) return `KES ${(amount / 1_000_000).toFixed(amount >= 10_000_000 ? 0 : 1)}M`;
-  if (amount >= 1_000) return `KES ${Math.round(amount / 1_000)}k`;
-  return `KES ${Math.round(amount)}`;
-}
-
 export function MemberHome() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [contributions, setContributions] = useState<Contribution[]>([]);
   const [profileChange, setProfileChange] = useState<ProfileChange | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -100,14 +60,6 @@ export function MemberHome() {
       })
       .catch(() => router.replace("/login?next=/dashboard"));
 
-    fetch(`${API_URL}/api/members/contributions/`, { headers })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => {
-        const rows = Array.isArray(data) ? data : [];
-        setContributions(rows);
-      })
-      .catch(() => setContributions([]));
-
     // A proposed profile edit waits here for the member's own yes or no.
     fetch(`${API_URL}/api/members/me/profile-changes/`, { headers })
       .then((res) => (res.ok ? res.json() : { pending: false }))
@@ -119,12 +71,6 @@ export function MemberHome() {
   const roles = me?.roles && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
   const hasAny = (list: string[]) => list.some((r) => roles.includes(r));
-
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-
-  const fmtAmount = (a: string | number) =>
-    `KES ${Number(a).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
   // ── Role-tailored quick tiles ─────────────────────────────────────────────
   const tiles = [
@@ -148,9 +94,6 @@ export function MemberHome() {
       ? [{ href: "/administration?tab=settings", label: "Church Settings", desc: "Configuration", icon: ShieldCheck }]
       : []),
   ];
-
-  // ── My giving ────────────────────────────────────────────────────────────
-  const completed = contributions.filter((c) => (c.status || "completed") === "completed");
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: "First name",
@@ -259,50 +202,6 @@ export function MemberHome() {
                 <p className="mt-0.5 text-[11px] leading-snug text-[#617068]">{t.desc}</p>
               </Link>
             ))}
-          </section>
-
-          {/* Recent giving */}
-          <section className="mt-6 rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-base font-bold text-[#26352f]">
-                <Receipt className="h-4 w-4 text-[#b36b3c]" /> Recent Giving
-              </h2>
-              <Link href="/member" className="text-xs font-semibold text-[#b36b3c] hover:underline">
-                History →
-              </Link>
-            </div>
-            {completed.length > 0 && (
-              <div className="mt-4 rounded-xl border border-[#e5dfd2] bg-[#faf9f5] p-3">
-                <p className="text-[11px] font-semibold text-[#26352f]">Your giving, last 6 months</p>
-                <div className="mt-2">
-                  <GroupedBarChart
-                    groups={monthlyGiving(completed).map((bucket) => ({
-                      label: bucket.label,
-                      values: [bucket.total],
-                    }))}
-                    series={[{ label: "My giving", color: "#5f8067" }]}
-                    formatValue={fmtCompactKes}
-                    height={150}
-                    emptyLabel="No giving recorded in the last 6 months."
-                  />
-                </div>
-              </div>
-            )}
-            <div className="mt-4 divide-y divide-[#eeeae2]">
-              {completed.length === 0 ? (
-                <p className="py-6 text-center text-xs text-[#617068]">No giving recorded yet.</p>
-              ) : (
-                completed.slice(0, 4).map((c) => (
-                  <div key={c.id} className="flex items-baseline justify-between gap-3 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#26352f]">{fmtAmount(c.amount)}</p>
-                      <p className="text-[11px] text-[#617068]">{c.purpose}</p>
-                    </div>
-                    <span className="shrink-0 text-[10px] text-[#617068]">{fmtDate(c.paid_at || c.created_at)}</span>
-                  </div>
-                ))
-              )}
-            </div>
           </section>
 
           {/* Quarterly giving — the year's quarters, for the officers who

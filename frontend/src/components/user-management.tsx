@@ -13,6 +13,7 @@ import {
   SYSTEM_ROLE_HELP,
 } from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
+import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 
@@ -27,11 +28,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * columns keeps the same grid for every roster.
  */
 const COL_INDEX = "w-8";
-const COL_NAME = "w-[11rem]";
+// Name is the flexible column: it absorbs the table's surplus width, so the
+// leftover never pools between Sex and the pinned Actions column on the
+// right — the dropdown overlays Sex, and a wide screen simply widens Name.
+const COL_NAME = "min-w-[11rem]";
 const COL_CONTACT = "w-[12rem]";
 const COL_ROLE = "w-[10rem]";
 const COL_TYPE = "w-[9rem]";
 const COL_SEX = "w-[4rem]";
+const COL_ACTIONS = "w-[7rem]";
 
 export type MemberUser = {
   id: number;
@@ -57,6 +62,12 @@ export type MemberUser = {
   is_disfellowshipped?: boolean;
   /** False while leadership has not yet approved a friend/Sabbath School joining. */
   is_active?: boolean;
+  /**
+   * Set when an officer switched the account off. An inactive account with no
+   * stamp is a join request still waiting for approval — the row reads it as
+   * "Not approved" — and only a stamped one can be switched back on.
+   */
+  deactivated_at?: string | null;
   /** True only for the installation's owner account, which is not a member. */
   is_superuser?: boolean;
 };
@@ -128,10 +139,17 @@ export function GiftsCombobox({
   const [search, setSearch] = useState("");
   const [customGift, setCustomGift] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body (see ComboboxPopover), so outside-click
+  // must count it as inside or the first click on it would close the picker.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     }
@@ -205,8 +223,7 @@ export function GiftsCombobox({
         </div>
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 bottom-full z-50 mb-1.5 w-full min-w-[280px] rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-2xl ring-1 ring-black/5 sm:min-w-[320px]">
+      <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
           <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
               Select Member Gifts ({selectedGifts.length})
@@ -295,13 +312,13 @@ export function GiftsCombobox({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </ComboboxPopover>
     </div>
   );
 }
 
 export const AVAILABLE_DISABILITIES = [
+  "None",
   "Visual Impairment (Blind / Low Vision)",
   "Hearing Impairment (Deaf / Hard of Hearing)",
   "Physical / Mobility Impairment",
@@ -329,10 +346,17 @@ export function DisabilityCombobox({
   const [search, setSearch] = useState("");
   const [customDisability, setCustomDisability] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body (see ComboboxPopover), so outside-click
+  // must count it as inside or the first click on it would close the picker.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     }
@@ -345,10 +369,16 @@ export function DisabilityCombobox({
   }, [isOpen]);
 
   const toggleDisability = (item: string) => {
+    // "None" is exclusive: picking it clears every real condition, and picking
+    // a condition drops "None" — the two states are mutually exclusive.
+    if (item === "None") {
+      onChange(selectedDisabilities.includes("None") ? [] : ["None"]);
+      return;
+    }
     if (selectedDisabilities.includes(item)) {
       onChange(selectedDisabilities.filter((d) => d !== item));
     } else {
-      onChange([...selectedDisabilities, item]);
+      onChange([...selectedDisabilities.filter((d) => d !== "None"), item]);
     }
   };
 
@@ -374,16 +404,16 @@ export function DisabilityCombobox({
         className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2 text-xs text-[#26352f] transition hover:bg-white focus:border-[#b36b3c] focus:bg-white focus:outline-none"
       >
         <div className="flex flex-1 flex-wrap items-center gap-1.5 overflow-hidden text-left">
-          {selectedDisabilities.length === 0 ? (
-            <span className="text-[#617068]">{placeholder}</span>
+          {selectedDisabilities.length === 0 || (selectedDisabilities.length === 1 && selectedDisabilities[0] === "None") ? (
+            <span className="text-[#617068]">{selectedDisabilities.includes("None") ? "None" : placeholder}</span>
           ) : (
             <>
-              {selectedDisabilities.slice(0, 2).map((item) => (
+              {selectedDisabilities.filter((d) => d !== "None").slice(0, 2).map((item) => (
                 <span
                   key={item}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#fdf3eb] px-2 py-0.5 text-[11px] font-semibold text-[#a35622] border border-[#f3ddcc]"
+                  className="inline-flex items-center gap-1 rounded-md bg-[#eef2ed] px-2 py-0.5 text-[11px] font-semibold text-[#2d5d39]"
                 >
-                  <span>♿ {item}</span>
+                  <span>{item}</span>
                 </span>
               ))}
               {selectedDisabilities.length > 2 && (
@@ -406,8 +436,7 @@ export function DisabilityCombobox({
         </div>
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 bottom-full z-50 mb-1.5 w-full min-w-[280px] rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-2xl ring-1 ring-black/5 sm:min-w-[320px]">
+      <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
           <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
               Select Disability ({selectedDisabilities.length})
@@ -464,7 +493,7 @@ export function DisabilityCombobox({
                         onChange={() => toggleDisability(item)}
                         className="h-4 w-4 rounded accent-[#b36b3c] cursor-pointer"
                       />
-                      <span>{item}</span>
+                      <span>{item === "None" ? "None (no disability)" : item}</span>
                     </div>
                     {isChecked && <span className="text-xs text-[#b36b3c]">✓</span>}
                   </label>
@@ -498,8 +527,7 @@ export function DisabilityCombobox({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </ComboboxPopover>
     </div>
   );
 }
@@ -548,6 +576,9 @@ export function ProfessionCombobox({
   const [specifyingOther, setSpecifyingOther] = useState(false);
   const [otherText, setOtherText] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body (see ComboboxPopover), so outside-click
+  // must count it as inside or the first click on it would close the picker.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/professions/`)
@@ -566,7 +597,11 @@ export function ProfessionCombobox({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
         setIsOpen(false);
         setSpecifyingOther(false);
       }
@@ -659,8 +694,7 @@ export function ProfessionCombobox({
         </div>
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[280px] rounded-2xl border border-[#dfdbd1] bg-white p-3 shadow-2xl ring-1 ring-black/5 sm:min-w-[340px]">
+      <ComboboxPopover anchorRef={containerRef} panelRef={panelRef} open={isOpen}>
           <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#b36b3c]">
               Select Profession / Occupation
@@ -779,17 +813,19 @@ export function ProfessionCombobox({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </ComboboxPopover>
     </div>
   );
 }
 
 const MINISTRIES = [
+  // Ministry membership, not a role: picking one files the member into that
+  // ministry (profile.ministry) without handing them its leader's authority.
   { value: "", label: "-- Select Ministry --" },
-  { value: "youth_leader", label: "Adventist Youth" },
-  { value: "women_ministry", label: "Adventist Women" },
-  { value: "men_ministry", label: "Adventist Men" },
+  { value: "adventist_men", label: "Adventist Men" },
+  { value: "adventist_women", label: "Adventist Women" },
+  { value: "young_adults", label: "Young Adults" },
+  { value: "ambassadors", label: "Ambassadors" },
 ];
 
 interface InvitationRow {
@@ -821,9 +857,7 @@ const inviteFormInitial = {
   roles: [] as string[],
 };
 
-const DEFAULT_MANUAL_PASSWORD = "Welcome@2026";
-
-const initialForm = {
+const DEFAULT_MANUAL_PASSWORD = "Welcome@2026";  const initialForm = {
   name: "",
   username: "",
   password: DEFAULT_MANUAL_PASSWORD,
@@ -832,8 +866,9 @@ const initialForm = {
   phone_number: "",
   whatsapp_number: "",
   role: "",
+  ministry: "",
   gifts: [] as string[],
-  disability: [] as string[],
+  disability: ["None"] as string[],
   profession: "",
   date_of_birth: "",
 };
@@ -981,6 +1016,8 @@ export function UserManagement() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingTypeId, setUpdatingTypeId] = useState<number | null>(null);
+  // The row whose activate/deactivate call is in flight.
+  const [updatingActivationId, setUpdatingActivationId] = useState<number | null>(null);
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -1007,22 +1044,22 @@ export function UserManagement() {
     const lower = (gender || "").toLowerCase();
     return MINISTRIES.filter((m) => {
       if (!m.value) return true;
-      if (lower === "male" && m.value === "women_ministry") return false;
-      if (lower === "female" && m.value === "men_ministry") return false;
+      if (lower === "male" && m.value === "adventist_women") return false;
+      if (lower === "female" && m.value === "adventist_men") return false;
       return true;
     });
   };
 
   const handleGenderChange = (selectedGender: string) => {
     setFormData((prev) => {
-      let newRole = prev.role;
+      let ministry = prev.ministry;
       const lower = selectedGender.toLowerCase();
-      if (lower === "male" && newRole === "women_ministry") {
-        newRole = "";
-      } else if (lower === "female" && newRole === "men_ministry") {
-        newRole = "";
+      if (lower === "male" && ministry === "adventist_women") {
+        ministry = "";
+      } else if (lower === "female" && ministry === "adventist_men") {
+        ministry = "";
       }
-      return { ...prev, gender: selectedGender, role: newRole };
+      return { ...prev, gender: selectedGender, ministry };
     });
   };
 
@@ -1230,7 +1267,8 @@ export function UserManagement() {
           username: formData.username.trim(),
           password: formData.password,
           gifts: formData.gifts.join(", "),
-          disability: formData.disability.join(", "),
+          disability: formData.disability.filter((d) => d !== "None").join(", "),
+          ministry: formData.ministry || "",
         }),
       });
       const data = await res.json();
@@ -1686,6 +1724,69 @@ export function UserManagement() {
     }
   };
 
+  /** True when the office itself switched this login off (see the API). */
+  const isDeactivated = (member: MemberUser) => member.is_active === false && Boolean(member.deactivated_at);
+
+  /**
+   * Switch a login off, or back on. Nothing about the person changes — the
+   * record, roles, roll membership and giving history all stay; only the
+   * ability to sign in does. A confirmation stands in front of it because an
+   * accidental tap would lock a member out of their own account.
+   */
+  const handleToggleActivation = async (member: MemberUser) => {
+    const deactivating = !isDeactivated(member);
+    const name = member.first_name || member.last_name
+      ? `${member.first_name} ${member.last_name}`.trim()
+      : member.username;
+    const result = await showAlert(
+      deactivating ? "Deactivate this account?" : "Activate this account?",
+      deactivating
+        ? `${name} will no longer be able to sign in, and any session already open will end. Their record, roles, roll membership and giving history stay exactly as they are.`
+        : `${name} will be able to sign in again with their usual password.`,
+      deactivating ? "warning" : "question",
+      {
+        showCancelButton: true,
+        confirmButtonText: deactivating ? "Deactivate" : "Activate",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: deactivating ? "#b36b3c" : "#26352f",
+      },
+    );
+    if (!result.isConfirmed) return;
+
+    setUpdatingActivationId(member.id);
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/users/${member.id}/activation/`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: deactivating ? false : true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // The API answers with the saved record, so the row cannot drift.
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === member.id
+              ? { ...m, is_active: data.is_active, deactivated_at: data.deactivated_at ?? null }
+              : m
+          )
+        );
+        showAlert(
+          deactivating ? "Account deactivated" : "Account activated",
+          data.detail || (deactivating ? "They can no longer sign in." : "They can sign in again."),
+          "success",
+          { toast: true, timer: 4500, showConfirmButton: false, position: "top-end" },
+        );
+      } else {
+        showAlert("Could not update the account", data.detail || data.is_active || "The change was not saved.", "error");
+      }
+    } catch {
+      showAlert("Could not update the account", "Network error updating the account.", "error");
+    } finally {
+      setUpdatingActivationId(null);
+    }
+  };
+
   const handleContactMember = (member: MemberUser) => {
     if (member.phone_number) {
       window.location.href = `tel:${member.phone_number}`;
@@ -1875,7 +1976,7 @@ export function UserManagement() {
             { label: "Role", className: COL_ROLE },
             { label: "Type", className: COL_TYPE },
             { label: "Sex", className: COL_SEX },
-            { label: "Actions", className: "text-right" },
+            { label: "Actions", className: `${COL_ACTIONS} text-right` },
           ]}
           loadingLabel="Loading members..."
           tableEmpty="No members found matching your search."
@@ -1889,12 +1990,21 @@ export function UserManagement() {
                         <div className="truncate text-[11px] font-normal text-[#8b9790]">@{m.username}</div>
                       </div>
                       {m.is_active === false && (
-                        <span
-                          title="Email confirmed but this account is waiting for leadership approval — they cannot sign in yet"
-                          className="mt-0.5 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
-                        >
-                          Not approved
-                        </span>
+                        isDeactivated(m) ? (
+                          <span
+                            title="An officer switched this account off. The record is intact and it can be switched back on from Actions"
+                            className="mt-0.5 inline-block rounded-full bg-[#efe3e3] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
+                          >
+                            Deactivated
+                          </span>
+                        ) : (
+                          <span
+                            title="Email confirmed but this account is waiting for leadership approval — they cannot sign in yet"
+                            className="mt-0.5 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]"
+                          >
+                            Not approved
+                          </span>
+                        )
                       )}
                     </td>
                     <td className={`py-3 text-[#617068] ${COL_CONTACT}`}>
@@ -1922,7 +2032,7 @@ export function UserManagement() {
                       />
                     </td>
                     <td className={`py-3 text-[#617068] pl-6 ${COL_SEX}`}>{m.gender || "—"}</td>
-                    <td className="py-3 text-right">
+                    <td className={`py-3 text-right ${COL_ACTIONS}`}>
                       <div className="relative inline-block" ref={openActionMenuId === m.id ? actionMenuRef : undefined}>
                         <button
                           onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
@@ -1961,6 +2071,28 @@ export function UserManagement() {
                             >
                               👑 Assign Leadership
                             </button>
+                            {m.is_active === false && !isDeactivated(m) ? (
+                              // A join request nobody has approved yet: the
+                              // Requests desk owns that decision, not this menu.
+                              <div
+                                title="This account is waiting for leadership approval on the Requests desk"
+                                className="flex w-full cursor-default items-center gap-2 px-4 py-2 text-xs text-[#8b9790]"
+                              >
+                                ⏳ Awaiting approval
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
+                                disabled={updatingActivationId === m.id}
+                                className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
+                                  isDeactivated(m)
+                                    ? "text-[#26352f] hover:bg-[#f7f4ee]"
+                                    : "text-[#8c3a3a] hover:bg-[#faf1f1]"
+                                }`}
+                              >
+                                {isDeactivated(m) ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1977,9 +2109,18 @@ export function UserManagement() {
                       <h3 className="font-bold text-sm text-[#26352f]">
                         {name}
                         {m.is_active === false && (
-                          <span className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]">
-                            Not approved
-                          </span>
+                          isDeactivated(m) ? (
+                            <span
+                              title="An officer switched this account off. The record is intact and it can be switched back on from Actions"
+                              className="ml-2 inline-block rounded-full bg-[#efe3e3] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8c3a3a]"
+                            >
+                              Deactivated
+                            </span>
+                          ) : (
+                            <span className="ml-2 inline-block rounded-full bg-[#f7e3d2] px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#96552c]">
+                              Not approved
+                            </span>
+                          )
                         )}
                       </h3>
                       <p className="text-[11px] text-[#8b9790] mt-0.5">@{m.username}</p>
@@ -2040,6 +2181,28 @@ export function UserManagement() {
                           >
                             👑 Assign Leadership
                           </button>
+                          {m.is_active === false && !isDeactivated(m) ? (
+                            // A join request nobody has approved yet: the Requests
+                            // desk owns that decision, not this menu.
+                            <div
+                              title="This account is waiting for leadership approval on the Requests desk"
+                              className="flex w-full cursor-default items-center gap-2 px-4 py-2 text-xs text-[#8b9790]"
+                            >
+                              ⏳ Awaiting approval
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { handleToggleActivation(m); setOpenActionMenuId(null); }}
+                              disabled={updatingActivationId === m.id}
+                              className={`flex w-full items-center gap-2 px-4 py-2 text-xs disabled:opacity-60 ${
+                                isDeactivated(m)
+                                  ? "text-[#26352f] hover:bg-[#f7f4ee]"
+                                  : "text-[#8c3a3a] hover:bg-[#faf1f1]"
+                              }`}
+                            >
+                              {isDeactivated(m) ? "✅ Activate Account" : "🚫 Deactivate Account"}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2352,9 +2515,12 @@ export function UserManagement() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#26352f]">Ministry / Role</label>
-                      <select value={formData.role}
-                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      <label className="block text-xs font-semibold text-[#26352f]">Ministry</label>
+                      {/* Ministry membership, not a role: roles are handed out in
+                          the Role column, so a new member is never secretly made
+                          a ministry's leader here. */}
+                      <select value={formData.ministry}
+                        onChange={(e) => setFormData({ ...formData, ministry: e.target.value })}
                         className="mt-1 w-full rounded-xl border border-[#dfdbd1] bg-[#fcfbf9] px-3.5 py-2.5 text-xs text-[#26352f] focus:border-[#b36b3c] focus:bg-white focus:outline-none">
                         {getFilteredMinistries(formData.gender).map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>

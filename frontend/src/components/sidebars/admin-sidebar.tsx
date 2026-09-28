@@ -95,10 +95,15 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
   const userRoles: string[] = permissions?.roles?.length ? permissions.roles : Array.from(new Set(profileRoles.length ? profileRoles : ["member"]));
   const hasAnyRole = (...codes: string[]) => userRoles.some((r) => codes.includes(r));
   const isAdmin = permissions?.isAdmin ?? hasAnyRole("admin");
-  const isClerk = permissions?.isClerk ?? hasAnyRole("clerk", "admin");
-  const isElder = permissions?.isElder ?? hasAnyRole("elder", "admin");
+  const isClerk = permissions?.isClerk ?? hasAnyRole("clerk");
+  const isElder = permissions?.isElder ?? hasAnyRole("elder");
   const isFinance = permissions?.isFinance ?? hasAnyRole("treasurer", "admin");
-  const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk");
+  // The deaconate desk belongs to the deacons and the office's admin; elders
+  // and clerks reach everything they need from the Elders' Desk.
+  const isDeaconate = permissions?.isDeaconate ?? hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
+  // An elder without the admin role sees the Elders' Desk and nothing else —
+  // no treasury, no deaconate, no department sections.
+  const isElderOnly = isElder && !isAdmin;
 
   const isReconPage = pathname === "/administration/reconciliation";  // Fund drives are their own page, so their item is highlighted by the URL
   // rather than by the tab the main workspace is showing.
@@ -127,7 +132,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
           </p>
         </div>
 
-        {/* Elders' Desk Section */}
+        {/* Elders' Desk Section — the elder's whole sidebar; the admin sees
+            this plus every other section, the clerk just this one. */}
         {(isElder || isClerk || isAdmin) && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
@@ -390,8 +396,9 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
           </div>
         )}
 
-        {/* Treasury & Finance Section */}
-        {isFinance && (
+        {/* Treasury & Finance Section — treasurer and admin only; an elder's
+            sidebar is the Elders' Desk alone. */}
+        {isFinance && !isElderOnly && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Treasury &amp; Finance
@@ -527,8 +534,8 @@ export function AdminSidebar({ activeTab, onSelectTab, profile: propProfile, per
           </div>
         )}
 
-        {/* Deaconate Section */}
-        {isDeaconate && (
+        {/* Deaconate Section — deacons and admin; hidden from elders. */}
+        {isDeaconate && !isElderOnly && (
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#617068]">
               Deaconate Ministry
