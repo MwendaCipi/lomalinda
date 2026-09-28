@@ -31,6 +31,8 @@ import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
 import { showAlert } from "@/lib/alerts";
 import Swal from "sweetalert2";
 import { normalizePath } from "@/lib/paths";
+import { clearSession } from "@/lib/auth";
+import { collapseToHome, trackAppHistory } from "@/lib/app-history";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const staffRoles = [
@@ -412,14 +414,32 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     };
   }, []);
 
+  // Count this tab's app entries from the first render, so "go home" knows how
+  // far back the floor is. Records history; it never navigates on its own.
+  useEffect(() => {
+    trackAppHistory();
+  }, []);
+
+  /**
+   * Go home, dropping everything stacked above it.
+   *
+   * Signed-in members only: in the app, Home is the dashboard and the floor of
+   * the stack. On the public website the home page is one link among others, so
+   * an ordinary Back should still work.
+   */
+  const goHome = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!userState.isLoggedIn) return;
+    event.preventDefault();
+    setShowUserMenu(false);
+    collapseToHome(() => router.replace("/dashboard"));
+  };
+
   const handleLogout = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
       // Privacy on shared devices: signing out always closes the giving
-      // record, so the next person never inherits it revealed (the give
-      // page writes this key when the eye is opened).
-      localStorage.removeItem("my_givings_visible");
+      // record along with the tokens, so the next person never inherits it
+      // revealed (the give page writes that key when the eye is opened).
+      clearSession();
     }
     setUserState({
       isLoggedIn: false,
@@ -480,6 +500,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       icon: Home,
       active: pathname === "/" || pathname.startsWith("/dashboard"),
       replace: true,
+      // Home is the floor of the app: tapping it drops everything stacked
+      // above, so the next Back leaves the app (see lib/app-history).
+      collapseHistory: true,
     },
     {
       href: "/fellowship",
@@ -518,7 +541,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       {/* Top 100% Full-Width Header Bar */}
       <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-[#26352f] border-b border-white/10 shadow-md text-white px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Left: Church Banner / Logo & Church Name */}
-        <Link href={userState.isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
+        <Link href={userState.isLoggedIn ? "/dashboard" : "/"} onClick={goHome} className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
           <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/10 p-1 border border-white/15">
             <Image
               src="/adventist-symbol.svg"
@@ -937,6 +960,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
               key={item.href}
               href={item.href}
               replace={"replace" in item && item.replace}
+              onClick={"collapseHistory" in item && item.collapseHistory ? goHome : undefined}
               className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-colors text-center min-w-[46px] min-h-[44px] ${
                 isActive
                   ? "text-white font-bold bg-white/20 border border-white/30 shadow-xs"
