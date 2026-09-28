@@ -6701,6 +6701,8 @@ DEPARTMENT_LEAD_ROLE = {
     'amm': 'men_ministry',
     'awm': 'women_ministry',
     'aym': 'youth_leader',
+    'children': 'children_ministry',
+    'ambassadors': 'ambassadors_leader',
     'apm': 'apm_leader',
     'chaplaincy': 'chaplaincy',
 }

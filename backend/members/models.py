@@ -15,7 +15,11 @@ from .roles import ROLE_CHOICES, normalize_roles, role_label
 DEPARTMENT_CHOICES = [
     ('amm', 'Adventist Men Ministries (AMM)'),
     ('awm', 'Adventist Women Ministries (AWM)'),
-    ('aym', 'Adventist Youth & Children (AYM)'),
+    # Youth and Children are two departments with their own leaders and
+    # assistants, not one; Ambassadors round out the youth ministries.
+    ('aym', 'Adventist Youth (AYM)'),
+    ('children', 'Children Ministry'),
+    ('ambassadors', 'Ambassadors'),
     ('apm', 'Adventist Possibility Ministries (APM)'),
     ('chaplaincy', 'Chaplaincy Ministry'),
 ]
