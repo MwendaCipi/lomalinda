@@ -332,6 +332,9 @@ function AcceptInviteContent() {
                 name="username"
                 required
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={username}
                 aria-invalid={Boolean(fieldErrors.username)}
                 onChange={(event) => {

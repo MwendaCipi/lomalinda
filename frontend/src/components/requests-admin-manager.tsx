@@ -64,7 +64,7 @@ type JoinItem = {
   full_name: string;
   email: string;
   phone_number?: string;
-  joining_mode: "baptism" | "membership_transfer" | "friend" | "sabbath_school";
+  joining_mode: "baptism" | "membership_transfer" | "transfer_in" | "friend" | "sabbath_school";
   current_church?: string;
   status: "verification_pending" | "pending" | "approved" | "rejected" | "completed" | "expired";
   has_account: boolean;
@@ -123,7 +123,8 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
 
 const JOINING_MODE_LABELS: Record<string, string> = {
   baptism: "Joining by baptism",
-  membership_transfer: "Membership transfer in",
+  membership_transfer: "A church member",
+  transfer_in: "Membership transfer in",
   friend: "Friend of the church",
   sabbath_school: "Sabbath School attendee",
 };

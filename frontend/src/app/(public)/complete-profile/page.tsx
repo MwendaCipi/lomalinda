@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
+import { ComboboxPopover } from "@/components/combobox-popover";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -48,63 +49,136 @@ const MINISTRY_OPTIONS = [
 const inputClass =
   "mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-sm text-[#26352f] outline-none focus:border-[#b36b3c]";
 
-/** Multi-select chip picker shared by the gifts and disability boxes. */
-function ChipPicker({
+/**
+ * A multi-select combo shared by the gifts and disability boxes.
+ *
+ * The choices live inside a dropdown checklist rather than on the form itself,
+ * so a long list of gifts or conditions no longer buries the rest of the form.
+ * The panel renders through a portal (see ComboboxPopover), which also keeps it
+ * from being clipped on a short screen.
+ */
+function CheckboxCombobox({
   legend,
   options,
   selected,
   onChange,
+  placeholder = "Select…",
   allowNone,
 }: {
   legend: string;
   options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  placeholder?: string;
   allowNone?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // The panel lives in document.body, so outside-click has to count it as
+  // inside — otherwise ticking the first box would close the list.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        !(panelRef.current && panelRef.current.contains(target))
+      ) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   const toggle = (item: string) => {
     if (selected.includes(item)) {
-      onChange(selected.filter((v) => v !== item));
+      onChange(selected.filter((value) => value !== item));
     } else {
       onChange([...selected, item]);
     }
   };
 
+  const summary =
+    selected.length === 0
+      ? allowNone
+        ? "None recorded"
+        : placeholder
+      : selected.length <= 2
+        ? selected.join(", ")
+        : `${selected.slice(0, 2).join(", ")} +${selected.length - 2} more`;
+
   return (
-    <fieldset>
-      <legend className="block text-sm font-medium">{legend}</legend>
-      {allowNone && (
-        <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={selected.length === 0}
-            onChange={() => onChange([])}
-            className="h-4 w-4 rounded border-[#c9c5bb] text-[#26352f] focus:ring-[#b36b3c]"
-          />
-          None
-        </label>
-      )}
-      <div className="mt-2 flex flex-wrap gap-2">
+    <div ref={containerRef}>
+      <span className="block text-sm font-medium">{legend}</span>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="mt-1.5 flex w-full items-center justify-between gap-3 rounded-xl border border-[#c9c5bb] bg-white px-4 py-2.5 text-left text-sm text-[#26352f] outline-none focus:border-[#b36b3c]"
+      >
+        <span className={`truncate ${selected.length === 0 ? "text-[#617068]" : ""}`}>
+          {summary}
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-[#617068]">
+          {selected.length > 0 && (
+            <span className="rounded-full bg-[#5f8067] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {selected.length}
+            </span>
+          )}
+          <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
+        </span>
+      </button>
+
+      <ComboboxPopover
+        anchorRef={containerRef}
+        panelRef={panelRef}
+        open={open}
+        minW={280}
+        panelClassName="max-h-72 overflow-y-auto rounded-xl border border-[#dfdbd1] bg-white p-2 shadow-lg scrollbar-thin"
+      >
+        {allowNone && (
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-[#f7f4ee]">
+            <input
+              type="checkbox"
+              checked={selected.length === 0}
+              onChange={() => onChange([])}
+              className="h-4 w-4 rounded border-[#c9c5bb] accent-[#5f8067]"
+            />
+            <span className="font-medium">None — no special needs</span>
+          </label>
+        )}
         {options.map((item) => {
           const checked = selected.includes(item);
           return (
-            <button
+            <label
               key={item}
-              type="button"
-              onClick={() => toggle(item)}
-              aria-pressed={checked}
-              className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-                checked
-                  ? "border-[#26352f] bg-[#26352f] text-white"
-                  : "border-[#c9c5bb] bg-white text-[#26352f] hover:border-[#b36b3c]"
+              className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm ${
+                checked ? "bg-[#eef2ed] font-semibold text-[#2d5d39]" : "hover:bg-[#f7f4ee]"
               }`}
             >
-              {item}
-            </button>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(item)}
+                className="h-4 w-4 rounded border-[#c9c5bb] accent-[#5f8067]"
+              />
+              <span>{item}</span>
+            </label>
           );
         })}
-      </div>
-    </fieldset>
+        <div className="sticky bottom-0 -mx-2 mt-1 border-t border-[#dfdbd1] bg-white px-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="w-full rounded-lg bg-[#26352f] px-3 py-2 text-xs font-semibold text-white"
+          >
+            Done
+          </button>
+        </div>
+      </ComboboxPopover>
+    </div>
   );
 }
 
@@ -216,7 +290,7 @@ export default function CompleteProfilePage() {
       <section className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight">Add more details</h1>
         <p className="mt-3 text-sm leading-6 text-[#617068]">
-          Add a few more details to help the church run smoothly — the leadership uses these to plan ministries and reach you. You can sign in with your new account first:
+          The leadership uses these details to plan ministry and serve you well.
         </p>
         <form onSubmit={submit} className="mt-6 space-y-5">
           {error && (
@@ -247,11 +321,12 @@ export default function CompleteProfilePage() {
             )}
           </label>
 
-          <ChipPicker
+          <CheckboxCombobox
             legend="Gifts & talents"
             options={GIFTS_OPTIONS}
             selected={gifts}
             onChange={setGifts}
+            placeholder="Select gifts & talents…"
           />
 
           <label className="block text-sm font-medium">
@@ -266,7 +341,7 @@ export default function CompleteProfilePage() {
             </select>
           </label>
 
-          <ChipPicker
+          <CheckboxCombobox
             legend="Disability / special needs"
             options={DISABILITY_OPTIONS}
             selected={disability}

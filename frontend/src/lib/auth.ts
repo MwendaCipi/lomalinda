@@ -35,3 +35,33 @@ export function destinationAfterSignIn(data: SignInResponse, next: string | null
   if (data.profile_update_pending) return `/complete-profile?next=${encodeURIComponent(destination)}`;
   return destination;
 }
+
+/**
+ * Where a visitor who is *already* signed in belongs.
+ *
+ * The sign-in page cannot tell that from a stored token alone, so it asks
+ * `/me` first and hands the answer here. The rules mirror
+ * `destinationAfterSignIn`, minus the password change it cannot see — an
+ * account still owing the four profile questions answers them before arriving.
+ */
+export function destinationAfterSession(
+  me: { profile_update_pending?: boolean },
+  next: string | null,
+): string {
+  const destination = next || "/dashboard";
+  if (me.profile_update_pending) return `/complete-profile?next=${encodeURIComponent(destination)}`;
+  return destination;
+}
+
+/**
+ * Forget the session.
+ *
+ * Shared-device rule: the giving record's revealed state goes with it, so the
+ * next person on the phone never inherits an open eye (the give page writes
+ * that key when it is opened).
+ */
+export function clearSession() {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("my_givings_visible");
+}

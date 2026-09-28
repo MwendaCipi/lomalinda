@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { destinationAfterSignIn, storeSession } from "@/lib/auth";
+import {
+  clearSession,
+  destinationAfterSession,
+  destinationAfterSignIn,
+  storeSession,
+} from "@/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -14,11 +19,41 @@ function LoginContent() {
   // an empty loading shell, so the sign-in form would not be in the served HTML.
   const [nextParam, setNextParam] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState(false);
+  /** Set only while a stored session is being carried into the app. */
+  const [takingYouIn, setTakingYouIn] = useState(false);
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
-    setNextParam(query.get("next"));
+    const next = query.get("next");
+    setNextParam(next);
     setJustCreated(query.get("created") === "1");
+
+    // Already signed in? Then this page has nothing to offer — send them into
+    // the app instead of asking for a password they already gave. The token is
+    // checked against /me before moving: a stale one must not land the member
+    // somewhere that would immediately send them back here.
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    let active = true;
+    setTakingYouIn(true);
+    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json();
+      })
+      .then((me) => {
+        if (active) router.replace(destinationAfterSession(me, next));
+      })
+      .catch((error: unknown) => {
+        // Expired or revoked: clear it so the sign-in form is usable.
+        const status = error instanceof Error ? error.message : "";
+        if (status === "401" || status === "403") clearSession();
+        if (active) setTakingYouIn(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [username, setUsername] = useState("");
@@ -56,6 +91,16 @@ function LoginContent() {
     }
   }
 
+  // A signed-in visit is on its way to the app, so the form is not shown — no
+  // second sign-in prompt, and no half-drawn page while /me answers.
+  if (takingYouIn) {
+    return (
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#617068]">
+        <p className="text-sm">Taking you in…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-[#f7f4ee] px-6 py-8 text-[#26352f]">
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#dfdbd1] sm:p-8">
@@ -73,6 +118,10 @@ function LoginContent() {
               className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 outline-none focus:border-[#b36b3c]"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
             />
           </label>
@@ -97,7 +146,7 @@ function LoginContent() {
         </form>
         {message && <p className="mt-4 rounded-xl bg-[#f7f4ee] p-3 text-xs text-[#617068] sm:text-sm">{message}</p>}
         <p className="mt-6 border-t border-[#dfdbd1] pt-5 text-center text-xs leading-5 text-[#617068] sm:text-sm">
-          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one as a member or Friend of SDA Loma Linda</Link>.
+          Need an account? <Link href="/create-account" className="font-semibold text-[#b36b3c] hover:underline">Create one here</Link>.
         </p>
       </section>
     </main>

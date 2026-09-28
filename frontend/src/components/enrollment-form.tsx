@@ -7,7 +7,12 @@ import { showAlert } from "@/lib/alerts";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export type TransferDirection = "transfer_in" | "transfer_out";
-export type JoiningMode = "baptism" | "membership_transfer" | "friend" | "sabbath_school";
+export type JoiningMode =
+  | "baptism"
+  | "membership_transfer"
+  | "transfer_in"
+  | "friend"
+  | "sabbath_school";
 
 const inputClass = "mt-1.5 w-full rounded-xl border border-[#c9c5bb] px-4 py-2.5 text-sm outline-none focus:border-[#b36b3c]";
 
@@ -66,9 +71,11 @@ export function EnrollmentForm({
    * the office is recording a transfer rather than granting a request.
    */
   const isExistingMember = showAccountTypeChoice && joiningMode === "membership_transfer";
-  const asksCurrentChurch =
-    !isExistingMember &&
-    (joiningMode === "membership_transfer" || joiningMode === "friend" || joiningMode === "sabbath_school");
+  // Everyone except a new baptism arrives from a church they can name: a
+  // friend, a Sabbath School attendee, or a membership transfer in progress.
+  const asksCurrentChurch = !isExistingMember && joiningMode !== "baptism";
+  /** True when the church field is about the church being left, not a habit. */
+  const isTransferringIn = joiningMode === "transfer_in";
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -267,6 +274,7 @@ export function EnrollmentForm({
             >
               <option value="baptism">Baptism / New member</option>
               <option value="membership_transfer">A church member</option>
+              <option value="transfer_in">Membership transfer</option>
               <option value="friend">A friend of the church</option>
               <option value="sabbath_school">A Sabbath School attendee</option>
             </select>
@@ -282,7 +290,8 @@ export function EnrollmentForm({
               className={inputClass}
             >
               <option value="baptism">Baptism</option>
-              <option value="membership_transfer">Membership Transfer</option>
+              <option value="membership_transfer">A church member</option>
+              <option value="transfer_in">Membership transfer</option>
               <option value="friend">Friend of SDA Loma Linda</option>
               <option value="sabbath_school">Sabbath School</option>
             </select>
@@ -322,6 +331,10 @@ export function EnrollmentForm({
             required
             type="email"
             placeholder="yourname@example.com"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             value={form.email}
             onChange={(event) => update("email", event.target.value)}
             className={inputClass}
@@ -345,13 +358,17 @@ export function EnrollmentForm({
 
             {asksCurrentChurch && (
               <label className="block text-sm font-medium">
-                Current / Previous Church Name
+                {isTransferringIn ? "Transferring from (church name)" : "Current / Previous Church Name"}
                 <input
                   required
                   value={form.current_church}
                   onChange={(event) => update("current_church", event.target.value)}
                   className={inputClass}
-                  placeholder="Name of your current or former SDA church"
+                  placeholder={
+                    isTransferringIn
+                      ? "The SDA church you are transferring from"
+                      : "Name of your current or former SDA church"
+                  }
                 />
               </label>
             )}
@@ -388,13 +405,8 @@ export function EnrollmentForm({
 
       {transferDirection === "transfer_in" ? (
         <div className="grid grid-cols-2 gap-3 pt-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
-          >
-            {loading ? "Sending..." : codeStage ? "Verify code" : "Verify via Email"}
-          </button>
+          {/* Clear on the left, the forward step on the right — the same order
+              the eye reads the form, and where the primary action belongs. */}
           <button
             type="button"
             onClick={clearForm}
@@ -402,6 +414,13 @@ export function EnrollmentForm({
             className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#26352f] bg-white px-5 font-semibold text-[#26352f] transition hover:bg-[#eae6de] disabled:opacity-60"
           >
             Clear form
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#5f8067] px-5 font-semibold text-white transition hover:bg-[#4d6d55] disabled:opacity-60"
+          >
+            {loading ? "Sending..." : codeStage ? "Verify code" : "Verify via Email"}
           </button>
         </div>
       ) : (
