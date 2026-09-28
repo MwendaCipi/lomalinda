@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AccountTypeCombobox,
   accountTypeOf,
   accountTypeLabel,
+  ACCOUNT_TYPE_OPTIONS,
   type AccountTypeOption,
   RolesCombobox,
   refreshRoleRegister,
   formatRoles,
   heldSystemRoles,
+  roleDisplayLabel,
   SYSTEM_ROLE_HELP,
 } from "./roles-combobox";
 import { showAlert } from "@/lib/alerts";
@@ -128,6 +129,52 @@ function AccountStatus({ member }: { member: MemberUser }) {
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#b36b3c]" aria-hidden="true" />
       Awaiting
+    </span>
+  );
+}
+
+/**
+ * The Role column: one role plus a count.
+ *
+ * The roster is a glance, not a manifest — an officer scanning it needs to know
+ * that someone is an Elder without wading through every office they hold. The
+ * full set is on the tooltip and in Assign Leadership, which is where roles are
+ * actually decided.
+ */
+function roleSummary(roles: string[], assistants: string[] = []): string {
+  if (!roles || roles.length === 0) return "Member";
+  const first = roleDisplayLabel(roles[0], assistants);
+  const others = roles.length - 1;
+  if (others <= 0) return first;
+  return `${first} + ${others} other${others === 1 ? "" : "s"}`;
+}
+
+function RoleCell({ member }: { member: MemberUser }) {
+  const roles = member.roles && member.roles.length > 0 ? member.roles : [member.role || "member"];
+  const assistants = member.assistant_roles || [];
+  const full = roles.map((code) => roleDisplayLabel(code, assistants)).join(", ");
+  return (
+    <span className="block truncate text-xs text-[#26352f]" title={full}>
+      {roleSummary(roles, assistants)}
+    </span>
+  );
+}
+
+/**
+ * The Type column, read rather than edited.
+ *
+ * Two stored fields express four states, so the row is answered by one label.
+ * Changing it is a decision, not a slider: it lives behind Actions → Account
+ * Type, next to the Remove / Restore that already means "on the roll or off it".
+ */
+function AccountTypeCell({ member }: { member: MemberUser }) {
+  const value = accountTypeOf(member.account_type, member.is_disfellowshipped);
+  const help = ACCOUNT_TYPE_OPTIONS.find((option) => option.value === value)?.help || "";
+  const tone =
+    value === "ex_member" ? "text-[#8c3a3a]" : value === "member" ? "text-[#26352f]" : "text-[#617068]";
+  return (
+    <span className={`block truncate text-xs font-medium ${tone}`} title={help}>
+      {accountTypeLabel(value)}
     </span>
   );
 }
@@ -1063,7 +1110,6 @@ export function UserManagement() {
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; credentials?: string } | null>(null);
-  const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingTypeId, setUpdatingTypeId] = useState<number | null>(null);
   // The row whose activate/deactivate call is in flight.
   const [showAddFriendForm, setShowAddFriendForm] = useState(false);
@@ -1087,6 +1133,10 @@ export function UserManagement() {
     disability: "",
   };
   const [friendFormData, setFriendFormData] = useState(friendFormInitial);
+  // The account-type chooser behind Actions → Account Type. One row at a time,
+  // so the roster columns stay read-only.
+  const [typeMember, setTypeMember] = useState<MemberUser | null>(null);
+  const [typeChoice, setTypeChoice] = useState<AccountTypeOption["value"]>("member");
 
   const getFilteredMinistries = (gender: string | undefined) => {
     const lower = (gender || "").toLowerCase();
@@ -1688,45 +1738,21 @@ export function UserManagement() {
     }
   };
 
-  // ── Quick role change from the table combo (multi-role) ─────────────────
-  const handleQuickRolesChange = async (userId: number, newRoles: string[], newAssistants: string[] = []) => {
-    setUpdatingRoleId(userId);
-    const previous = members.find((m) => m.id === userId);
-    const previousRoles = previous?.roles || ["member"];
-    const previousAssistants = previous?.assistant_roles || [];
-    // Optimistic update
-    setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: newRoles, assistant_roles: newAssistants, role: newRoles[0] || "member" } : m)));
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/users/${userId}/role/`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ roles: newRoles, assistant_roles: newAssistants }),
-      });
-      if (res.ok) {
-        const d = await res.json().catch(() => ({}));
-        refreshRoleRegister();
-        setMessage({ type: "success", text: d.detail || "Roles updated successfully. Notification and email sent to member." });
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.id === userId
-              ? { ...m, roles: previousRoles, assistant_roles: previousAssistants, role: previousRoles[0] || "member" }
-              : m
-          )
-        );
-        setMessage({ type: "error", text: d.detail || d.roles || "Failed to update roles." });
-      }
-    } catch {
-      setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, roles: previousRoles, role: previousRoles[0] || "member" } : m)));
-      setMessage({ type: "error", text: "Network error updating roles." });
-    } finally {
-      setUpdatingRoleId(null);
-    }
+  /** Open the account-type chooser for one member, starting on their record. */
+  const openAccountTypeModal = (member: MemberUser) => {
+    setTypeMember(member);
+    setTypeChoice(accountTypeOf(member.account_type, member.is_disfellowshipped));
+    setOpenActionMenuId(null);
   };
 
-  // ── Quick type change from the table combo (member / friend / ex-member) ──
+  const handleAccountTypeSubmit = async () => {
+    if (!typeMember) return;
+    const member = typeMember;
+    setTypeMember(null);
+    await handleQuickTypeChange(member, typeChoice);
+  };
+
+  // ── Account type change (member / friend / sabbath school / ex-member) ──
   const handleQuickTypeChange = async (member: MemberUser, nextType: AccountTypeOption["value"]) => {
     const previous = accountTypeOf(member.account_type, member.is_disfellowshipped);
     if (nextType === "ex_member" && previous !== "ex_member") {
@@ -2058,24 +2084,10 @@ export function UserManagement() {
                       <AccountStatus member={m} />
                     </td>
                     <td className={`py-3 ${COL_ROLE}`}>
-                      <RolesCombobox
-                        selected={m.roles && m.roles.length > 0 ? m.roles : [m.role || "member"]}
-                        onChange={(newRoles, newAssistants) => handleQuickRolesChange(m.id, newRoles, newAssistants)}
-                        disabled={updatingRoleId === m.id || m.account_type === "friend"}
-                        lockedRoles={heldSystemRoles(m.roles, m.role)}
-                        memberId={m.id}
-                        assistants={m.assistant_roles || []}
-                        showAssistants
-                        fill
-                      />
+                      <RoleCell member={m} />
                     </td>
                     <td className={`py-3 ${COL_TYPE}`}>
-                      <AccountTypeCombobox
-                        value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
-                        onChange={(nextType) => handleQuickTypeChange(m, nextType)}
-                        disabled={updatingTypeId === m.id}
-                        fill
-                      />
+                      <AccountTypeCell member={m} />
                     </td>
                     <td className={`py-3 text-[#617068] pl-6 ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`py-3 text-right ${COL_ACTIONS}`}>
@@ -2117,6 +2129,12 @@ export function UserManagement() {
                             >
                               👑 Assign Leadership
                             </button>
+                            <button
+                              onClick={() => openAccountTypeModal(m)}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                            >
+                              🎚️ Account Type
+                            </button>
                             {m.is_disfellowshipped ? (
                               <button
                                 onClick={() => { handleMembershipChange(m, false); setOpenActionMenuId(null); }}
@@ -2146,22 +2164,23 @@ export function UserManagement() {
               return (
                 <div key={m.id} className={`rounded-2xl border border-[#dfdbd1] p-4 shadow-sm space-y-2 ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-[#fdf6ec]" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold text-sm text-[#26352f]">
                         {name}
 
                       </h3>
                       <p className="text-[11px] text-[#8b9790] mt-0.5">@{m.username}</p>
                       <p className="text-xs text-[#617068] mt-0.5">{contact}</p>
+                      <div className="mt-0.5 truncate text-xs font-semibold text-[#26352f]">
+                        <RoleCell member={m} />
+                      </div>
                     </div>
-                    {/* The type combobox sits where the role badge used to be,
-                        and the Actions menu takes the row that held Type — one
-                        row fewer on a phone. */}
-                    <AccountTypeCombobox
-                      value={accountTypeOf(m.account_type, m.is_disfellowshipped)}
-                      onChange={(nextType) => handleQuickTypeChange(m, nextType)}
-                      disabled={updatingTypeId === m.id}
-                    />
+                    {/* What the row says about them, where the old type combo
+                        sat: their record type, read-only — changing it is a
+                        decision taken from the Actions menu. */}
+                    <div className="shrink-0 text-right">
+                      <AccountTypeCell member={m} />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between gap-2 border-t border-[#dfdbd1]/60 pt-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -2211,6 +2230,12 @@ export function UserManagement() {
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
                           >
                             👑 Assign Leadership
+                          </button>
+                          <button
+                            onClick={() => openAccountTypeModal(m)}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#26352f] hover:bg-[#f7f4ee]"
+                          >
+                            🎚️ Account Type
                           </button>
                           {m.is_disfellowshipped ? (
                             <button
@@ -3036,6 +3061,70 @@ export function UserManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Account Type Modal ══ */}
+      {typeMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-[#dfdbd1]">
+            <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-3">
+              <h3 className="text-base font-bold text-[#26352f]">
+                Account Type — {typeMember.first_name || typeMember.username}
+              </h3>
+              <button onClick={() => setTypeMember(null)} className="text-[#617068] hover:text-[#26352f] text-xl leading-none">✕</button>
+            </div>
+            {accountTypeOf(typeMember.account_type, typeMember.is_disfellowshipped) === "ex_member" && (
+              <p className="mt-3 rounded-xl bg-[#fdf6ec] px-3 py-2 text-[11px] text-[#96552c]">
+                They are recorded as an ex-member. Choosing a type here puts them back on the church roll.
+              </p>
+            )}
+            <div className="mt-3 space-y-2">
+              {/* Ex-member is deliberately absent: being on the roll or off it
+                  is the Remove / Restore decision, not this one. */}
+              {ACCOUNT_TYPE_OPTIONS.filter((option) => option.value !== "ex_member").map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setTypeChoice(option.value)}
+                  aria-pressed={typeChoice === option.value}
+                  className={`flex w-full items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
+                    typeChoice === option.value
+                      ? "border-[#b36b3c] bg-[#fdf6ec]"
+                      : "border-[#dfdbd1] bg-white hover:border-[#b36b3c]"
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
+                      typeChoice === option.value ? "border-[#b36b3c] bg-[#b36b3c]" : "border-[#c9c5bb]"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold text-[#26352f]">{option.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-[#617068]">{option.help}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleAccountTypeSubmit}
+                disabled={updatingTypeId === typeMember.id || typeChoice === "ex_member"}
+                className="rounded-xl bg-[#26352f] px-5 py-2 text-xs font-semibold text-white hover:bg-[#b36b3c] disabled:opacity-60"
+              >
+                {updatingTypeId === typeMember.id ? "Saving..." : "Save Type"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeMember(null)}
+                className="rounded-xl border border-[#c9c5bb] px-5 py-2 text-xs font-semibold text-[#617068] hover:border-[#b36b3c]"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
