@@ -540,8 +540,8 @@ export function CampaignManagement({
 
   if (loading) {
     return (
-      <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
-        <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
+      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+        <div className="flex h-full md:overflow-hidden">
           {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 flex items-center justify-center">
             <p className="text-sm font-semibold text-[#617068]">Loading Fund Drives...</p>
@@ -553,8 +553,8 @@ export function CampaignManagement({
 
   if (isOfficial === false) {
     return (
-      <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
-        <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
+      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+        <div className="flex h-full md:overflow-hidden">
           {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 p-8 text-center">
             <h1 className="text-2xl font-bold text-[#26352f]">Access Restricted</h1>
@@ -570,11 +570,11 @@ export function CampaignManagement({
   }
 
   return (
-    <main className="min-h-screen md:h-screen bg-white text-[#26352f] md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
+    <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-[#26352f] md:overflow-hidden">
+      <div className="flex h-full md:overflow-hidden">
         {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
 
-        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
+        <div className="flex-1 min-w-0 w-full h-full bg-white p-5 sm:p-8 lg:p-10 border-b border-[#dfdbd1] space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
           {/* Phones carry no admin sidebar, so this page gives its own way back. */}
           {isAdminMode && (
             <Link
