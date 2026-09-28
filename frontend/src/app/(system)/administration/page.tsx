@@ -393,7 +393,7 @@ function AdministrationContent() {
                     </>
                   )}
 
-                  {isElder && (
+                  {showEldersItems && (
                     <div
                       onClick={() => {
                         setActiveTab("announcements");
@@ -410,7 +410,7 @@ function AdministrationContent() {
                     </div>
                   )}
 
-                  {(isElder || isClerk) && (
+                  {showEldersItems && (
                     <div
                       onClick={() => {
                         setActiveTab("requests");
@@ -534,7 +534,7 @@ function AdministrationContent() {
                     </div>
                   ) : null}
 
-                  {isAdmin && (
+                  {showEldersItems && isAdmin && (
                     <div
                       onClick={() => {
                         setActiveTab("settings");
@@ -554,7 +554,7 @@ function AdministrationContent() {
                   {/* The departments' desks (AMM, AWM, AYM, APM, Chaplaincy) —
                       the desktop sidebar's department sections, as one card
                       per department opening its members register. */}
-                  {isElder || isClerk || isAdmin ? (
+                  {showEldersItems ? (
                     <div
                       onClick={() => {
                         setActiveTab("dept-amm-members");

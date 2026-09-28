@@ -481,9 +481,6 @@ export function BoardMeetingManager() {
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
               <div>
                 <h3 className="text-xl font-bold text-[#26352f]">Schedule Board Meeting</h3>
-                <p className="mt-1 text-xs text-[#617068]">
-                  When and where the board meets. Agenda items are added to the meeting once it is created.
-                </p>
               </div>
               <button
                 type="button"

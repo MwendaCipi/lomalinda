@@ -37,16 +37,16 @@ export default function HymnalPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <section className="px-6 pt-14 lg:px-8">
-        <div className="mx-auto max-w-6xl">
+        <div className="max-w-6xl">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Hymnals</h1>
-          <p className="mt-3 max-w-2xl text-base leading-8 text-[#617068]">
+          <p className="mt-3 hidden max-w-2xl text-base leading-8 text-[#617068] sm:block">
             Worship hymnals in English and Swahili for personal, family, and church praise.
           </p>
         </div>
       </section>
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
-        <div className="mx-auto grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
+        <div className="grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
           {hymnals.map((item) => {
             const Icon = item.icon;
             return (

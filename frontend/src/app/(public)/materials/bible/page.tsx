@@ -45,7 +45,7 @@ export default function BiblePage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <section className="px-6 pt-14 lg:px-8">
-        <div className="mx-auto max-w-6xl">
+        <div className="max-w-6xl">
           <Link
             href="/materials"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b36b3c] hover:underline"
@@ -54,14 +54,14 @@ export default function BiblePage() {
             <span>Back to all materials</span>
           </Link>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Bible &amp; EGW Writings</h1>
-          <p className="mt-3 max-w-2xl text-base leading-8 text-[#617068]">
+          <p className="mt-3 hidden max-w-2xl text-base leading-8 text-[#617068] sm:block">
             Read, search, and study Holy Scriptures and the published Spirit of Prophecy writings.
           </p>
         </div>
       </section>
 
       <section className="px-6 py-12 lg:px-8 lg:py-14">
-        <div className="mx-auto grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
+        <div className="grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
           {referenceShelf.map((item) => {
             const Icon = item.icon;
             return (

@@ -24,12 +24,14 @@ export default function MaterialsPage() {
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-white text-[#26352f]" : "min-h-screen bg-[#f7f4ee] text-[#26352f]"}>
-      {/* Compact hub heading — the cards are the point. */}
+      {/* Compact hub heading — the cards are the point. The line under it is
+          desktop-only: on a phone it costs a row of the screen and says no more
+          than the card labels below it. */}
       <section className={signedIn ? "px-5 pt-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
-        <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
+        <div className={signedIn ? "max-w-5xl" : "max-w-6xl"}>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
-          <p className="mt-2 text-sm leading-6 text-[#617068]">
+          <p className="mt-2 hidden text-sm leading-6 text-[#617068] sm:block">
             Sabbath School lessons, mission readings, Scripture, hymns and the Spirit of Prophecy — open one to begin.
           </p>
         </div>
@@ -37,7 +39,7 @@ export default function MaterialsPage() {
 
       {/* The destinations, on mobile and desktop alike. */}
       <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 py-8 lg:px-8"}>
-        <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-4xl"}>
+        <div className={signedIn ? "max-w-5xl" : "max-w-4xl"}>
           <MaterialsDestinationCards />
         </div>
       </section>

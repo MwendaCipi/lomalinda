@@ -855,7 +855,7 @@ function GivePageContent() {
                   email; an anonymous giver's rides the phone they give with.
                   Only a member whose account has no email sees a field — the
                   one thing they alone can fix. */}
-              {signedIn && !accountEmail.trim() ? (
+              {signedIn && !accountEmail.trim() && (
                 <label className="block text-sm font-medium text-[#26352f]">
                   Email for receipts <span className="font-normal text-[#617068]">(optional)</span>
                   <input
@@ -869,12 +869,6 @@ function GivePageContent() {
                     Saved to your account so a receipt can reach you by email. Leave it out and your receipt goes by SMS to the phone you give with.
                   </span>
                 </label>
-              ) : (
-                <p className="text-[11px] font-normal leading-relaxed text-[#617068]">
-                  {signedIn
-                    ? "Your receipt is emailed to the address on your account, and an SMS copy goes to the phone you give with."
-                    : "Your receipt goes by SMS to the phone you give with. Members who sign in get theirs by email too."}
-                </p>
               )}
 
               {/* 2. How the money moves first — method, then the phone the

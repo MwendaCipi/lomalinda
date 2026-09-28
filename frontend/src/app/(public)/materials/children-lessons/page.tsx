@@ -61,17 +61,17 @@ export default function ChildrenLessonsPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <section className="px-6 pt-10 lg:px-8">
-        <div className="mx-auto max-w-4xl">
+        <div className="max-w-4xl">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b36b3c]">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Children&apos;s Lesson Guides</h1>
-          <p className="mt-2 text-sm leading-6 text-[#617068]">
+          <p className="mt-2 hidden text-sm leading-6 text-[#617068] sm:block">
             One guide per age group. Open a division to read its current lesson — student edition.
           </p>
         </div>
       </section>
 
       <section className="px-6 py-6 lg:px-8">
-        <div className="mx-auto max-w-4xl">
+        <div className="max-w-4xl">
           <div className="grid gap-3 sm:grid-cols-2">
             {DIVISIONS.map((d) => (
               <button

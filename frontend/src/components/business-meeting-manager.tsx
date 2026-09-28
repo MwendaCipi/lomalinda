@@ -553,7 +553,6 @@ export function BusinessMeetingManager() {
             <div className="flex items-center justify-between border-b border-[#dfdbd1] pb-4">
               <div>
                 <h3 className="text-lg font-extrabold text-[#26352f]">Create Business Meeting</h3>
-                <p className="text-xs text-[#617068]">Add meeting details and notification settings. Agendas can be added per meeting row after creation.</p>
               </div>
               <button
                 type="button"

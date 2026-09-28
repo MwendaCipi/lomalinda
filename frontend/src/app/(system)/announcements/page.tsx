@@ -59,7 +59,6 @@ function driveGiveHref(drive: FundDrive) {
 export default function AnnouncementsPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [supportAccount, setSupportAccount] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   // Pledging and in-kind giving happen in modals over the feed, so a member
   // never loses their place to give.
@@ -78,25 +77,23 @@ export default function AnnouncementsPage() {
   // nothing that has finished its run is served.
   const loadFeed = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (search.trim()) params.set("search", search.trim());
     const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/?${params.toString()}`, {
+    fetch(`${API_URL}/api/members/announcements/`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((response) => (response.ok ? response.json() : []))
       .then((data: FeedItem[]) => setAnnouncements(Array.isArray(data) ? data : []))
       .catch(() => setAnnouncements([]))
       .finally(() => setLoading(false));
-  }, [search]);
+  }, []);
 
   // Drives are announced through the same feed; keep the state name the rest
   // of the page already reads.
   const setAnnouncements = (rows: FeedItem[]) => setItems(rows);
 
+  // One load: nothing on the page narrows the feed any more.
   useEffect(() => {
-    const timer = window.setTimeout(loadFeed, 200);
-    return () => window.clearTimeout(timer);
+    loadFeed();
   }, [loadFeed]);
 
   /** Submit an opinion answer, then confirm inline on the card. */
@@ -148,20 +145,9 @@ export default function AnnouncementsPage() {
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
-            {/* The heading and its search sit tight together: the feed below is
-                what the page is for, so the controls above it stay compact. */}
-            <div className="max-w-4xl space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
-              <label className="block max-w-md text-sm font-semibold text-[#26352f]">
-                Search
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search announcements..."
-                  className="mt-1.5 w-full rounded-xl border border-[#c9c5bb] bg-white px-3.5 py-2 text-sm font-normal outline-none focus:border-[#b36b3c]"
-                />
-              </label>
-            </div>
+            {/* Just the heading: the feed below is what the page is for, and
+                nothing is served but what is live now. */}
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
 
             {loading ? <p className="text-sm text-[#617068]">Loading announcements…</p> : items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-10 text-center text-[#617068]">No announcements found.</div>
