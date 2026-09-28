@@ -456,11 +456,10 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
 
   const isStaff = userState.roles.length > 0 ? userState.roles.some((r) => staffRoles.includes(r)) : staffRoles.includes(userState.role);
 
-  // Desktop navigation items
+  // Desktop navigation items. There is no Dashboard link: the logo on the
+  // left already takes a signed-in member to their dashboard, and the links
+  // sit right beside the logo rather than floating at the centre of the bar.
   const desktopNavItems = [
-    ...(userState.isLoggedIn
-      ? [{ href: "/dashboard", label: "Dashboard", active: pathname.startsWith("/dashboard") }]
-      : []),
     {
       href: "/announcements",
       label: "Fellowship",
@@ -540,7 +539,9 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
     <>
       {/* Top 100% Full-Width Header Bar */}
       <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-[#26352f] border-b border-white/10 shadow-md text-white px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        {/* Left: Church Banner / Logo & Church Name */}
+        {/* Left: the logo with the navigation immediately after it — one group,
+            so the links hug the logo instead of centering in the bar. */}
+        <div className="flex min-w-0 items-center gap-3 lg:gap-5">
         <Link href={userState.isLoggedIn ? "/dashboard" : "/"} onClick={goHome} className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
           <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/10 p-1 border border-white/15">
             <Image
@@ -562,7 +563,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
           </div>
         </Link>
 
-        {/* Center: Desktop Navigation Menu */}
+        {/* Desktop Navigation Menu, beside the logo on the left */}
         <nav hidden={navigationLocked} className="hidden md:flex items-center gap-1 lg:gap-1.5" aria-label="Main navigation">
           {desktopNavItems.map((item) => (
             <Link
@@ -578,6 +579,7 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
             </Link>
           ))}
         </nav>
+        </div>
 
         {/* Right: Accessibility, Notifications & User Account Controls */}
         <div ref={controlsRef} hidden={navigationLocked} className="flex items-center gap-2 sm:gap-3 relative shrink-0">

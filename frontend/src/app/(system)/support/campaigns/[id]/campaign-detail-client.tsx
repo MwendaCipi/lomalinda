@@ -8,7 +8,6 @@ import { PublicSectionNav } from "@/components/public-section-nav";
 import { DonutChart } from "@/components/mini-charts";
 import { stewardshipLinks } from "@/config/site-sections";
 import { SupportSidebar } from "@/components/sidebars/support-sidebar";
-import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -77,10 +76,6 @@ export default function CampaignDetailClient() {
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [signedIn, setSignedIn] = useState(false);
-  // Which sidebar this viewer gets: office holders keep the Leader Portal's
-  // navigation on a drive's page (the admin work lives here); everyone else
-  // keeps the giving sidebar, because fund drives are part of giving.
-  const [viewerOffices, setViewerOffices] = useState<string[]>([]);
   const [accountEmail, setAccountEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,14 +118,6 @@ export default function CampaignDetailClient() {
         .then((userData) => {
           if (userData) {
             setSignedIn(true);
-            const roles = [
-              ...(Array.isArray(userData.roles) ? userData.roles : []),
-              userData.role || "",
-              userData.is_staff || userData.is_superuser ? "admin" : "",
-            ]
-              .map((role: string) => String(role).toLowerCase().trim().replace(/[\s-]+/g, "_"))
-              .filter((role: string) => role && role !== "member");
-            setViewerOffices([...new Set(roles)]);
             const phone = userData.phone_number || "";
             const email = userData.email || "";
             const name = [userData.first_name, userData.last_name].filter(Boolean).join(" ").trim();
@@ -271,16 +258,13 @@ export default function CampaignDetailClient() {
   const ministries = (campaign.ministry_breakdown ?? []).filter((m) => m.amount > 0);
   const maxMinistry = Math.max(0, ...ministries.map((m) => m.amount));
 
-  // The same office list the drive manager accepts; any one of them means the
-  // Leader Portal navigation is worth showing beside the drive. The owner
-  // account (is_staff) is not in every roles list, so it is granted directly.
-  const OFFICE_ROLES = ["admin", "clerk", "elder", "youth_leader", "choir_director", "children_ministry", "men_ministry", "women_ministry", "chaplaincy", "treasurer"];
-  const isOfficeHolder = viewerOffices.some((role) => OFFICE_ROLES.includes(role));
-
+  // A fund drive is a member-facing page — view the card, give, share — so
+  // everyone gets the giving sidebar, office holders included. The Leader
+  // Portal keeps its own navigation; admin work on drives lives there.
   return (
     <main className="min-h-screen bg-[#f7f4ee] text-[#26352f]">
       <div className="flex min-h-screen">
-        {isOfficeHolder ? <AdminSidebar /> : <SupportSidebar />}
+        <SupportSidebar />
         <div className="min-w-0 flex-1">
       <div className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-4xl space-y-6">
