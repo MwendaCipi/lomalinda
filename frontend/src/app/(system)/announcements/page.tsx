@@ -8,6 +8,7 @@ import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { eventLabel } from "@/lib/announcement-dates";
+import { useTableDensity, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -57,6 +58,9 @@ function driveGiveHref(drive: FundDrive) {
 }
 
 export default function AnnouncementsPage() {
+  // The desk-wide compact preference, shared with the roster and every other
+  // table: here it tightens the feed's cards rather than a table's rows.
+  const { dense, toggleDensity } = useTableDensity();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [supportAccount, setSupportAccount] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,32 +149,35 @@ export default function AnnouncementsPage() {
         <FellowshipSidebar />
         <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
-            {/* Just the heading: the feed below is what the page is for, and
-                nothing is served but what is live now. */}
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+            {/* Just the heading and the density toggle: the feed below is what
+                the page is for, and nothing is served but what is live now. */}
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+              <DensityToggle dense={dense} onToggle={toggleDensity} />
+            </div>
 
             {loading ? <p className="text-sm text-[#617068]">Loading announcements…</p> : items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#c9c5bb] bg-white p-10 text-center text-[#617068]">No announcements found.</div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className={`grid ${dense ? "gap-3" : "gap-6"} md:grid-cols-2`}>
                 {items.map((item) => {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;
                   // A support-account post carries its own giving actions —
                   // the same Pledge / In-kind / Give Money row a drive gets.
                   const supportGives = !isDrive && Boolean(item.support_account_display);
-                  const cardClasses = "flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white p-6 shadow-sm sm:p-7";
+                  const cardClasses = `flex flex-col justify-between rounded-2xl border border-[#dfdbd1] bg-white shadow-sm ${dense ? "p-4" : "p-6 sm:p-7"}`;
                   const content = (
                     <>
                       <div>
                         {/* No eyebrow and no badge row: the card is in the
                             announcements feed, so the title, its event date
                             and the words are the whole story. */}
-                        <h2 className="text-xl font-semibold sm:text-2xl">{item.title}</h2>
+                        <h2 className={dense ? "text-base font-semibold" : "text-xl font-semibold sm:text-2xl"}>{item.title}</h2>
                         {eventLabel(item) && (
-                          <p className="mt-2 text-sm font-semibold text-[#b36b3c]">Event date: {eventLabel(item)}</p>
+                          <p className={`text-sm font-semibold text-[#b36b3c] ${dense ? "mt-1" : "mt-2"}`}>Event date: {eventLabel(item)}</p>
                         )}
-                        <p className="mt-3 text-base leading-7 text-[#26352f]">{item.text}</p>
+                        <p className={`text-[#26352f] ${dense ? "mt-2 text-sm leading-6" : "mt-3 text-base leading-7"}`}>{item.text}</p>
                         {item.href && (
                           <a
                             href={item.href}
@@ -267,7 +274,7 @@ export default function AnnouncementsPage() {
                       </div>
 
                       {item.attachment && (
-                        <div className="mt-6 border-t border-[#dfdbd1] pt-4">
+                        <div className={`border-t border-[#dfdbd1] pt-4 ${dense ? "mt-4" : "mt-6"}`}>
                           <AnnouncementAttachment
                             attachment={item.attachment}
                             name={item.attachment_name}
@@ -282,7 +289,7 @@ export default function AnnouncementsPage() {
                           chosen; a drive opens straight into its own giving
                           modal. */}
                       {supportGives && (
-                        <div className="mt-6 border-t border-[#dfdbd1] pt-5">
+                        <div className={`border-t border-[#dfdbd1] pt-5 ${dense ? "mt-4" : "mt-6"}`}>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
@@ -310,7 +317,7 @@ export default function AnnouncementsPage() {
                       )}
 
                       {isDrive && drive && (
-                        <div className="mt-6 border-t border-[#dfdbd1] pt-5">
+                        <div className={`border-t border-[#dfdbd1] pt-5 ${dense ? "mt-4" : "mt-6"}`}>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
