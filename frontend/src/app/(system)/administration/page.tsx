@@ -565,7 +565,7 @@ function AdministrationContent() {
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f4ee] text-2xl" aria-hidden="true">🤝</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-bold text-[#26352f]">Departments</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Members, calendars and activities for AMM, AWM, AYM, APM and Chaplaincy.</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-[#617068]">Leadership, members, calendars and budgets for every department and ministry.</span>
                       </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-[#c9c5bb] transition group-hover:text-[#b36b3c]" aria-hidden="true" />
                     </div>

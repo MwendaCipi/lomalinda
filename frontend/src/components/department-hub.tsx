@@ -14,18 +14,26 @@
  * roles shares one set of rules and one notification path.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Accessibility,
   ArrowLeft,
+  Baby,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
+  Church,
+  Heart,
   Landmark,
   Mail,
   Megaphone,
+  MoreVertical,
   Phone,
   Search,
+  Sun,
   UserPlus,
   Users,
+  Volume2,
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
@@ -39,22 +47,106 @@ import { AnnouncementManager } from "./announcement-manager";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type DepartmentCode = "amm" | "awm" | "aym" | "apm" | "chaplaincy";
+type DepartmentCode = "amm" | "awm" | "aym" | "children" | "ambassadors" | "apm" | "chaplaincy";
 
-/** Visual identity carried from the department screens this view replaces. */
-const DEPARTMENT_STYLES: Record<DepartmentCode, { icon: string; accent: string; chip: string }> = {
-  amm: { icon: "⚙️", accent: "text-blue-800", chip: "bg-blue-50 text-blue-800" },
-  awm: { icon: "💗", accent: "text-rose-800", chip: "bg-rose-50 text-rose-800" },
-  aym: { icon: "🌱", accent: "text-amber-800", chip: "bg-amber-50 text-amber-800" },
-  apm: { icon: "♿", accent: "text-teal-800", chip: "bg-teal-50 text-teal-800" },
-  chaplaincy: { icon: "🙏", accent: "text-indigo-900", chip: "bg-indigo-50 text-indigo-900" },
+/** Visual identity carried from the department screens this view replaces.
+    Lucide marks rather than emojis, so the desk reads as the rest of the app. */
+const DEPARTMENT_STYLES: Record<DepartmentCode, { icon: React.ReactNode; accent: string; chip: string }> = {
+  amm: { icon: <Users className="h-4 w-4" />, accent: "text-blue-800", chip: "bg-blue-50 text-blue-800" },
+  awm: { icon: <Heart className="h-4 w-4" />, accent: "text-rose-800", chip: "bg-rose-50 text-rose-800" },
+  aym: { icon: <Sun className="h-4 w-4" />, accent: "text-amber-800", chip: "bg-amber-50 text-amber-800" },
+  children: { icon: <Baby className="h-4 w-4" />, accent: "text-fuchsia-800", chip: "bg-fuchsia-50 text-fuchsia-800" },
+  ambassadors: { icon: <Volume2 className="h-4 w-4" />, accent: "text-orange-800", chip: "bg-orange-50 text-orange-800" },
+  apm: { icon: <Accessibility className="h-4 w-4" />, accent: "text-teal-800", chip: "bg-teal-50 text-teal-800" },
+  chaplaincy: { icon: <Church className="h-4 w-4" />, accent: "text-indigo-900", chip: "bg-indigo-50 text-indigo-900" },
 };
+
+/**
+ * The row's actions behind one ⋯ button — Budget, Calendar, Members,
+ * Communicate, Open — a popover rather than a strip of icons. Closes on an
+ * outside click, and unmounts cleanly when the row re-renders.
+ */
+function DepartmentActionsMenu({
+  department,
+  onOpen,
+  onCalendar,
+  onMembers,
+  onBudget,
+  onCommunicate,
+}: {
+  department: DepartmentRow;
+  onOpen: () => void;
+  onCalendar: () => void;
+  onMembers: () => void;
+  onBudget: () => void;
+  onCommunicate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  const items: { label: string; icon: React.ReactNode; run: () => void }[] = [
+    { label: "Open", icon: <ChevronRight className="h-4 w-4" />, run: onOpen },
+    { label: "Budget", icon: <Landmark className="h-4 w-4" />, run: onBudget },
+    { label: "Calendar", icon: <CalendarDays className="h-4 w-4" />, run: onCalendar },
+    { label: "Members", icon: <Users className="h-4 w-4" />, run: onMembers },
+    { label: "Communicate", icon: <Megaphone className="h-4 w-4" />, run: onCommunicate },
+  ];
+
+  return (
+    <div className="relative inline-block" ref={wrapRef} data-dept-menu={department.code}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Actions for ${department.label}`}
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-8 items-center gap-1 rounded-xl border border-[#dfdbd1] bg-white px-2.5 text-xs font-semibold text-[#26352f] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
+      >
+        Actions
+        <ChevronDown className={`h-3.5 w-3.5 text-[#617068] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-[#dfdbd1] bg-white p-1.5 shadow-xl ring-1 ring-black/5"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                item.run();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[#26352f] transition hover:bg-[#f7f4ee]"
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The role that leads each department, matching the backend's DEPARTMENT_LEAD_ROLE. */
 const DEPARTMENT_LEAD_ROLE: Record<DepartmentCode, string> = {
   amm: "men_ministry",
   awm: "women_ministry",
   aym: "youth_leader",
+  children: "children_ministry",
+  ambassadors: "ambassadors_leader",
   apm: "apm_leader",
   chaplaincy: "chaplaincy",
 };
@@ -153,8 +245,8 @@ function HolderCard({
           <h4 className="mt-0.5 truncate text-sm font-bold text-[#26352f]">{holder.name}</h4>
           <p className="text-[11px] text-[#8b9790]">@{holder.username}</p>
           <div className="mt-1.5 space-y-0.5 text-xs text-[#617068]">
-            {holder.phone_number && <p className="truncate">📞 {holder.phone_number}</p>}
-            {holder.email && <p className="truncate">✉️ {holder.email}</p>}
+            {holder.phone_number && <p className="truncate">{holder.phone_number}</p>}
+            {holder.email && <p className="truncate">{holder.email}</p>}
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -530,7 +622,7 @@ function DepartmentDetail({
   const rollIds = new Set(roll.map((m) => m.id));
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-5 px-1 py-2">
       {/* Header */}
       <div className="rounded-2xl border border-[#dfdbd1] bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
@@ -539,13 +631,15 @@ function DepartmentDetail({
               type="button"
               onClick={onBack}
               aria-label="Back to all departments"
-              className="lg:hidden -ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-[#26352f] transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-[#26352f] transition hover:bg-[#f7f4ee] hover:text-[#b36b3c]"
             >
               <ArrowLeft className="h-5 w-5" aria-hidden="true" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden="true">{style.icon}</span>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
+                  {style.icon}
+                </span>
                 <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
               </div>
               <p className="mt-1 text-xs text-[#617068]">
@@ -768,7 +862,7 @@ export function DepartmentHub() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-6xl space-y-3 px-1 py-2">
       <div>
         <h2 className="text-lg font-bold text-[#26352f]">Departments &amp; Ministries</h2>
         <p className="mt-0.5 text-xs text-[#617068]">
@@ -796,7 +890,9 @@ export function DepartmentHub() {
                 <tr key={department.code} className="border-b border-[#eeeae2] last:border-0 hover:bg-[#f7f4ee]/60">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg" aria-hidden="true">{style.icon}</span>
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
+                        {style.icon}
+                      </span>
                       <span className={`text-sm font-bold ${style.accent}`}>{department.label}</span>
                     </div>
                   </td>
@@ -824,57 +920,24 @@ export function DepartmentHub() {
                     {department.member_count}
                     <span className="block text-[10px] text-[#8b9790]">{department.event_count} event{department.event_count === 1 ? "" : "s"}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailTab("members");
-                          setSelected(department);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
-                      >
-                        Open <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Budget"
-                        onClick={() => setBudgetDept(department)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                      >
-                        <Landmark className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Calendar"
-                        onClick={() => {
-                          setDetailTab("calendar");
-                          setSelected(department);
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                      >
-                        <CalendarDays className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Members"
-                        onClick={() => {
-                          setDetailTab("members");
-                          setSelected(department);
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                      >
-                        <Users className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Communicate — post an announcement to this department"
-                        onClick={() => setCommunicateDept(department)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                      >
-                        <Megaphone className="h-4 w-4" />
-                      </button>
-                    </div>
+                  <td className="px-4 py-3 text-right">
+                    <DepartmentActionsMenu
+                      department={department}
+                      onOpen={() => {
+                        setDetailTab("members");
+                        setSelected(department);
+                      }}
+                      onCalendar={() => {
+                        setDetailTab("calendar");
+                        setSelected(department);
+                      }}
+                      onMembers={() => {
+                        setDetailTab("members");
+                        setSelected(department);
+                      }}
+                      onBudget={() => setBudgetDept(department)}
+                      onCommunicate={() => setCommunicateDept(department)}
+                    />
                   </td>
                 </tr>
               );
@@ -889,9 +952,30 @@ export function DepartmentHub() {
           const style = DEPARTMENT_STYLES[department.code];
           return (
             <div key={department.code} className="rounded-2xl border border-[#dfdbd1] bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-lg" aria-hidden="true">{style.icon}</span>
-                <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
+                    {style.icon}
+                  </span>
+                  <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
+                </div>
+                <DepartmentActionsMenu
+                  department={department}
+                  onOpen={() => {
+                    setDetailTab("members");
+                    setSelected(department);
+                  }}
+                  onCalendar={() => {
+                    setDetailTab("calendar");
+                    setSelected(department);
+                  }}
+                  onMembers={() => {
+                    setDetailTab("members");
+                    setSelected(department);
+                  }}
+                  onBudget={() => setBudgetDept(department)}
+                  onCommunicate={() => setCommunicateDept(department)}
+                />
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <p className="text-[#26352f]">
@@ -913,45 +997,6 @@ export function DepartmentHub() {
                 <p className="text-[11px] text-[#617068]">
                   {department.member_count} on roll · {department.event_count} event{department.event_count === 1 ? "" : "s"}
                 </p>
-              </div>
-              <div className="mt-3 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDetailTab("members");
-                    setSelected(department);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[#26352f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1a2420]"
-                >
-                  Open <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Budget"
-                  onClick={() => setBudgetDept(department)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                >
-                  <Landmark className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  title="Calendar"
-                  onClick={() => {
-                    setDetailTab("calendar");
-                    setSelected(department);
-                  }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  title="Communicate"
-                  onClick={() => setCommunicateDept(department)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfdbd1] bg-white text-[#617068] transition hover:border-[#b36b3c] hover:text-[#b36b3c]"
-                >
-                  <Megaphone className="h-4 w-4" />
-                </button>
               </div>
             </div>
           );
