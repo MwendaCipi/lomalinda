@@ -7014,7 +7014,7 @@ class AnnouncementResponsesCsvTests(APITestCase):
         res = self.client.get(f'/api/members/announcements/{post.pk}/answers.csv')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         rows = list(csv.reader(StringIO(res.content.decode('utf-8'))))
-        self.assertEqual(rows[0], ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Answered on'])
+        self.assertEqual(rows[0], ['Respondent', 'Phone', 'Action', 'Response text', 'Pledge (KES)', 'Promised by', 'Pledge status', 'Closed by', 'Answered on'])
         self.assertEqual(rows[1][2], 'Tithe')
         self.assertEqual(rows[1][4], '1500.00')
 

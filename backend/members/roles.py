@@ -126,6 +126,18 @@ MINISTRY_AUDIENCE_OPTIONS = (
     ('head_deaconess', 'Head Deaconess'),
     ('treasurer', 'Treasurer'),
     ('clerk', 'Church Clerk'),
+    # Whole-department addressing: the post travels to the department's roll
+    # (its actual membership list) together with its leader and assistants.
+    # These codes are kept in step with DEPARTMENT_CHOICES in members.models;
+    # roles.py cannot import models from here, so the pair is mirrored by
+    # hand and the department hub is the only place that composes them.
+    ('dept_amm', 'AMM Department'),
+    ('dept_awm', 'AWM Department'),
+    ('dept_aym', 'AYM Department'),
+    ('dept_children', 'Children Department'),
+    ('dept_ambassadors', 'Ambassadors Department'),
+    ('dept_apm', 'APM Department'),
+    ('dept_chaplaincy', 'Chaplaincy Department'),
 )
 
 MINISTRY_AUDIENCE_CODES = tuple(code for code, _label in MINISTRY_AUDIENCE_OPTIONS)

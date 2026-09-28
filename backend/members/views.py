@@ -1556,26 +1556,52 @@ def _send_announcement_emails_locked(announcement):
 MEMBERSHIP_AUDIENCE_CODES = {'adventist_men', 'adventist_women', 'young_adults', 'board'}
 
 
+def department_audience_user_ids(codes):
+    """Members of whole-department audiences (``dept_*`` codes).
+
+    A department audience is the department's actual roll — the membership
+    list the elder's desk curates on the Departments & Ministries screen —
+    plus its leader and assistants, who lead the group whether or not they
+    sit on their own roll.
+    """
+    dept_codes = {code.removeprefix('dept_') for code in codes if code.startswith('dept_')}
+    user_ids = set()
+    if not dept_codes:
+        return user_ids
+    roll = DepartmentMembership.objects.filter(
+        department__in=dept_codes, member__is_active=True
+    ).values_list('member_id', flat=True)
+    user_ids.update(roll)
+    # The department's leaders ride along with their department's post.
+    for dept in dept_codes:
+        leader, assistants = department_holders(dept)
+        if leader:
+            user_ids.add(leader['id'])
+        user_ids.update(a['id'] for a in assistants)
+    return user_ids
+
+
 def announcement_audience_user_ids(audience_codes):
     """Users an audience addresses, or ``None`` when the post is to everyone.
 
     An audience is a mixed list: ministry office codes (matched against the
     roles a member holds), membership groups like Adventist Men (matched
-    against the member's own declared ministry), and the church board.
+    against the member's own declared ministry), the church board, and
+    whole departments (matched against the department rolls).
     """
     codes = {code for code in (audience_codes or []) if code}
     if not codes:
         return None
-    office_codes = codes - MEMBERSHIP_AUDIENCE_CODES
-    user_ids = set()
+    user_ids = department_audience_user_ids(codes)
+    if 'board' in codes:
+        user_ids |= set(board_audience().values_list('id', flat=True))
+    office_codes = codes - MEMBERSHIP_AUDIENCE_CODES - {c for c in codes if c.startswith('dept_')}
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
         if office_codes and set(profile.get_roles()) & office_codes:
             user_ids.add(profile.user_id)
             continue
         if profile.ministry and profile.ministry in codes:
             user_ids.add(profile.user_id)
-    if 'board' in codes:
-        user_ids |= set(board_audience().values_list('id', flat=True))
     return user_ids
 
 
