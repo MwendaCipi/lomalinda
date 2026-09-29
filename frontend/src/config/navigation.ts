@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Armchair,
+  Baby,
   BarChart3,
   BookOpen,
   Boxes,
@@ -21,10 +22,10 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Sun,
   Target,
   TrendingUp,
   Undo2,
-  User,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -320,6 +321,12 @@ export type RailItem = {
   /** For pages that are a `?tab=` of one route, the value that page is. */
   tab?: string;
   /**
+   * For a page of one department: the `dept=` value that names it. The office
+   * console holds every department's desk on one tab, so the department is
+   * what tells two of those pages apart.
+   */
+  dept?: string;
+  /**
    * Other `?tab=` values that are the same page — a page that folded two old
    * tabs into one (Meetings holds board and business) still lights up for a
    * deep link or a dashboard tile that names one of them.
@@ -343,6 +350,13 @@ export type RailEntry = {
   items?: RailItem[];
   roles?: readonly string[];
   hiddenFor?: readonly string[];
+  /**
+   * A row whose pages are the church's own records rather than a list here.
+   * Ministries and Departments hold whatever the elder's desk has created —
+   * they cannot be named in this file without going stale the day a ministry
+   * is added.
+   */
+  fromDepartments?: DepartmentGroup;
 };
 
 /** A rail page, described by the registry where the registry has it. */
@@ -363,60 +377,82 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
   return { href: `/administration?tab=${tab}`, tab, label, icon, ...extra };
 }
 
-/** A top-level row that is a single console tab (Church Settings). */
-function consoleRow(
-  label: string,
-  icon: LucideIcon,
-  tab: string,
-  extra: Partial<RailEntry> = {}
-): RailEntry {
-  return { label, icon, href: `/administration?tab=${tab}`, tab, match: ["/administration"], ...extra };
-}
-
 const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
+/** The church's offices owe the register and its programmes to the office. */
+const ELDERSHIP_ROLES = ["elder", "admin"];
+const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
- * The Administration's pages, in the rail's own vocabulary.
+ * The elders' office: the church's people and its programmes.
  *
- * These are the sections the admin console has always had, gated by the same
- * roles its sidebar used: the elders' desk for the office, the deaconate for
- * the deacons, and each department's own desk for its leader. An admin sees
- * the desks in the office rather than the department copies of them — an
- * officer reaches a department through Departments & Ministries.
- *
- * The treasury keeps its own row on the rail rather than sitting in here: its
- * pages are a treasurer's whole working day, and the office's other rows are
- * about people and programmes.
+ * Departments & Ministries, the register, the meetings, what is announced and
+ * what is asked of the church. The office bodies sit on their own rows — a
+ * clerk's work is not an elder's — and the treasury has always had its own.
  */
-export const officeItems: RailItem[] = [
-  officeTab("leaders", "Departments & Ministries", Crown, { roles: ["elder", "clerk", "admin"] }),
-  officeTab("users", "User Management", Users, { roles: ["elder", "clerk", "admin"] }),
+export const eldershipItems: RailItem[] = [
+  officeTab("leaders", "Departments & Ministries", Crown, { roles: ELDERSHIP_ROLES }),
+  officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
   // Board and business meetings are one desk now; the page switches between
   // them. A deep link that still names either one lands on the same page.
   officeTab("meetings", "Meetings", Armchair, {
-    roles: ["elder", "clerk", "admin"],
+    roles: ELDERSHIP_ROLES,
     aliasTabs: ["board", "business"],
   }),
-  officeTab("announcements", "Announcements", Megaphone, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
+];
+
+/** The clerk's office: the church's register, its transfers and its settings. */
+export const clerkshipItems: RailItem[] = [
+  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES }),
+  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: CLERKSHIP_ROLES }),
+  officeTab("settings", "Church Settings", Settings, { roles: CLERKSHIP_ROLES }),
+];
+
+/** The deaconate: the church's property, its duty and its ordinances. */
+export const deaconateItems: RailItem[] = [
   officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES }),
-  ...[
-    { tab: "dept-amm", label: "Adventist Men", roles: ["men_ministry"] },
-    { tab: "dept-awm", label: "Adventist Women", roles: ["women_ministry"] },
-    { tab: "dept-aym", label: "Adventist Youth", roles: ["youth_leader"] },
-    { tab: "dept-children", label: "Children's Ministry", roles: ["children_ministry"] },
-    { tab: "dept-apm", label: "Possibility Ministries", roles: ["apm_leader"] },
-    { tab: "dept-chaplaincy", label: "Chaplaincy", roles: ["chaplaincy"] },
-  ].flatMap((dept) => [
-    officeTab(`${dept.tab}-members`, `${dept.label} Members`, Users, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
-    officeTab(`${dept.tab}-calendar`, `${dept.label} Calendar`, Calendar, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
-    officeTab(`${dept.tab}-activities`, `${dept.label} Activities`, ClipboardList, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
-  ]),
 ];
+
+/** Which heading a department is filed under. */
+export type DepartmentGroup = "office" | "ministry" | "department";
+
+/** The church's own record of a department, as the rail needs it. */
+export type DepartmentSummary = {
+  code: string;
+  label: string;
+  group: DepartmentGroup;
+};
+
+/** The mark each known department wears; one the desk invents gets a plain one. */
+const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
+  amm: Users,
+  awm: Heart,
+  aym: Sun,
+  children: Baby,
+  ambassadors: Sparkles,
+  apm: HandHeart,
+  chaplaincy: Crown,
+  music: Gift,
+  personal_ministries: Megaphone,
+};
+
+/** One department's desk: the hub, opened straight on that department. */
+export function departmentItem(department: DepartmentSummary): RailItem {
+  return {
+    href: `/administration?tab=leaders&dept=${department.code}`,
+    label: department.label,
+    icon: DEPARTMENT_ICONS[department.code] ?? Users,
+    match: ["/administration"],
+    tab: "leaders",
+    dept: department.code,
+    roles: STAFF_ROLES,
+  };
+}
 
 /**
  * The treasury's pages — the treasurer's desk, as its own row on the rail.
@@ -445,21 +481,17 @@ export const treasuryItems: RailItem[] = [
 ];
 
 /**
- * The rail, in the order a member meets it: the week's page first, then their
- * own places, the church's, and last the office's.
+ * The rail, in the order a member meets it: the week's page first, the
+ * church's life, then each office's own desk and the departments under it.
  *
  * Every row is a destination from the registry or a page of the office
  * console — a row cannot invent an href. A group's list holds all of its
  * pages including the section's own landing page, so nothing is reachable
- * only by guessing.
+ * only by guessing. Ministries and Departments hold neither: their pages are
+ * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"] },
-  {
-    label: "My Church",
-    icon: User,
-    items: [page("myAccount"), page("memberReports"), page("welfare"), page("prayerVisitation")],
-  },
   {
     label: "Fellowship",
     icon: Megaphone,
@@ -480,12 +512,16 @@ export const railEntries: RailEntry[] = [
     icon: HandHeart,
     items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("reports")],
   },
-  { label: "About", icon: Building2, items: [page("about")] },
-  // The office's people-and-programmes desk, the church's configuration, and
-  // the treasury — three rows, because they are three different jobs.
-  { label: "Administration", icon: ShieldCheck, items: officeItems },
-  consoleRow("Church Settings", Settings, "settings", { roles: ["elder", "clerk", "admin"] }),
+  // The church's offices, each on the row it belongs to — an elder's work, a
+  // clerk's work and the deacons' work are three different jobs, and the
+  // treasurer's has always stood on its own.
+  { label: "Elders' Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
+  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
+  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
+  // The two lists of the church's own departments, filled from its records.
+  { label: "Ministries", icon: HeartHandshake, fromDepartments: "ministry", roles: STAFF_ROLES },
+  { label: "Departments", icon: Users, fromDepartments: "department", roles: STAFF_ROLES },
 ];
 
 /** May these roles see this row or page? */
@@ -503,9 +539,21 @@ export function canSee(
  * left with nothing under it dropped with them (an office tab a member may
  * not open is not a section they should see at all).
  */
-export function railFor(roles: readonly string[]): RailEntry[] {
+export function railFor(
+  roles: readonly string[],
+  departments: readonly DepartmentSummary[] = []
+): RailEntry[] {
   return railEntries.flatMap((entry) => {
     if (!canSee(entry, roles)) return [];
+    // A row whose pages are the church's own records: its list is whatever
+    // the desk has created, so a ministry added this morning is on the rail
+    // this afternoon and an empty list leaves the row out entirely.
+    if (entry.fromDepartments) {
+      const items = departments
+        .filter((department) => department.group === entry.fromDepartments)
+        .map(departmentItem);
+      return items.length === 0 ? [] : [{ ...entry, items }];
+    }
     if (!entry.href && entry.items) {
       const items = entry.items.filter((item) => canSee(item, roles));
       return items.length === 0 ? [] : [{ ...entry, items }];
@@ -517,7 +565,12 @@ export function railFor(roles: readonly string[]): RailEntry[] {
 /** Which row the rail should open and highlight — the most specific match. */
 export type RailHere = { group: string | null; href: string | null };
 
-export function railHere(pathname: string, tab: string | null, entries: RailEntry[]): RailHere {
+/** The query values that tell two pages of one route apart. */
+export type RailQuery = { tab?: string | null; dept?: string | null };
+
+export function railHere(pathname: string, query: RailQuery | null, entries: RailEntry[]): RailHere {
+  const tab = query?.tab ?? null;
+  const dept = query?.dept ?? null;
   let best: RailHere = { group: null, href: null };
   let bestLength = -1;
 
@@ -536,7 +589,16 @@ export function railHere(pathname: string, tab: string | null, entries: RailEntr
     if (item.tab) {
       if (pathname !== "/administration" || tab === null) return -1;
       const names = [item.tab, ...(item.aliasTabs ?? [])];
-      return names.includes(tab) ? 10_000 + tab.length : -1;
+      if (!names.includes(tab)) return -1;
+      // A department's own desk beats the directory that lists it, and the
+      // directory is not "here" while one department is open — otherwise
+      // both rows would light up at once.
+      if (item.dept) return dept === item.dept ? 20_000 + item.dept.length : -1;
+      return dept ? -1 : 10_000 + tab.length;
+    }
+    if (dept) {
+      // A department's desk answers to nothing else while it is open.
+      return -1;
     }
     if (pathname === item.href.replace(/\?.*$/, "")) return 100_000 + item.href.length;
     const patterns = item.match ?? [item.href];

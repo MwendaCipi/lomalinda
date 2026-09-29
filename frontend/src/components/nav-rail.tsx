@@ -6,8 +6,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 
-import { railFor, railHere, type RailEntry, type RailItem } from "@/config/navigation";
+import { railFor, railHere, type RailEntry, type RailItem, type RailQuery } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
+import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 
 /**
@@ -32,17 +33,20 @@ export function NavRail() {
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
   /**
-   * The console's `?tab=`, read from the address bar rather than through
-   * `useSearchParams` — the rail is drawn on every page, including pages that
-   * are prerendered, and reading the location directly keeps those pages
-   * static. Because Next's client navigation writes the URL through the
+   * The console's `?tab=` and `?dept=`, read from the address bar rather than
+   * through `useSearchParams` — the rail is drawn on every page, including
+   * pages that are prerendered, and reading the location directly keeps those
+   * pages static. Because Next's client navigation writes the URL through the
    * history API without firing `popstate`, the two writers are wrapped for as
    * long as the rail is mounted: clicking another console page updates the
    * highlight in the same breath as the page.
    */
-  const [tab, setTab] = useState<string | null>(null);
+  const [query, setQuery] = useState<RailQuery>({ tab: null, dept: null });
   useEffect(() => {
-    const read = () => setTab(new URLSearchParams(window.location.search).get("tab"));
+    const read = () => {
+      const params = new URLSearchParams(window.location.search);
+      setQuery({ tab: params.get("tab"), dept: params.get("dept") });
+    };
     read();
     window.addEventListener("popstate", read);
 
@@ -63,8 +67,9 @@ export function NavRail() {
     };
   }, [pathname]);
 
-  const entries = railFor(roles);
-  const here = railHere(pathname, tab, entries);
+  const departments = useDepartments();
+  const entries = railFor(roles, departments);
+  const here = railHere(pathname, query, entries);
 
   /**
    * The group the member opened or closed by hand, and the group they were
@@ -98,8 +103,10 @@ export function NavRail() {
       className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-sand-line bg-sand-grain lg:flex"
       aria-label="Navigation"
     >
-      {/* Brand — the way home, at the head of the rail. */}
-      <div className="flex items-center justify-between border-b border-sand-line px-4 py-3.5">
+      {/* Brand — the way home, at the head of the rail. Its height is the
+          identity bar's (`h-16` in AppTopBar), so the two bottom hairlines
+          meet at one continuous line across the app. */}
+      <div className="flex h-16 items-center justify-between border-b border-sand-line px-4">
         <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-bark p-1">
             <Image src="/adventist-symbol.svg" alt="SDA Church" width={32} height={32} className="h-full w-auto object-contain" priority />

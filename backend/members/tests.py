@@ -7386,3 +7386,138 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.client.force_authenticate(None)
         listed = self.client.get('/api/members/reports/')
         self.assertEqual([row['total_tithes'] for row in listed.data], ['4000.00'])
+
+
+class DepartmentGroupAndUnitTests(APITestCase):
+    """Where a department is filed, and the sub-units one of them runs.
+
+    The rail shows two lists — Ministries and Departments — with the three
+    office bodies having desks of their own, so every department carries the
+    heading it belongs under. A department may also run as named units (the
+    Children's Kindergarten and Pathfinders), in which case its desk reads one
+    unit at a time and each leader and member is tagged with theirs.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('grp.elder', 'grp.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.one = User.objects.create_user('grp.one', 'grp.one@example.com', 'StrongPass#2026', first_name='One', last_name='Member')
+        MemberProfile.objects.create(user=self.one, role='member', roles='member')
+        self.two = User.objects.create_user('grp.two', 'grp.two@example.com', 'StrongPass#2026', first_name='Two', last_name='Member')
+        MemberProfile.objects.create(user=self.two, role='member', roles='member')
+        self.children = Department.objects.get(code='children')
+        self.children_role = DepartmentRole.objects.get(department=self.children, name='Leader')
+        self.client.force_authenticate(self.elder)
+
+    def test_the_seeded_departments_are_filed_under_a_heading(self):
+        rows = {row['code']: row for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertEqual(rows['apm']['group'], 'ministry')
+        self.assertEqual(rows['chaplaincy']['group'], 'ministry')
+        self.assertEqual(rows['music']['group'], 'ministry')
+        self.assertEqual(rows['personal_ministries']['group'], 'ministry')
+        self.assertEqual(rows['children']['group'], 'department')
+        self.assertEqual(rows['ambassadors']['group'], 'department')
+        # The office bodies are neither list — they have desks of their own.
+        self.assertEqual(rows['eldership']['group'], 'office')
+        self.assertEqual(rows['clerkship']['group'], 'office')
+        self.assertEqual(rows['deaconate']['group'], 'office')
+        # The AYM is the Young Adults under the name the church uses.
+        self.assertEqual(rows['aym']['label'], 'Young Adults')
+        self.assertEqual(rows['children']['units'], ['Kindergarten', 'Pathfinders'])
+
+    def test_the_desk_adds_a_ministry_and_names_its_units(self):
+        created = self.client.post('/api/members/departments/create/', {
+            'name': 'Health Ministries',
+            'description': 'Health talks and the temperance programme.',
+            'group': 'ministry',
+            'units': ['Cooking Class', 'Temperance'],
+        }, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.data['group'], 'ministry')
+        self.assertEqual(created.data['units'], ['Cooking Class', 'Temperance'])
+        department = Department.objects.get(code=created.data['code'])
+        self.assertEqual(department.unit_names, ['Cooking Class', 'Temperance'])
+
+        # A heading that is not one of the three is refused rather than stored.
+        bad = self.client.post('/api/members/departments/create/', {
+            'name': 'Nowhere', 'group': 'committee',
+        }, format='json')
+        self.assertEqual(bad.status_code, 400)
+        self.assertFalse(Department.objects.filter(name='Nowhere').exists())
+
+    def test_a_unit_roll_is_kept_apart_from_the_other(self):
+        kindergarten = self.client.post('/api/members/departments/children/members/', {
+            'member_id': self.one.id, 'unit': 'Kindergarten',
+        }, format='json')
+        self.assertEqual(kindergarten.status_code, 201)
+        self.client.post('/api/members/departments/children/members/', {
+            'member_id': self.two.id, 'unit': 'Pathfinders',
+        }, format='json')
+
+        kids = self.client.get('/api/members/departments/children/members/?unit=Kindergarten')
+        self.assertEqual(kids.status_code, 200)
+        self.assertEqual([row['id'] for row in kids.data['members']], [self.one.id])
+        self.assertEqual(kids.data['units'], ['Kindergarten', 'Pathfinders'])
+
+        pathfinders = self.client.get('/api/members/departments/children/members/?unit=Pathfinders')
+        self.assertEqual([row['id'] for row in pathfinders.data['members']], [self.two.id])
+
+        # The whole department, units and all.
+        everyone = self.client.get('/api/members/departments/children/members/')
+        self.assertEqual(sorted(row['id'] for row in everyone.data['members']), [self.one.id, self.two.id])
+
+        # Moving a child is an edit on their one place on the roll.
+        moved = self.client.post('/api/members/departments/children/members/', {
+            'member_id': self.two.id, 'unit': 'Kindergarten',
+        }, format='json')
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(DepartmentMembership.objects.filter(member=self.two, department='children').count(), 1)
+        self.assertEqual(DepartmentMembership.objects.get(member=self.two).unit, 'Kindergarten')
+
+        # A unit the department does not run is refused.
+        unknown = self.client.get('/api/members/departments/children/members/?unit=Adventurers')
+        self.assertEqual(unknown.status_code, 400)
+
+    def test_each_unit_keeps_its_own_leaders_and_calendar(self):
+        first = self.client.put('/api/members/departments/children/leadership/', {
+            'unit': 'Kindergarten',
+            'assignments': [{'role_id': self.children_role.id, 'member_id': self.one.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(first.status_code, 200)
+        second = self.client.put('/api/members/departments/children/leadership/', {
+            'unit': 'Pathfinders',
+            'assignments': [{'role_id': self.children_role.id, 'member_id': self.two.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(second.status_code, 200)
+        # Appointing Pathfinders' leader did not unseat Kindergarten's.
+        self.assertEqual(DepartmentAssignment.objects.filter(department=self.children, kind='leader').count(), 2)
+
+        kindergarten = self.client.get('/api/members/departments/children/leadership/?unit=Kindergarten')
+        self.assertEqual(kindergarten.data['leader']['id'], self.one.id)
+        pathfinders = self.client.get('/api/members/departments/children/leadership/?unit=Pathfinders')
+        self.assertEqual(pathfinders.data['leader']['id'], self.two.id)
+
+        added = self.client.post('/api/members/departments/children/events/', {
+            'title': 'Kindergarten Sabbath',
+            'date': '2026-10-04',
+            'unit': 'Kindergarten',
+        }, format='json')
+        self.assertEqual(added.status_code, 201)
+        self.client.post('/api/members/departments/children/events/', {
+            'title': 'Pathfinder Camporee',
+            'date': '2026-10-11',
+            'unit': 'Pathfinders',
+        }, format='json')
+
+        events = self.client.get('/api/members/departments/children/events/?unit=Kindergarten')
+        self.assertEqual([event['title'] for event in events.data['events']], ['Kindergarten Sabbath'])
+        self.assertEqual(
+            [event['title'] for event in self.client.get('/api/members/departments/children/events/').data['events']],
+            ['Kindergarten Sabbath', 'Pathfinder Camporee'],
+        )
+
+    def test_a_department_without_units_refuses_a_unit(self):
+        response = self.client.post('/api/members/departments/amm/members/', {
+            'member_id': self.one.id, 'unit': 'Kindergarten',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)

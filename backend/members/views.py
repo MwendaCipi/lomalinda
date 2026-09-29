@@ -6884,19 +6884,23 @@ DEPARTMENT_LEAD_ROLE = {
 }
 
 
-def department_holders(department):
+def department_holders(department, unit=None):
     """``(leader_dict_or_None, [assistant_dicts])`` from the leaders table.
 
     The department's leader is the member marked ``kind='leader'`` — first
     appointed wins if the desk ever appoints two — and every other row
     reports as an assistant named by its role ("Music Leader (assistant)").
+
+    ``unit`` narrows it to one sub-unit of a department that has them (the
+    Children's Kindergarten or Pathfinders), which is what its desk toggles
+    between; ``None`` means the whole department, unit-tagged rows included.
     """
-    assignments = list(
-        DepartmentAssignment.objects.select_related(
-            'member', 'member__member_profile', 'role', 'department'
-        ).filter(department__code=department, department__is_active=True)
-        .order_by('role__sort_order', 'role__id', 'kind', 'id')
-    )
+    assignments = DepartmentAssignment.objects.select_related(
+        'member', 'member__member_profile', 'role', 'department'
+    ).filter(department__code=department, department__is_active=True)
+    if unit:
+        assignments = assignments.filter(unit=unit)
+    assignments = list(assignments.order_by('role__sort_order', 'role__id', 'kind', 'id'))
 
     def holder_dict(assignment):
         user = assignment.member
@@ -6948,6 +6952,10 @@ class DepartmentDirectoryView(APIView):
                 'label': department.name,
                 'description': department.description,
                 'icon': department.icon,
+                # Which heading the rail files it under, and the sub-units its
+                # desk toggles between (Children's Kindergarten/Pathfinders).
+                'group': department.group,
+                'units': department.unit_names,
                 'leader': leader,
                 'assistants': assistants,
                 # The roles the leadership modal edits, with who serves in
@@ -7179,7 +7187,21 @@ class DepartmentCreateView(APIView):
             suffix += 1
 
         description = str(request.data.get('description') or '').strip()[:240]
-        department = Department.objects.create(code=code, name=name, description=description)
+        group = str(request.data.get('group') or 'department').strip().lower()
+        if group not in dict(Department.GROUP_CHOICES):
+            return Response({'group': 'Say whether this is a ministry or a department.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Sub-units arrive as a list or as the comma-separated text the field
+        # stores; either way the stored form is one line of names.
+        raw_units = request.data.get('units')
+        if isinstance(raw_units, (list, tuple)):
+            units = ', '.join(str(unit).strip() for unit in raw_units if str(unit).strip())
+        else:
+            units = str(raw_units or '').strip()
+        units = ', '.join(part.strip() for part in units.split(',') if part.strip())[:200]
+
+        department = Department.objects.create(
+            code=code, name=name, description=description, group=group, units=units,
+        )
         DepartmentRole.objects.bulk_create([
             DepartmentRole(department=department, name=role_name, has_assistant=assistant, sort_order=index)
             for index, (role_name, assistant) in enumerate(DEFAULT_DEPARTMENT_ROLES)
@@ -7187,6 +7209,8 @@ class DepartmentCreateView(APIView):
         return Response({
             'code': department.code,
             'name': department.name,
+            'group': department.group,
+            'units': department.unit_names,
             'roles': [role_name for role_name, _assistant in DEFAULT_DEPARTMENT_ROLES],
         }, status=status.HTTP_201_CREATED)
 
@@ -7212,10 +7236,17 @@ class DepartmentLeadershipView(APIView):
         target = self._department(department)
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        leader, assistants = department_holders(department)
+        # A department with sub-units reads one unit at a time: the desk's
+        # toggle swaps the whole view, so leadership is asked for the unit too.
+        unit = str(request.query_params.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
+        leader, assistants = department_holders(department, unit=unit or None)
         return Response({
             'leader': leader,
             'assistants': assistants,
+            'unit': unit,
+            'units': target.unit_names,
             'roles': [
                 {
                     'id': role.id,
@@ -7224,7 +7255,7 @@ class DepartmentLeadershipView(APIView):
                     'is_custom': role.is_custom,
                     'assignments': [
                         {'id': a.id, 'member_id': a.member_id, 'kind': a.kind}
-                        for a in role.assignments.all()
+                        for a in role.assignments.filter(unit=unit)
                     ],
                 }
                 for role in target.roles.all()
@@ -7237,6 +7268,11 @@ class DepartmentLeadershipView(APIView):
         target = self._department(department)
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+
+        units = target.unit_names
+        unit = str(request.data.get('unit') or request.query_params.get('unit') or '').strip()
+        if unit and unit not in units:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
 
         submitted = request.data.get('assignments')
         if not isinstance(submitted, list):
@@ -7260,17 +7296,27 @@ class DepartmentLeadershipView(APIView):
             member = members.get(pk=entry.get('member_id'))
             if kind == 'leader':
                 # One leader per role: the new appointment replaces whoever
-                # held the seat, the way an appointment lands in person.
-                DepartmentAssignment.objects.filter(role=role, kind='leader').exclude(member=member).delete()
+                # held the seat, the way an appointment lands in person. In a
+                # department with units the seat is the unit's — Kindergarten
+                # may have its leader while Pathfinders keeps its own.
+                DepartmentAssignment.objects.filter(role=role, kind='leader', unit=unit).exclude(member=member).delete()
             assignment, _created = DepartmentAssignment.objects.get_or_create(
-                role=role, member=member, kind=kind,
+                role=role, member=member, kind=kind, unit=unit,
                 defaults={'department': target},
             )
+            updates = []
             if assignment.department_id != target.id:
                 assignment.department = target
-                assignment.save(update_fields=['department'])
+                updates.append('department')
+            if assignment.unit != unit:
+                # A leader who moves unit moves with the seat, the way an
+                # appointment in a new unit replaces the old one.
+                assignment.unit = unit
+                updates.append('unit')
+            if updates:
+                assignment.save(update_fields=updates)
         sync_role_flags_from_assignments()
-        return Response({'detail': 'Leadership updated.', 'code': target.code})
+        return Response({'detail': 'Leadership updated.', 'code': target.code, 'unit': unit})
 
     def delete(self, request, department):
         """Release one person, or remove a role the desk added.
@@ -7331,12 +7377,16 @@ class DepartmentMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, department):
-        if not Department.objects.filter(code=department, is_active=True).exists():
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        unit = str(request.query_params.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
         members = []
         for membership in (
             DepartmentMembership.objects.select_related('member', 'member__member_profile')
-            .filter(department=department, member__is_active=True)
+            .filter(department=department, member__is_active=True, **({'unit': unit} if unit else {}))
             .order_by('member__first_name', 'member__last_name')
         ):
             user = membership.member
@@ -7349,9 +7399,10 @@ class DepartmentMembersView(APIView):
                 'email': user.email or '',
                 'phone_number': (profile.phone_number if profile else '') or '',
                 'gender': (profile.gender if profile else '') or '',
+                'unit': membership.unit,
                 'added_at': membership.created_at,
             })
-        return Response({'members': members})
+        return Response({'members': members, 'unit': unit, 'units': target.unit_names})
 
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
@@ -7362,12 +7413,22 @@ class DepartmentMembersView(APIView):
             target_user = User.objects.get(pk=request.data.get('member_id'))
         except (User.DoesNotExist, TypeError, ValueError):
             return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        target = Department.objects.filter(code=department, is_active=True).first()
+        unit = str(request.data.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
         membership, created = DepartmentMembership.objects.get_or_create(
             member=target_user,
             department=department,
-            defaults={'added_by': request.user},
+            defaults={'added_by': request.user, 'unit': unit},
         )
         if not created:
+            # Moving a member between units is an edit on their one row, not a
+            # second place on the roll.
+            if membership.unit != unit:
+                membership.unit = unit
+                membership.save(update_fields=['unit'])
+                return Response({'detail': 'Member moved to the unit.'})
             return Response({'detail': 'That member is already on this roll.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'detail': 'Member added to the roll.', 'membership_id': membership.id}, status=status.HTTP_201_CREATED)
 
@@ -7391,7 +7452,11 @@ class DepartmentEventsView(APIView):
     def get(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        events = DepartmentEvent.objects.filter(department=department)
+        target = Department.objects.filter(code=department, is_active=True).first()
+        unit = str(request.query_params.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
+        events = DepartmentEvent.objects.filter(department=department, **({'unit': unit} if unit else {}))
         events = events.order_by('event_date', 'event_time', 'title')
         return Response({'events': [
             {
@@ -7402,9 +7467,10 @@ class DepartmentEventsView(APIView):
                 'location': event.location,
                 'lead': event.lead,
                 'notes': event.notes,
+                'unit': event.unit,
             }
             for event in events
-        ]})
+        ], 'unit': unit, 'units': target.unit_names})
 
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
@@ -7415,9 +7481,14 @@ class DepartmentEventsView(APIView):
         event_date = request.data.get('date') or ''
         if not title or not event_date:
             return Response({'detail': 'A title and a date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        target = Department.objects.filter(code=department, is_active=True).first()
+        unit = str(request.data.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
         event = DepartmentEvent.objects.create(
             department=department,
             title=title,
+            unit=unit,
             event_date=event_date,
             event_time=(request.data.get('time') or '').strip(),
             location=(request.data.get('location') or '').strip(),

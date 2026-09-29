@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 
+import { invalidateDepartments } from "@/hooks/use-departments";
 import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
 import { AnnouncementManager } from "./announcement-manager";
 import { RecordList } from "./record-list";
@@ -170,6 +171,9 @@ type DepartmentRoleRow = {
   is_custom: boolean;
   /** Everyone serving this role, leaders first as the API orders them. */
   holders: { id: number; name: string; username: string; kind: "leader" | "assistant" }[];
+  /** The appointments behind those holders — only the unit-scoped read
+      carries them, and they are what releasing one names. */
+  assignments?: { id: number; member_id: number; kind: "leader" | "assistant" }[];
 };
 
 type DepartmentRow = {
@@ -181,6 +185,10 @@ type DepartmentRow = {
   roles: DepartmentRoleRow[];
   member_count: number;
   event_count: number;
+  /** Where the rail files it: an office, a ministry or a department. */
+  group?: "office" | "ministry" | "department";
+  /** Sub-units, when the department runs as more than one (Children). */
+  units?: string[];
 };
 
 type RollMember = {
@@ -191,6 +199,7 @@ type RollMember = {
   email: string;
   phone_number: string;
   gender: string;
+  unit?: string;
   added_at: string;
 };
 
@@ -202,7 +211,19 @@ type DeptEvent = {
   location: string;
   lead: string;
   notes: string;
+  unit?: string;
 };
+
+/**
+ * A department's desk reads one unit at a time, or the whole of it.
+ *
+ * ``null`` is the department itself — every unit and the rows tagged to none
+ * — which is what the desk opens on, so nothing is hidden until a unit is
+ * chosen.
+ */
+function unitQuery(unit: string | null) {
+  return unit ? `?unit=${encodeURIComponent(unit)}` : "";
+}
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -497,12 +518,21 @@ function AddEventModal({
 
 /** One department role staged in the leadership modal: the people the save
     will appoint into it, leaders first, assistants where the role takes them. */
+type RolePerson = {
+  id: number;
+  name: string;
+  username: string;
+  kind: "leader" | "assistant";
+  /** The appointment's own id, so releasing one names the row and not the role. */
+  assignmentId?: number;
+};
+
 type RoleDraft = {
   id: number;
   name: string;
   has_assistant: boolean;
   is_custom: boolean;
-  people: { id: number; name: string; username: string; kind: "leader" | "assistant" }[];
+  people: RolePerson[];
 };
 
 /**
@@ -518,10 +548,13 @@ type RoleDraft = {
  */
 function LeadershipEditModal({
   department,
+  unit = null,
   onClose,
   onSaved,
 }: {
   department: DepartmentRow;
+  /** The unit whose leadership is being edited; null is the department's. */
+  unit?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -534,6 +567,39 @@ function LeadershipEditModal({
       people: role.holders.map((h) => ({ id: h.id, name: h.name, username: h.username, kind: h.kind })),
     }))
   );
+
+  // In a department that runs as units, the board on screen is that unit's —
+  // read from the API rather than taken from the directory, which carries the
+  // department's board and not each unit's.
+  useEffect(() => {
+    if (!unit) return;
+    let cancelled = false;
+    fetch(`${API_URL}/api/members/departments/${department.code}/leadership/${unitQuery(unit)}`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.roles) return;
+        setDraft(
+          data.roles.map((role: DepartmentRoleRow) => ({
+            id: role.id,
+            name: role.name,
+            has_assistant: role.has_assistant,
+            is_custom: role.is_custom,
+            people: (role.assignments ?? [])
+              .map((assignment): RolePerson | null => {
+                const holder = role.holders.find((h) => h.id === assignment.member_id);
+                return holder
+                  ? { id: holder.id, name: holder.name, username: holder.username, kind: assignment.kind, assignmentId: assignment.id }
+                  : null;
+              })
+              .filter((person): person is RolePerson => person !== null),
+          }))
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [department.code, unit]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
@@ -594,7 +660,7 @@ function LeadershipEditModal({
     }
   };  /** Release one person now — a remove on a role row calls the API at
       once, so a mis-tap never waits for a save. */
-  const releasePerson = async (role: RoleDraft, person: { id: number; name: string; kind: "leader" | "assistant" }) => {
+  const releasePerson = async (role: RoleDraft, person: RolePerson) => {
     const answer = await showAlert(
       "Release this appointment?",
       `${person.name} will no longer serve ${department.label} as ${person.kind === "leader" ? role.name : `assistant ${role.name}`}.`,
@@ -602,11 +668,19 @@ function LeadershipEditModal({
       { showCancelButton: true, confirmButtonText: "Release", cancelButtonText: "Keep", confirmButtonColor: brand.alert },
     );
     if (!answer.isConfirmed) return;
+    // Someone appointed in this sitting has no row on the server yet: taking
+    // them off the board is the draft's business, and Save writes the rest.
+    // (`role_id` on this endpoint means "remove this role entirely", so it is
+    // never the way to release one person.)
+    if (!person.assignmentId) {
+      setDraft((current) => current.map((r) => (r.id === role.id ? { ...r, people: r.people.filter((p) => p !== person) } : r)));
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
         method: "DELETE",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ role_id: role.id, member_id: person.id, kind: person.kind }),
+        body: JSON.stringify({ assignment_id: person.assignmentId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not release the appointment.");
@@ -673,7 +747,7 @@ function LeadershipEditModal({
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ assignments: fresh }),
+        body: JSON.stringify({ assignments: fresh, unit: unit ?? "" }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not save the leadership board.");
@@ -906,6 +980,12 @@ function DepartmentDetail({
   initialTab?: "members" | "calendar";
 }) {
   const style = areaStyle(department.code);
+  const units = department.units ?? [];
+  // Which unit's desk is open; null is the whole department.
+  const [unit, setUnit] = useState<string | null>(null);
+  // The unit's own leadership, when one is selected: the directory's board is
+  // the department's, and a unit has its own leader.
+  const [unitBoard, setUnitBoard] = useState<{ leader: Holder | null; assistants: Holder[] } | null>(null);
   const [roll, setRoll] = useState<RollMember[]>([]);
   const [events, setEvents] = useState<DeptEvent[]>([]);
   const [loadingRoll, setLoadingRoll] = useState(true);
@@ -921,21 +1001,21 @@ function DepartmentDetail({
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
-    fetch(`${API_URL}/api/members/departments/${department.code}/members/`, { headers: authHeaders() })
+    fetch(`${API_URL}/api/members/departments/${department.code}/members/${unitQuery(unit)}`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { members: [] }))
       .then((data) => setRoll(data.members || []))
       .catch(() => setRoll([]))
       .finally(() => setLoadingRoll(false));
-  }, [department.code]);
+  }, [department.code, unit]);
 
   const loadEvents = useCallback(() => {
     setLoadingEvents(true);
-    fetch(`${API_URL}/api/members/departments/${department.code}/events/`, { headers: authHeaders() })
+    fetch(`${API_URL}/api/members/departments/${department.code}/events/${unitQuery(unit)}`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { events: [] }))
       .then((data) => setEvents(data.events || []))
       .catch(() => setEvents([]))
       .finally(() => setLoadingEvents(false));
-  }, [department.code]);
+  }, [department.code, unit]);
 
   useEffect(() => {
     // Every department carries a roll — Eldership, Clerkship and Deaconate
@@ -944,11 +1024,39 @@ function DepartmentDetail({
     loadEvents();
   }, [loadRoll, loadEvents]);
 
+  const loadUnitBoard = useCallback(() => {
+    // Deferred by a microtask: the read settles state after the effect's own
+    // synchronous body, which is what keeps the render from cascading.
+    void Promise.resolve().then(async () => {
+      if (!unit) {
+        setUnitBoard(null);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${API_URL}/api/members/departments/${department.code}/leadership/${unitQuery(unit)}`,
+          { headers: authHeaders() }
+        );
+        const data = res.ok ? await res.json() : null;
+        setUnitBoard(data ? { leader: data.leader ?? null, assistants: data.assistants ?? [] } : null);
+      } catch {
+        setUnitBoard(null);
+      }
+    });
+  }, [department.code, unit]);
+
+  useEffect(() => {
+    loadUnitBoard();
+  }, [loadUnitBoard]);
+
+  /** The board on show: the unit's when one is selected, the department's otherwise. */
+  const board = unitBoard ?? { leader: department.leader, assistants: department.assistants };
+
   const addMember = async (member: { id: number; name: string }) => {
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ member_id: member.id }),
+      body: JSON.stringify({ member_id: member.id, unit: unit ?? "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -986,7 +1094,7 @@ function DepartmentDetail({
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(event),
+      body: JSON.stringify({ ...event, unit: unit ?? "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -1048,6 +1156,7 @@ function DepartmentDetail({
                 <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
               </div>
               <p className="mt-1 text-xs text-moss">
+                {unit ? `${unit} · ` : ""}
                 {roll.length} member{roll.length === 1 ? "" : "s"} on the roll ·{" "}
                 {events.length} calendar event{events.length === 1 ? "" : "s"}
               </p>
@@ -1075,19 +1184,52 @@ function DepartmentDetail({
           </div>
         </div>
 
+        {/* A department that runs as units reads one at a time — the roll,
+            the calendar and the leadership all follow the toggle, so
+            Kindergarten and Pathfinders are two desks under one roof. */}
+        {units.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-sand-line pt-4">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-moss">Unit</span>
+            <div
+              role="group"
+              aria-label="Department unit"
+              className="inline-flex h-9 items-center rounded-xl border border-sand-line bg-sand p-0.5"
+            >
+              {[{ value: null as string | null, label: "All" }, ...units.map((name) => ({ value: name as string | null, label: name }))].map((option) => {
+                const active = unit === option.value;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => setUnit(option.value)}
+                    aria-pressed={active}
+                    className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-semibold transition ${
+                      active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Leadership: every named office, filled or open — the same board
             the leadership modal edits. */}
         <div className="mt-4 border-t border-sand-line pt-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Leadership</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-moss">
+            Leadership{unit ? ` · ${unit}` : ""}
+          </p>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            {department.leader && (
+            {board.leader && (
               <HolderCard
-                holder={department.leader}
-                roleCaption={department.leader.position || "Leader"}
-                onContact={() => contactHolder(department.leader!)}
+                holder={board.leader}
+                roleCaption={board.leader.position || "Leader"}
+                onContact={() => contactHolder(board.leader!)}
               />
             )}
-            {department.assistants.map((assistant) => (
+            {board.assistants.map((assistant) => (
               <HolderCard
                 key={`${assistant.id}-${assistant.position}`}
                 holder={assistant}
@@ -1095,7 +1237,7 @@ function DepartmentDetail({
                 onContact={() => contactHolder(assistant)}
               />
             ))}
-            {!department.leader && department.assistants.length === 0 && (
+            {!board.leader && board.assistants.length === 0 && (
               <div className="rounded-2xl border border-dashed border-sand-line p-4 text-xs text-moss">
                 No one appointed yet. Use Edit leadership to appoint the leader.
               </div>
@@ -1246,9 +1388,11 @@ function DepartmentDetail({
       {showLeadership && (
         <LeadershipEditModal
           department={department}
+          unit={unit}
           onClose={() => setShowLeadership(false)}
           onSaved={() => {
             setShowLeadership(false);
+            loadUnitBoard();
             onChanged();
           }}
         />
@@ -1260,7 +1404,7 @@ function DepartmentDetail({
   );
 }
 
-export function DepartmentHub() {
+export function DepartmentHub({ initialDept = null }: { initialDept?: string | null } = {}) {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   // Which department detail (and which of its tabs) is open; the row's
@@ -1284,13 +1428,17 @@ export function DepartmentHub() {
       .then((res) => (res.ok ? res.json() : { departments: [] }))
       .then((data) => {
         setDepartments(data.departments || []);
-        setSelected((current) =>
-          current ? (data.departments || []).find((d: DepartmentRow) => d.code === current.code) ?? null : null
-        );
+        setSelected((current) => {
+          // A rail row names the department it opens (`?dept=children`), so the
+          // hub lands on it rather than on the table it is listed in.
+          const code = current?.code ?? initialDept;
+          if (!code) return null;
+          return (data.departments || []).find((d: DepartmentRow) => d.code === code) ?? null;
+        });
       })
       .catch(() => setDepartments([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [initialDept]);
 
   useEffect(() => {
     loadDirectory();
@@ -1528,6 +1676,7 @@ export function DepartmentHub() {
       {leadershipDept && (
         <LeadershipEditModal
           department={leadershipDept}
+          unit={null}
           onClose={() => setLeadershipDept(null)}
           onSaved={() => {
             setLeadershipDept(null);
@@ -1788,6 +1937,10 @@ function AddAreaModal({
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  // The rail files it under one of two lists, so the desk says which; the
+  // third answer (a church office) only ever applies to the seeded bodies.
+  const [group, setGroup] = useState<"ministry" | "department">("department");
+  const [units, setUnits] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -1798,10 +1951,13 @@ function AddAreaModal({
       const res = await fetch(`${API_URL}/api/members/departments/create/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), group, units: units.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.name || data.detail || "Could not create the department.");
+      // The rail reads the church's records, so a ministry added here should
+      // appear on it without a reload.
+      invalidateDepartments();
       showAlert(
         "Department created",
         `${data.name} now has its own roles. Open Edit leadership to appoint its officers.`,
@@ -1853,6 +2009,29 @@ function AddAreaModal({
               placeholder="One line about what this department does (optional)"
               className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
             />
+          </label>
+          <label className="block text-xs font-semibold text-bark">
+            Listed under
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value as "ministry" | "department")}
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+            >
+              <option value="department">Departments</option>
+              <option value="ministry">Ministries</option>
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-bark">
+            Units
+            <input
+              value={units}
+              onChange={(e) => setUnits(e.target.value)}
+              placeholder="e.g. Kindergarten, Pathfinders (optional)"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+            />
+            <span className="mt-1 block text-[11px] font-normal text-moss">
+              Only for a department that runs as more than one group: its desk then reads one at a time.
+            </span>
           </label>
           <p className="text-[11px] text-moss">
             Created with Leader (assistant-capable), Secretary and Treasurer roles — add more when editing leadership.

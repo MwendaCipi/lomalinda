@@ -273,16 +273,43 @@ class Department(models.Model):
     here — church-wide roles are assigned from User Management.
     """
 
+    #: Where the rail files a department. The three office bodies the church is
+    #: governed by are not listed under either heading — they are desks of
+    #: their own (Elders', Clerk's, Deaconate) — while the ministries and the
+    #: departments are the two lists the rail shows.
+    GROUP_CHOICES = [
+        ('office', 'Church office'),
+        ('ministry', 'Ministry'),
+        ('department', 'Department'),
+    ]
+
     code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used in API paths and audience codes (dept_<code>)")
     name = models.CharField(max_length=120)
     description = models.CharField(max_length=240, blank=True)
     icon = models.CharField(max_length=40, blank=True, help_text="Lucide icon name shown beside the department")
+    group = models.CharField(
+        max_length=20, choices=GROUP_CHOICES, default='department',
+        help_text="Whether this is a ministry or a department, or an office with its own desk",
+    )
+    #: Sub-units within one department, e.g. Children's Kindergarten and
+    #: Pathfinders. Comma-separated and blank for most departments; when a
+    #: department carries them, its desk offers a toggle between them and each
+    #: member and leader is tagged with the one they serve in.
+    units = models.CharField(
+        max_length=200, blank=True,
+        help_text="Sub-units, comma-separated (e.g. 'Kindergarten, Pathfinders')",
+    )
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=100)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ('sort_order', 'name')
+
+    @property
+    def unit_names(self):
+        """The department's sub-units, in the order the desk wrote them."""
+        return [name.strip() for name in (self.units or '').split(',') if name.strip()]
 
     def __str__(self):
         return self.name
@@ -335,6 +362,10 @@ class DepartmentAssignment(models.Model):
     role = models.ForeignKey(DepartmentRole, on_delete=models.CASCADE, related_name='assignments')
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_assignments')
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='leader')
+    unit = models.CharField(
+        max_length=60, blank=True,
+        help_text="The sub-unit this leader serves; blank for the department as a whole",
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -359,6 +390,10 @@ class DepartmentMembership(models.Model):
 
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_memberships')
     department = models.CharField(max_length=100)
+    unit = models.CharField(
+        max_length=60, blank=True,
+        help_text="The sub-unit the member belongs to; blank for the department as a whole",
+    )
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_memberships_added')
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -382,6 +417,10 @@ class DepartmentEvent(models.Model):
 
     department = models.CharField(max_length=100)
     title = models.CharField(max_length=160)
+    unit = models.CharField(
+        max_length=60, blank=True,
+        help_text="The sub-unit the event belongs to; blank for the whole department",
+    )
     event_date = models.DateField()
     event_time = models.CharField(max_length=20, blank=True, help_text="Free-text, e.g. '09:00 AM' or 'during divine service'")
     location = models.CharField(max_length=160, blank=True)

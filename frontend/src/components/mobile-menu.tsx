@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight, X, type LucideIcon } from "lucide-react";
 
-import { railFor, railHere, type RailEntry, type RailItem } from "@/config/navigation";
+import { railFor, railHere, type RailEntry, type RailItem, type RailQuery } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
+import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 
 /**
@@ -24,7 +25,8 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
   const pathname = normalizePath(usePathname());
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
-  const entries = railFor(roles);
+  const departments = useDepartments();
+  const entries = railFor(roles, departments);
 
   /**
    * The section the member drilled into. Stored with the page it was opened
@@ -48,8 +50,8 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
 
   // The console's tabs all live on one path, so the query is what tells its
   // rows apart; the rail reads it the same way.
-  const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-  const here = railHere(pathname, tab, entries);
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const here = railHere(pathname, { tab: params?.get("tab") ?? null, dept: params?.get("dept") ?? null } as RailQuery, entries);
   const isHereItem = (item: RailItem) => here.href !== null && here.href === item.href;
 
   /** A row holding a single page is that page, so its card goes straight there. */
