@@ -20,6 +20,36 @@ const FLOOR_TIMEOUT_MS = 1000;
 
 type HistoryState = Record<string, unknown> | null;
 
+/**
+ * Surfaces that need to know the location moved.
+ *
+ * Next's client navigation writes the address bar through the history API
+ * without a `popstate`, so anything reading `window.location` — the rail reads
+ * its `?tab=` and `?dept=` — has to be told. That notification lives here
+ * rather than in a second wrapper of its own: two patches of the same two
+ * methods cannot both survive, because restoring one restores an older
+ * `pushState` over the other and the stamping stops.
+ */
+const locationListeners = new Set<() => void>();
+
+/** Subscribe to app navigations. Returns the unsubscribe. */
+export function onAppLocationChange(listener: () => void) {
+  locationListeners.add(listener);
+  return () => {
+    locationListeners.delete(listener);
+  };
+}
+
+/**
+ * Tell subscribers the location moved — a tick later, because a wrapper runs
+ * *before* the URL is written and they read `window.location`.
+ */
+function notifyLocation() {
+  window.setTimeout(() => {
+    locationListeners.forEach((listener) => listener());
+  }, 0);
+}
+
 /** Index of the entry we are on; 0 is the entry the app opened with. */
 let currentIndex = 0;
 let installed = false;
@@ -64,11 +94,15 @@ export function trackAppHistory() {
 
   window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
     currentIndex += 1;
-    return pushState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    const result = pushState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    notifyLocation();
+    return result;
   };
 
   window.history.replaceState = function (data: unknown, unused: string, url?: string | URL | null) {
-    return replaceState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    const result = replaceState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    notifyLocation();
+    return result;
   };
 
   window.addEventListener("popstate", (event) => {
@@ -76,12 +110,24 @@ export function trackAppHistory() {
     // floor. Reading the index off the destination also covers a jump across
     // several entries in one go.
     currentIndex = readIndex(event.state);
+    notifyLocation();
     if (currentIndex === 0 && pendingHome) {
       // One tick later: the router's own popstate handling starts first, and
       // the rewrite should follow it rather than race it.
       window.setTimeout(finishPendingHome, 0);
     }
   });
+}
+
+/**
+ * Are we on the entry the app opened with — the floor of its back stack?
+ *
+ * A caller that would otherwise collapse on arrival asks this first: at the
+ * floor there is nothing above to drop, so a Home that is already home does
+ * not have to rewrite its own entry.
+ */
+export function atAppFloor() {
+  return !installed || currentIndex === 0;
 }
 
 /**
@@ -96,6 +142,11 @@ export function collapseToHome(onFloor: () => void) {
     onFloor();
     return;
   }
+  // One walk at a time. A second caller — the dashboard collapsing itself on
+  // arrival, while a Home tap's walk is already under way — would otherwise
+  // step back a second time and overshoot the floor, landing on whatever
+  // document the app was opened from.
+  if (pendingHome) return;
 
   pendingHome = onFloor;
   if (pendingTimer !== null) window.clearTimeout(pendingTimer);

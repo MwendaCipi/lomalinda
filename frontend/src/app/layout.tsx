@@ -22,7 +22,12 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
   title: "SDA Loma Linda",
   description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
-  manifest: "/manifest.json?v=3-meru",
+  // `public/manifest.json` is the manifest the installed app actually reads
+  // (`manifest.ts` next to this file only produces an unused copy). It starts
+  // at the dashboard, so the launch entry is the floor of the app's back
+  // stack. The query string is the only lever for making an install re-read
+  // it — bump it whenever the manifest changes.
+  manifest: "/manifest.json?v=4-dashboard",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
