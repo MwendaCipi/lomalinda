@@ -8,7 +8,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, LeadershipArea, EnrollmentRequest, FundraisingCampaign, Invitation,
+    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, Department, EnrollmentRequest, FundraisingCampaign, Invitation,
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
@@ -427,7 +427,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             )
         dept_codes = {code.removeprefix('dept_') for code in codes if code.startswith('dept_')}
         if dept_codes:
-            known = set(LeadershipArea.objects.filter(code__in=dept_codes, kind='department', is_active=True).values_list('code', flat=True))
+            known = set(Department.objects.filter(code__in=dept_codes, is_active=True).values_list('code', flat=True))
             missing = dept_codes - known
             if missing:
                 raise serializers.ValidationError(

@@ -42,7 +42,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .models import DEFAULT_POSITION_TITLES, AreaRole, DepartmentBudget, DepartmentEvent, DepartmentMembership, LeadershipArea
+from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentMembership, DepartmentRole
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -1560,9 +1560,8 @@ def department_audience_user_ids(codes):
     """Members of whole-department audiences (``dept_*`` codes).
 
     A department audience is the department's actual roll — the membership
-    list the department hub curates — plus everyone holding one of its
-    leadership positions (leader, assistants, secretary, treasurer…), who
-    serve the group whether or not they sit on their own roll.
+    list the department hub curates — plus its leaders and assistants,
+    who serve the group whether or not they sit on their own roll.
     """
     dept_codes = {code.removeprefix('dept_') for code in codes if code.startswith('dept_')}
     user_ids = set()
@@ -1572,12 +1571,13 @@ def department_audience_user_ids(codes):
         department__in=dept_codes, member__is_active=True
     ).values_list('member_id', flat=True)
     user_ids.update(roll)
-    # The area's leadership rides along with its post.
-    for position in AreaRole.objects.filter(
-        area__code__in=dept_codes, area__kind='department', area__is_active=True
-    ).select_related('holder'):
-        if position.holder_id and position.holder.is_active:
-            user_ids.add(position.holder_id)
+    # The department's leaders and assistants ride along with its post.
+    user_ids.update(
+        DepartmentAssignment.objects.filter(
+            department__code__in=dept_codes, department__is_active=True,
+            member__is_active=True,
+        ).values_list('member_id', flat=True)
+    )
     return user_ids
 
 
@@ -6724,8 +6724,8 @@ def user_departments(user):
     """The departments an account belongs to, for the feed's addressed tab.
 
     A department counts when the account sits on its roll (the membership
-    list the department hub curates) or holds one of its leadership
-    positions — the same two relationships department_audience_user_ids()
+    list the department hub curates) or serves among its leaders and
+    assistants — the same two relationships department_audience_user_ids()
     resolves when a ``dept_*`` post decides who receives it, so what a
     member sees under "My departments" is exactly what was addressed to
     them. The inactive are skipped — the audience resolver requires active
@@ -6733,17 +6733,17 @@ def user_departments(user):
     """
     if not getattr(user, 'is_active', False):
         return []
-    dept_codes = set(DepartmentMembership.objects.filter(
+    roll_codes = set(DepartmentMembership.objects.filter(
         member=user, member__is_active=True,
     ).values_list('department', flat=True))
-    dept_codes.update(
-        AreaRole.objects.filter(
-            holder=user, area__kind='department', area__is_active=True,
-        ).values_list('area__code', flat=True)
+    assigned_codes = set(
+        DepartmentAssignment.objects.filter(
+            member=user, department__is_active=True,
+        ).values_list('department__code', flat=True)
     )
     return [
         {'code': row.code, 'label': row.name, 'audience_code': f'dept_{row.code}'}
-        for row in LeadershipArea.objects.filter(code__in=dept_codes, kind='department', is_active=True)
+        for row in Department.objects.filter(code__in=roll_codes | assigned_codes, is_active=True)
     ]
 
 
@@ -6755,9 +6755,11 @@ def department_office_profile(user):
     return None
 
 
-#: The role code that led each of the original seven departments, kept only
-#: for reference — leadership now lives in AreaRole rows, decided
-#: on the department hub rather than through role flags.
+#: The church-wide role code that led each of the original seven departments.
+#: Leadership now lives in DepartmentAssignment rows — decided on the
+#: department hub — but these pairs remain the bridge: appointing a
+#: department's generic Leader/Assistant grants the same role flag the old
+#: system carried, so permission checks and audiences follow the person.
 DEPARTMENT_LEAD_ROLE = {
     'amm': 'men_ministry',
     'awm': 'women_ministry',
@@ -6770,23 +6772,21 @@ DEPARTMENT_LEAD_ROLE = {
 
 
 def department_holders(department):
-    """``(leader_dict_or_None, [assistant_dicts])`` from leadership positions.
+    """``(leader_dict_or_None, [assistant_dicts])`` from the leaders table.
 
-    The department's Leader position is the leader; every other filled
-    position reports as an assistant with the office named in ``position``.
-    Kept for the detail view's contact cards; new code should read
-    AreaRole directly.
+    The department's leader is the member marked ``kind='leader'`` — first
+    appointed wins if the desk ever appoints two — and every other row
+    reports as an assistant named by its role ("Music Leader (assistant)").
     """
-    positions = list(
-        AreaRole.objects.select_related('holder', 'holder__member_profile')
-        .filter(area__code=department, area__is_active=True)
-        .order_by('position_order', 'id')
+    assignments = list(
+        DepartmentAssignment.objects.select_related(
+            'member', 'member__member_profile', 'role', 'department'
+        ).filter(department__code=department, department__is_active=True)
+        .order_by('role__sort_order', 'role__id', 'kind', 'id')
     )
-    leader = None
-    assistants = []
 
-    def holder_dict(position):
-        user = position.holder
+    def holder_dict(assignment):
+        user = assignment.member
         profile = getattr(user, 'member_profile', None)
         return {
             'id': user.id,
@@ -6797,25 +6797,24 @@ def department_holders(department):
             'photo_url': getattr(profile, 'photo_url', '') or '',
             'roles': list(profile.get_roles()) if profile else ['member'],
             'assistant_roles': list(profile.get_assistant_roles()) if profile else [],
-            'position': position.title,
+            'position': assignment.role.name,
+            'kind': assignment.kind,
         }
 
-    for position in positions:
-        if not position.holder_id or not position.holder.is_active:
+    leader = None
+    assistants = []
+    for assignment in assignments:
+        if not assignment.member.is_active:
             continue
-        if position.title.lower() == 'leader' and leader is None:
-            leader = holder_dict(position)
+        if assignment.kind == 'leader' and leader is None:
+            leader = holder_dict(assignment)
         else:
-            assistants.append(holder_dict(position))
-    if leader is None and assistants:
-        # An area without a "Leader" office — The Church (First Elder),
-        # Eldership — is headed by its first filled office.
-        leader = assistants.pop(0)
+            assistants.append(holder_dict(assignment))
     return leader, assistants
 
 
 class DepartmentDirectoryView(APIView):
-    """One row per department: leadership, roll size, calendar count."""
+    """One row per department: leadership, roles, roll size, calendar count."""
 
     permission_classes = [IsAuthenticated]
 
@@ -6828,47 +6827,56 @@ class DepartmentDirectoryView(APIView):
             row['department']: row['total']
             for row in DepartmentEvent.objects.values('department').annotate(total=Count('id'))
         }
-        areas = []
-        for area in LeadershipArea.objects.filter(is_active=True):
-            leader, assistants = department_holders(area.code)
-            areas.append({
-                'code': area.code,
-                'label': area.name,
-                'kind': area.kind,
-                'description': area.description,
+        departments = []
+        for department in Department.objects.filter(is_active=True):
+            leader, assistants = department_holders(department.code)
+            departments.append({
+                'code': department.code,
+                'label': department.name,
+                'description': department.description,
+                'icon': department.icon,
                 'leader': leader,
                 'assistants': assistants,
-                # The offices the leadership modal edits, with who fills each.
-                'positions': [
+                # The roles the leadership modal edits, with who serves in
+                # each and whether the role takes an assistant.
+                'roles': [
                     {
-                        'id': position.id,
-                        'title': position.title,
-                        'is_custom': position.is_custom,
-                        'holder': ({
-                            'id': position.holder.id,
-                            'name': f"{position.holder.first_name} {position.holder.last_name}".strip() or position.holder.get_username(),
-                            'username': position.holder.get_username(),
-                        } if position.holder_id and position.holder.is_active else None),
+                        'id': role.id,
+                        'name': role.name,
+                        'has_assistant': role.has_assistant,
+                        'is_custom': role.is_custom,
+                        'holders': [
+                            {
+                                'id': assignment.member.id,
+                                'name': f"{assignment.member.first_name} {assignment.member.last_name}".strip() or assignment.member.get_username(),
+                                'username': assignment.member.get_username(),
+                                'kind': assignment.kind,
+                            }
+                            for assignment in role.assignments.select_related('member')
+                            if assignment.member.is_active
+                        ],
                     }
-                    for position in area.positions.all()
+                    for role in department.roles.all()
                 ],
-                'member_count': counts.get(area.code, 0),
-                'event_count': event_counts.get(area.code, 0),
+                'member_count': counts.get(department.code, 0),
+                'event_count': event_counts.get(department.code, 0),
             })
-        return Response({'departments': areas})
+        return Response({'departments': departments})
 
 
 def can_manage_department(user, department):
-    """Office holders manage any area; its leadership manages its own.
+    """Office holders manage any department; its leader and assistant manage their own.
 
-    "Leadership" is anyone holding an office in the area — a leader
-    certainly, but also its secretary or treasurer, who keep the roll and
-    the money and so need the same keys.
+    "Leadership" is anyone with a row in the leaders table — the leader
+    certainly, but also an assistant, who keeps the roll and the money and
+    so needs the same keys. Administrative access in the department sense
+    is exactly leader + assistant; a department's secretary or treasurer
+    serves without the desk keys.
     """
     if department_office_profile(user):
         return True
-    return AreaRole.objects.filter(
-        area__code=department, holder=user, area__is_active=True,
+    return DepartmentAssignment.objects.filter(
+        department__code=department, member=user, department__is_active=True,
     ).exists()
 
 
@@ -6882,7 +6890,7 @@ class DepartmentBudgetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, department):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         rows = DepartmentBudget.objects.filter(department=department).order_by('-year', 'title')
         return Response({'budgets': [
@@ -6900,7 +6908,7 @@ class DepartmentBudgetView(APIView):
     def post(self, request, department):
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only office holders or the department lead can manage its budget.'}, status=status.HTTP_403_FORBIDDEN)
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         title = str(request.data.get('title') or '').strip()
         if not title:
@@ -6964,179 +6972,244 @@ OFFICE_ROLE_CODES = {
 }
 
 
-def sync_role_flags_from_offices():
-    """Reconcile every member's role flags with the offices they hold.
+#: The church-wide role codes the leaders table manages — the named church
+#: offices that exist as department roles (First Elder, Church Clerk, Head
+#: Deacon) plus each original department's lead role. Every other church-wide
+#: flag (Treasurer, PM Leader, Choir Director…) is assigned in User
+#: Management and is never touched here.
+DEPARTMENT_MANAGED_ROLE_CODES = frozenset({
+    'first_elder', 'second_elder', 'third_elder', 'clerk', 'head_deacon', 'head_deaconess',
+} | set(DEPARTMENT_LEAD_ROLE.values()))
 
-    The office table is the source of truth for assignment; this keeps the
-    derived role flags (the codes the permission checks, audiences and the
-    roster read) in step with it. Two mappings feed it: a named office
-    ("First Elder", "Church Clerk") carries its role everywhere, and a
-    department's generic Leader/Assistant office carries that department's
-    lead role. A flag without an office behind it is a leftover, not a
-    right. Run after any leadership save; one pass, a handful of rows.
+
+def sync_role_flags_from_assignments():
+    """Reconcile every member's church-wide role flags with the leaders table.
+
+    Department leadership lives in DepartmentAssignment rows; this keeps the
+    derived church-wide flags (the codes the permission checks, audiences
+    and the roster read) in step with it — and only within the codes the
+    leaders table manages: a named church office ("First Elder", "Church
+    Clerk", "Head Deacon") grants its role code wherever it is held — as an
+    assistant flag when the holder is the office's assistant — and a
+    department's generic Leader/Assistant role grants that department's lead
+    role the old system carried. A managed flag without an assignment behind
+    it is a leftover, not a right; flags outside the managed set belong to
+    User Management and pass through untouched. Run after any leadership
+    save; one pass, a handful of rows.
     """
-    lead_role_by_area = dict(DEPARTMENT_LEAD_ROLE)
+    lead_role_by_department = dict(DEPARTMENT_LEAD_ROLE)
     for profile in MemberProfile.objects.select_related('user').all():
         current = set(profile.get_roles())
-        held_offices = set()
-        for position in AreaRole.objects.filter(
-            holder_id=profile.user_id, area__is_active=True
-        ).select_related('area'):
-            named = OFFICE_ROLE_CODES.get(position.title.strip().lower())
-            if named:
-                held_offices.add(named)
+        current_assistants = set(profile.get_assistant_roles())
+        granted, granted_assistant = set(), set()
+        for assignment in DepartmentAssignment.objects.filter(
+            member_id=profile.user_id, department__is_active=True,
+        ).select_related('role', 'department'):
+            named = OFFICE_ROLE_CODES.get(assignment.role.name.strip().lower())
+            if named not in DEPARTMENT_MANAGED_ROLE_CODES:
+                named = None
+            if named is None:
+                # A department's own generic Leader/Assistant role maps to
+                # its lead role, so the desk's appointment reaches the old
+                # permission checks.
+                lead = lead_role_by_department.get(assignment.department.code)
+                named = lead if assignment.role.name.strip().lower() in ('leader', 'assistant') else None
+            if named is None:
                 continue
-            # A department's own Leader/Assistant office maps to its lead
-            # role; the Assistant holder takes it as an assistant flag.
-            lead = lead_role_by_area.get(position.area.code)
-            title = position.title.strip().lower()
-            if lead and title in ('leader', 'assistant'):
-                held_offices.add(lead)
-        mapped_held = {c for c in current if c in OFFICE_ROLE_CODES.values()}
-        added = held_offices - current
-        removed = mapped_held - held_offices
-        if not added and not removed:
+            if assignment.kind == 'assistant':
+                granted_assistant.add(named)
+            else:
+                granted.add(named)
+        mapped = {c for c in current if c in DEPARTMENT_MANAGED_ROLE_CODES}
+        mapped_assistants = {c for c in current_assistants if c in DEPARTMENT_MANAGED_ROLE_CODES}
+        added, removed = granted - current, mapped - granted - granted_assistant
+        added_assistant = granted_assistant - current_assistants
+        removed_assistant = mapped_assistants - granted_assistant
+        if not (added or removed or added_assistant or removed_assistant):
             continue
+        # An assistant holds the role itself (set_roles enforces this), so
+        # the granted assistant codes join the role set they mark.
         roles_param = profile.set_roles(
-            sorted((current - removed) | added),
-            assistants=profile.get_assistant_roles(),
+            sorted((current - removed) | added | granted_assistant),
+            assistants=sorted((current_assistants - removed_assistant) | added_assistant),
         )
         sync_role_groups(profile.user, roles_param)
 
 
 class DepartmentCreateView(APIView):
-    """Add a leadership area from the desk — a department or an office body.
+    """Add a department from the desk.
 
-    The body carries the name (required) and optionally a kind ('department'
-    or 'office' — Eldership and Clerkship are offices; AMM is a department),
-    a description and the offices to seed beyond the defaults. Every area is
-    created with Leader, Assistant, Secretary and Treasurer to start; the
-    desk fills them through Edit leadership or leaves them open. The code is
-    a slug of the name — it names the API path and, for departments, the
-    ``dept_<code>`` audience — and is never reused, even after deactivation.
+    The body carries the name (required) and optionally a description. Every
+    department is created with the Leader (assistant-capable), Secretary and
+    Treasurer roles to start; the desk fills them through Edit leadership or
+    leaves them open. The code is a slug of the name — it names the API path
+    and the ``dept_<code>`` audience — and is never reused, even after
+    deactivation.
     """
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not department_office_profile(request.user):
-            return Response({'detail': 'Only church officers can add areas.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'Only church officers can add departments.'}, status=status.HTTP_403_FORBIDDEN)
         name = str(request.data.get('name') or '').strip()
         if not name:
-            return Response({'name': 'Give the area a name.'}, status=status.HTTP_400_BAD_REQUEST)
-        if LeadershipArea.objects.filter(name__iexact=name).exists():
-            return Response({'name': 'An area with this name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
-        kind = request.data.get('kind') or 'department'
-        if kind not in ('department', 'office'):
-            return Response({'kind': 'An area is a department or a church office.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'name': 'Give the department a name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if Department.objects.filter(name__iexact=name).exists():
+            return Response({'name': 'A department with this name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        base_slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:50] or 'area'
+        base_slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:50] or 'department'
         code = base_slug
         suffix = 2
-        while LeadershipArea.objects.filter(code=code).exists():
+        while Department.objects.filter(code=code).exists():
             code = f"{base_slug}-{suffix}"
             suffix += 1
 
         description = str(request.data.get('description') or '').strip()[:240]
-        area = LeadershipArea.objects.create(code=code, name=name, kind=kind, description=description)
-        titles = list(DEFAULT_POSITION_TITLES)
-        for extra in request.data.get('positions') or []:
-            title = str(extra or '').strip()[:80]
-            if title and title.lower() not in {t.lower() for t in titles}:
-                titles.append(title)
-        AreaRole.objects.bulk_create([
-            AreaRole(area=area, title=title, position_order=index)
-            for index, title in enumerate(titles)
+        department = Department.objects.create(code=code, name=name, description=description)
+        DepartmentRole.objects.bulk_create([
+            DepartmentRole(department=department, name=role_name, has_assistant=assistant, sort_order=index)
+            for index, (role_name, assistant) in enumerate(DEFAULT_DEPARTMENT_ROLES)
         ])
         return Response({
-            'code': area.code,
-            'name': area.name,
-            'kind': area.kind,
-            'positions': titles,
+            'code': department.code,
+            'name': department.name,
+            'roles': [role_name for role_name, _assistant in DEFAULT_DEPARTMENT_ROLES],
         }, status=status.HTTP_201_CREATED)
 
 
 class DepartmentLeadershipView(APIView):
-    """Fill or clear an area's offices in one save, and add or remove offices.
+    """A department's leadership: read it, appoint and release, add roles.
 
-    The PUT body is ``positions: [{id, holder_id}]`` — each entry sets who
-    holds that office, or clears it with a null holder. A person may hold
-    several offices in the same area, but no two people share one office,
-    and appointing into a filled office replaces its holder, the way a new
-    appointment does in person. Holding an office is what makes someone an
-    area's leadership — there are no assistant flags to remember.
+    The PUT body is ``assignments: [{role_id, member_id, kind}]`` — one entry
+    per person being appointed, ``kind`` either ``leader`` or ``assistant``
+    (assistants only where the role takes one). Appointing replaces whoever
+    held that leader seat; releasing is a DELETE by assignment id. The desk
+    adds department-specific roles with ``name`` and ``has_assistant`` and
+    removes the ones it added. Every save reconciles the church-wide role
+    flags so permissions and audiences follow at once.
     """
 
     permission_classes = [IsAuthenticated]
 
-    def _area(self, department):
-        return LeadershipArea.objects.filter(code=department, is_active=True).first()
+    def _department(self, code):
+        return Department.objects.filter(code=code, is_active=True).first()
+
+    def get(self, request, department):
+        target = self._department(department)
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        leader, assistants = department_holders(department)
+        return Response({
+            'leader': leader,
+            'assistants': assistants,
+            'roles': [
+                {
+                    'id': role.id,
+                    'name': role.name,
+                    'has_assistant': role.has_assistant,
+                    'is_custom': role.is_custom,
+                    'assignments': [
+                        {'id': a.id, 'member_id': a.member_id, 'kind': a.kind}
+                        for a in role.assignments.all()
+                    ],
+                }
+                for role in target.roles.all()
+            ],
+        })
 
     def put(self, request, department):
         if not can_manage_department(request.user, department):
-            return Response({'detail': "Only church officers or this area's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
-        area = self._area(department)
-        if area is None:
-            return Response({'detail': 'Unknown area.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': "Only church officers or this department's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
+        target = self._department(department)
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
 
-        submitted = request.data.get('positions')
+        submitted = request.data.get('assignments')
         if not isinstance(submitted, list):
-            return Response({'detail': 'Send the positions as a list.'}, status=status.HTTP_400_BAD_REQUEST)
-        positions = {p.id: p for p in AreaRole.objects.filter(area=area)}
-        unknown = [entry.get('id') for entry in submitted if entry.get('id') not in positions]
+            return Response({'detail': 'Send the appointments as a list.'}, status=status.HTTP_400_BAD_REQUEST)
+        roles = {r.id: r for r in DepartmentRole.objects.filter(department=target)}
+        unknown = [entry.get('role_id') for entry in submitted if entry.get('role_id') not in roles]
         if unknown:
-            return Response({'detail': 'One of the offices does not belong to this area.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Resolve every holder id once; a null clears the office.
-        holder_ids = {entry.get('holder_id') for entry in submitted if entry.get('holder_id')}
-        holders = User.objects.filter(id__in=holder_ids, is_active=True)
-        if len(holders) != len(holder_ids):
+            return Response({'detail': 'One of the roles does not belong to this department.'}, status=status.HTTP_400_BAD_REQUEST)
+        member_ids = {entry.get('member_id') for entry in submitted if entry.get('member_id')}
+        members = User.objects.filter(id__in=member_ids, is_active=True)
+        if len(members) != len(member_ids):
             return Response({'detail': 'One of the people chosen is not an active account.'}, status=status.HTTP_400_BAD_REQUEST)
 
         for entry in submitted:
-            position = positions[entry.get('id')]
-            position.holder_id = entry.get('holder_id') or None
-            position.save(update_fields=['holder'])
-        # Office assignment is how roles are granted now: reconcile the
-        # derived role flags so permissions and audiences follow at once.
-        sync_role_flags_from_offices()
-        return Response({'detail': 'Leadership updated.', 'code': area.code})
-
-    def post(self, request, department):
-        """Add an office beyond the seeded ones — a Pianist, a Youth
-        Sponsor, whatever the area needs."""
-        if not can_manage_department(request.user, department):
-            return Response({'detail': "Only church officers or this area's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
-        area = LeadershipArea.objects.filter(code=department, is_active=True).first()
-        if area is None:
-            return Response({'detail': 'Unknown area.'}, status=status.HTTP_404_NOT_FOUND)
-        title = str(request.data.get('title') or '').strip()[:80]
-        if not title:
-            return Response({'title': 'Name the office.'}, status=status.HTTP_400_BAD_REQUEST)
-        if AreaRole.objects.filter(area=area, title__iexact=title).exists():
-            return Response({'title': 'That office already exists here.'}, status=status.HTTP_400_BAD_REQUEST)
-        last = AreaRole.objects.filter(area=area).order_by('-position_order').first()
-        position = AreaRole.objects.create(
-            area=area, title=title,
-            position_order=(last.position_order + 1) if last else 0, is_custom=True,
-        )
-        return Response({'id': position.id, 'title': position.title}, status=status.HTTP_201_CREATED)
+            role = roles[entry.get('role_id')]
+            kind = entry.get('kind') or 'leader'
+            if kind not in ('leader', 'assistant'):
+                return Response({'detail': 'An appointment is a leader or an assistant.'}, status=status.HTTP_400_BAD_REQUEST)
+            if kind == 'assistant' and not role.has_assistant:
+                return Response({'detail': f"{role.name} does not take an assistant."}, status=status.HTTP_400_BAD_REQUEST)
+            member = members.get(pk=entry.get('member_id'))
+            if kind == 'leader':
+                # One leader per role: the new appointment replaces whoever
+                # held the seat, the way an appointment lands in person.
+                DepartmentAssignment.objects.filter(role=role, kind='leader').exclude(member=member).delete()
+            assignment, _created = DepartmentAssignment.objects.get_or_create(
+                role=role, member=member, kind=kind,
+                defaults={'department': target},
+            )
+            if assignment.department_id != target.id:
+                assignment.department = target
+                assignment.save(update_fields=['department'])
+        sync_role_flags_from_assignments()
+        return Response({'detail': 'Leadership updated.', 'code': target.code})
 
     def delete(self, request, department):
-        """Remove an office the desk added. Seeded offices stay — every area
-        keeps the same shape at its base."""
+        """Release one person, or remove a role the desk added.
+
+        A body of ``assignment_id`` releases that appointment; a body of
+        ``role_id`` removes a custom role ("Music Leader") and every
+        appointment in it. Seeded roles stay — every department keeps the
+        same shape at its base.
+        """
         if not can_manage_department(request.user, department):
-            return Response({'detail': "Only church officers or this area's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
-        area = LeadershipArea.objects.filter(code=department, is_active=True).first()
-        if area is None:
-            return Response({'detail': 'Unknown area.'}, status=status.HTTP_404_NOT_FOUND)
-        position = AreaRole.objects.filter(
-            area=area, pk=request.data.get('position_id'), is_custom=True,
+            return Response({'detail': "Only church officers or this department's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
+        target = self._department(department)
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.data.get('role_id'):
+            role = DepartmentRole.objects.filter(
+                department=target, pk=request.data.get('role_id'), is_custom=True,
+            ).first()
+            if role is None:
+                return Response({'detail': 'Role not found (only added roles can be removed).'}, status=status.HTTP_404_NOT_FOUND)
+            role.delete()
+            sync_role_flags_from_assignments()
+            return Response({'detail': 'Role removed.'})
+        assignment = DepartmentAssignment.objects.filter(
+            department=target, pk=request.data.get('assignment_id'),
         ).first()
-        if position is None:
-            return Response({'detail': 'Office not found (only added offices can be removed).'}, status=status.HTTP_404_NOT_FOUND)
-        position.delete()
-        return Response({'detail': 'Office removed.'})
+        if assignment is None:
+            return Response({'detail': 'Appointment not found.'}, status=status.HTTP_404_NOT_FOUND)
+        assignment.delete()
+        sync_role_flags_from_assignments()
+        return Response({'detail': 'Appointment released.'})
+
+    def post(self, request, department):
+        """Add a role to the department — "Music Leader" with its assistant
+        switch, a "Sponsor", whatever the department needs."""
+        if not can_manage_department(request.user, department):
+            return Response({'detail': "Only church officers or this department's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
+        target = self._department(department)
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        name = str(request.data.get('name') or '').strip()[:80]
+        if not name:
+            return Response({'name': 'Name the role.'}, status=status.HTTP_400_BAD_REQUEST)
+        if DepartmentRole.objects.filter(department=target, name__iexact=name).exists():
+            return Response({'name': 'That role already exists here.'}, status=status.HTTP_400_BAD_REQUEST)
+        last = DepartmentRole.objects.filter(department=target).order_by('-sort_order').first()
+        role = DepartmentRole.objects.create(
+            department=target, name=name,
+            has_assistant=bool(request.data.get('has_assistant')),
+            sort_order=(last.sort_order + 1) if last else 0, is_custom=True,
+        )
+        return Response({'id': role.id, 'name': role.name, 'has_assistant': role.has_assistant}, status=status.HTTP_201_CREATED)
 
 
 class DepartmentMembersView(APIView):
@@ -7145,7 +7218,7 @@ class DepartmentMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, department):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         members = []
         for membership in (
@@ -7168,7 +7241,7 @@ class DepartmentMembersView(APIView):
         return Response({'members': members})
 
     def post(self, request, department):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can add members.'}, status=status.HTTP_403_FORBIDDEN)
@@ -7186,7 +7259,7 @@ class DepartmentMembersView(APIView):
         return Response({'detail': 'Member added to the roll.', 'membership_id': membership.id}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, department, member_id=None):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can remove members.'}, status=status.HTTP_403_FORBIDDEN)
@@ -7203,7 +7276,7 @@ class DepartmentEventsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, department):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         events = DepartmentEvent.objects.filter(department=department)
         events = events.order_by('event_date', 'event_time', 'title')
@@ -7221,7 +7294,7 @@ class DepartmentEventsView(APIView):
         ]})
 
     def post(self, request, department):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can add events.'}, status=status.HTTP_403_FORBIDDEN)
@@ -7242,7 +7315,7 @@ class DepartmentEventsView(APIView):
         return Response({'detail': 'Event added to the calendar.', 'id': event.id}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, department, event_id=None):
-        if not LeadershipArea.objects.filter(code=department, is_active=True).exists():
+        if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can remove events.'}, status=status.HTTP_403_FORBIDDEN)

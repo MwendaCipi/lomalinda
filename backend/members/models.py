@@ -228,91 +228,55 @@ class RoleHistory(models.Model):
         return f"{self.member.get_username()} — {self.get_role_display()}"
 
 
-#: The offices every area is seeded with — an area can add more (Eldership
-#: gets First/Second/Third Elder; the choir a Pianist).
-DEFAULT_POSITION_TITLES = ('Leader', 'Assistant', 'Secretary', 'Treasurer')
-
-#: The leadership areas the church runs. The church itself is the first area
-#: — its offices are the church-wide roles — and every department and office
-#: body (Eldership, Clerkship, Deaconate) is an area, so assigning a role
-#: always means filling an office somewhere.
-SEED_AREAS = (
-    # (code, name, kind, sort) — the church carries no roll, so its people
-    # are exactly the holders of its offices.
-    ('church', 'The Church', 'church', 0),
-    ('eldership', 'Eldership', 'office', 1),
-    ('clerkship', 'Clerkship', 'office', 2),
-    ('deaconate', 'Deaconate', 'office', 3),
-    ('amm', 'Adventist Men Ministries (AMM)', 'department', 10),
-    ('awm', 'Adventist Women Ministries (AWM)', 'department', 11),
-    ('aym', 'Adventist Youth (AYM)', 'department', 12),
-    ('children', 'Children Ministry', 'department', 13),
-    ('ambassadors', 'Ambassadors', 'department', 14),
-    ('apm', 'Adventist Possibility Ministries (APM)', 'department', 15),
-    ('chaplaincy', 'Chaplaincy Ministry', 'department', 16),
+#: The departments every church is seeded with. Eldership, Clerkship and
+#: Deaconate are departments like the rest — leadership bodies the desk
+#: staffs from the same screen — and the church itself is not one: its
+#: church-wide roles (elder, clerk, treasurer…) are assigned in User
+#: Management, not here.
+SEED_DEPARTMENTS = (
+    # (code, name, sort) — the order the directory shows.
+    ('eldership', 'Eldership', 1),
+    ('clerkship', 'Clerkship', 2),
+    ('deaconate', 'Deaconate', 3),
+    ('amm', 'Adventist Men Ministries (AMM)', 10),
+    ('awm', 'Adventist Women Ministries (AWM)', 11),
+    ('aym', 'Adventist Youth (AYM)', 12),
+    ('children', 'Children Ministry', 13),
+    ('ambassadors', 'Ambassadors', 14),
+    ('apm', 'Adventist Possibility Ministries (APM)', 15),
+    ('chaplaincy', 'Chaplaincy Ministry', 16),
 )
 
-#: The offices each seeded area starts with. The church's offices mirror the
-#: church-wide roles the register already had; Eldership gets the three
-#: elders' seats; areas without an entry take the four-office template.
-SEED_AREA_ROLES = {
-    'church': (
-        'First Elder', 'Elder', 'Church Clerk', 'Church Treasurer', 'Head Deacon',
-        'Head Deaconess', 'PM Leader', 'AWM Leader', 'AYM Leader', 'Children Leader',
-        'Ambassadors Leader', 'APM Leader', 'Chaplaincy Leader', 'Health Leader',
-        'Education Leader', 'Family Life Leader', 'Publishing Head', 'Welfare Leader',
-        'Interest Coordinator', 'Development', 'Choir Director',
-    ),
-    'eldership': ('First Elder', 'Second Elder', 'Third Elder'),
-    'clerkship': ('Church Clerk',),
-    'deaconate': ('Head Deacon', 'Head Deaconess'),
+#: The roles each seeded department starts with — (name, has_assistant).
+#: Departments without an entry take the Leader/Secretary/Treasurer
+#: template. Eldership keeps its three seats; Clerkship and Deaconate keep
+#: the offices the church-wide register carried. Appointing into one of the
+#: named church offices still grants the matching church-wide role flag so
+#: permissions follow the person.
+SEED_DEPARTMENT_ROLES = {
+    'eldership': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
+    'clerkship': (('Church Clerk', True),),
+    'deaconate': (('Head Deacon', True), ('Head Deaconess', True)),
 }
+DEFAULT_DEPARTMENT_ROLES = (('Leader', True), ('Secretary', False), ('Treasurer', False))
 
 
-class Role(models.Model):
-    """A church role in the register the office assigns from.
+class Department(models.Model):
+    """A department of the church, as the elder's desk defines it.
 
-    Seeded from the church-wide roles and department leads the role-flag
-    system carried, extendable in Settings; the code is the stable key the
-    permission checks and announcement audiences still read.
+    Every leadership body is a department — ministries like the AYM and
+    office bodies like Eldership and Deaconate alike. Each carries its own
+    roles (its leader, an assistant where the role takes one, a secretary,
+    whatever the office adds), the roll of members who belong to it, and a
+    calendar; the announcement audience ``dept_<code>`` addresses roll and
+    office holders together. The church itself is deliberately not a row
+    here — church-wide roles are assigned from User Management.
     """
 
-    code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used by permissions and audiences")
+    code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used in API paths and audience codes (dept_<code>)")
     name = models.CharField(max_length=120)
     description = models.CharField(max_length=240, blank=True)
-    is_system = models.BooleanField(default=False, help_text="Seeded role the church runs on; protected from deletion")
-    created_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ('name',)
-
-    def __str__(self):
-        return self.name
-
-
-class LeadershipArea(models.Model):
-    """A body of the church that holds roles: the church itself, Eldership,
-    Clerkship, Deaconate, or a department.
-
-    One register of "where a role can be held". Assigning leadership always
-    means filling an office in an area — Eldership's First Elder, the AYM's
-    Treasurer — so there is one way to appoint people and one place their
-    service is recorded. Department areas keep their rolls, calendars and
-    budgets; the announcement audience ``dept_<code>`` addresses a
-    department area's roll plus its office holders.
-    """
-
-    KIND_CHOICES = [
-        ('church', 'The church'),
-        ('office', 'Church office'),
-        ('department', 'Department / ministry'),
-    ]
-
-    code = models.SlugField(max_length=60, unique=True, help_text="Stable identifier used in API paths and audience codes")
-    name = models.CharField(max_length=120)
-    description = models.CharField(max_length=240, blank=True)
-    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='department')
-    icon = models.CharField(max_length=40, blank=True, help_text="Lucide icon name shown beside the area")
+    icon = models.CharField(max_length=40, blank=True, help_text="Lucide icon name shown beside the department")
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=100)
     created_at = models.DateTimeField(default=timezone.now)
@@ -324,31 +288,64 @@ class LeadershipArea(models.Model):
         return self.name
 
 
-class AreaRole(models.Model):
-    """One office in an area, and who holds it.
+class DepartmentRole(models.Model):
+    """One role inside a department, and whether it takes an assistant.
 
-    A role filled in a place: First Elder in Eldership, Treasurer in the
-    AYM. The same office title can sit in several areas (every department
-    has a Treasurer) because each row is one office, not a global flag.
-    Filling or clearing ``holder`` IS appointing or releasing — the member's
-    role-flag list is derived for compatibility, never edited by hand.
+    A department's roles live here — "Leader", "Secretary", "Music
+    Leader" — each scoped to its department, so two departments can both
+    have a Treasurer without the titles colliding. ``has_assistant`` is the
+    one switch that matters: when it is set, the department may appoint
+    assistants beside the holder, which is how "Music Leader" grows an
+    "Assistant Music Leader" without a second role row.
     """
 
-    area = models.ForeignKey(LeadershipArea, on_delete=models.CASCADE, related_name='positions')
-    title = models.CharField(max_length=80)
-    holder = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='area_roles')
-    position_order = models.PositiveIntegerField(default=0)
-    is_custom = models.BooleanField(default=False, help_text="Added by the office beyond the seeded offices")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='roles')
+    name = models.CharField(max_length=80)
+    has_assistant = models.BooleanField(default=False, help_text="The department may appoint assistants of this role beside its holder")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_custom = models.BooleanField(default=False, help_text="Added by the office beyond the seeded roles")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        ordering = ('position_order', 'id')
+        ordering = ('sort_order', 'id')
         constraints = [
-            models.UniqueConstraint(fields=('area', 'title'), name='uniq_area_role_title'),
+            models.UniqueConstraint(fields=('department', 'name'), name='uniq_department_role_name'),
         ]
 
     def __str__(self):
-        return f"{self.area.name} — {self.title}"
+        return f"{self.department.name} — {self.name}"
+
+
+class DepartmentAssignment(models.Model):
+    """One person serving one department in one role.
+
+    The leaders table: a row is a member in a role in a department, marked
+    either as the role's leader or as its assistant (only where the role
+    takes one). Holding a row is what makes someone a department's
+    leadership — leader and assistant alike get the department's keys — and
+    these rows, not role flags, are the source of truth for appointment.
+    """
+
+    KIND_CHOICES = [
+        ('leader', 'Leader'),
+        ('assistant', 'Assistant'),
+    ]
+
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='assignments')
+    role = models.ForeignKey(DepartmentRole, on_delete=models.CASCADE, related_name='assignments')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_assignments')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='leader')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('role__sort_order', 'role__id', 'kind', 'id')
+        constraints = [
+            models.UniqueConstraint(fields=('role', 'member', 'kind'), name='uniq_assignment_per_role'),
+        ]
+
+    def __str__(self):
+        label = self.get_kind_display()
+        return f"{self.member.get_username()} — {label}, {self.role.name} ({self.department.name})"
 
 
 class DepartmentMembership(models.Model):

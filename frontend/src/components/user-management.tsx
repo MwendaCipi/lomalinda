@@ -10,6 +10,8 @@ import {
   formatRoles,
   roleDisplayLabel,
   orderRolesBySeniority,
+  RolesCombobox,
+  refreshRoleRegister,
 } from "./roles-combobox";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { showAlert } from "@/lib/alerts";
@@ -19,6 +21,15 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** The church-wide role codes the Departments & Ministries desk assigns —
+    hidden from the roster's role picker so no role ends up assigned in two
+    places. Everything else here is editable from this desk. */
+const DEPARTMENT_MANAGED_ROLE_CODES = [
+  "first_elder", "second_elder", "third_elder", "clerk", "head_deacon", "head_deaconess",
+  "men_ministry", "women_ministry", "youth_leader", "children_ministry",
+  "ambassadors_leader", "apm_leader", "chaplaincy",
+];
 
 /**
  * Column widths, declared once and applied to both the header and the cells.
@@ -1778,7 +1789,9 @@ export function UserManagement() {
   const [remainFriend, setRemainFriend] = useState(true);
   const [transferSubmitting, setTransferSubmitting] = useState(false);
 
-  // Roles modal (read-only): appointments live in Departments & Ministries.
+  // Roles modal: church-wide roles are edited here. The department-managed
+  // codes (elder seats, clerk, deacons, department leads) are hidden from the
+  // picker — those appointments live in Departments & Ministries.
   const [leadershipMember, setLeadershipMember] = useState<MemberUser | null>(null);
 
   // Removal request modal
@@ -2394,6 +2407,12 @@ export function UserManagement() {
                               <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
                             </button>
                             <button
+                              onClick={() => { setLeadershipMember(m); setOpenActionMenuId(null); }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+                            >
+                              <Check size={12} aria-hidden="true" /> Roles
+                            </button>
+                            <button
                               onClick={() => openAccountTypeModal(m)}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
@@ -2485,6 +2504,12 @@ export function UserManagement() {
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
                             <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
+                          </button>
+                          <button
+                            onClick={() => { setLeadershipMember(m); setOpenActionMenuId(null); }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+                          >
+                            <Check size={12} aria-hidden="true" /> Roles
                           </button>
                           <button
                             onClick={() => openAccountTypeModal(m)}
@@ -3381,7 +3406,7 @@ export function UserManagement() {
         </div>
       )}
 
-      {/* ══ Assign Leadership Modal ══ */}
+      {/* ══ Roles Modal — church-wide roles, editable here ══ */}
       {leadershipMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
@@ -3395,12 +3420,42 @@ export function UserManagement() {
               <div>
                 <label className="block text-xs font-semibold text-bark">Roles held</label>
                 <p className="mt-0.5 text-[10px] text-moss">
-                  Roles are appointments, filled office by office in Departments &amp; Ministries — Eldership's First Elder, the choir's Director, a department's Treasurer.
+                  Church-wide roles are assigned here. Elder seats, the clerk, deacons and department leaders are appointed in Departments &amp; Ministries.
                 </p>
-                <div className="mt-2 rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5 text-xs text-bark">
-                  {orderRolesBySeniority(leadershipMember.roles && leadershipMember.roles.length > 0 ? leadershipMember.roles : [leadershipMember.role || "member"])
-                    .map((code) => roleDisplayLabel(code, leadershipMember.assistant_roles || []))
-                    .join(", ") || "Member"}
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
+                  <span className="min-w-0 flex-1 truncate text-xs text-bark">
+                    {orderRolesBySeniority(leadershipMember.roles && leadershipMember.roles.length > 0 ? leadershipMember.roles : [leadershipMember.role || "member"])
+                      .map((code) => roleDisplayLabel(code, leadershipMember.assistant_roles || []))
+                      .join(", ") || "Member"}
+                  </span>
+                  <RolesCombobox
+                    fill={false}
+                    selected={leadershipMember.roles && leadershipMember.roles.length > 0 ? leadershipMember.roles : [leadershipMember.role || "member"]}
+                    assistants={leadershipMember.assistant_roles || []}
+                    showAssistants
+                    memberId={leadershipMember.id}
+                    hiddenRoles={DEPARTMENT_MANAGED_ROLE_CODES}
+                    onChange={(roles, assistants) => {
+                      const token = localStorage.getItem("access_token");
+                      fetch(`${API_URL}/api/members/users/${leadershipMember.id}/role/`, {
+                        method: "PATCH",
+                        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({ roles, assistant_roles: assistants }),
+                      })
+                        .then(async (res) => {
+                          if (res.ok) {
+                            showAlert("Roles updated", "", "success", { toast: true, timer: 3500, showConfirmButton: false });
+                            setLeadershipMember(null);
+                            refreshRoleRegister();
+                            fetchMembers();
+                          } else {
+                            const data = await res.json().catch(() => ({}));
+                            showAlert("Could not update roles", data.detail || data.roles || "Try again.", "error");
+                          }
+                        })
+                        .catch(() => showAlert("Network error", "Could not reach the server.", "error"));
+                    }}
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-1">
