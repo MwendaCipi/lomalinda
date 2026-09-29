@@ -46,6 +46,22 @@ export function PwaRegister() {
       });
     }
 
+    // The installed app paints the build it loaded with until the document
+    // reloads, so a member can be looking at last week's shell while the
+    // server serves this week's. `sw.js` takes over at once
+    // (`skipWaiting` + `clients.claim`); the moment an updated worker
+    // controls the page, reload once so what is on screen is the build that
+    // just landed. Only when a worker was already in charge — on a first
+    // install there is nothing to replace and a reload would be noise.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloaded = false;
+    const handleControllerChange = () => {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       globalDeferredPrompt = e as BeforeInstallPromptEvent;
@@ -70,6 +86,7 @@ export function PwaRegister() {
     window.addEventListener("trigger-pwa-install", handleTriggerInstall);
 
     return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("trigger-pwa-install", handleTriggerInstall);
     };

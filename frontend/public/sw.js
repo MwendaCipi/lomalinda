@@ -1,4 +1,13 @@
-const CACHE_NAME = "sda-loma-linda-meru-v8";
+/* The cache name is the app's asset generation, not just a label.
+
+   The page copies below are whole documents, and a document carries the app's
+   shell — the rail, the identity bar, the phone's tab bar, the sign-in gate.
+   A member whose app was installed under an older generation keeps painting
+   that older shell for the routes we hold copies of (everything except
+   `/dashboard/`, which was never listed here) until this name moves: their own
+   build looks current on the dashboard and stale everywhere else. So bump the
+   version whenever the chrome changes, not only when an icon does. */
+const CACHE_NAME = "sda-loma-linda-meru-v9";
 const STATIC_ASSETS = [
   "/",
   "/about/",
