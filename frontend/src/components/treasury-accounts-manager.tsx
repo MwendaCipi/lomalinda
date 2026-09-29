@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
+import { ReportComposer, blankDraft, type Draft } from "./report-composer";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -53,6 +54,11 @@ export function TreasuryAccountsManager() {
 
   // Modals
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  // The statement being published from this desk. It opens on the ledger's own
+  // month to date, so the treasurer reviews the figures rather than adding them
+  // up from the accounts they are looking at.
+  const [reportDraft, setReportDraft] = useState<Draft | null>(null);
+  const [preparingReport, setPreparingReport] = useState(false);
   // The row actions menu, and the account being edited in its dialog.
   const [openMenuAccountId, setOpenMenuAccountId] = useState<number | null>(null);
   const [editAccount, setEditAccount] = useState<TreasuryAccount | null>(null);
@@ -183,6 +189,37 @@ export function TreasuryAccountsManager() {
   const moneyOut = transactions
     .filter((tx) => !isCreditMovement(tx))
     .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+  /**
+   * Publish a statement from the desk the treasurer is already sitting at.
+   *
+   * The period and the three figures come from the ledger's own month to date;
+   * the form then opens for review, so the desk is confirming the church's
+   * numbers rather than typing them out of the accounts in front of it.
+   */
+  const openReportComposer = async () => {
+    setPreparingReport(true);
+    let draft = blankDraft();
+    try {
+      const res = await fetch(`${API_URL}/api/members/reports/suggestions/`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        draft = {
+          ...draft,
+          title: data.title || draft.title,
+          period_start: data.period_start || draft.period_start,
+          period_end: data.period_end || draft.period_end,
+          total_tithes: data.total_tithes ?? "",
+          total_offerings: data.total_offerings ?? "",
+          total_expenses: data.total_expenses ?? "",
+        };
+      }
+    } catch {
+      // A statement can still be written by hand if the totals do not arrive.
+    }
+    setPreparingReport(false);
+    setReportDraft(draft);
+  };
 
   const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -773,20 +810,53 @@ export function TreasuryAccountsManager() {
           )}
         </div>
         {view === "accounts" && (
-          /* An account is the one way to a drive: each row can be Promoted,
-              which opens the drive form with that account answering for it.
-              A separate "Add Fund Drive" button was a second, disconnected
-              path to the same thing. */
-          <button
-            type="button"
-            onClick={() => setShowAddAccountModal(true)}
-            className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Account</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* The congregation's statement is written from the same desk that
+                keeps the accounts: publishing it is what tells members what
+                the month's giving and spending came to. */}
+            <button
+              type="button"
+              onClick={openReportComposer}
+              disabled={preparingReport}
+              className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
+            >
+              <FileText className="h-4 w-4" />
+              <span className="sm:hidden">{preparingReport ? "…" : "Report"}</span>
+              <span className="hidden sm:inline">{preparingReport ? "Preparing…" : "Publish report"}</span>
+            </button>
+            {/* An account is the one way to a drive: each row can be Promoted,
+                which opens the drive form with that account answering for it.
+                A separate "Add Fund Drive" button was a second, disconnected
+                path to the same thing. */}
+            <button
+              type="button"
+              onClick={() => setShowAddAccountModal(true)}
+              className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Account</span>
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Modal: the church's financial statement, opened from the ledger's own
+          month to date and published to members when the desk confirms it. */}
+      {reportDraft && (
+        <ReportComposer
+          report={null}
+          initialDraft={reportDraft}
+          onClose={() => setReportDraft(null)}
+          onSaved={() => {
+            setReportDraft(null);
+            void showAlert(
+              "Report published",
+              "The statement is now on the congregation's Reports page under Giving.",
+              "success"
+            );
+          }}
+        />
+      )}
 
       {/* Modal: the support link for one account, ready to send on */}
       {supportAccount && (

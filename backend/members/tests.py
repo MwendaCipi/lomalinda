@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import csv
 from decimal import Decimal
 from io import StringIO
@@ -7297,3 +7297,92 @@ class FinancialReportPostingTests(APITestCase):
         )
         self.assertEqual(self._post(total_tithes='-1').status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(ChurchFinancialReport.objects.exists())
+
+
+class FinancialReportSuggestionsTests(APITestCase):
+    """The treasury's own ledger answers "what has this month brought in?".
+
+    The figures are a starting point the treasurer reviews, so what matters is
+    that they are drawn from money that actually arrived and money that was
+    actually spent in the period — not from pending gifts, and not from last
+    month's entries.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('sug.treasurer', 'sug.treasurer@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.member = User.objects.create_user('sug.member', 'sug.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.today = timezone.localdate()
+        self.last_month = self.today.replace(day=1) - timedelta(days=1)
+
+    def _contribution(self, purpose, amount, when, status='completed'):
+        return Contribution.objects.create(
+            member=self.member,
+            purpose=purpose,
+            amount=Decimal(amount),
+            status=status,
+            paid_at=timezone.make_aware(datetime.combine(when, datetime.min.time())),
+        )
+
+    def test_the_month_to_date_is_read_off_the_ledger(self):
+        self._contribution('Tithe', '3000', self.today)
+        self._contribution('Combined Offering', '1500', self.today)
+        # A pending gift is money that has not arrived.
+        self._contribution('Tithe', '9000', self.today, status='pending')
+        # Neither is last month's tithe.
+        self._contribution('Tithe', '7000', self.last_month)
+        CashContribution.objects.create(
+            received_on=self.today, amount=Decimal('500'), purpose='Combined Offering',
+            entry_type='collection', payment_method='cash', received_by=self.treasurer,
+        )
+        Expenditure.objects.create(
+            title='Power bill', amount=Decimal('1200'), category='utilities',
+            expenditure_date=self.today, recorded_by=self.treasurer,
+        )
+
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/reports/suggestions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['period_start'], self.today.replace(day=1).isoformat())
+        self.assertEqual(response.data['period_end'], self.today.isoformat())
+        self.assertEqual(response.data['total_tithes'], '3000.00')
+        self.assertEqual(response.data['total_offerings'], '2000.00')
+        self.assertEqual(response.data['total_expenses'], '1200.00')
+        self.assertEqual(response.data['gift_entries'], 3)
+        self.assertEqual(response.data['expense_entries'], 1)
+        self.assertIn(str(self.today.year), response.data['title'])
+
+    def test_a_month_with_nothing_in_it_reads_as_zero(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/reports/suggestions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_tithes'], '0.00')
+        self.assertEqual(response.data['total_offerings'], '0.00')
+        self.assertEqual(response.data['gift_entries'], 0)
+
+    def test_only_the_desk_may_ask(self):
+        self.client.force_authenticate(self.member)
+        self.assertEqual(
+            self.client.get('/api/members/reports/suggestions/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_suggested_figures_post_as_a_published_report(self):
+        self._contribution('Tithe', '4000', self.today)
+        self.client.force_authenticate(self.treasurer)
+        suggestion = self.client.get('/api/members/reports/suggestions/').data
+        posted = self.client.post('/api/members/reports/', {
+            'title': suggestion['title'],
+            'period_type': 'monthly',
+            'period_start': suggestion['period_start'],
+            'period_end': suggestion['period_end'],
+            'total_tithes': suggestion['total_tithes'],
+            'total_offerings': suggestion['total_offerings'],
+            'total_expenses': suggestion['total_expenses'],
+            'published_to_members': True,
+        }, format='json')
+        self.assertEqual(posted.status_code, status.HTTP_201_CREATED)
+        self.client.force_authenticate(None)
+        listed = self.client.get('/api/members/reports/')
+        self.assertEqual([row['total_tithes'] for row in listed.data], ['4000.00'])

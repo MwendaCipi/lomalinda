@@ -4129,6 +4129,83 @@ class ChurchFinancialReportDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete()
 
 
+def _giving_to_tithes(purpose):
+    """The one split a statement needs: tithe against everything else.
+
+    Giving is recorded by purpose ("Tithe", "Combined Offering", "Local
+    Church Budget"), so the trust-fund split is read off the name rather than
+    kept in a second table that would have to be kept in step with it.
+    """
+    return 'tithe' in str(purpose or '').lower()
+
+
+class ChurchFinancialReportSuggestionsView(APIView):
+    """What a statement for the current period already says.
+
+    The treasury's own ledger knows what came in and what went out, so the
+    desk should not have to add it up by hand before publishing the month's
+    report. This hands back the month to date — money actually received, and
+    money actually spent — and the desk reviews and corrects it in the normal
+    composer. Nothing here is authoritative on its own: it is a starting point
+    whose figures the treasurer still signs off.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can prepare financial reports.')
+
+        today = timezone.localdate()
+        start = today.replace(day=1)
+
+        # Digital giving counts on the day it was paid; a row still waiting on
+        # that stamp falls back to the day it was taken in.
+        digital = Contribution.objects.filter(status='completed').filter(
+            Q(paid_at__date__range=(start, today))
+            | Q(paid_at__isnull=True, created_at__date__range=(start, today))
+        )
+        cash = CashContribution.objects.filter(received_on__range=(start, today))
+
+        tithes = Decimal('0')
+        offerings = Decimal('0')
+        gifts = 0
+        for purpose, amount, count in (
+            digital.values_list('purpose').annotate(total=Sum('amount'), rows=Count('id'))
+        ):
+            if _giving_to_tithes(purpose):
+                tithes += Decimal(amount or 0)
+            else:
+                offerings += Decimal(amount or 0)
+            gifts += count
+        for purpose, amount, count in (
+            cash.values_list('purpose').annotate(total=Sum('amount'), rows=Count('id'))
+        ):
+            if _giving_to_tithes(purpose):
+                tithes += Decimal(amount or 0)
+            else:
+                offerings += Decimal(amount or 0)
+            gifts += count
+
+        expenses = Expenditure.objects.filter(expenditure_date__range=(start, today)).aggregate(
+            total=Sum('amount'),
+            rows=Count('id'),
+        )
+
+        return Response({
+            'period_start': start.isoformat(),
+            'period_end': today.isoformat(),
+            'title': f"{start.strftime('%B %Y')} stewardship report",
+            'total_tithes': str(tithes.quantize(Decimal('0.01'))),
+            'total_offerings': str(offerings.quantize(Decimal('0.01'))),
+            'total_expenses': str(Decimal(expenses['total'] or 0).quantize(Decimal('0.01'))),
+            # How many lines each figure was drawn from, so the desk can tell
+            # an empty month from one it has already posted entries against.
+            'gift_entries': gifts,
+            'expense_entries': expenses['rows'],
+        })
+
+
 class ChurchBudgetsView(generics.ListAPIView):
     permission_classes = [AllowAny]
     serializer_class = ChurchBudgetSerializer
