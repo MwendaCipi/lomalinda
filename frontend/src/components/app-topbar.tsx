@@ -17,10 +17,14 @@ import { NavIdentity } from "./nav-identity";
  *
  * It wears `bark`, the church's dark chrome — the same colour the phone's tab
  * bar uses, so the two ends of the app read as one frame around the page.
+ *
+ * Its height is the rail's brand block (`h-16` there), so the bar's own bottom
+ * hairline continues the line under the rail's logo instead of sitting a few
+ * pixels above it.
  */
 export function AppTopBar() {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-end gap-2 border-b border-white/10 bg-bark px-3 text-white shadow-sm sm:px-5">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-end gap-2 border-b border-white/10 bg-bark px-3 text-white shadow-sm sm:px-5">
       <NavIdentity />
     </header>
   );

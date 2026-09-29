@@ -109,6 +109,9 @@ export function DashboardAnnouncements() {
   });
 
   return (
+    // `h-full`: on a wide screen the card shares a row with the pages beside
+    // it, and filling the row keeps the two panels' feet level instead of
+    // leaving the short one floating.
     <div
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -116,7 +119,7 @@ export function DashboardAnnouncements() {
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsInteracting(false);
       }}
-      className="relative rounded-3xl border border-sand-line bg-white px-6 py-5 shadow-sm sm:px-8"
+      className="relative h-full rounded-3xl border border-sand-line bg-white px-6 py-5 shadow-sm sm:px-8"
     >
       {/* The whole card opens the Fellowship feed. The overlay sits under the
           controls, so the arrows and action buttons keep working on top. */}
