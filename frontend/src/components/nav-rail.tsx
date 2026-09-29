@@ -9,7 +9,6 @@ import { ChevronRight, X } from "lucide-react";
 import { railFor, railHere, type RailEntry, type RailItem } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useHeaderData } from "@/hooks/use-header-data";
-import { NavIdentity } from "./nav-identity";
 
 /**
  * The rail — the app's navigation, in one column.
@@ -155,10 +154,6 @@ export function NavRail({ open = false, onClose }: { open?: boolean; onClose?: (
               />
             ))}
           </nav>
-        </div>
-
-        <div className="border-t border-sand-line p-3">
-          <NavIdentity />
         </div>
       </aside>
     </>

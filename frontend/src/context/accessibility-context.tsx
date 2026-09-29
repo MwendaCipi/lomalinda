@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { A11Y_STORAGE_KEY as STORAGE_KEY, type ThemeChoice } from "@/lib/theme";
 
 export type FontSizeOption = "normal" | "large" | "xlarge";
 
@@ -10,6 +11,8 @@ export interface AccessibilityPrefs {
   dyslexicFont: boolean;
   reducedMotion: boolean;
   highVisFocus: boolean;
+  /** Light or dark. Stored here so one "Reset Defaults" resets everything. */
+  theme: ThemeChoice;
 }
 
 interface AccessibilityContextType extends AccessibilityPrefs {
@@ -18,6 +21,7 @@ interface AccessibilityContextType extends AccessibilityPrefs {
   setDyslexicFont: (val: boolean) => void;
   setReducedMotion: (val: boolean) => void;
   setHighVisFocus: (val: boolean) => void;
+  setTheme: (theme: ThemeChoice) => void;
   resetDefaults: () => void;
 }
 
@@ -27,9 +31,11 @@ const DEFAULT_PREFS: AccessibilityPrefs = {
   dyslexicFont: false,
   reducedMotion: false,
   highVisFocus: false,
+  // Light until someone asks for dark: the theme is opt-in, never inferred
+  // from the device, so a member's screen looks the same as it did before a
+  // dark palette existed.
+  theme: "light",
 };
-
-const STORAGE_KEY = "sda_church_a11y_prefs";
 
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
 
@@ -62,6 +68,7 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
   const setDyslexicFont = (val: boolean) => updatePref("dyslexicFont", val);
   const setReducedMotion = (val: boolean) => updatePref("reducedMotion", val);
   const setHighVisFocus = (val: boolean) => updatePref("highVisFocus", val);
+  const setTheme = (theme: ThemeChoice) => updatePref("theme", theme);
 
   const resetDefaults = () => {
     setPrefs(DEFAULT_PREFS);
@@ -90,6 +97,11 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
     if (prefs.highVisFocus) root.setAttribute("data-focus-ring", "high");
     else root.removeAttribute("data-focus-ring");
+
+    // The dark palette hangs off this attribute. `color-scheme` rides along in
+    // CSS so form controls and scrollbars follow.
+    if (prefs.theme === "dark") root.setAttribute("data-theme", "dark");
+    else root.removeAttribute("data-theme");
   }, [prefs]);
 
   return (
@@ -101,6 +113,7 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
         setDyslexicFont,
         setReducedMotion,
         setHighVisFocus,
+        setTheme,
         resetDefaults,
       }}
     >
@@ -119,6 +132,7 @@ export function useAccessibility() {
       setDyslexicFont: () => {},
       setReducedMotion: () => {},
       setHighVisFocus: () => {},
+      setTheme: () => {},
       resetDefaults: () => {},
     };
   }

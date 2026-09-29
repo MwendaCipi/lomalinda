@@ -16,6 +16,7 @@ import {
 import Swal from "sweetalert2";
 
 import { AccessibilityMenu } from "./accessibility-menu";
+import { ThemeToggle } from "./theme-toggle";
 import { triggerPwaInstall } from "./pwa-register";
 import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -86,14 +87,12 @@ export function useUnreadNotifications(): number {
 }
 
 /**
- * The member's identity controls, living at the foot of the rail.
+ * The member's identity controls, sitting at the right end of the top bar.
  *
- * This is the bell, the account menu, the accessibility menu and sign-out —
- * everything the old top bar carried that is not navigation. The rail is the
- * only chrome in the app now, so these belong to it: the bell pops upward out
- * of the rail's foot, and the account menu holds the few places the rail
- * itself does not name (the member's own page, the calendar, the console for
- * staff).
+ * This is the bell, the theme switch, the accessibility menu, install and the
+ * account menu — everything the bar carries that is *not* navigation. The rail
+ * owns the map, so these are the only three things that ever load a page: the
+ * member's own account, the calendar, and the console for staff.
  */
 export function NavIdentity() {
   const router = useRouter();
@@ -264,11 +263,15 @@ export function NavIdentity() {
     router.refresh();
   };
 
+  /** The bar's buttons: one size, one shape, icons only. */
+  const barButton =
+    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark transition hover:bg-sand";
+
   if (!isLoggedIn) {
     return (
       <Link
         href="/login"
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-bark px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-bark-hover"
+        className="flex items-center justify-center gap-2 rounded-xl bg-bark px-3.5 py-2 text-xs font-bold text-white transition hover:bg-bark-hover"
       >
         <LogIn className="h-4 w-4" />
         Sign in
@@ -277,29 +280,29 @@ export function NavIdentity() {
   }
 
   return (
-    <div ref={controlsRef} className="space-y-2">
-      {/* Sign out, install and the accessibility options: the foot of the
-          rail, where a rail naturally carries them. */}
+    <div ref={controlsRef} className="flex items-center gap-1.5">
       <div className="flex items-center gap-1.5">
-        <div className="relative flex-1">
+        <div className="relative">
           <button
             type="button"
             onClick={openNotifications}
-            className="relative flex w-full items-center justify-center gap-2 rounded-xl border border-sand-mute bg-white px-3 py-2.5 text-xs font-semibold text-bark transition hover:bg-sand"
+            className={barButton}
             aria-label="Notifications"
             aria-expanded={showNotifications}
+            title="Notifications"
           >
             <Bell className="h-4 w-4" />
-            Notifications
+            {/* The badge rings in `sand-card`, the surface of the button it
+                cuts out of, so it sits correctly in either theme. */}
             {unreadCount > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white ring-2 ring-sand-card">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </button>
 
           {showNotifications && (
-            <div className="absolute bottom-full left-0 z-50 mb-2 w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
+            <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-bark">Notifications</span>
@@ -427,20 +430,24 @@ export function NavIdentity() {
           )}
         </div>
 
-        <AccessibilityMenu buttonClassName="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark transition hover:bg-sand" />
+        <ThemeToggle className={barButton} />
+
+        <AccessibilityMenu buttonClassName={barButton} />
 
         <button
           type="button"
           onClick={triggerPwaInstall}
           title="Install the app"
           aria-label="Install the app"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark transition hover:bg-sand"
+          className={`${barButton} hidden sm:flex`}
         >
           <Download className="h-4 w-4 text-ember" />
         </button>
       </div>
 
-      {/* The account row: who you are, and the way out. */}
+      {/* The account control: who you are, and the way out. The name rides
+          beside the avatar while there is room for it, and the avatar alone
+          on a phone. */}
       <div className="relative">
         <button
           type="button"
@@ -448,20 +455,20 @@ export function NavIdentity() {
             setShowUserMenu(!showUserMenu);
             setShowNotifications(false);
           }}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-sand-mute bg-white px-3 py-2.5 text-left transition hover:bg-sand"
+          className="flex items-center gap-2 rounded-xl border border-sand-mute bg-white p-1 pr-1 transition hover:bg-sand sm:pr-3"
           aria-expanded={showUserMenu}
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ember text-xs font-bold text-white">
             {(me?.name || me?.username || "?").charAt(0).toUpperCase()}
           </span>
-          <span className="min-w-0 flex-1">
+          <span className="hidden min-w-0 max-w-40 text-left sm:block">
             <span className="block truncate text-xs font-semibold text-bark">{me?.name || me?.username}</span>
             <span className="block truncate text-[10px] text-moss">{me?.email || `@${me?.username}`}</span>
           </span>
         </button>
 
         {showUserMenu && (
-          <div className="absolute bottom-full left-0 z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
             <div className="space-y-1">
               {accountMenuKeys
                 .filter(({ staffOnly }) => !staffOnly || isStaff)

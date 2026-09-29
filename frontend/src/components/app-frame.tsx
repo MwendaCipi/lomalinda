@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
+import { AppTopBar } from "./app-topbar";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { normalizePath } from "@/lib/paths";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -13,8 +14,9 @@ import { useHeaderData } from "@/hooks/use-header-data";
  *
  * Every signed-in page in the app renders through this, whichever route group
  * it lives in, so navigation never changes shape between a section and the
- * console: the rail is on the left, the page scrolls beside it, and on a
- * phone the same rail slides in from the tab bar.
+ * console: the rail is on the left, the identity bar sits at the top of the
+ * page column beside it, the page scrolls in what is left, and on a phone the
+ * same rail slides in from the tab bar.
  *
  * The few surfaces that are the *public website* — the landing page and the
  * sign-in journey — keep their own header and get no rail: they are the shop
@@ -78,7 +80,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       >
         <div className="app-shell-body flex min-h-0 flex-1">
           <NavRail open={menuOpen} onClose={() => setDrawerOpenedAt(null)} />
-          <div className="app-panel min-w-0 min-h-0 flex-1">{children}</div>
+          {/* The bar lives inside the content column, not across the window:
+              it starts after the rail, so nothing is drawn above it. */}
+          <div className="app-panel-column">
+            <AppTopBar />
+            <div className="app-panel">{children}</div>
+          </div>
         </div>
       </div>
       <MobileTabBar menuOpen={menuOpen} onToggleMenu={() => setMenuOpen(!menuOpen)} />

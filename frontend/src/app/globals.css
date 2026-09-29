@@ -137,6 +137,260 @@
   --color-alert-veil: #efe3e3;
 }
 
+/* ==========================================================================
+   Dark theme.
+
+   Not a second stylesheet. Every colour the app paints comes from the tokens
+   above, and Tailwind compiles its utilities to `var(--color-*)` — so
+   re-declaring those properties repaints the whole app without a single
+   component knowing a theme exists.
+
+   Two things cannot be a variable and are handled at class level below:
+
+   - `bg-white`. There is no surface token; the cards simply say white. One
+     rule covers every card in the app (over 500 of them), and its focus/hover
+     variants are named because an input that turned white on focus would
+     flash light text on light ground.
+   - colours whose *role* depends on the property. Bark is the chrome in
+     `bg-bark` (the rail, primary buttons, the hero) and the ink in
+     `text-bark`; flipping the variable would break the buttons to fix the
+     headings, so the ink side is overridden by class instead.
+
+   The theme is opt-in: nothing here applies until a member chooses dark.
+   ========================================================================== */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Paper: the page, then the tonal steps up from it. The names stay honest —
+     "sand" is still the surface everything else is drawn on, it is simply a
+     dark paper now. */
+  --color-sand: #111714;
+  --color-sand-line: #29322d;
+  --color-sand-mute: #3a453f;
+  --color-sand-deep: #222b26;
+  --color-sand-edge: #323d37;
+  --color-sand-hoverline: #4a554e;
+  --color-sand-tint: #1a211d;
+  --color-sand-soft: #1b221e;
+  --color-sand-warm: #1f2723;
+  --color-sand-shade: #1a211d;
+  --color-sand-wash: #19201c;
+  --color-sand-sheen: #19201c;
+  --color-sand-light: #1c231f;
+  --color-sand-paper: #19201c;
+  --color-sand-grain: #171e1a;
+  --color-sand-card: #1b2320;
+  --color-sand-plate: #1e2622;
+  --color-sand-vellum: #1b2320;
+  --color-sand-silk: #1a221e;
+  --color-sand-linen: #1a221e;
+  --color-sand-veil: #19201c;
+  --color-sand-mist: #1c2420;
+  --color-sand-cream: #202723;
+  --color-sand-sheer: #222825;
+  --color-sand-airy: #1b231f;
+  --color-sand-glow: #212722;
+  --color-sand-bright: #232a25;
+  --color-sand-hover: #2a332e;
+  --color-sand-haze: #1a211d;
+  --color-sand-film: #182019;
+
+  /* Cool selected surfaces (rows you have picked, active tabs). */
+  --color-mist: #16201b;
+  --color-mist-tint: #17211c;
+  --color-mist-soft: #1a2620;
+  --color-mist-veil: #17211c;
+  --color-mist-select: #1e2a24;
+
+  /* Ink. The moss family is text on the paper and nothing else, so it simply
+     lightens: the same muted green-gray, read the other way round. */
+  --color-moss: #9dada3;
+  --color-moss-dark: #b9c7bd;
+  --color-moss-mid: #aab9af;
+  --color-moss-soft: #93a399;
+  --color-moss-dim: #9aa9a0;
+  --color-moss-hover: #c3d0c6;
+  --color-moss-faint: #77857c;
+  --color-moss-faint2: #7d8a81;
+  --color-warmgray: #9a9384;
+  --color-graydim: #8d938f;
+  --color-graymuted: #9aa1a6;
+  --color-grayui: #a5abb1;
+
+  /* Chrome: the rail, the hero, the footer and primary buttons keep their
+     deep green — a step up from the page, so they read as raised bands and
+     white text on them stays legible. */
+  --color-bark: #2b3b34;
+  --color-bark-900: #24322c;
+  --color-bark-950: #1d2924;
+  --color-bark-hover: #33463d;
+  --color-bark-raised: #384c42;
+
+  /* Soft sage surfaces and hairlines darken; the saturated greens stay put so
+     a sage badge keeps working as a light-on-green chip. */
+  --color-sage-wash: #1f2a24;
+  --color-sage-mist: #26332c;
+  --color-sage-line: #2c3b33;
+  --color-sage-mild: #25322b;
+  --color-sage-breathe: #202b25;
+  --color-sage-air: #25322b;
+  --color-sage-tint: #1f2b25;
+  --color-sage-pale: #7f8f84;
+  --color-sage-fog: #8a9a90;
+  --color-leaf: #24302a;
+  --color-leaf-wash: #1f2b25;
+
+  /* Gentle notice tints. */
+  --color-gold-blush: #241f18;
+  --color-gold-pale: #2a2118;
+  --color-gold-sand: #2b251c;
+  --color-alert-wash: #2a1c1c;
+  --color-alert-pale: #2e1d1d;
+  --color-alert-film: #241a1a;
+  --color-alert-veil: #221919;
+
+  /* Dialogs are the one surface Tailwind does not paint, so SweetAlert's own
+     variables are pointed at the same paper and ink. */
+  --swal2-background: #1b2320;
+  --swal2-color: #e8eee9;
+  --swal2-input-background: #1f2723;
+  --swal2-input-border: #3a453f;
+}
+
+/* Text that carries no class inherits from the body, and the body's ink is
+   bark — which stays dark because the buttons need it to. So the inherited
+   ink is set here, once. */
+html[data-theme="dark"] body {
+  background: var(--color-sand);
+  color: #e8eee9;
+}
+
+/* The cards. `bg-white` is the app's surface class; its focus and hover
+   variants are listed because a field that turned white on focus would put
+   light ink on a light ground. */
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] .hover\:bg-white:hover,
+html[data-theme="dark"] .focus\:bg-white:focus,
+html[data-theme="dark"] .focus-within\:bg-white:focus-within {
+  background-color: #1b2320;
+}
+
+/* Translucent white bands sit *above* the paper rather than on it, so the
+   solid ones become the surface and the pale ones a whisper of light. */
+html[data-theme="dark"] .bg-white\/95 {
+  background-color: rgb(27 35 32 / 0.95);
+}
+html[data-theme="dark"] .bg-white\/70 {
+  background-color: rgb(255 255 255 / 0.07);
+}
+html[data-theme="dark"] .bg-white\/60 {
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+/* The ink side of the dual-role colours. */
+html[data-theme="dark"] .text-bark {
+  color: #e8eee9;
+}
+html[data-theme="dark"] .hover\:text-bark:hover {
+  color: #ffffff;
+}
+/* Gold surfaces keep dark ink on them, so a gold button still reads. */
+html[data-theme="dark"] .bg-gold.text-bark,
+html[data-theme="dark"] .hover\:bg-gold:hover.text-bark {
+  color: #26352f;
+}
+html[data-theme="dark"] .border-bark {
+  border-color: #46564e;
+}
+html[data-theme="dark"] .text-ember,
+html[data-theme="dark"] .hover\:text-ember:hover {
+  color: #e19a63;
+}
+/* Sage is a badge background and a positive figure; only the figure lightens. */
+html[data-theme="dark"] .text-sage,
+html[data-theme="dark"] .text-sage-mid,
+html[data-theme="dark"] .text-sage-soft,
+html[data-theme="dark"] .text-sage-rich,
+html[data-theme="dark"] .text-sage-deep {
+  color: #8fbf9a;
+}
+html[data-theme="dark"] .text-sage-strong {
+  color: #7fbf90;
+}
+html[data-theme="dark"] .text-sage-bright {
+  color: #8ccf9c;
+}
+html[data-theme="dark"] .text-sage-light,
+html[data-theme="dark"] .text-sage-pale {
+  color: #a9d0b4;
+}
+html[data-theme="dark"] .text-sage-gray,
+html[data-theme="dark"] .text-sage-slate,
+html[data-theme="dark"] .text-sage-fog {
+  color: #9aa89f;
+}
+/* Muted chrome on paper (chevrons, small labels) is read on the paper, not in
+   the chrome. */
+html[data-theme="dark"] .text-sand-mute,
+html[data-theme="dark"] .text-sand-warm {
+  color: #8b968f;
+}
+
+/* Hand-rolled slate and red literals in a few popovers and danger rows. */
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-700 {
+  color: #e6ece8;
+}
+html[data-theme="dark"] .text-slate-500 {
+  color: #a3aea7;
+}
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .hover\:text-slate-600:hover {
+  color: #8b968f;
+}
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-200\/70 {
+  border-color: #2a332e;
+}
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-50\/70,
+html[data-theme="dark"] .hover\:bg-slate-100:hover,
+html[data-theme="dark"] .hover\:bg-slate-100\/70:hover,
+html[data-theme="dark"] .bg-slate-100\/70 {
+  background-color: #1f2723;
+}
+html[data-theme="dark"] .bg-slate-200,
+html[data-theme="dark"] .hover\:bg-slate-200:hover {
+  background-color: #2a332e;
+}
+html[data-theme="dark"] .text-red-700,
+html[data-theme="dark"] .text-red-600,
+html[data-theme="dark"] .hover\:text-red-600:hover,
+html[data-theme="dark"] .hover\:text-red-700:hover,
+html[data-theme="dark"] .text-rose-800,
+html[data-theme="dark"] .text-rose-700,
+html[data-theme="dark"] .text-rose-600 {
+  color: #f0a6a6;
+}
+html[data-theme="dark"] .text-red-500 {
+  color: #eb8f8f;
+}
+html[data-theme="dark"] .bg-red-50,
+html[data-theme="dark"] .hover\:bg-red-50:hover,
+html[data-theme="dark"] .bg-red-100,
+html[data-theme="dark"] .bg-rose-50,
+html[data-theme="dark"] .bg-rose-100,
+html[data-theme="dark"] .hover\:bg-rose-50:hover {
+  background-color: #2e1d1d;
+}
+html[data-theme="dark"] .border-red-200,
+html[data-theme="dark"] .border-red-300,
+html[data-theme="dark"] .border-rose-200,
+html[data-theme="dark"] .hover\:border-red-300:hover {
+  border-color: #5a3232;
+}
+
 body {
   background: var(--color-sand);
   color: var(--color-bark);
@@ -211,9 +465,21 @@ body {
   }
 }
 
-/* The panel beside the rail — the page's own frame. It scrolls (`panel`) or
+/* The column beside the rail: the identity bar on top, the page below it.
+   The bar is inside this column rather than across the window, so the rail
+   keeps the full height of the page and starts at the very top. */
+.app-panel-column {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The panel under the bar — the page's own frame. It scrolls (`panel`) or
    clips and fills (`pinned`), so a page never carries a height incantation of
-   its own. */
+   its own. Its height comes from the flex column above it, never from 100vh:
+   the viewport is the bar taller than the box the page actually lives in. */
 .app-panel {
   flex: 1 1 0%;
   min-width: 0;
@@ -222,8 +488,19 @@ body {
 
 @media (min-width: 768px) {
   .app-shell[data-scroll-mode="panel"] .app-panel {
-    height: 100%;
     overflow-y: auto;
+  }
+
+  /* Pages were written when the app had no top bar, and most still ask for a
+     whole viewport (`md:h-screen`, `min-h-screen`). Inside the panel that is
+     a bar's worth too tall — content at the foot of a page written with
+     `md:overflow-hidden` would be clipped below the fold with nothing able to
+     scroll to it. Pinning the page root to the panel it lives in fixes every
+     page at once and keeps the promise that a new page needs no height
+     incantation. */
+  .app-shell .app-panel > main {
+    height: 100%;
+    min-height: 0;
   }
 }
 
@@ -233,7 +510,6 @@ body {
 .app-shell[data-scroll-mode="pinned"] .app-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
 }
 .app-shell[data-scroll-mode="pinned"] .app-panel > * {

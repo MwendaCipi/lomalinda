@@ -4,6 +4,7 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { AccessibilityProvider } from "@/context/accessibility-context";
 import { brand } from "@/lib/brand";
+import { themeInitScript } from "@/lib/theme";
 
 export const viewport: Viewport = {
   themeColor: brand.bark,
@@ -43,6 +44,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        {/* Before the first paint: a member whose stored preferences say dark
+            gets the dark palette on the very first frame rather than a white
+            flash that the provider corrects a moment later. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="h-full flex flex-col">
         <AccessibilityProvider>
           {/* Chrome is per group: the public website renders MarketingNav, and
