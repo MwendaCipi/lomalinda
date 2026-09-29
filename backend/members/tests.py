@@ -55,6 +55,7 @@ class WeeklyLessonParserTests(TestCase):
 
 from rest_framework.test import APITestCase
 from rest_framework import status
+from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
@@ -6194,6 +6195,31 @@ class DepartmentApiTests(APITestCase):
         self._auth(self.elder)
         res = self.client.get('/api/members/departments/awm/events/')
         self.assertEqual(res.data['events'], [])
+
+    def test_office_flag_without_a_seat_gets_one_back(self):
+        """Migration 0141: a church-office flag the old system carried with
+        no seat behind it (the church area's elders, clerk, deacons) is given
+        its department seat back, and running again changes nothing."""
+        import importlib
+
+        repair = importlib.import_module('members.migrations.0141_restore_church_office_seats')
+        elder = User.objects.create_user('seat.elder', 'seat.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=elder, role='member', roles='member,first_elder')
+        clerk = User.objects.create_user('seat.clerk', 'seat.clerk@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(
+            user=clerk, role='member', roles='member,clerk', assistant_roles='clerk',
+        )
+        repair.restore_office_seats(apps=django_apps, schema_editor=None)
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            member=elder, department__code='eldership', role__name='First Elder', kind='leader',
+        ).exists())
+        # An office held as an assistant lands as the role's assistant.
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            member=clerk, department__code='clerkship', role__name='Church Clerk', kind='assistant',
+        ).exists())
+        before = DepartmentAssignment.objects.filter(member__in=[elder, clerk]).count()
+        repair.restore_office_seats(apps=django_apps, schema_editor=None)
+        self.assertEqual(DepartmentAssignment.objects.filter(member__in=[elder, clerk]).count(), before)
 
     def test_leadership_put_appoints_and_syncs_flags(self):
         """The leadership modal saves appointments in one PUT: a leader
