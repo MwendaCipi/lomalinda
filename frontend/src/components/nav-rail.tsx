@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { entryHref, railFor } from "@/config/navigation";
+import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -54,30 +54,41 @@ export function NavRail() {
         </Link>
       </div>
 
-      {/* The rail scrolls on its own; the page never moves with it. */}
+      {/* The rail scrolls on its own; the page never moves with it. The
+          headings are a reading aid — Dashboard, then the church's life, then
+          the desks — not a click target and not a group to expand. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
-        <nav className="space-y-0.5">
-          {entries.map((entry) => {
-            const href = entryHref(entry);
-            if (!href) return null;
-            const Icon = entry.icon;
-            // A row is "here" when it is the section you are in — whatever page
-            // of it you are on — or the single page it links to.
-            const active = here.group === entry.label || here.href === href;
-            return (
-              <Link
-                key={entry.label}
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                  active ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{entry.label}</span>
-              </Link>
-            );
-          })}
+        <nav>
+          {railSectionsFor(entries).map((section, index) => (
+            <div key={section.key} className={index === 0 ? "" : "mt-4"}>
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.entries.map((entry) => {
+                  const href = entryHref(entry);
+                  if (!href) return null;
+                  const Icon = entry.icon;
+                  // A row is "here" when it is the section you are in — whatever
+                  // page of it you are on — or the single page it links to.
+                  const active = here.group === entry.label || here.href === href;
+                  return (
+                    <Link
+                      key={entry.label}
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                        active ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{entry.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </div>
     </aside>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, X } from "lucide-react";
 
-import { entryHref, railFor } from "@/config/navigation";
+import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -63,42 +63,51 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </header>
 
       {/* The bar sits above this sheet, so "Admin" is also the way back out;
-          the reserve at the foot keeps its height off the last card. */}
+          the reserve at the foot keeps its height off the last card. The
+          headings are the rail's own — Dashboard, My church, Leadership — so
+          the two maps read the same. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar p-4 pb-24">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {entries.map((entry) => {
-            const href = entryHref(entry);
-            if (!href) return null;
-            const Icon = entry.icon;
-            const current = here.group === entry.label || here.href === href;
-            return (
-              <Link
-                key={entry.label}
-                href={href}
-                onClick={onClose}
-                aria-current={current ? "page" : undefined}
-                className={`group flex w-full items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-ember/60 active:scale-[0.99] ${
-                  current ? "border-ember" : "border-sand-line"
-                }`}
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember">
-                  <Icon size={20} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-bark">{entry.label}</span>
-                  {/* What is inside, in the rail's own words — so the card is a
-                      decision rather than a guess. */}
-                  {entry.items && entry.items.length > 1 ? (
-                    <span className="mt-0.5 block truncate text-xs text-moss">
-                      {entry.items.map((item) => item.short ?? item.label).join(" · ")}
+        {railSectionsFor(entries).map((section) => (
+          <section key={section.key} className="mb-5">
+            <p className="px-1 pb-2 text-[10px] font-bold uppercase tracking-wider text-moss">
+              {section.label}
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {section.entries.map((entry) => {
+                const href = entryHref(entry);
+                if (!href) return null;
+                const Icon = entry.icon;
+                const current = here.group === entry.label || here.href === href;
+                return (
+                  <Link
+                    key={entry.label}
+                    href={href}
+                    onClick={onClose}
+                    aria-current={current ? "page" : undefined}
+                    className={`group flex w-full items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-ember/60 active:scale-[0.99] ${
+                      current ? "border-ember" : "border-sand-line"
+                    }`}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember">
+                      <Icon size={20} />
                     </span>
-                  ) : null}
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />
-              </Link>
-            );
-          })}
-        </div>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-bark">{entry.label}</span>
+                      {/* What is inside, in the rail's own words — so the card
+                          is a decision rather than a guess. */}
+                      {entry.items && entry.items.length > 1 ? (
+                        <span className="mt-0.5 block truncate text-xs text-moss">
+                          {entry.items.map((item) => item.short ?? item.label).join(" · ")}
+                        </span>
+                      ) : null}
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

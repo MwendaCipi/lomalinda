@@ -275,6 +275,21 @@ export const destinations = {
     audience: STAFF_ROLES,
     match: ["/administration"],
   },
+  /**
+   * The member's own Requests page — the forms: prayer and visitation, child
+   * dedication, joining. The office answers the same requests from the
+   * console's Requests desk, which is a different page and is named by the
+   * desk's own tile (`REQUESTS_TILE`); the two are separate destinations on
+   * purpose, because a member asking and an officer answering are two jobs.
+   */
+  requests: {
+    href: "/requests",
+    label: "Requests",
+    description: "Ask for prayer, a visit, or to dedicate a child — one page for it.",
+    icon: HeartHandshake,
+    area: "fellowship",
+    match: ["/requests"],
+  },
 } satisfies Record<string, NavDestination>;
 
 export type DestinationKey = keyof typeof destinations;
@@ -494,6 +509,7 @@ export const treasuryItems: RailItem[] = [
  * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
+  // The member's own page, alone under the first heading.
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"] },
   {
     label: "Fellowship",
@@ -503,6 +519,7 @@ export const railEntries: RailEntry[] = [
       page("announcements"),
       page("services"),
       page("testimonies"),
+      page("requests"),
       page("childDedication"),
       page("membership"),
       page("ideas"),
@@ -540,6 +557,54 @@ export const railEntries: RailEntry[] = [
     roles: STAFF_ROLES,
   },
 ];
+
+/**
+ * How the rail groups its rows. A heading is a reading aid, not a click
+ * target — every row under it is a place, exactly as it was flat.
+ */
+export type RailSection = "dashboard" | "my-church" | "leadership";
+
+/** The heading each section goes by, on the rail and in the phone's menu. */
+export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "my-church", label: "My church" },
+  { key: "leadership", label: "Leadership" },
+];
+
+/** Which heading a row is filed under; a row with none sits before the first. */
+const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
+  "Fellowship": "my-church",
+  "Materials": "my-church",
+  "Giving": "my-church",
+  "Elders' Desk": "leadership",
+  "Clerk's Desk": "leadership",
+  "Treasury": "leadership",
+  "Deaconate": "leadership",
+  "Ministries": "leadership",
+  "Departments": "leadership",
+};
+
+/**
+ * The rail, read as headings with the rows under each: the member's own page
+ * first, then the church's life, then the desks — which are the leadership's
+ * side of the app.
+ */
+export function railSectionsFor(
+  entries: RailEntry[]
+): { key: RailSection; label: string; entries: RailEntry[] }[] {
+  const grouped = new Map<RailSection, RailEntry[]>();
+  for (const entry of entries) {
+    const key = RAIL_SECTION_OF[entry.label] ?? "dashboard";
+    const list = grouped.get(key) ?? [];
+    list.push(entry);
+    grouped.set(key, list);
+  }
+  return RAIL_SECTIONS.map(({ key, label }) => ({
+    key,
+    label,
+    entries: grouped.get(key) ?? [],
+  })).filter((section) => section.entries.length > 0);
+}
 
 /**
  * The one page a rail row opens.
@@ -666,22 +731,22 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
   }
 
   return bestLength >= 0 ? best : { group: null, href: null };
-}
-
-/**
- * The phone's tab bar: the four places members move between all week, and the
- * whole map behind the last tab. "home" is chrome — the dashboard-or-site-
- * home tab, which also collapses history — and "admin" opens the rail's entries
- * as cards, so the phone carries the same navigation as the desktop rather
- * than a cut-down map or a column to read sideways. The last tab is the
- * leaders' door: a member who serves in no office is not offered the map here
- * at all, and its office row opens the console everyone else never sees.
+}/**
+ * The phone's tab bar: the places members move between all week, and the map
+ * behind the leaders' last tab. "home" is chrome — the dashboard-or-site-home
+ * tab, which also collapses history — and "requests" is the member's own page
+ * for asking the church for something. "admin" opens the rail's entries as
+ * cards, so the phone carries the same navigation as the desktop rather than a
+ * cut-down map or a column to read sideways. The last tab is the leaders' door:
+ * a member who serves in no office is not offered it at all, so their bar is
+ * Home, Fellowship, Materials, Giving and Requests.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   "home",
   { key: "fellowship" },
   { key: "materials" },
   { key: "give" },
+  { key: "requests" },
   "admin",
 ];
 
@@ -720,7 +785,6 @@ export const REQUESTS_TILE = {
   /** The desks that answer requests — same list the Requests managers gate by. */
   deskAudience: ["elder", "admin", "clerk", "pastor", "chaplaincy", "welfare_leader", "children_ministry"],
 };
-
 export const dashboardTiles: TileSpec[] = [
   { key: "announcements" },
   { key: "give" },
