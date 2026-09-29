@@ -57,6 +57,10 @@ export type HeaderMe = {
   phone_number: string;
   announce_email: boolean;
   announce_push: boolean;
+  /** The office flags the desk endpoints also accept — a treasurer alone is
+   * not enough to know whether a page's write controls should appear. */
+  is_staff: boolean;
+  is_superuser: boolean;
 };
 
 const ME_TTL = 5 * 60 * 1000;
@@ -102,6 +106,8 @@ async function fetchMe(token: string): Promise<HeaderMe | null | undefined> {
       phone_number: data.phone_number || "",
       announce_email: !!data.announce_email,
       announce_push: !!data.announce_push,
+      is_staff: !!data.is_staff,
+      is_superuser: !!data.is_superuser,
     };
   } catch {
     return undefined;

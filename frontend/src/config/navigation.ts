@@ -28,7 +28,6 @@ import {
   User,
   UserCheck,
   Users,
-  FileText,
 } from "lucide-react";
 
 /**
@@ -220,21 +219,16 @@ export const destinations = {
     area: "stewardship",
     match: ["/support/budget"],
   },
-  liveReports: {
+  reports: {
     href: "/support/reports",
-    label: "Live Reports",
-    description: "Real-time, transparent tracking of contributions by category.",
+    label: "Reports",
+    description: "Live treasury balances and the statements the church publishes.",
     icon: TrendingUp,
     area: "stewardship",
-    match: ["/support/reports"],
-  },
-  periodicalReports: {
-    href: "/support/periodical-reports",
-    label: "Periodic Reports",
-    description: "Weekly, monthly, quarterly and annual published statements.",
-    icon: FileText,
-    area: "stewardship",
-    match: ["/support/periodical-reports"],
+    // Live balances and the published statements share one page now, switched
+    // by a toggle at the top. The retired /support/periodical-reports path
+    // still highlights this row: it redirects here with that view selected.
+    match: ["/support/reports", "/support/periodical-reports"],
   },
   about: {
     href: "/about",
@@ -451,7 +445,7 @@ export const railEntries: RailEntry[] = [
   {
     label: "Giving",
     icon: HandHeart,
-    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("liveReports"), page("periodicalReports")],
+    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("reports")],
   },
   { label: "About", icon: Building2, items: [page("about")] },
   { label: "Office", icon: ShieldCheck, items: officeItems },

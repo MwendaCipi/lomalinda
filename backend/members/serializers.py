@@ -771,7 +771,19 @@ class TestimonySerializer(serializers.ModelSerializer):
 class ChurchFinancialReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchFinancialReport
-        fields = ('id', 'title', 'period_type', 'period_start', 'period_end', 'total_tithes', 'total_offerings', 'total_expenses', 'notes')
+        fields = (
+            'id', 'title', 'period_type', 'period_start', 'period_end',
+            'total_tithes', 'total_offerings', 'total_expenses', 'notes',
+            # The desk decides who reads it: a draft is the treasurer's own
+            # working copy and is hidden from the congregation until published.
+            'published_to_members', 'created_at',
+        )
+
+    def validate_title(self, value):
+        title = str(value or '').strip()
+        if not title:
+            raise serializers.ValidationError('Give the report a title.')
+        return title
 
     def validate(self, attrs):
         if attrs.get('period_end') and attrs.get('period_start') and attrs['period_end'] < attrs['period_start']:

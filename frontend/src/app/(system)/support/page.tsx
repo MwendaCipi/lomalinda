@@ -27,7 +27,7 @@ export default function SupportHubPage() {
                   Give Now
                 </Link>
                 <Link href="/support/reports" className="rounded-full border border-white/30 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/10">
-                  Live Reports
+                  Reports
                 </Link>
               </div>
             </div>

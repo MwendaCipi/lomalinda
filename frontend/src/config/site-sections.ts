@@ -175,8 +175,7 @@ export const stewardshipLinks: SectionLink[] = (
     "fundDrives",
     "inKind",
     "budget",
-    "liveReports",
-    "periodicalReports",
+    "reports",
   ] as const
 ).map((key) => {
   const dest = navDestinations[key];

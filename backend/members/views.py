@@ -4081,7 +4081,15 @@ class TestimonyVerificationView(APIView):
         return Response({'message': 'Your testimony has been submitted for review.'}, status=status.HTTP_201_CREATED)
 
 
-class ChurchFinancialReportsView(generics.ListAPIView):
+class ChurchFinancialReportsView(generics.ListCreateAPIView):
+    """The church's published financial statements: the treasurer posts, members read.
+
+    Reading is open — the reports are the congregation's own accounts, and the
+    page is reachable without signing in. The desk (treasurer, admin) also sees
+    drafts, which is what lets a report be written, reviewed and published in
+    two steps rather than appearing the moment it is typed.
+    """
+
     permission_classes = [AllowAny]
     serializer_class = ChurchFinancialReportSerializer
 
@@ -4091,6 +4099,34 @@ class ChurchFinancialReportsView(generics.ListAPIView):
         if profile and profile.has_role('admin', 'treasurer'):
             return ChurchFinancialReport.objects.all()
         return ChurchFinancialReport.objects.filter(published_to_members=True)
+
+    def perform_create(self, serializer):
+        if not is_treasurer_or_admin(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only church treasurers or administrators can post financial reports.')
+        serializer.save()
+
+
+class ChurchFinancialReportDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """One report: the desk edits it, flips it between draft and published, or drops it."""
+
+    serializer_class = ChurchFinancialReportSerializer
+    queryset = ChurchFinancialReport.objects.all()
+
+    def get_permissions(self):
+        return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        if not is_treasurer_or_admin(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only church treasurers or administrators can change financial reports.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not is_treasurer_or_admin(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only church treasurers or administrators can remove financial reports.')
+        instance.delete()
 
 
 class ChurchBudgetsView(generics.ListAPIView):

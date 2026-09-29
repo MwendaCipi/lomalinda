@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentMembership, DepartmentRole, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentMembership, DepartmentRole, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -7194,3 +7194,106 @@ class AnnouncementAttachmentRemovalTests(APITestCase):
         self.announcement.refresh_from_db()
         self.assertTrue(self.announcement.attachment)
         self.assertIn('flyer', self.announcement.attachment.name)
+
+
+class FinancialReportPostingTests(APITestCase):
+    """The treasurer posts the church's financial statements; members read them.
+
+    Writing belongs to the desk alone, and a posted report is a draft until it
+    is published — the congregation's reports page fetches without a token, so
+    an unpublished report must never reach it.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('rep.treasurer', 'rep.treasurer@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.member = User.objects.create_user('rep.member', 'rep.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    def _post(self, **overrides):
+        payload = {
+            'title': 'August 2026',
+            'period_type': 'monthly',
+            'period_start': '2026-08-01',
+            'period_end': '2026-08-31',
+            'total_tithes': '120000',
+            'total_offerings': '45000',
+            'total_expenses': '88000',
+            'notes': 'Roof repair, part one.',
+            'published_to_members': True,
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/reports/', payload, format='json')
+
+    def _public_list(self):
+        self.client.force_authenticate(None)
+        return self.client.get('/api/members/reports/')
+
+    def test_treasurer_posts_a_report_the_congregation_can_read(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['published_to_members'])
+        listed = self._public_list()
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['title'] for row in listed.data], ['August 2026'])
+
+    def test_a_draft_stays_with_the_desk_until_published(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self._post(published_to_members=False)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        report_id = response.data['id']
+        # Members, and the public at large, see nothing.
+        self.assertEqual(self._public_list().data, [])
+        # The desk sees its own draft.
+        self.client.force_authenticate(self.treasurer)
+        desk = self.client.get('/api/members/reports/')
+        self.assertEqual([row['id'] for row in desk.data], [report_id])
+        # Publishing is a one-field edit.
+        published = self.client.patch(
+            f'/api/members/reports/{report_id}/', {'published_to_members': True}, format='json',
+        )
+        self.assertEqual(published.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['id'] for row in self._public_list().data], [report_id])
+
+    def test_a_report_can_be_corrected_and_removed(self):
+        self.client.force_authenticate(self.treasurer)
+        report_id = self._post().data['id']
+        edited = self.client.patch(
+            f'/api/members/reports/{report_id}/',
+            {'total_expenses': '91000', 'notes': 'Roof repair, invoiced.'},
+            format='json',
+        )
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(edited.data['total_expenses']), Decimal('91000'))
+        removed = self.client.delete(f'/api/members/reports/{report_id}/')
+        self.assertEqual(removed.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ChurchFinancialReport.objects.filter(pk=report_id).exists())
+
+    def test_a_plain_member_cannot_post_or_change_a_report(self):
+        self.client.force_authenticate(self.member)
+        self.assertEqual(self._post().status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(ChurchFinancialReport.objects.exists())
+
+        self.client.force_authenticate(self.treasurer)
+        report_id = self._post(published_to_members=False).data['id']
+        self.client.force_authenticate(self.member)
+        self.assertEqual(
+            self.client.patch(f'/api/members/reports/{report_id}/', {'title': 'Mine now'}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.delete(f'/api/members/reports/{report_id}/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertTrue(ChurchFinancialReport.objects.filter(pk=report_id).exists())
+
+    def test_a_report_needs_a_title_and_a_sane_period(self):
+        self.client.force_authenticate(self.treasurer)
+        self.assertEqual(self._post(title='   ').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            self._post(period_start='2026-08-31', period_end='2026-08-01').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(self._post(total_tithes='-1').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(ChurchFinancialReport.objects.exists())
