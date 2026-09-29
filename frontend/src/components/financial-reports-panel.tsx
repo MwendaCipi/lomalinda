@@ -116,19 +116,34 @@ export function FinancialReportsPanel() {
     me && (me.is_staff || me.is_superuser || me.roles.includes("treasurer") || me.roles.includes("admin"))
   );
 
-  const load = useCallback(async () => {
+  /** The list, as the API sees it for this viewer — published to everyone,
+   *  the full register to the desk. */
+  const fetchReports = useCallback(async (): Promise<Report[] | null> => {
     try {
       const res = await fetch(`${API_URL}/api/members/reports/`, { headers: authHeaders() });
-      if (res.ok) setReports(await res.json());
+      return res.ok ? ((await res.json()) as Report[]) : null;
     } catch {
       // The page still reads as "nothing published yet" rather than an error.
-    } finally {
-      setLoading(false);
+      return null;
     }
   }, []);
 
+  const load = useCallback(async () => {
+    const rows = await fetchReports();
+    if (rows) setReports(rows);
+    setLoading(false);
+  }, [fetchReports]);
+
   useEffect(() => {
-    void load();
+    // Deferred by a microtask so the fetch is not started in the effect's own
+    // synchronous body; the state it settles lands after the first paint.
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) void load();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const openComposer = (report: Report | null) => {

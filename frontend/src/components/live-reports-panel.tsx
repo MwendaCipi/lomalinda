@@ -61,7 +61,10 @@ export function LiveReportsPanel() {
   }
 
   useEffect(() => {
-    loadData();
+    // The first read is deferred by a microtask rather than started in the
+    // effect's own synchronous body — the state it lands then settles after
+    // the first paint. The 30-second poll takes over from there.
+    void Promise.resolve().then(loadData);
     intervalRef.current = setInterval(loadData, 30_000); // refresh every 30 s
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
