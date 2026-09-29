@@ -200,83 +200,64 @@ body {
     height: calc(3.5625rem + env(safe-area-inset-bottom, 0px) + 0.625rem);
   }
 
-  /* Pinned pages keep the height chain: the shell is exactly the space below
-     the header, the page fills it, and its inner lists scroll. The reserve is
-     trimmed to the bar plus the device inset, so pinned action footers sit
-     tight above the bar instead of floating a gap above it. */
+  /* Pinned pages keep the height chain: the shell is the whole viewport (there
+     is no header any more), the page fills it, and its inner lists scroll. The
+     reserve is trimmed to the bar plus the device inset, so pinned action
+     footers sit tight above the bar instead of floating a gap above it. */
   .app-shell[data-scroll-mode="pinned"] {
-    height: calc(100vh - 4rem);
-    height: calc(100dvh - 4rem);
+    height: 100vh;
+    height: 100dvh;
     padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
-  }
-  .app-shell[data-scroll-mode="pinned"] > :last-child {
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
   }
 }
 
-/* Pinned pages, every width: the page is a flex column that fills the shell
+/* The panel beside the rail — the page's own frame. It scrolls (`panel`) or
+   clips and fills (`pinned`), so a page never carries a height incantation of
+   its own. */
+.app-panel {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  .app-shell[data-scroll-mode="panel"] .app-panel {
+    height: 100%;
+    overflow-y: auto;
+  }
+}
+
+/* Pinned pages, every width: the page is a flex column that fills the panel
    and stretches its own children, so sticky footers and inner scrollers can
    find a definite height. */
-.app-shell[data-scroll-mode="pinned"] > * {
-  min-height: 0;
-}
-.app-shell[data-scroll-mode="pinned"] > :last-child {
-  flex: 1;
+.app-shell[data-scroll-mode="pinned"] .app-panel {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
-.app-shell[data-scroll-mode="pinned"] > :last-child > * {
+.app-shell[data-scroll-mode="pinned"] .app-panel > * {
   flex: 1;
   min-height: 0;
 }
 
-/* Pinned pages inside the signed-in public shell (the giving page): the
-   shell is a fixed panel at every width — a definite height below the
-   header, the tab-bar reserve trimmed to exactly the bar, the page and its
-   inner scrollers filling it. */
-.authenticated-public-shell[data-scroll-mode="pinned"] {
-  height: calc(100vh - 4rem);
-  height: calc(100dvh - 4rem);
-}
-@media (max-width: 767px) {
-  .authenticated-public-shell[data-scroll-mode="pinned"] {
-    padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
-  }
-  .authenticated-public-shell[data-scroll-mode="pinned"]::after {
-    content: none;
-  }
-}
-
-/* From lg up the authenticated shell shows the page's own sidebar, so the
-   landing-page section cards would be a duplicate. On phones the cards stay:
-   outside the pinned giving page they are the only way to reach the other
-   destinations. (The giving page pins at every width, so its cards would sit
-   below the locked viewport — they stay hidden there too.) */
+/* The rail already names these places on a wide screen, so the landing-page
+   section cards are a duplicate there. On phones the cards stay: outside the
+   pinned giving page they are the only way to reach the other destinations.
+   (The giving page pins at every width, so its cards would sit below the
+   locked viewport — they stay hidden there too.) */
 @media (min-width: 1024px) {
-  .authenticated-public-shell .public-section-nav {
+  .app-shell .public-section-nav {
     display: none;
   }
 }
 @media (max-width: 1023px) {
-  .authenticated-public-shell[data-scroll-mode="pinned"] .public-section-nav {
+  .app-shell[data-scroll-mode="pinned"] .public-section-nav {
     display: none;
   }
-  .authenticated-public-shell .public-section-nav {
+  .app-shell .public-section-nav {
     padding-bottom: 1.25rem;
   }
-}
-
-/* The giving page pins inside the authenticated public shell: heading and
-   footer actions stay put while the givings list scrolls the full height of
-   the space below the header. */
-.authenticated-public-shell[data-scroll-mode="pinned"] > div:last-child {
-  overflow: hidden;
-  height: 100%;
-}
-.authenticated-public-shell[data-scroll-mode="pinned"] > div:last-child > div {
-  height: 100%;
 }
 
 @keyframes hero-image-in {

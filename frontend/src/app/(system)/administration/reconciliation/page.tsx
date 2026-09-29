@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
-import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
@@ -454,8 +453,7 @@ export default function ReconciliationPage() {
 
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <AdminSidebar />
+      <div className="flex h-full md:h-full md:overflow-hidden">
         
         {/* SINGLE CARD TOUCHING MARGINS (ZERO MARGIN/PADDING) */}
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">

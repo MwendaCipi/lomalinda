@@ -4,7 +4,6 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { kenyaCounties } from "@/config/kenya-counties";
-import { NavRail } from "@/components/nav-rail";
 import { getPushState, PushSupport } from "@/lib/push";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -95,11 +94,9 @@ export default function MemberPage() {
   }
 
   return (
-    <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <NavRail />
-        <div className="flex-1 min-w-0 h-full p-4 sm:p-8 lg:p-10 overflow-y-auto custom-hover-scrollbar">
-          <div className="max-w-5xl mx-auto space-y-6">
+    <main className="min-h-full bg-sand text-bark">
+      <div className="p-4 sm:p-8 lg:p-10">
+        <div className="mx-auto max-w-5xl space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Member space</p>
@@ -228,7 +225,6 @@ export default function MemberPage() {
                 {message} {message.includes("Sign in") && <Link href="/login" className="font-semibold text-ember">Sign in &rarr;</Link>}
               </div>
             )}
-          </div>
           </div>
         </div>
       </div>

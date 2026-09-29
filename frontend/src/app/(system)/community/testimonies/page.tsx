@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { Sparkles } from "lucide-react";
-import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -169,9 +168,8 @@ export default function TestimoniesPage() {
 
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <FellowshipSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 h-full md:h-full p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Testimonies</h1>
 

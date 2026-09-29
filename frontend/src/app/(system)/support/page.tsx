@@ -1,14 +1,12 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { stewardshipLinks } from "@/config/site-sections";
 
 export default function SupportHubPage() {
   return (
     <main className="min-h-screen md:h-screen bg-white text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <SupportSidebar />
-        <div className="flex-1 min-w-0 w-full h-full md:h-[calc(100vh-4rem)] bg-white p-5 pb-28 sm:p-8 lg:p-10 border-b border-sand-line md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 w-full h-full md:h-full bg-white p-5 pb-28 sm:p-8 lg:p-10 border-b border-sand-line md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto">
             <div className="max-w-3xl">
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Stewardship &amp; Support</h1>

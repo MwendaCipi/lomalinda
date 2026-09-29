@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { Lightbulb, X } from "lucide-react";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -140,9 +139,8 @@ export default function IdeasPage() {
 
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <SupportSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 h-full md:h-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { CalendarDays, HandHelping, Home, Phone, X } from "lucide-react";
-import { RequestsSidebar } from "@/components/sidebars/requests-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -302,9 +301,8 @@ function PrayerVisitationContent() {
 
   return (
     <main className="min-h-screen md:h-screen bg-white text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <RequestsSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 h-full md:h-full bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Prayer &amp; Visitation Requests</h1>

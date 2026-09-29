@@ -8,15 +8,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 /**
  * Header data, cached across route changes.
  *
- * SiteNav used to re-fetch the profile, announcements and personal
+ * The chrome used to re-fetch the profile, announcements and personal
  * notifications on every pathname change — four requests per navigation,
- * with the header's name and badges flashing empty while they ran. This hook
+ * with the rail's name and badges flashing empty while they ran. This hook
  * keeps that data in a module-level cache that survives remounts and route
- * changes, so the header paints from cache instantly and only revalidates in
+ * changes, so the chrome paints from cache instantly and only revalidates in
  * the background when its copy has gone stale:
  *
  * - the profile (+ announcement channel prefs, folded into the same /me/
- *   call the header used to make twice) after 5 minutes,
+ *   call the chrome used to make twice) after 5 minutes,
  * - the announcement and notification feeds after 60 seconds,
  * - on window focus when either has expired,
  * - immediately whenever the signed-in token changes (sign-in, sign-out,

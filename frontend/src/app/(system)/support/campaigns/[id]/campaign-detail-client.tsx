@@ -9,7 +9,6 @@ import { Check, Copy, IdCard, X } from "lucide-react";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { DonutChart } from "@/components/mini-charts";
 import { stewardshipLinks } from "@/config/site-sections";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -266,7 +265,6 @@ export default function CampaignDetailClient() {
   return (
     <main className="min-h-screen bg-sand text-bark">
       <div className="flex min-h-screen">
-        <SupportSidebar />
         <div className="min-w-0 flex-1">
       <div className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-4xl space-y-6">

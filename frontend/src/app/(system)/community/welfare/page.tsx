@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { RequestsSidebar } from "@/components/sidebars/requests-sidebar";
 
 const activities = [
   "Visiting and checking in on members who need encouragement",
@@ -18,10 +17,9 @@ const benefits = [
 export default function ChurchWelfarePage() {
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <RequestsSidebar />
+      <div className="flex h-full md:h-full md:overflow-hidden">
 
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
+        <div className="flex-1 min-w-0 h-full md:h-full p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-8">
             <div className="max-w-3xl">
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Welfare</h1>

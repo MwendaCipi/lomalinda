@@ -207,7 +207,7 @@ export function ChurchSettingsManager() {
   }
 
   return (
-    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line">
+    <section className="w-full min-h-dvh bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line">
       <div className="flex items-center justify-between border-b border-sand-line pb-4">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />

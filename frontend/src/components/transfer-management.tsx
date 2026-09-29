@@ -236,7 +236,7 @@ export function TransferManagement() {
   };
 
   return (
-    <section className="w-full min-h-[calc(100vh-4rem)] bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line space-y-6">
+    <section className="w-full min-h-dvh bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line space-y-6">
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-sand-line pb-6">
         <div>

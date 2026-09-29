@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Printer, Receipt, RotateCw } from "lucide-react";
 import { brand } from "@/lib/brand";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
 import { showAlert } from "@/lib/alerts";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
@@ -213,7 +212,6 @@ function GiveInKindPageContent() {
   return (
     <main className="min-h-screen bg-sand text-bark">
       <div className="flex">
-        <SupportSidebar />
 
         <div className="flex-1 min-w-0 px-4 py-8 sm:px-6 lg:px-10">
           <div className="mx-auto max-w-3xl space-y-6">

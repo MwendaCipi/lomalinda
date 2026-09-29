@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
-import { SiteNav } from "./site-nav";
 import { normalizePath } from "@/lib/paths";
 
 const marketingLinks = [
@@ -33,10 +32,7 @@ const publicWebsitePrefixes = ["/login", "/create-account", "/forgot-password", 
 /** The site home, and the sign-in surfaces below it. */
 const isPublicWebsite = (path: string) =>
   path === "/" || publicWebsitePrefixes.some((prefix) => path.startsWith(prefix));
-// The forced profile update is a modal, not a page to wander from: while it is
-// up the member gets the bare header only — no links, no account menu, and on
-// a phone no bottom tab bar to escape through or hide the submit button.
-const gatedPrefixes = ["/complete-profile"];
+
 
 /**
  * Header for the public website (the marketing pages).
@@ -59,17 +55,15 @@ export function MarketingNav() {
     setMenuOpen(false);
   }, [pathname]);
 
-  // A signed-in member keeps the app chrome — header, account menu and, on a
-  // phone, the bottom tab bar — everywhere in the app. This used to test a
-  // list of the sections that happened to look app-like, so tapping the mobile
+  // A signed-in member roaming these pages is in the app: AppFrame draws the
+  // rail around the page, so the marketing header steps aside entirely rather
+  // than sitting above it as a second navigation. This used to test a list of
+  // the sections that happened to look app-like, so tapping the mobile
   // Fellowship (/share) or Requests (/requests) tab dropped the tab bar and
   // stranded the member on the marketing site with no way back. Inverting the
   // test means a new public page cannot reintroduce that.
   if (signedIn && !isPublicWebsite(pathname)) {
-    if (gatedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
-      return <SiteNav navigationLocked />;
-    }
-    return <SiteNav />;
+    return null;
   }
 
   const accountHref = signedIn ? "/dashboard" : "/login";

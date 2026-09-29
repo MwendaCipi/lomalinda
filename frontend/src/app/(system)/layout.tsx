@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { AppShell } from "@/components/app-shell";
-import { SiteHeader } from "@/components/site-header";
+import { AppFrame } from "@/components/app-frame";
+import { PopupAnnouncementModal } from "@/components/popup-announcement-modal";
 import { SystemGate } from "@/components/system-gate";
 
 // Sections behind the sign-in wall are not for search engines. `robots` is
@@ -12,19 +12,20 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * The system area: the app itself.
+ *
+ * There is no top bar here any more — `AppFrame` draws the rail (and, on a
+ * phone, the tab bar that opens it), and the rail carries the identity
+ * controls the bar used to: the bell, the account menu and sign-out.
+ */
 export default function SystemLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      {/* System chrome: full header with account menu plus the mobile bottom
-          tab bar. The bottom padding keeps content clear of that tab bar. */}
-      <SiteHeader />
-      {/* `app-shell` is what locks outer scrolling on desktop (see globals.css) —
-          only the system's own panels scroll, never the public website. The
-          scroll mode (document / panel / pinned) is stamped by route inside
-          AppShell; pages carry no scroll classes of their own. */}
-      <AppShell>
+      <PopupAnnouncementModal />
+      <AppFrame>
         <SystemGate>{children}</SystemGate>
-      </AppShell>
+      </AppFrame>
     </>
   );
 }

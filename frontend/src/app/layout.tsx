@@ -45,8 +45,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="h-full flex flex-col">
         <AccessibilityProvider>
-          {/* Chrome is per group: the public website renders MarketingNav,
-              the system area renders SiteHeader (header + mobile tab bar). */}
+          {/* Chrome is per group: the public website renders MarketingNav, and
+              every signed-in page is framed by the rail (AppFrame). */}
           {children}
           <PwaRegister />
         </AccessibilityProvider>

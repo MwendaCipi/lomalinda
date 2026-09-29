@@ -1,22 +1,32 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Armchair,
   BarChart3,
   BookOpen,
+  Boxes,
+  Briefcase,
   Building2,
   Calendar,
   ClipboardList,
+  Crown,
   Gift,
   HandHeart,
   Heart,
   HeartHandshake,
+  Landmark,
   LayoutDashboard,
   Lightbulb,
   Megaphone,
+  Receipt,
+  Scale,
+  Settings,
   ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
+  Undo2,
   User,
+  UserCheck,
   Users,
   FileText,
 } from "lucide-react";
@@ -28,10 +38,9 @@ import {
  *
  * Every navigation surface renders from here:
  *
- * - the desktop bar (`SiteNav`) picks `barKeys`,
- * - the mobile tab bar picks `tabKeys` (Home is chrome, not a destination),
- * - the signed-in user menu picks `accountMenuKeys`,
- * - the member workspace rail picks `railBranches` / `railTopKeys`,
+ * - the rail (`NavRail`) picks `railEntries`,
+ * - the phone's tab bar picks `tabKeys` (Home and Menu are chrome),
+ * - the account menu picks `accountMenuKeys`,
  * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
  * - the marketing footer's columns pick `footerColumns`,
  * - the Fellowship hub's cards pick `fellowshipHubKeys`.
@@ -292,133 +301,263 @@ export function isActive(dest: Destination, pathname: string): boolean {
   return patterns.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+/** Does any of these roles reach the office console? */
+export function isStaffRole(roles: readonly string[]): boolean {
+  return roles.some((role) => STAFF_ROLES.includes(role));
+}
+
+// ── The rail ────────────────────────────────────────────────────────────────
+
 /**
- * The one destination a pathname is on — the most specific match wins.
+ * The rail is the app's navigation: one column, everywhere, at every width.
  *
- * Destinations deliberately overlap: `/member` matches the statements page
- * under it, and the Fellowship hub matches the whole `/community` tree where
- * welfare and child dedication also live. Asking each destination in turn
- * therefore lights up two rows at once. Comparing how many characters each
- * matched, and keeping the longest, leaves exactly one row highlighted — the
- * rule every surface that draws active state should use.
+ * A row either *is* a page (it navigates) or *holds* pages (it expands, and
+ * the pages inside it navigate). Nothing else — no second sidebar appears
+ * when a section opens, and no page draws navigation of its own.
  */
-export function activeDestination(pathname: string): Destination | null {
-  let best: Destination | null = null;
+
+/** One page in the rail. */
+export type RailItem = {
+  href: string;
+  label: string;
+  short?: string;
+  icon: LucideIcon;
+  /** Path prefixes that count as "here"; registry items carry their own. */
+  match?: readonly string[];
+  /** For pages that are a `?tab=` of one route, the value that page is. */
+  tab?: string;
+  /** Roles that may see it; absent means everyone. */
+  roles?: readonly string[];
+  /** Roles that hide it even where `roles` matches (the admin's rule). */
+  hiddenFor?: readonly string[];
+};
+
+/** A row: a page (`href`), or a group of pages (`items`) that expands. */
+export type RailEntry = {
+  label: string;
+  icon: LucideIcon;
+  href?: string;
+  match?: readonly string[];
+  items?: RailItem[];
+  roles?: readonly string[];
+  hiddenFor?: readonly string[];
+};
+
+/** A rail page, described by the registry where the registry has it. */
+function page(key: DestinationKey, extra: Partial<RailItem> = {}): RailItem {
+  const dest: NavDestination = destinations[key];
+  return {
+    href: dest.href,
+    label: dest.label,
+    short: dest.short,
+    icon: dest.icon,
+    match: dest.match,
+    ...extra,
+  };
+}
+
+/** A page that is a tab of the office console rather than a route of its own. */
+function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<RailItem> = {}): RailItem {
+  return { href: `/administration?tab=${tab}`, tab, label, icon, ...extra };
+}
+
+const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
+const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
+
+/**
+ * The office's pages, in the rail's own vocabulary.
+ *
+ * These are the sections the admin console has always had, gated by the same
+ * roles its sidebar used: the elders' desk for the office, the treasury for
+ * the treasurer, the deaconate for the deacons, and each department's own
+ * desk for its leader. An admin sees the desks in the office rather than the
+ * department copies of them — an officer reaches a department through
+ * Departments & Ministries.
+ */
+export const officeItems: RailItem[] = [
+  officeTab("leaders", "Departments & Ministries", Crown, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("users", "User Management", Users, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("board", "Board Meetings", Armchair, { roles: ["elder", "admin"] }),
+  officeTab("business", "Business Meetings", Briefcase, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("announcements", "Announcements", Megaphone, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
+  officeTab("settings", "Church Settings", Settings, { roles: ["elder", "clerk", "admin"] }),
+  officeTab("accounts", "Treasury Accounts", Landmark, { roles: ["treasurer", "admin"] }),
+  {
+    href: "/administration/fund-drives",
+    label: "Fund Drives",
+    icon: Target,
+    match: ["/administration/fund-drives"],
+    roles: ["treasurer", "admin"],
+  },
+  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
+  {
+    href: "/administration/reconciliation",
+    label: "Contributions Ledger",
+    icon: Scale,
+    match: ["/administration/reconciliation"],
+    roles: ["treasurer", "admin"],
+  },
+  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
+  officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
+  officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
+  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES }),
+  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES }),
+  ...[
+    { tab: "dept-amm", label: "Adventist Men", roles: ["men_ministry"] },
+    { tab: "dept-awm", label: "Adventist Women", roles: ["women_ministry"] },
+    { tab: "dept-aym", label: "Adventist Youth", roles: ["youth_leader"] },
+    { tab: "dept-children", label: "Children's Ministry", roles: ["children_ministry"] },
+    { tab: "dept-apm", label: "Possibility Ministries", roles: ["apm_leader"] },
+    { tab: "dept-chaplaincy", label: "Chaplaincy", roles: ["chaplaincy"] },
+  ].flatMap((dept) => [
+    officeTab(`${dept.tab}-members`, `${dept.label} Members`, Users, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
+    officeTab(`${dept.tab}-calendar`, `${dept.label} Calendar`, Calendar, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
+    officeTab(`${dept.tab}-activities`, `${dept.label} Activities`, ClipboardList, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
+  ]),
+];
+
+/**
+ * The rail, in the order a member meets it: the week's page first, then their
+ * own places, the church's, and last the office's.
+ *
+ * Every row is a destination from the registry or a page of the office
+ * console — a row cannot invent an href. A group's list holds all of its
+ * pages including the section's own landing page, so nothing is reachable
+ * only by guessing.
+ */
+export const railEntries: RailEntry[] = [
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"] },
+  {
+    label: "My Church",
+    icon: User,
+    items: [page("myAccount"), page("memberReports"), page("welfare"), page("prayerVisitation")],
+  },
+  {
+    label: "Fellowship",
+    icon: Megaphone,
+    items: [
+      page("fellowship"),
+      page("announcements"),
+      page("services"),
+      page("testimonies"),
+      page("childDedication"),
+      page("membership"),
+      page("ideas"),
+      page("calendar"),
+    ],
+  },
+  { label: "Materials", icon: BookOpen, items: [page("materials")] },
+  {
+    label: "Giving",
+    icon: HandHeart,
+    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("liveReports"), page("periodicalReports")],
+  },
+  { label: "About", icon: Building2, items: [page("about")] },
+  { label: "Office", icon: ShieldCheck, items: officeItems },
+];
+
+/** May these roles see this row or page? */
+export function canSee(
+  entry: { roles?: readonly string[]; hiddenFor?: readonly string[] },
+  roles: readonly string[]
+): boolean {
+  if (entry.hiddenFor && entry.hiddenFor.some((role) => roles.includes(role))) return false;
+  if (!entry.roles) return true;
+  return entry.roles.some((role) => roles.includes(role));
+}
+
+/**
+ * The rail as these roles see it: gated rows and pages dropped, and a row
+ * left with nothing under it dropped with them (an office tab a member may
+ * not open is not a section they should see at all).
+ */
+export function railFor(roles: readonly string[]): RailEntry[] {
+  return railEntries.flatMap((entry) => {
+    if (!canSee(entry, roles)) return [];
+    if (!entry.href && entry.items) {
+      const items = entry.items.filter((item) => canSee(item, roles));
+      return items.length === 0 ? [] : [{ ...entry, items }];
+    }
+    return [entry];
+  });
+}
+
+/** Which row the rail should open and highlight — the most specific match. */
+export type RailHere = { group: string | null; href: string | null };
+
+export function railHere(pathname: string, tab: string | null, entries: RailEntry[]): RailHere {
+  let best: RailHere = { group: null, href: null };
   let bestLength = -1;
-  for (const dest of Object.values(destinations) as Destination[]) {
-    const patterns = dest.match ?? [dest.href];
-    const length = patterns.reduce(
+
+  /**
+   * How strongly this page claims the current location — higher wins.
+   *
+   * A `match` prefix is the group's broad claim (the Fellowship hub matches
+   * the whole `/community` tree); an item that *is* the path is a far better
+   * answer than one that merely contains it, so landing exactly on a page's
+   * own href beats any prefix, and among prefixes the longest wins.
+   */
+  const measure = (item: RailItem): number => {
+    // A console tab matches on the query, not the path: every one of them is
+    // /administration, so the tab is what tells them apart.
+    if (item.tab) return pathname === "/administration" && tab === item.tab ? 10_000 + item.tab.length : -1;
+    if (pathname === item.href.replace(/\?.*$/, "")) return 100_000 + item.href.length;
+    const patterns = item.match ?? [item.href];
+    return patterns.reduce(
       (longest, prefix) =>
         pathname === prefix || pathname.startsWith(`${prefix}/`)
           ? Math.max(longest, prefix.length)
           : longest,
       -1
     );
-    if (length > bestLength) {
-      best = dest;
-      bestLength = length;
+  };
+
+  for (const entry of entries) {
+    if (entry.items) {
+      for (const item of entry.items) {
+        const length = measure(item);
+        if (length > bestLength) {
+          best = { group: entry.label, href: item.href };
+          bestLength = length;
+        }
+      }
+    } else if (entry.href) {
+      const length = measure({ href: entry.href, label: entry.label, icon: entry.icon, match: entry.match });
+      if (length > bestLength) {
+        best = { group: null, href: entry.href };
+        bestLength = length;
+      }
     }
   }
-  return best;
+
+  return bestLength >= 0 ? best : { group: null, href: null };
 }
 
-/** Does any of these roles reach the office console? */
-export function isStaffRole(roles: readonly string[]): boolean {
-  return roles.some((role) => STAFF_ROLES.includes(role));
-}
-
-// ── Surface layouts ─────────────────────────────────────────────────────────
-
 /**
- * The desktop bar. The Fellowship entry opens the section's hub — the same
- * place the same label opens on a phone, which is the whole point.
+ * The phone's tab bar: the four places members move between all week, and the
+ * rail itself behind the last tab. "home" is chrome — the dashboard-or-site-
+ * home tab, which also collapses history — and "menu" opens the rail, so the
+ * phone carries the same navigation as the desktop rather than a cut-down map.
  */
-export const barKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
-  { key: "fellowship" },
-  { key: "materials" },
-  { key: "give" },
-  { key: "about" },
-  { key: "administration", staffOnly: true },
-];
-
-/**
- * The phone's tab bar, in the order a member moves through the app. "home"
- * is the dashboard-or-site-home tab; it is chrome (dynamic destination,
- * history collapse), not a destination, so SiteNav renders it specially.
- * The office reaches its console from the tab bar; a member's account tab
- * takes that slot.
- */
-export const tabKeys: ({ key: DestinationKey; staffOnly?: boolean; memberOnly?: boolean } | "home")[] = [
+export const tabKeys: ({ key: DestinationKey } | "home" | "menu")[] = [
   "home",
   { key: "fellowship" },
   { key: "materials" },
   { key: "give" },
-  // The rail hides at this width, so a member's own places — account,
-  // statements, welfare, care — would otherwise live only in the avatar
-  // menu. Staff trade this slot for their console tab.
-  { key: "myAccount", memberOnly: true },
-  { key: "administration", staffOnly: true },
+  "menu",
 ];
 
 /**
- * The signed-in user menu. Deliberately short: the top bar shows the
- * church's places (Fellowship, Materials, Giving, About) and the rail shows
- * the workspace's, so this menu holds only what neither carries — the
- * member's own account, the calendar, and the office console.
+ * The account menu, at the foot of the rail. Short by design: the rail names
+ * every place the church has, so this holds only the member's own page, the
+ * calendar, and the console for staff.
  */
 export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "myAccount" },
   { key: "calendar" },
   { key: "administration", staffOnly: true },
 ];
-
-/**
- * The rail's branches — navigation lives in the sidebar and each branch
- * expands in place to show its own pages.
- *
- * The keys name destinations in the registry above: a branch cannot rename
- * a place or invent an href. The first key is the branch's landing page, so
- * a branch row navigates there and the caret beside it opens the children.
- */
-export type NavBranch = {
-  label: string;
-  icon: LucideIcon;
-  keys: DestinationKey[];
-  staffOnly?: boolean;
-};
-
-export const railBranches: NavBranch[] = [
-  { label: "My Church", icon: User, keys: ["myAccount", "memberReports", "welfare", "prayerVisitation"] },
-  {
-    label: "Fellowship",
-    icon: Megaphone,
-    keys: ["fellowship", "announcements", "services", "testimonies", "childDedication", "membership", "ideas", "calendar"],
-  },
-  { label: "Materials", icon: BookOpen, keys: ["materials"] },
-  { label: "Giving", icon: HandHeart, keys: ["give", "fundDrives", "inKind", "budget", "liveReports", "periodicalReports"] },
-  { label: "About", icon: Building2, keys: ["about"] },
-  { label: "Office", icon: ShieldCheck, keys: ["administration"], staffOnly: true },
-];
-
-/** The rail's standalone rows above the branches — nothing to expand. */
-export const railTopKeys: DestinationKey[] = ["dashboard"];
-
-/**
- * The branch a pathname falls in, or null when it is a standalone row.
- *
- * Branches are passed in because the rail renders a filtered list (staff see
- * the Office branch, members do not), and the active row must be looked for
- * among the rows that exist.
- */
-export function branchOf(pathname: string, branches: NavBranch[] = railBranches): NavBranch | null {
-  const here = activeDestination(pathname);
-  if (!here) return null;
-  return (
-    branches.find((branch) =>
-      branch.keys.some((key) => destinationOf(key).href === here.href)
-    ) ?? null
-  );
-}
 
 /**
  * The dashboard's quick tiles. `audience` narrows a tile to the offices that

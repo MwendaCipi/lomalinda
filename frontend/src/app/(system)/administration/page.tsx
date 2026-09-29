@@ -19,7 +19,6 @@ import { ExpenditureManager } from "@/components/expenditure-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
-import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -239,26 +238,8 @@ function AdministrationContent() {
   if (status === "denied") return null;
 
   return (
-    <main className="min-h-screen md:h-[calc(100dvh-4rem)] bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        {/* DESKTOP CONTEXTUAL SIDEBAR (Permanently Sticky on Desktop, Touching Header) */}
-        <AdminSidebar
-          activeTab={activeTab}
-          profile={profile}
-          permissions={{
-            isAdmin,
-            isClerk,
-            isElder,
-            isFinance,
-            isDeaconate: hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin", "elder", "clerk"),
-            roles: userRoles,
-          }}
-          onSelectTab={(tab) => {
-            setActiveTab(tab);
-            router.replace(`/administration?tab=${tab}`, { scroll: false });
-          }}
-        />
-
+    <main className="min-h-screen md:h-full bg-sand text-bark md:overflow-hidden">
+      <div className="flex h-full md:h-full md:overflow-hidden">
         {/* MAIN WORKSPACE CONTENT */}
         <div className="flex-1 min-w-0 h-full p-0 flex flex-col overflow-hidden">
           <div className="w-full h-full flex flex-col bg-white border-l border-sand-line overflow-hidden">

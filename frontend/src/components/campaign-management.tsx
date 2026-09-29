@@ -21,8 +21,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { SupportSidebar } from "@/components/sidebars/support-sidebar";
-import { AdminSidebar } from "@/components/sidebars/admin-sidebar";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
@@ -558,9 +556,8 @@ export function CampaignManagement({
 
   if (loading) {
     return (
-      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
+      <main className="min-h-screen md:h-full md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
-          {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 flex items-center justify-center">
             <p className="text-sm font-semibold text-moss">Loading Fund Drives...</p>
           </div>
@@ -571,9 +568,8 @@ export function CampaignManagement({
 
   if (isOfficial === false) {
     return (
-      <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
+      <main className="min-h-screen md:h-full md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
-          {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
           <div className="flex-1 min-w-0 p-8 text-center">
             <h1 className="text-2xl font-bold text-bark">Access Restricted</h1>
             <p className="mt-2 text-sm text-moss">
@@ -588,9 +584,8 @@ export function CampaignManagement({
   }
 
   return (
-    <main className="min-h-screen md:h-[calc(100dvh-4rem)] md:min-h-0 bg-white text-bark md:overflow-hidden">
+    <main className="min-h-screen md:h-full md:min-h-0 bg-white text-bark md:overflow-hidden">
       <div className="flex h-full md:overflow-hidden">
-        {isAdminMode ? <AdminSidebar /> : <SupportSidebar />}
 
         <div className="flex-1 min-w-0 w-full h-full bg-white p-5 sm:p-8 lg:p-10 border-b border-sand-line space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
           {/* Phones carry no admin sidebar, so this page gives its own way back. */}

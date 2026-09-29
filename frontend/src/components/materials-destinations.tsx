@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   BookOpen,
   ExternalLink,
@@ -173,68 +172,3 @@ export function MaterialsDestinationCards({ activeKey }: { activeKey?: string })
   );
 }
 
-/** The PC sidebar: the same destinations the hub's cards show, in groups. */
-export function MaterialsSidebar() {
-  const pathname = usePathname();
-
-  const activeKey = pathname.startsWith("/materials/children-lessons") || pathname.startsWith("/materials/children/lesson")
-    ? "children-lessons"
-    : pathname.startsWith("/materials/bible") || pathname.startsWith("/materials/egw")
-      ? "bible-egw"
-      : pathname.startsWith("/materials/hymnal")
-        ? "hymnals"
-        : pathname.startsWith("/materials/adult/lesson")
-          ? "adult-lesson"
-          : pathname.startsWith("/materials/adult/mission-reading")
-            ? "adult-mission"
-            : pathname.startsWith("/materials/children/mission-reading")
-              ? "children-mission"
-              : undefined;
-
-  return (
-    <aside className="hidden h-full min-h-0 w-60 shrink-0 border-r border-sand-line bg-sand-grain lg:block">
-      <div className="h-full min-h-0 space-y-5 overflow-y-auto p-5 scrollbar-thin">
-        <div className="border-b border-sand-line pb-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-ember">Study Materials</p>
-          <p className="mt-1 text-xs text-moss">
-            Sabbath School lessons, mission readings, scripture &amp; E.G. White writings.
-          </p>
-        </div>
-        <nav className="space-y-4">
-          {materialGroups.map((group) => (
-            <div key={group.label}>
-              <p className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
-                {group.label}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((dest) => {
-                  const isActive = activeKey === dest.key;
-                  const Icon = dest.icon;
-                  const row = (
-                    <>
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate">{dest.label}</span>
-                      {dest.isExternal && <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />}
-                    </>
-                  );
-                  const cls = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
-                    isActive ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
-                  }`;
-                  return dest.isExternal ? (
-                    <a key={dest.key} href={dest.href} className={cls}>
-                      {row}
-                    </a>
-                  ) : (
-                    <Link key={dest.key} href={dest.href} className={cls}>
-                      {row}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </div>
-    </aside>
-  );
-}

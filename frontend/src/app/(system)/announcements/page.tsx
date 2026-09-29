@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
@@ -172,9 +171,8 @@ export default function AnnouncementsPage() {
 
   return (
     <main className="min-h-screen bg-white text-bark">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <FellowshipSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 h-full md:h-full bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
             {/* Just the heading and the density toggle: the feed below is what
                 the page is for, and nothing is served but what is live now.

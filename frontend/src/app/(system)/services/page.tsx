@@ -1,6 +1,5 @@
 "use client";
 
-import { FellowshipSidebar } from "@/components/sidebars/fellowship-sidebar";
 import { fellowshipLinks } from "@/config/site-sections";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { SatelliteDish } from "lucide-react";
@@ -17,9 +16,8 @@ import { SatelliteDish } from "lucide-react";
 export default function LiveServicesPage() {
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
-      <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <FellowshipSidebar />
-        <div className="flex-1 min-w-0 h-full md:h-[calc(100vh-4rem)] bg-sand p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
+      <div className="flex h-full md:h-full md:overflow-hidden">
+        <div className="flex-1 min-w-0 h-full md:h-full bg-sand p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Fellowship</p>
