@@ -8,6 +8,7 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
+import { SubNav } from "./sub-nav";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -472,28 +473,19 @@ export function TreasuryAccountsManager() {
             aria-label={view === "accounts" ? "Search treasury accounts" : "Search account transactions"}
           />
           <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
-          <div
-            className="flex h-[38px] shrink-0 items-center self-start rounded-xl border border-sand-line bg-sand p-0.5 sm:self-auto"
-            role="group"
-            aria-label="Treasury view"
-          >
-            {([
-              { key: "accounts" as const, label: `Accounts (${accounts.length})` },
-              { key: "transactions" as const, label: `Transaction log (${transactions.length})` },
-            ]).map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setView(option.key)}
-                aria-pressed={view === option.key}
-                className={`h-8 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${
-                  view === option.key ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {/* The desk's two views, on the shared strip. The counts ride the
+              tabs themselves so they read the same way here as on every other
+              desk rather than swelling the label. */}
+          <SubNav
+            label="Treasury views"
+            value={view}
+            onChange={(key) => setView(key as "accounts" | "transactions")}
+            items={[
+              { key: "accounts", label: "Accounts", count: accounts.length },
+              { key: "transactions", label: "Transaction log", count: transactions.length },
+            ]}
+            className="self-start sm:self-auto"
+          />
         </div>
       </div>
 

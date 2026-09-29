@@ -1,25 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRightLeft,
   Boxes,
-  CalendarDays,
   CheckCircle2,
-  ClipboardList,
   Clock,
   Plus,
   Search,
-  UserCheck,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { SubNav } from "./sub-nav";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -165,23 +159,10 @@ interface DeaconateManagerProps {
   initialTab?: "inventory" | "rota" | "members" | "calendar";
 }
 
-/**
- * The deaconate's four desks, as the console's own `?tab=` values. The strip
- * navigates exactly the way the rail does, so the page never keeps a second
- * copy of which desk is open — the URL stays the single answer.
- */
-const DEACONATE_VIEWS: { key: "inventory" | "rota" | "members" | "calendar"; tab: string; label: string; icon: LucideIcon }[] = [
-  { key: "inventory", tab: "inventory", label: "Inventory", icon: Boxes },
-  { key: "rota", tab: "deaconate-rota", label: "Duty Rota", icon: ClipboardList },
-  { key: "members", tab: "deaconate-members", label: "Deaconate Team", icon: UserCheck },
-  { key: "calendar", tab: "deaconate-calendar", label: "Calendar", icon: CalendarDays },
-];
-
 export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerProps) {
-  // The admin sidebar owns which deaconate panel is open, so the tab comes
-  // straight from the URL instead of a second, in-page copy that can drift.
+  // The shell's section strip owns which deaconate page is open, so the tab
+  // comes straight from the URL instead of a second, in-page copy that can drift.
   const activeTab = initialTab;
-  const router = useRouter();
 
   // Inventory state (server-backed: this is the real property register)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -374,19 +355,6 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      {/* The desk's four views, pinned to the top of the page: property,
-          duty, the team and the ordinances calendar. */}
-      <SubNav
-        sticky
-        label="Deaconate views"
-        items={DEACONATE_VIEWS.map(({ key, label, icon }) => ({ key, label, icon }))}
-        value={activeTab}
-        onChange={(key) => {
-          const view = DEACONATE_VIEWS.find((option) => option.key === key);
-          if (view) router.replace(`/administration?tab=${view.tab}`, { scroll: false });
-        }}
-      />
-
       {/* ── INVENTORY: fixed filters on top, scrolling rows, fixed actions below ── */}
       {activeTab === "inventory" && (
         <>

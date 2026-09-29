@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 
 /** One view of a page, as its sub-navigation names it. */
@@ -13,26 +14,46 @@ export type SubNavItem = {
   help?: string;
 };
 
+/** One page of a section, as the section's own strip names it. */
+export type SectionNavItem = SubNavItem & { href: string };
+
+const stripClass =
+  "flex h-10 w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-sand-line bg-sand p-0.5 sm:w-auto sm:shrink-0";
+
+const tabClass = (active: boolean) =>
+  `flex h-9 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
+    active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+  }`;
+
+/** The inside of a tab — the mark, the name and any count. */
+function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <>
+      {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+      {item.label}
+      {typeof item.count === "number" ? (
+        <span className={`text-[10px] font-bold ${active ? "text-white/70" : "text-moss-faint"}`}>{item.count}</span>
+      ) : null}
+    </>
+  );
+}
+
 /**
- * A page's own sub-navigation: the views of one place, as a segmented strip at
- * the top of the page.
+ * A page's own sub-navigation: the views of one place, as a segmented strip.
  *
- * The rail says which *place* you are in; this says which *view* of it. It
- * belongs on the page rather than under the rail's row, because the sibling
- * views are then one tap away with the current one marked — no round trip
- * through the menu to get from a department's roll to its calendar. Every desk
- * draws the same strip, so two views of the same shape never look like two
- * different controls.
+ * The rail says which *place* you are in; this says which *view* of it. The
+ * strip is built once and drawn everywhere, so two views of the same shape
+ * never look like two different controls.
  *
  * `sticky` pins the strip — and anything passed as `trailing` — to the top of
- * the scrolling page under a hairline, which is what a desk wants: the views
- * stay reachable while the table beneath them scrolls.
+ * the scrolling page under a hairline, for a page whose own table scrolls
+ * beneath it.
  *
- * The strip is a group of toggle buttons (`aria-pressed`) rather than
- * `role="tab"`: the views are swapped in place with no linked panel elements
- * to announce, and this is the same contract the app's other segmented
- * controls already keep. `help` becomes the button's tooltip, so the reason
- * for a view travels with the control.
+ * This variant switches *within* a page: the items are toggle buttons
+ * (`aria-pressed`) rather than links, because they swap content in place.
+ * `SectionNav` below is the other half — the sibling pages of a section, which
+ * are links.
  */
 export function SubNav({
   items,
@@ -54,13 +75,8 @@ export function SubNav({
   className?: string;
 }) {
   const strip = (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex h-10 w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-sand-line bg-sand p-0.5 sm:w-auto sm:shrink-0"
-    >
+    <div role="group" aria-label={label} className={stripClass}>
       {items.map((item) => {
-        const Icon = item.icon;
         const active = item.key === value;
         return (
           <button
@@ -69,17 +85,9 @@ export function SubNav({
             onClick={() => onChange(item.key)}
             aria-pressed={active}
             title={item.help}
-            className={`flex h-9 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
-              active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
-            }`}
+            className={tabClass(active)}
           >
-            {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-            {item.label}
-            {typeof item.count === "number" ? (
-              <span className={`text-[10px] font-bold ${active ? "text-white/70" : "text-moss-faint"}`}>
-                {item.count}
-              </span>
-            ) : null}
+            <TabBody item={item} active={active} />
           </button>
         );
       })}
@@ -105,5 +113,45 @@ export function SubNav({
       {strip}
       {trailing}
     </div>
+  );
+}
+
+/**
+ * A section's pages, as the strip that sits at the top of each of them.
+ *
+ * These are the rows that used to hang under a rail item: the same list, on
+ * the page rather than hidden behind a caret in the sidebar. Every page of the
+ * section draws it, so the sibling pages are one tap away with the current one
+ * marked — and the rail stays a short list of places instead of a tree.
+ */
+export function SectionNav({
+  items,
+  activeHref,
+  label,
+  className = "",
+}: {
+  items: readonly SectionNavItem[];
+  /** The current page's href, as the navigation model spells it. */
+  activeHref: string | null;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <nav aria-label={label} className={`${stripClass} ${className}`}>
+      {items.map((item) => {
+        const active = item.href === activeHref;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            title={item.help}
+            className={tabClass(active)}
+          >
+            <TabBody item={item} active={active} />
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

@@ -7,18 +7,27 @@ import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
 import { MobileMenu } from "./mobile-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
+import { SectionNav } from "./sub-nav";
+import { railFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
+import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
+import { useRailHere } from "@/hooks/use-rail-location";
 
 /**
- * The app shell — one rail, one page, no top bar.
+ * The app shell — one rail, one page, one strip between them.
  *
  * Every signed-in page in the app renders through this, whichever route group
  * it lives in, so navigation never changes shape between a section and the
- * console: the rail is on the left, the identity bar sits at the top of the
- * page column beside it, and the page scrolls in what is left. On a phone the
- * rail steps aside and the same map is opened as cards from the last tab —
- * see MobileMenu.
+ * console: the rail (flat, one row per place) is on the left, the identity bar
+ * sits at the top of the page column beside it, and under the bar is the strip
+ * of the place you are in — the pages that used to hang under the rail's row.
+ * The page scrolls in what is left. On a phone the rail steps aside and the
+ * same map is opened as cards from the last tab — see MobileMenu.
+ *
+ * The strip lives in the page column rather than inside the scrolling panel, so
+ * it stays put in both scroll modes and no page has to draw navigation of its
+ * own.
  *
  * The few surfaces that are the *public website* — the landing page and the
  * sign-in journey — keep their own header and get no rail: they are the shop
@@ -56,7 +65,7 @@ const LOCKED_PREFIXES = ["/complete-profile"];
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
-  const { hasToken } = useHeaderData();
+  const { me, hasToken } = useHeaderData();
   /**
    * The menu remembers the page it was opened on, not a boolean: arriving
    * somewhere else closes it by derivation, so a route change needs no effect
@@ -66,6 +75,24 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const menuOpen = menuOpenedAt === pathname;
   const setMenuOpen = (open: boolean) => setMenuOpenedAt(open ? pathname : null);
   const mode = scrollModeForPath(pathname);
+
+  const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
+  const departments = useDepartments();
+  const entries = railFor(roles, departments);
+  const here = useRailHere(pathname, entries);
+  /**
+   * The place you are in. Its pages are the strip under the bar — the list that
+   * used to expand under the rail's row. A place with a single page gets no
+   * strip: a toggle that switches to itself is noise.
+   */
+  const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
+  const sectionPages = (section?.items ?? []).map((item) => ({
+    key: item.href,
+    href: item.href,
+    label: item.short ?? item.label,
+    icon: item.icon,
+    help: item.label,
+  }));
 
   // The rail is for members in the app. The website keeps its own header, and
   // the forced-profile gate shows nothing but the form.
@@ -86,6 +113,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               it starts after the rail, so nothing is drawn above it. */}
           <div className="app-panel-column">
             <AppTopBar />
+            {sectionPages.length > 1 && (
+              /* `sticky top-16` keeps the strip under the identity bar on a
+                 phone, where the document itself scrolls; where the panel
+                 scrolls, the strip sits above it and is already still. */
+              <div className="sticky top-16 z-20 shrink-0 border-b border-sand-line bg-sand-grain px-3 py-2.5 sm:px-5">
+                <SectionNav
+                  label={`${section?.label ?? ""} pages`}
+                  activeHref={here.href}
+                  items={sectionPages}
+                />
+              </div>
+            )}
             <div className="app-panel">{children}</div>
           </div>
         </div>

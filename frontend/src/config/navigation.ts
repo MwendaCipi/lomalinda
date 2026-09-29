@@ -306,9 +306,11 @@ export function isStaffRole(roles: readonly string[]): boolean {
 /**
  * The rail is the app's navigation: one column, everywhere, at every width.
  *
- * A row either *is* a page (it navigates) or *holds* pages (it expands, and
- * the pages inside it navigate). Nothing else — no second sidebar appears
- * when a section opens, and no page draws navigation of its own.
+ * Every row is a *place*, and the rail lists only places: a row either is a
+ * page (`href`) or holds a section's pages (`items`). The pages a row holds do
+ * not hang under it in the sidebar — they are the strip at the top of each of
+ * them (`SectionNav`, drawn by the shell), so the rail stays short and every
+ * page still shows its siblings one tap away.
  */
 
 /** One page in the rail. */
@@ -339,7 +341,7 @@ export type RailItem = {
   hiddenFor?: readonly string[];
 };
 
-/** A row: a page (`href`), or a group of pages (`items`) that expands. */
+/** A row: a place — a page (`href`), or a section whose pages are `items`. */
 export type RailEntry = {
   label: string;
   icon: LucideIcon;
@@ -521,9 +523,35 @@ export const railEntries: RailEntry[] = [
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
   // The two lists of the church's own departments, filled from its records.
-  { label: "Ministries", icon: HeartHandshake, fromDepartments: "ministry", roles: STAFF_ROLES },
-  { label: "Departments", icon: Users, fromDepartments: "department", roles: STAFF_ROLES },
+  // Their `href` is the directory that lists them: the rail row is a place, and
+  // the departments themselves are the pages of it, drawn as a strip on top.
+  {
+    label: "Ministries",
+    icon: HeartHandshake,
+    href: "/administration?tab=leaders",
+    fromDepartments: "ministry",
+    roles: STAFF_ROLES,
+  },
+  {
+    label: "Departments",
+    icon: Users,
+    href: "/administration?tab=leaders",
+    fromDepartments: "department",
+    roles: STAFF_ROLES,
+  },
 ];
+
+/**
+ * The one page a rail row opens.
+ *
+ * A row is a *place*: it may name its own page (`href`) or be a section whose
+ * first page is the way in (`items[0]`). Either way the rail has something to
+ * link to, because the pages below a row no longer hang under it — they are
+ * the strip at the top of each of them (`SectionNav`).
+ */
+export function entryHref(entry: RailEntry): string | null {
+  return entry.href ?? entry.items?.[0]?.href ?? null;
+}
 
 /** May these roles see this row or page? */
 export function canSee(

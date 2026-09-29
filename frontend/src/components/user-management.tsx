@@ -19,6 +19,7 @@ import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
+import { SubNav } from "./sub-nav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -2125,44 +2126,31 @@ export function UserManagement() {
                 Confirmed tabs by account state; Pending tabs by what the
                 person is joining as. On a phone the group scrolls rather than
                 wraps, keeping the band to one line. */}
-            <div
-              className="flex h-[38px] w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-xl border border-sand-line bg-sand p-0.5 sm:w-auto"
-              role="group"
-              aria-label={invitationFilter === "confirmed" ? "Account status filter" : "Pending record type filter"}
-            >
-              {(invitationFilter === "confirmed" ? STATUS_TABS : PENDING_KIND_TABS).map((tab) => {
-                const isActive = invitationFilter === "confirmed" ? statusFilter === tab.key : pendingKindFilter === tab.key;
-                const count =
+            {/* The list tabs, on the shared strip. Confirmed tabs by account
+                state; Pending tabs by what the person is joining as. The
+                counts ride the tabs, so the same control reads the same way
+                here as on every other desk. */}
+            <SubNav
+              className="w-full sm:w-auto"
+              label={invitationFilter === "confirmed" ? "Account status filter" : "Pending record type filter"}
+              value={invitationFilter === "confirmed" ? statusFilter : pendingKindFilter}
+              onChange={(key) =>
+                invitationFilter === "confirmed"
+                  ? setStatusFilter(key as StatusFilter)
+                  : setPendingKindFilter(key as PendingKindFilter)
+              }
+              items={(invitationFilter === "confirmed" ? STATUS_TABS : PENDING_KIND_TABS).map((tab) => ({
+                key: tab.key,
+                label: tab.label,
+                help: tab.help,
+                count:
                   invitationFilter === "confirmed"
                     ? tab.key === "all"
                       ? rosterScoped.length
                       : statusCounts[tab.key as Exclude<StatusFilter, "all">]
-                    : pendingScoped.filter((row) => pendingKindOf(row) === tab.key).length;
-                return (
-                  <button
-                    key={`${invitationFilter}-${tab.key}`}
-                    type="button"
-                    onClick={() =>
-                      invitationFilter === "confirmed"
-                        ? setStatusFilter(tab.key as StatusFilter)
-                        : setPendingKindFilter(tab.key as PendingKindFilter)
-                    }
-                    title={tab.help}
-                    aria-pressed={isActive}
-                    className={`flex h-8 flex-1 shrink-0 items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition sm:flex-none ${
-                      isActive ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
-                    }`}
-                  >
-                    {tab.label}
-                    <span
-                      className={`text-[10px] font-bold ${isActive ? "text-white/70" : "text-moss-faint"}`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                    : pendingScoped.filter((row) => pendingKindOf(row) === tab.key).length,
+              }))}
+            />
           </div>
         </div>
         {/* Second row: the list chooser, the type filter and the search box. */}
