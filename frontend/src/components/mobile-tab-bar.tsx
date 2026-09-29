@@ -23,11 +23,11 @@ type TabItem = {
 
 /**
  * The phone's tab bar — the four places a member moves between all week, and
- * the rail itself behind the last tab.
+ * the whole map behind the last tab.
  *
- * The rail is one document at every width; on a phone it slides in as a
- * drawer rather than being cut down to a shorter map, so the phone carries
- * exactly the navigation the desktop does.
+ * The rail is not squeezed into a drawer on a phone: the same entries open as
+ * cards (MobileMenu), because a column written for a desktop is a poor thing
+ * to read on a phone. Whatever a member may see, they see all of it here.
  */
 export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMenu: () => void }) {
   const pathname = normalizePath(usePathname());
@@ -99,7 +99,8 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
       ];
     }
     if (entry === "menu") {
-      return [{ key: "menu", label: "Menu", icon: Menu, active: menuOpen }];
+      // Tapping again puts the cards away — the icon says so.
+      return [{ key: "menu", label: "Menu", icon: menuOpen ? X : Menu, active: menuOpen }];
     }
     const dest = destinationOf(entry.key);
     return [
@@ -114,15 +115,17 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
   });
 
   return (
+    /* The bar sits above the menu sheet (z-50) — the last tab both opens and
+       closes it. */
     <nav
       aria-hidden={navHidden && !menuOpen}
-      className={`md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/15 bg-bark/95 px-1.5 py-1.5 text-white shadow-lg backdrop-blur-md pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
+      className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-around border-t border-white/15 bg-bark/95 px-1.5 py-1.5 text-white shadow-lg backdrop-blur-md pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
         navHidden && !menuOpen ? "translate-y-full pointer-events-none" : "translate-y-0"
       }`}
       aria-label="Main"
     >
       {items.map((item) => {
-        const Icon = item.key === "menu" && menuOpen ? X : item.icon;
+        const Icon = item.icon;
         const className = `relative flex flex-col items-center justify-center rounded-xl px-1 py-1 text-center min-w-[46px] min-h-[44px] transition-colors ${
           item.active ? "border border-white/30 bg-white/20 font-bold text-white shadow-xs" : "text-white/75 hover:text-white"
         }`;

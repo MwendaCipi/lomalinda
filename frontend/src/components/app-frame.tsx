@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
+import { MobileMenu } from "./mobile-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { normalizePath } from "@/lib/paths";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -15,8 +16,9 @@ import { useHeaderData } from "@/hooks/use-header-data";
  * Every signed-in page in the app renders through this, whichever route group
  * it lives in, so navigation never changes shape between a section and the
  * console: the rail is on the left, the identity bar sits at the top of the
- * page column beside it, the page scrolls in what is left, and on a phone the
- * same rail slides in from the tab bar.
+ * page column beside it, and the page scrolls in what is left. On a phone the
+ * rail steps aside and the same map is opened as cards from the last tab —
+ * see MobileMenu.
  *
  * The few surfaces that are the *public website* — the landing page and the
  * sign-in journey — keep their own header and get no rail: they are the shop
@@ -56,13 +58,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
   const { hasToken } = useHeaderData();
   /**
-   * The drawer remembers the page it was opened on, not a boolean: arriving
+   * The menu remembers the page it was opened on, not a boolean: arriving
    * somewhere else closes it by derivation, so a route change needs no effect
-   * and the drawer can never linger over the page it navigated to.
+   * and the menu can never linger over the page it navigated to.
    */
-  const [drawerOpenedAt, setDrawerOpenedAt] = useState<string | null>(null);
-  const menuOpen = drawerOpenedAt === pathname;
-  const setMenuOpen = (open: boolean) => setDrawerOpenedAt(open ? pathname : null);
+  const [menuOpenedAt, setMenuOpenedAt] = useState<string | null>(null);
+  const menuOpen = menuOpenedAt === pathname;
+  const setMenuOpen = (open: boolean) => setMenuOpenedAt(open ? pathname : null);
   const mode = scrollModeForPath(pathname);
 
   // The rail is for members in the app. The website keeps its own header, and
@@ -79,7 +81,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         data-scroll-mode={mode}
       >
         <div className="app-shell-body flex min-h-0 flex-1">
-          <NavRail open={menuOpen} onClose={() => setDrawerOpenedAt(null)} />
+          <NavRail />
           {/* The bar lives inside the content column, not across the window:
               it starts after the rail, so nothing is drawn above it. */}
           <div className="app-panel-column">
@@ -88,6 +90,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
       <MobileTabBar menuOpen={menuOpen} onToggleMenu={() => setMenuOpen(!menuOpen)} />
     </>
   );

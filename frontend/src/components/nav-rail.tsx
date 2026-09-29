@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { railFor, railHere, type RailEntry, type RailItem } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
@@ -13,9 +13,10 @@ import { useHeaderData } from "@/hooks/use-header-data";
 /**
  * The rail — the app's navigation, in one column.
  *
- * One rail, everywhere: desktop shows it beside the page, a phone slides it in
- * as a drawer. It is the only navigation in the app, which is why a section
- * never opens a second sidebar and no page draws navigation of its own.
+ * One rail, everywhere: it stands beside the page and is the desktop's only
+ * navigation, which is why a section never opens a second sidebar and no page
+ * draws navigation of its own. A phone does not get a narrower column to read
+ * — the same map opens as cards from the last tab, drawn by MobileMenu.
  *
  * A row either *is* a page or *holds* pages:
  *
@@ -25,7 +26,7 @@ import { useHeaderData } from "@/hooks/use-header-data";
  *   time (the rail scrolls instead of growing), and the open group is scrolled
  *   into view — so the rail always shows where you are.
  */
-export function NavRail({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
+export function NavRail() {
   const pathname = normalizePath(usePathname());
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -76,12 +77,6 @@ export function NavRail({ open = false, onClose }: { open?: boolean; onClose?: (
 
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // The phone's drawer closes itself on arrival: the tap did its job.
-  useEffect(() => {
-    onClose?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
-
   // The open group is scrolled into view, so the rail shows where you are
   // without the member hunting for it. DOM only — no state to settle.
   useEffect(() => {
@@ -99,64 +94,42 @@ export function NavRail({ open = false, onClose }: { open?: boolean; onClose?: (
   const isHere = (item: RailItem) => here.href !== null && here.href === item.href;
 
   return (
-    <>
-      {/* Scrim: the drawer is modal, so a tap outside it puts it away. */}
-      {open && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={onClose}
-          className="fixed inset-0 z-40 bg-bark/50 backdrop-blur-xs lg:hidden"
-        />
-      )}
+    <aside
+      className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-sand-line bg-sand-grain lg:flex"
+      aria-label="Navigation"
+    >
+      {/* Brand — the way home, at the head of the rail. */}
+      <div className="flex items-center justify-between border-b border-sand-line px-4 py-3.5">
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-bark p-1">
+            <Image src="/adventist-symbol.svg" alt="SDA Church" width={32} height={32} className="h-full w-auto object-contain" priority />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm leading-tight tracking-tight text-bark">SDA Church</span>
+            <span className="block truncate text-[11px] leading-tight text-moss">Loma Linda</span>
+          </span>
+        </Link>
+      </div>
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[85vw] shrink-0 flex-col border-r border-sand-line bg-sand-grain transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-64 lg:max-w-none lg:translate-x-0 ${
-          open ? "translate-x-0 shadow-2xl" : "-translate-x-full"
-        }`}
-        aria-label="Navigation"
-      >
-        {/* Brand — the way home, at the head of the rail. */}
-        <div className="flex items-center justify-between border-b border-sand-line px-4 py-3.5">
-          <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-bark p-1">
-              <Image src="/adventist-symbol.svg" alt="SDA Church" width={32} height={32} className="h-full w-auto object-contain" priority />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm leading-tight tracking-tight text-bark">SDA Church</span>
-              <span className="block truncate text-[11px] leading-tight text-moss">Loma Linda</span>
-            </span>
-          </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close navigation"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-moss transition hover:bg-sand lg:hidden"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* The rail scrolls on its own; the page never moves with it. */}
-        <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
-          <nav className="space-y-0.5">
-            {entries.map((entry) => (
-              <RailRow
-                key={entry.label}
-                entry={entry}
-                open={openLabel === entry.label}
-                here={here.href}
-                onToggle={() => toggle(entry.label)}
-                isHere={isHere}
-                registerRef={(node) => {
-                  groupRefs.current[entry.label] = node;
-                }}
-              />
-            ))}
-          </nav>
-        </div>
-      </aside>
-    </>
+      {/* The rail scrolls on its own; the page never moves with it. */}
+      <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
+        <nav className="space-y-0.5">
+          {entries.map((entry) => (
+            <RailRow
+              key={entry.label}
+              entry={entry}
+              open={openLabel === entry.label}
+              here={here.href}
+              onToggle={() => toggle(entry.label)}
+              isHere={isHere}
+              registerRef={(node) => {
+                groupRefs.current[entry.label] = node;
+              }}
+            />
+          ))}
+        </nav>
+      </div>
+    </aside>
   );
 }
 
