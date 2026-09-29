@@ -4167,24 +4167,24 @@ class ChurchFinancialReportSuggestionsView(APIView):
         )
         cash = CashContribution.objects.filter(received_on__range=(start, today))
 
-        tithes = Decimal('0')
-        offerings = Decimal('0')
+        trust_fund = Decimal('0')
+        local_offerings = Decimal('0')
         gifts = 0
         for purpose, amount, count in (
             digital.values_list('purpose').annotate(total=Sum('amount'), rows=Count('id'))
         ):
             if _giving_to_tithes(purpose):
-                tithes += Decimal(amount or 0)
+                trust_fund += Decimal(amount or 0)
             else:
-                offerings += Decimal(amount or 0)
+                local_offerings += Decimal(amount or 0)
             gifts += count
         for purpose, amount, count in (
             cash.values_list('purpose').annotate(total=Sum('amount'), rows=Count('id'))
         ):
             if _giving_to_tithes(purpose):
-                tithes += Decimal(amount or 0)
+                trust_fund += Decimal(amount or 0)
             else:
-                offerings += Decimal(amount or 0)
+                local_offerings += Decimal(amount or 0)
             gifts += count
 
         expenses = Expenditure.objects.filter(expenditure_date__range=(start, today)).aggregate(
@@ -4192,13 +4192,17 @@ class ChurchFinancialReportSuggestionsView(APIView):
             rows=Count('id'),
         )
 
+        expenditure = Decimal(expenses['total'] or 0).quantize(Decimal('0.01'))
         return Response({
             'period_start': start.isoformat(),
             'period_end': today.isoformat(),
             'title': f"{start.strftime('%B %Y')} stewardship report",
-            'total_tithes': str(tithes.quantize(Decimal('0.01'))),
-            'total_offerings': str(offerings.quantize(Decimal('0.01'))),
-            'total_expenses': str(Decimal(expenses['total'] or 0).quantize(Decimal('0.01'))),
+            'trust_fund': str(trust_fund.quantize(Decimal('0.01'))),
+            'local_church_offerings': str(local_offerings.quantize(Decimal('0.01'))),
+            'expenditure': str(expenditure),
+            # What the period leaves in hand, computed here so the desk sees
+            # the same total the published report will carry.
+            'total': str((trust_fund + local_offerings).quantize(Decimal('0.01')) - expenditure),
             # How many lines each figure was drawn from, so the desk can tell
             # an empty month from one it has already posted entries against.
             'gift_entries': gifts,

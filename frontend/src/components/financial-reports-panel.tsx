@@ -170,21 +170,28 @@ export function FinancialReportsPanel() {
 
               <h3 className="mt-3 text-lg font-semibold text-bark">{report.title}</h3>
 
-              {/* Three columns on a wide screen; on a phone each figure takes
-                  its own row (label left, amount right) — three money columns
-                  on a 390px card wrap every amount onto two lines. */}
-              <dl className="mt-4 grid gap-2 border-t border-sand-line pt-4 text-sm sm:grid-cols-3 sm:gap-3">
+              {/* The report's figures, in the field's own language: trust fund
+                  and local offerings in, expenditure out, and the total they
+                  leave. On a wide screen three columns with the total beside
+                  them; on a phone each figure takes its own row (label left,
+                  amount right) — money columns on a 390px card wrap every
+                  amount onto two lines. */}
+              <dl className="mt-4 grid gap-2 border-t border-sand-line pt-4 text-sm sm:grid-cols-4 sm:gap-3">
                 <div className="flex items-baseline justify-between gap-3 sm:block">
-                  <dt className="text-[11px] uppercase tracking-wider text-moss">Tithes</dt>
-                  <dd className="font-semibold text-bark sm:mt-1">{money(report.total_tithes)}</dd>
+                  <dt className="text-[11px] uppercase tracking-wider text-moss">Trust Fund</dt>
+                  <dd className="font-semibold text-bark sm:mt-1">{money(report.trust_fund)}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
-                  <dt className="text-[11px] uppercase tracking-wider text-moss">Offerings</dt>
-                  <dd className="font-semibold text-bark sm:mt-1">{money(report.total_offerings)}</dd>
+                  <dt className="text-[11px] uppercase tracking-wider text-moss">Local Church Offerings</dt>
+                  <dd className="font-semibold text-bark sm:mt-1">{money(report.local_church_offerings)}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
-                  <dt className="text-[11px] uppercase tracking-wider text-moss">Expenses</dt>
-                  <dd className="font-semibold text-bark sm:mt-1">{money(report.total_expenses)}</dd>
+                  <dt className="text-[11px] uppercase tracking-wider text-moss">Expenditure</dt>
+                  <dd className="font-semibold text-bark sm:mt-1">{money(report.expenditure)}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 sm:block">
+                  <dt className="text-[11px] font-bold uppercase tracking-wider text-ember">Total</dt>
+                  <dd className="font-bold text-bark sm:mt-1">{money(report.total)}</dd>
                 </div>
               </dl>
 

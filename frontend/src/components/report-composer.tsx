@@ -14,9 +14,10 @@ export type Report = {
   period_type: PeriodType;
   period_start: string;
   period_end: string;
-  total_tithes: string;
-  total_offerings: string;
-  total_expenses: string;
+  trust_fund: string;
+  local_church_offerings: string;
+  expenditure: string;
+  total: string;
   notes: string;
   published_to_members: boolean;
   created_at: string;
@@ -37,9 +38,9 @@ export type Draft = {
   period_type: PeriodType;
   period_start: string;
   period_end: string;
-  total_tithes: string;
-  total_offerings: string;
-  total_expenses: string;
+  trust_fund: string;
+  local_church_offerings: string;
+  expenditure: string;
   notes: string;
   published_to_members: boolean;
 };
@@ -53,9 +54,9 @@ export function blankDraft(): Draft {
     period_type: "monthly",
     period_start: `${today.slice(0, 7)}-01`,
     period_end: today,
-    total_tithes: "",
-    total_offerings: "",
-    total_expenses: "",
+    trust_fund: "",
+    local_church_offerings: "",
+    expenditure: "",
     notes: "",
     published_to_members: true,
   };
@@ -66,9 +67,9 @@ export const draftFromReport = (report: Report): Draft => ({
   period_type: report.period_type,
   period_start: report.period_start,
   period_end: report.period_end,
-  total_tithes: String(report.total_tithes ?? ""),
-  total_offerings: String(report.total_offerings ?? ""),
-  total_expenses: String(report.total_expenses ?? ""),
+  trust_fund: String(report.trust_fund ?? ""),
+  local_church_offerings: String(report.local_church_offerings ?? ""),
+  expenditure: String(report.expenditure ?? ""),
   notes: report.notes ?? "",
   published_to_members: report.published_to_members,
 });
@@ -123,9 +124,9 @@ export function ReportComposer({
       period_type: draft.period_type,
       period_start: draft.period_start,
       period_end: draft.period_end,
-      total_tithes: draft.total_tithes || "0",
-      total_offerings: draft.total_offerings || "0",
-      total_expenses: draft.total_expenses || "0",
+      trust_fund: draft.trust_fund || "0",
+      local_church_offerings: draft.local_church_offerings || "0",
+      expenditure: draft.expenditure || "0",
       notes: draft.notes.trim(),
       published_to_members: draft.published_to_members,
     };
@@ -147,7 +148,7 @@ export function ReportComposer({
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      const parsed = parseApiErrors(data, ["title", "period_start", "period_end", "total_tithes", "total_offerings", "total_expenses", "notes"]);
+      const parsed = parseApiErrors(data, ["title", "period_start", "period_end", "trust_fund", "local_church_offerings", "expenditure", "notes"]);
       setErrors(parsed.fieldErrors);
       setGeneralError(parsed.generalError || "The report could not be saved. Please check the figures and try again.");
       setSaving(false);
@@ -252,53 +253,67 @@ export function ReportComposer({
           </div>
 
           <label className="text-sm font-medium text-bark">
-            Tithes (KES)
+            Trust Fund (KES)
             <input
               type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
               placeholder="0.00"
-              value={draft.total_tithes}
-              onChange={(e) => set("total_tithes", e.target.value)}
+              value={draft.trust_fund}
+              onChange={(e) => set("trust_fund", e.target.value)}
               className={fieldClass}
             />
-            {errors.total_tithes && (
-              <span className="mt-1 block text-xs text-ember">{errors.total_tithes}</span>
+            {errors.trust_fund && (
+              <span className="mt-1 block text-xs text-ember">{errors.trust_fund}</span>
             )}
           </label>
           <label className="text-sm font-medium text-bark">
-            Offerings (KES)
+            Local Church Offerings (KES)
             <input
               type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
               placeholder="0.00"
-              value={draft.total_offerings}
-              onChange={(e) => set("total_offerings", e.target.value)}
+              value={draft.local_church_offerings}
+              onChange={(e) => set("local_church_offerings", e.target.value)}
               className={fieldClass}
             />
-            {errors.total_offerings && (
-              <span className="mt-1 block text-xs text-ember">{errors.total_offerings}</span>
+            {errors.local_church_offerings && (
+              <span className="mt-1 block text-xs text-ember">{errors.local_church_offerings}</span>
             )}
           </label>
           <label className="text-sm font-medium text-bark sm:col-span-2">
-            Expenses (KES)
+            Expenditure (KES)
             <input
               type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
               placeholder="0.00"
-              value={draft.total_expenses}
-              onChange={(e) => set("total_expenses", e.target.value)}
+              value={draft.expenditure}
+              onChange={(e) => set("expenditure", e.target.value)}
               className={fieldClass}
             />
-            {errors.total_expenses && (
-              <span className="mt-1 block text-xs text-ember">{errors.total_expenses}</span>
+            {errors.expenditure && (
+              <span className="mt-1 block text-xs text-ember">{errors.expenditure}</span>
             )}
           </label>
+
+          {/* The total is computed as the desk types — trust fund and local
+              offerings in, expenditure out — so what the desk confirms is
+              what the congregation will read. */}
+          <div className="flex items-baseline justify-between rounded-xl bg-sand px-4 py-3 sm:col-span-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-moss">Total (in hand)</span>
+            <span className="text-lg font-bold text-bark">
+              KES {(
+                (Number(draft.trust_fund) || 0) +
+                (Number(draft.local_church_offerings) || 0) -
+                (Number(draft.expenditure) || 0)
+              ).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
 
           <label className="text-sm font-medium text-bark sm:col-span-2">
             Notes &amp; details

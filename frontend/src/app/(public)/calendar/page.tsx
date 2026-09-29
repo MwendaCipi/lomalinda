@@ -21,6 +21,21 @@ function timeOnly(value?: string) { if (!value) return "-"; const match = value.
 function newYearsThanksgiving(year: number): CalendarEvent { return { date: `${year}-01-01`, name: "New Year's Thanksgiving", department: "Whole church", kind: "special", program_items: [["9:00 AM", "Opening prayer"], ["9:15 AM", "Music"], ["9:45 AM", "Bible sharing"], ["10:30 AM", "Testimonies"], ["11:15 AM", "Prayers"], ["12:00 PM", "Offerings"], ["12:30 PM", "Departure"]] }; }
 
 function CalendarPageContent() {
+  // Signed in, the page lives in the app shell — the strip at the top names
+  // the page, so the marketing heading hides and the content leads. The read
+  // is deferred by a microtask (the idiom the reports panel uses) so the
+  // effect's own body stays synchronous-free.
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSignedIn(Boolean(localStorage.getItem("access_token")));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const today = new Date();
   const currentYear = today.getFullYear();
   const searchParams = useSearchParams();
@@ -60,8 +75,8 @@ function CalendarPageContent() {
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   return (
-    <main className="min-h-screen bg-sand text-bark">
-      <section className="px-6 pt-14 lg:px-8">
+    <main className={signedIn ? "h-full min-h-0 bg-sand text-bark" : "min-h-screen bg-sand text-bark"}>
+      <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className="mx-auto max-w-6xl">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>

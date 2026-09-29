@@ -1013,6 +1013,12 @@ class ChurchFinancialReport(models.Model):
     class Meta:
         ordering = ['-period_end']
 
+    @property
+    def total(self):
+        """What the period leaves in hand: trust fund plus local offerings,
+        less what was spent."""
+        return self.total_tithes + self.total_offerings - self.total_expenses
+
 
 class ChurchBudget(models.Model):
     year = models.PositiveIntegerField(unique=True)

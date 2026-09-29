@@ -215,13 +215,9 @@ function GiveInKindPageContent() {
 
         <div className="flex-1 min-w-0 px-4 py-8 sm:px-6 lg:px-10">
           <div className="mx-auto max-w-3xl space-y-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Giving</p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">In-Kind Giving</h1>
-              <p className="mt-2 text-sm text-moss">
-                Donate goods, produce, or materials instead of money.
-              </p>
-            </div>
+            {/* The strip names the page; the h1 is for screen readers. */}
+            <h1 className="sr-only">In-Kind Giving</h1>
+            <p className="sr-only">Donate goods, produce, or materials instead of money.</p>
 
             {/* ── My In-Kind Givings: the page is the record, like My Givings on
                 the money-giving page. The form is a modal away. ── */}

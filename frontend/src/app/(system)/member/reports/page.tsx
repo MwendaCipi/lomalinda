@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { MemberWorkspace } from "@/components/member-workspace";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-type Report = { id: number; title: string; period_start: string; period_end: string; total_tithes: string; total_offerings: string; total_expenses: string; notes: string };
+type Report = { id: number; title: string; period_start: string; period_end: string; trust_fund: string; local_church_offerings: string; expenditure: string; total: string; notes: string };
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
@@ -42,18 +42,25 @@ export default function ReportsPage() {
               {report.period_start} – {report.period_end}
             </p>
             <h2 className="mt-3 text-2xl font-semibold">{report.title}</h2>
+            {/* The statement in the field's own language: trust fund and
+                local offerings in, expenditure out, and the total they leave
+                in hand — computed by the server, never typed twice. */}
             <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
               <div>
-                <dt className="text-moss">Tithes</dt>
-                <dd className="mt-1 font-semibold">KES {Number(report.total_tithes).toLocaleString()}</dd>
+                <dt className="text-moss">Trust Fund</dt>
+                <dd className="mt-1 font-semibold">KES {Number(report.trust_fund).toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="text-moss">Offerings</dt>
-                <dd className="mt-1 font-semibold">KES {Number(report.total_offerings).toLocaleString()}</dd>
+                <dt className="text-moss">Local Church Offerings</dt>
+                <dd className="mt-1 font-semibold">KES {Number(report.local_church_offerings).toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="text-moss">Expenses</dt>
-                <dd className="mt-1 font-semibold">KES {Number(report.total_expenses).toLocaleString()}</dd>
+                <dt className="text-moss">Expenditure</dt>
+                <dd className="mt-1 font-semibold">KES {Number(report.expenditure).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt className="font-bold text-ember">Total</dt>
+                <dd className="mt-1 font-bold">KES {Number(report.total).toLocaleString()}</dd>
               </div>
             </dl>
             {report.notes && <p className="mt-6 border-t border-sand-line pt-5 text-sm leading-6 text-moss">{report.notes}</p>}

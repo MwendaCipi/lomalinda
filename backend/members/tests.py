@@ -7216,9 +7216,9 @@ class FinancialReportPostingTests(APITestCase):
             'period_type': 'monthly',
             'period_start': '2026-08-01',
             'period_end': '2026-08-31',
-            'total_tithes': '120000',
-            'total_offerings': '45000',
-            'total_expenses': '88000',
+            'trust_fund': '120000',
+            'local_church_offerings': '45000',
+            'expenditure': '88000',
             'notes': 'Roof repair, part one.',
             'published_to_members': True,
         }
@@ -7261,11 +7261,11 @@ class FinancialReportPostingTests(APITestCase):
         report_id = self._post().data['id']
         edited = self.client.patch(
             f'/api/members/reports/{report_id}/',
-            {'total_expenses': '91000', 'notes': 'Roof repair, invoiced.'},
+            {'expenditure': '91000', 'notes': 'Roof repair, invoiced.'},
             format='json',
         )
         self.assertEqual(edited.status_code, status.HTTP_200_OK)
-        self.assertEqual(Decimal(edited.data['total_expenses']), Decimal('91000'))
+        self.assertEqual(Decimal(edited.data['expenditure']), Decimal('91000'))
         removed = self.client.delete(f'/api/members/reports/{report_id}/')
         self.assertEqual(removed.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(ChurchFinancialReport.objects.filter(pk=report_id).exists())
@@ -7295,7 +7295,7 @@ class FinancialReportPostingTests(APITestCase):
             self._post(period_start='2026-08-31', period_end='2026-08-01').status_code,
             status.HTTP_400_BAD_REQUEST,
         )
-        self.assertEqual(self._post(total_tithes='-1').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._post(trust_fund='-1').status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(ChurchFinancialReport.objects.exists())
 
 
@@ -7346,9 +7346,10 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['period_start'], self.today.replace(day=1).isoformat())
         self.assertEqual(response.data['period_end'], self.today.isoformat())
-        self.assertEqual(response.data['total_tithes'], '3000.00')
-        self.assertEqual(response.data['total_offerings'], '2000.00')
-        self.assertEqual(response.data['total_expenses'], '1200.00')
+        self.assertEqual(response.data['trust_fund'], '3000.00')
+        self.assertEqual(response.data['local_church_offerings'], '2000.00')
+        self.assertEqual(response.data['expenditure'], '1200.00')
+        self.assertEqual(response.data['total'], '3800.00')
         self.assertEqual(response.data['gift_entries'], 3)
         self.assertEqual(response.data['expense_entries'], 1)
         self.assertIn(str(self.today.year), response.data['title'])
@@ -7357,8 +7358,9 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.client.force_authenticate(self.treasurer)
         response = self.client.get('/api/members/reports/suggestions/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_tithes'], '0.00')
-        self.assertEqual(response.data['total_offerings'], '0.00')
+        self.assertEqual(response.data['trust_fund'], '0.00')
+        self.assertEqual(response.data['local_church_offerings'], '0.00')
+        self.assertEqual(response.data['total'], '0.00')
         self.assertEqual(response.data['gift_entries'], 0)
 
     def test_only_the_desk_may_ask(self):
@@ -7377,15 +7379,18 @@ class FinancialReportSuggestionsTests(APITestCase):
             'period_type': 'monthly',
             'period_start': suggestion['period_start'],
             'period_end': suggestion['period_end'],
-            'total_tithes': suggestion['total_tithes'],
-            'total_offerings': suggestion['total_offerings'],
-            'total_expenses': suggestion['total_expenses'],
+            'trust_fund': suggestion['trust_fund'],
+            'local_church_offerings': suggestion['local_church_offerings'],
+            'expenditure': suggestion['expenditure'],
             'published_to_members': True,
         }, format='json')
         self.assertEqual(posted.status_code, status.HTTP_201_CREATED)
         self.client.force_authenticate(None)
         listed = self.client.get('/api/members/reports/')
-        self.assertEqual([row['total_tithes'] for row in listed.data], ['4000.00'])
+        self.assertEqual([row['trust_fund'] for row in listed.data], ['4000.00'])
+        # The total the congregation reads is computed, not stored: 4000 in,
+        # nothing out, so 4000 in hand.
+        self.assertEqual([row['total'] for row in listed.data], ['4000.00'])
 
 
 class DepartmentGroupAndUnitTests(APITestCase):

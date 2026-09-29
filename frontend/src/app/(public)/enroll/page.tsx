@@ -57,11 +57,9 @@ export default function EnrollPage() {
         <div className="space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Requests &amp; Care</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Membership</h1>
-                <p className="mt-2 max-w-2xl text-base leading-8 text-moss">
-                  Manage membership transfer requests to join SDA Loma Linda or move to another SDA church.
-                </p>
+                {/* The strip names the page; the h1 is for screen readers. */}
+                <h1 className="sr-only">Membership</h1>
+                <p className="sr-only">Manage membership transfer requests to join SDA Loma Linda or move to another SDA church.</p>
               </div>
               {!showForm && (
                 <button

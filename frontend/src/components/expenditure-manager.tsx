@@ -158,9 +158,6 @@ export function ExpenditureManager() {
     return matchesCategory && matchesSearch;
   });
 
-  const totalExpenditure = expenditures.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const filteredTotal = filteredExpenditures.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
   const categoryOptions = [
     { key: "operations", label: "Church Operations" },
     { key: "evangelism", label: "Evangelism & Missions" },
@@ -199,29 +196,6 @@ export function ExpenditureManager() {
           {actionMessage}
         </div>
       )}
-
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-xs">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-moss">Total Expenditures</p>
-          <p className="mt-2 text-2xl font-black text-alert">
-            KES {totalExpenditure.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-          </p>
-          <p className="mt-1 text-[11px] text-moss">{expenditures.length} recorded voucher{expenditures.length === 1 ? "" : "s"}</p>
-        </div>
-        <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-xs">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-moss">Filtered Outflows</p>
-          <p className="mt-2 text-xl font-bold text-bark">
-            KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-          </p>
-          <p className="mt-1 text-[11px] text-moss">{filteredExpenditures.length} matching record{filteredExpenditures.length === 1 ? "" : "s"}</p>
-        </div>
-        <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-xs sm:col-span-2 lg:col-span-1">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-moss">Active Treasury Accounts</p>
-          <p className="mt-2 text-xl font-bold text-ember">{accounts.length} Accounts Available</p>
-          <p className="mt-1 text-[11px] text-moss">Expenses can automatically debit an account upon entry</p>
-        </div>
-      </div>
 
       {/* Search & Category Filter Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-sand-line bg-white p-4 shadow-xs">

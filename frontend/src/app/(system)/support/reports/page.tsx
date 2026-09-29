@@ -44,8 +44,9 @@ function ReportsContent() {
           <div className="mx-auto max-w-5xl space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Reports</h1>
-                <p className="mt-2 text-sm leading-6 text-moss">
+                {/* The strip names the page; the h1 is for screen readers. */}
+                <h1 className="sr-only">Reports</h1>
+                <p className="sr-only">
                   What the church holds right now, and the statements it publishes about what has
                   come in and gone out.
                 </p>

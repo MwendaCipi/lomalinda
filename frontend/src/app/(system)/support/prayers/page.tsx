@@ -147,12 +147,9 @@ export default function PrayersPage() {
         <div className="flex-1 min-w-0 h-full md:h-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Prayer &amp; Moral Support
-              </h1>
-              <p className="hidden sm:block mt-2 text-sm leading-6 text-moss">
-                Support SDA Loma Linda through intercessory prayer, encouragement, and spiritual commitment.
-              </p>
+              {/* The strip names the page; the h1 is for screen readers. */}
+              <h1 className="sr-only">Prayer &amp; Moral Support</h1>
+              <p className="sr-only">Support SDA Loma Linda through intercessory prayer, encouragement, and spiritual commitment.</p>
             </div>
             {!showForm && (
               <button

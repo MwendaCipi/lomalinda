@@ -769,11 +769,30 @@ class TestimonySerializer(serializers.ModelSerializer):
 
 
 class ChurchFinancialReportSerializer(serializers.ModelSerializer):
+    """A statement in the field's own language: Trust Fund, Local Church
+    Offerings, Expenditure and the Total they leave. The stored columns keep
+    their long-standing names; what an API reader sees is the report the NEKF
+    offering summary spells out, with the total computed here so it can never
+    disagree with the three figures it is drawn from."""
+
+    trust_fund = serializers.DecimalField(
+        max_digits=14, decimal_places=2, source='total_tithes', required=False,
+    )
+    local_church_offerings = serializers.DecimalField(
+        max_digits=14, decimal_places=2, source='total_offerings', required=False,
+    )
+    expenditure = serializers.DecimalField(
+        max_digits=14, decimal_places=2, source='total_expenses', required=False,
+    )
+    total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True,
+    )
+
     class Meta:
         model = ChurchFinancialReport
         fields = (
             'id', 'title', 'period_type', 'period_start', 'period_end',
-            'total_tithes', 'total_offerings', 'total_expenses', 'notes',
+            'trust_fund', 'local_church_offerings', 'expenditure', 'total', 'notes',
             # The desk decides who reads it: a draft is the treasurer's own
             # working copy and is hidden from the congregation until published.
             'published_to_members', 'created_at',

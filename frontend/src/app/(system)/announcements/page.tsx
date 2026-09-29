@@ -174,13 +174,13 @@ export default function AnnouncementsPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6 container">
-            {/* Just the heading and the density toggle: the feed below is what
-                the page is for, and nothing is served but what is live now.
-                Members of a department also get tabs: All, or the posts
-                addressed to each group they belong to. */}
+            {/* The strip at the top names the page, so the h1 is for screen
+                readers only, and the density toggle keeps its row. Members of
+                a department also get tabs: All, or the posts addressed to
+                each group they belong to. */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Announcements</h1>
+              <div className="flex justify-end">
+                <h1 className="sr-only">Announcements</h1>
                 <DensityToggle dense={dense} onToggle={toggleDensity} />
               </div>
               {myDepartments.length > 0 && (

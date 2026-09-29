@@ -27,7 +27,7 @@ export default function MaterialsPage() {
       {/* Compact hub heading — the cards are the point. The line under it is
           desktop-only: on a phone it costs a row of the screen and says no more
           than the card labels below it. */}
-      <section className={signedIn ? "px-5 pt-5 sm:px-8 lg:px-10" : "px-6 pt-14 lg:px-8"}>
+      <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "max-w-6xl"}>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>

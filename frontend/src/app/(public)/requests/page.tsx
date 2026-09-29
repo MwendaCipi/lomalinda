@@ -15,10 +15,10 @@ export default function RequestsPage() {
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
-      {/* Signed in, this page is the Requests hub the tab opens — the cards
-          are the point, so a phone gets the compact hub heading and the
-          marketing hero returns from lg up, where the sidebar makes room. */}
-      <section className={signedIn ? "px-5 pt-5 lg:hidden" : "px-6 pt-14 lg:px-8"}>
+      {/* Signed in, this page is the Requests hub the tab opens — the strip
+          at the top names the page, so the heading is for screen readers only
+          and the marketing hero is for signed-out visitors. */}
+      <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className="max-w-5xl">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Care &amp; ministry support</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Requests &amp; Care</h1>
@@ -27,7 +27,7 @@ export default function RequestsPage() {
           </p>
         </div>
       </section>
-      <section className={signedIn ? "hidden px-5 py-5 sm:px-8 lg:block lg:px-10" : "px-6 pt-14 lg:px-8"}>
+      <section className={signedIn ? "hidden" : "px-6 pt-14 lg:px-8"}>
         <div className={signedIn ? "max-w-5xl" : "mx-auto max-w-6xl"}>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Care &amp; ministry support</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Requests &amp; Care</h1>

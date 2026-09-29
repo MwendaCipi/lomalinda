@@ -114,10 +114,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           <div className="app-panel-column">
             <AppTopBar />
             {sectionPages.length > 1 && (
-              /* `sticky top-16` keeps the strip under the identity bar on a
-                 phone, where the document itself scrolls; where the panel
-                 scrolls, the strip sits above it and is already still. */
-              <div className="sticky top-16 z-20 shrink-0 border-b border-sand-line bg-sand-grain px-3 py-2.5 sm:px-5">
+              /* On a phone the pages are a card grid that scrolls with the
+                 content — pinning it would eat back the screen the cards
+                 gave, so the band's chrome is md-only. From md up the
+                 segmented strip is pinned under the identity bar, above the
+                 panel that scrolls beneath it. */
+              <div className="shrink-0 px-3 py-3 sm:px-5 md:sticky md:top-16 md:z-20 md:border-b md:border-sand-line md:bg-sand-grain">
                 <SectionNav
                   label={`${section?.label ?? ""} pages`}
                   activeHref={here.href}

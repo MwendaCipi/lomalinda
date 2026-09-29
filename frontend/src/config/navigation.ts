@@ -40,11 +40,9 @@ import {
  * - the rail (`NavRail`) picks `railEntries`,
  * - the phone's tab bar picks `tabKeys` (Home and Admin are chrome; Admin is
  *   the leaders' door and is hidden from everyone else),
- * - the account menu picks `accountMenuKeys`,
- * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
- * - the marketing footer's columns pick `footerColumns`,
- * - the Fellowship hub's cards pick `fellowshipHubKeys`.
- *
+ * - the account menu picks `accountMenuKeys`,   * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
+   * - the marketing footer's columns pick `footerColumns`.
+   *
  * A destination may appear on several surfaces, but it is *described* in
  * exactly one place: label, href, icon and active-matchers live here. Renaming
  * something edits one line and the bar, tab, tile, menu and footer change
@@ -103,8 +101,15 @@ export const destinations = {
     area: "account",
     match: ["/dashboard"],
   },
+  /**
+   * The section's place. Its hub page was retired: `/fellowship` now opens the
+   * section's first page (Announcements), which the strip on top names as a
+   * toggle among siblings — the card grid that duplicated it is gone. The
+   * matchers still own the whole `/fellowship` tree so the section strip
+   * appears on every page of it and old bookmarks keep landing inside.
+   */
   fellowship: {
-    href: "/fellowship",
+    href: "/announcements",
     label: "Fellowship",
     description: "Where the church family gathers — news, services, testimony and care.",
     icon: Megaphone,
@@ -515,11 +520,9 @@ export const railEntries: RailEntry[] = [
     label: "Fellowship",
     icon: Megaphone,
     items: [
-      page("fellowship"),
       page("announcements"),
       page("services"),
       page("testimonies"),
-      page("requests"),
       page("childDedication"),
       page("membership"),
       page("ideas"),
@@ -532,6 +535,10 @@ export const railEntries: RailEntry[] = [
     icon: HandHeart,
     items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("reports")],
   },
+  // Asking the church for something is its own place, not a page of Fellowship:
+  // prayer and visitation, dedication, joining — the member's requests live
+  // here, while the office answers them at the console's Requests desk.
+  { label: "Requests", icon: HeartHandshake, items: [page("requests")] },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
   // treasurer's has always stood on its own.
@@ -576,6 +583,7 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
   "Materials": "my-church",
   "Giving": "my-church",
+  "Requests": "my-church",
   "Elders' Desk": "leadership",
   "Clerk's Desk": "leadership",
   "Treasury": "leadership",
@@ -694,7 +702,18 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
       // A department's desk answers to nothing else while it is open.
       return -1;
     }
-    if (pathname === item.href.replace(/\?.*$/, "")) return 100_000 + item.href.length;
+    const bare = item.href.replace(/\?.*$/, "");
+    if (pathname === bare) {
+      // An href carrying a query is only "here" when it is the query that
+      // says so: the directory rows point at `?tab=leaders` like every other
+      // console page, and scoring them by bare path would light them on every
+      // page of the console. (The bare-path branch below is for plain pages.)
+      return /\?/.test(item.href) ? -1 : 100_000 + item.href.length;
+    }
+    if (/\?/.test(item.href)) {
+      // A query-ful href never claims a path it is not exactly on.
+      return -1;
+    }
     const patterns = item.match ?? [item.href];
     return patterns.reduce(
       (longest, prefix) =>
@@ -863,14 +882,3 @@ export function footerLinkOf(link: FooterLink): { href: string; label: string } 
   return { href: link.href, label: link.label };
 }
 
-/** The Fellowship hub's cards — the section's front door, on every screen size. */
-export const fellowshipHubKeys: DestinationKey[] = [
-  "announcements",
-  "services",
-  "prayerVisitation",
-  "testimonies",
-  "childDedication",
-  "membership",
-  "ideas",
-  "calendar",
-];

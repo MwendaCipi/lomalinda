@@ -144,12 +144,9 @@ export default function IdeasPage() {
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Ideas &amp; Suggestions
-              </h1>
-              <p className="hidden sm:block mt-2 text-sm leading-6 text-moss">
-                Share ideas, feedback, or innovative proposals to help SDA Loma Linda grow and improve ministry.
-              </p>
+              {/* The strip names the page; the h1 is for screen readers. */}
+              <h1 className="sr-only">Ideas &amp; Suggestions</h1>
+              <p className="sr-only">Share ideas, feedback, or innovative proposals to help SDA Loma Linda grow and improve ministry.</p>
             </div>
             {!showForm && (
               <button

@@ -210,9 +210,9 @@ export function TreasuryAccountsManager() {
           title: data.title || draft.title,
           period_start: data.period_start || draft.period_start,
           period_end: data.period_end || draft.period_end,
-          total_tithes: data.total_tithes ?? "",
-          total_offerings: data.total_offerings ?? "",
-          total_expenses: data.total_expenses ?? "",
+          trust_fund: data.trust_fund ?? "",
+          local_church_offerings: data.local_church_offerings ?? "",
+          expenditure: data.expenditure ?? "",
         };
       }
     } catch {
