@@ -263,15 +263,21 @@ export function NavIdentity() {
     router.refresh();
   };
 
-  /** The bar's buttons: one size, one shape, icons only. */
+  /**
+   * The bar's buttons: one size, one shape, icons only.
+   *
+   * The bar is `bark`, so they are the ghost tiles the phone's tab bar and the
+   * marketing header use on dark chrome — white ink on a light wash — rather
+   * than the white cards they were on the old light bar.
+   */
   const barButton =
-    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark transition hover:bg-sand";
+    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus:outline-none";
 
   if (!isLoggedIn) {
     return (
       <Link
         href="/login"
-        className="flex items-center justify-center gap-2 rounded-xl bg-bark px-3.5 py-2 text-xs font-bold text-white transition hover:bg-bark-hover"
+        className="flex items-center justify-center gap-2 rounded-xl bg-ember px-3.5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
       >
         <LogIn className="h-4 w-4" />
         Sign in
@@ -295,7 +301,7 @@ export function NavIdentity() {
             {/* The badge rings in `sand-card`, the surface of the button it
                 cuts out of, so it sits correctly in either theme. */}
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white ring-2 ring-sand-card">
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white ring-2 ring-bark">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -455,15 +461,15 @@ export function NavIdentity() {
             setShowUserMenu(!showUserMenu);
             setShowNotifications(false);
           }}
-          className="flex items-center gap-2 rounded-xl border border-sand-mute bg-white p-1 pr-1 transition hover:bg-sand sm:pr-3"
+          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 p-1 pr-1 text-white transition hover:bg-white/20 sm:pr-3"
           aria-expanded={showUserMenu}
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ember text-xs font-bold text-white">
             {(me?.name || me?.username || "?").charAt(0).toUpperCase()}
           </span>
           <span className="hidden min-w-0 max-w-40 text-left sm:block">
-            <span className="block truncate text-xs font-semibold text-bark">{me?.name || me?.username}</span>
-            <span className="block truncate text-[10px] text-moss">{me?.email || `@${me?.username}`}</span>
+            <span className="block truncate text-xs font-semibold text-white">{me?.name || me?.username}</span>
+            <span className="block truncate text-[10px] text-white/70">{me?.email || `@${me?.username}`}</span>
           </span>
         </button>
 

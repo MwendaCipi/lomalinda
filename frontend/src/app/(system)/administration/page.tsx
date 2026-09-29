@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
+import { Armchair, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, Undo2, Users } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -59,6 +59,14 @@ type Transfer = {
   other_church: string;
 };
 
+/** The two kinds of meeting the Meetings desk keeps the minutes for. */
+type MeetingKind = "board" | "business";
+
+const MEETING_KINDS: { value: MeetingKind; label: string; icon: typeof Armchair }[] = [
+  { value: "board", label: "Board Meetings", icon: Armchair },
+  { value: "business", label: "Business Meetings", icon: Briefcase },
+];
+
 /** Session cache of the gate result — the API still enforces every request. */
 const ADMIN_GATE_KEY = "admin_gate_profile";
 
@@ -71,8 +79,9 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
   leaders: "church departments",
-  board: "board meetings",
-  business: "business meetings",
+  meetings: "meetings",
+  board: "meetings",
+  business: "meetings",
   announcements: "announcements",
   requests: "requests",
   transfers: "membership transfers",
@@ -213,7 +222,22 @@ function AdministrationContent() {
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "refunds", "announcements", "requests", "transfers", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
+
+  /**
+   * Meetings — board and business, switched by a toggle at the top of the page.
+   *
+   * They were two rows in the rail for one desk (who met, what was agreed), so
+   * the rail names the desk once and the page asks which meeting. The two old
+   * `?tab=` values still open the page on the right half, so a bookmark, a
+   * dashboard tile or an emailed link keeps working.
+   */
+  const meetingTab = activeTab === "meetings" || activeTab === "board" || activeTab === "business";
+  const meetingKind: MeetingKind = activeTab === "business" ? "business" : "board";
+  const selectMeeting = (kind: MeetingKind) => {
+    setActiveTab(kind);
+    router.replace(`/administration?tab=${kind}`, { scroll: false });
+  };
 
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
@@ -344,30 +368,15 @@ function AdministrationContent() {
 
                       <div
                         onClick={() => {
-                          setActiveTab("board");
-                          router.replace("/administration?tab=board", { scroll: false });
+                          setActiveTab("meetings");
+                          router.replace("/administration?tab=meetings", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><ShieldCheck size={20} /></span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Armchair size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Board Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Schedule board meetings, attach documents per agenda, record minutes, and invite board members.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("business");
-                          router.replace("/administration?tab=business", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Briefcase size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Business Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Manage business meeting schedules, agendas, supporting files, and minutes.</span>
+                          <span className="block text-sm font-bold text-bark">Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Board and business meeting schedules, agendas, files and minutes, on one desk.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -558,7 +567,7 @@ function AdministrationContent() {
             )}
 
             {/* Elders' Desk Church Clerk Approval Notice */}
-            {["users", "leaders", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Elders&apos; Desk (Church Clerk Access):</span>
@@ -574,17 +583,47 @@ function AdministrationContent() {
             {/* Church Leaders View */}
             {activeTab === "leaders" && (isClerk || isElder || isAdmin || isPastor) && <DepartmentHub />}
 
-            {/* Board Meetings Manager */}
-            {activeTab === "board" && (isClerk || isElder || isAdmin) && (
-              <div className="p-4 sm:p-6 lg:p-8">
-                <BoardMeetingManager />
-              </div>
-            )}
+            {/* Meetings Manager — board and business behind one toggle */}
+            {meetingTab && (isClerk || isElder || isAdmin) && (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="shrink-0 border-b border-sand-line px-4 py-3 sm:px-6">
+                  <div
+                    role="group"
+                    aria-label="Meeting kind"
+                    className="inline-flex h-10 items-center rounded-xl border border-sand-line bg-sand p-0.5"
+                  >
+                    {MEETING_KINDS.map((option) => {
+                      const Icon = option.icon;
+                      const active = meetingKind === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => selectMeeting(option.value)}
+                          aria-pressed={active}
+                          className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+                            active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            {/* Business Meetings Manager */}
-            {activeTab === "business" && (isClerk || isElder || isAdmin) && (
-              <div className="p-4 sm:p-6 lg:p-8">
-                <BusinessMeetingManager />
+                <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
+                  {meetingKind === "board" ? (
+                    <div className="p-4 sm:p-6 lg:p-8">
+                      <BoardMeetingManager />
+                    </div>
+                  ) : (
+                    <div className="p-4 sm:p-6 lg:p-8">
+                      <BusinessMeetingManager />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

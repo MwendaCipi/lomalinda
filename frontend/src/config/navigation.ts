@@ -4,7 +4,6 @@ import {
   BarChart3,
   BookOpen,
   Boxes,
-  Briefcase,
   Building2,
   Calendar,
   ClipboardList,
@@ -320,6 +319,12 @@ export type RailItem = {
   match?: readonly string[];
   /** For pages that are a `?tab=` of one route, the value that page is. */
   tab?: string;
+  /**
+   * Other `?tab=` values that are the same page — a page that folded two old
+   * tabs into one (Meetings holds board and business) still lights up for a
+   * deep link or a dashboard tile that names one of them.
+   */
+  aliasTabs?: readonly string[];
   /** Roles that may see it; absent means everyone. */
   roles?: readonly string[];
   /** Roles that hide it even where `roles` matches (the admin's rule). */
@@ -332,6 +337,9 @@ export type RailEntry = {
   icon: LucideIcon;
   href?: string;
   match?: readonly string[];
+  /** For a row that *is* a console tab, the `?tab=` value that is this page. */
+  tab?: string;
+  aliasTabs?: readonly string[];
   items?: RailItem[];
   roles?: readonly string[];
   hiddenFor?: readonly string[];
@@ -355,44 +363,43 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
   return { href: `/administration?tab=${tab}`, tab, label, icon, ...extra };
 }
 
+/** A top-level row that is a single console tab (Church Settings). */
+function consoleRow(
+  label: string,
+  icon: LucideIcon,
+  tab: string,
+  extra: Partial<RailEntry> = {}
+): RailEntry {
+  return { label, icon, href: `/administration?tab=${tab}`, tab, match: ["/administration"], ...extra };
+}
+
 const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
 
 /**
- * The office's pages, in the rail's own vocabulary.
+ * The Administration's pages, in the rail's own vocabulary.
  *
  * These are the sections the admin console has always had, gated by the same
- * roles its sidebar used: the elders' desk for the office, the treasury for
- * the treasurer, the deaconate for the deacons, and each department's own
- * desk for its leader. An admin sees the desks in the office rather than the
- * department copies of them — an officer reaches a department through
- * Departments & Ministries.
+ * roles its sidebar used: the elders' desk for the office, the deaconate for
+ * the deacons, and each department's own desk for its leader. An admin sees
+ * the desks in the office rather than the department copies of them — an
+ * officer reaches a department through Departments & Ministries.
+ *
+ * The treasury keeps its own row on the rail rather than sitting in here: its
+ * pages are a treasurer's whole working day, and the office's other rows are
+ * about people and programmes.
  */
 export const officeItems: RailItem[] = [
   officeTab("leaders", "Departments & Ministries", Crown, { roles: ["elder", "clerk", "admin"] }),
   officeTab("users", "User Management", Users, { roles: ["elder", "clerk", "admin"] }),
-  officeTab("board", "Board Meetings", Armchair, { roles: ["elder", "admin"] }),
-  officeTab("business", "Business Meetings", Briefcase, { roles: ["elder", "clerk", "admin"] }),
+  // Board and business meetings are one desk now; the page switches between
+  // them. A deep link that still names either one lands on the same page.
+  officeTab("meetings", "Meetings", Armchair, {
+    roles: ["elder", "clerk", "admin"],
+    aliasTabs: ["board", "business"],
+  }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ["elder", "clerk", "admin"] }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
-  officeTab("settings", "Church Settings", Settings, { roles: ["elder", "clerk", "admin"] }),
-  officeTab("accounts", "Treasury Accounts", Landmark, { roles: ["treasurer", "admin"] }),
-  {
-    href: "/administration/fund-drives",
-    label: "Fund Drives",
-    icon: Target,
-    match: ["/administration/fund-drives"],
-    roles: ["treasurer", "admin"],
-  },
-  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
-  {
-    href: "/administration/reconciliation",
-    label: "Contributions Ledger",
-    icon: Scale,
-    match: ["/administration/reconciliation"],
-    roles: ["treasurer", "admin"],
-  },
-  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
   officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES }),
@@ -409,6 +416,32 @@ export const officeItems: RailItem[] = [
     officeTab(`${dept.tab}-calendar`, `${dept.label} Calendar`, Calendar, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
     officeTab(`${dept.tab}-activities`, `${dept.label} Activities`, ClipboardList, { roles: dept.roles, hiddenFor: ["admin", "elder", "clerk"] }),
   ]),
+];
+
+/**
+ * The treasury's pages — the treasurer's desk, as its own row on the rail.
+ *
+ * It answers one question (what does the church hold, and where did it go),
+ * which is why it is not buried among the office's people-and-programmes rows.
+ */
+export const treasuryItems: RailItem[] = [
+  officeTab("accounts", "Accounts", Landmark, { roles: ["treasurer", "admin"] }),
+  {
+    href: "/administration/fund-drives",
+    label: "Fund Drives",
+    icon: Target,
+    match: ["/administration/fund-drives"],
+    roles: ["treasurer", "admin"],
+  },
+  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
+  {
+    href: "/administration/reconciliation",
+    label: "Contributions Ledger",
+    icon: Scale,
+    match: ["/administration/reconciliation"],
+    roles: ["treasurer", "admin"],
+  },
+  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
 ];
 
 /**
@@ -448,7 +481,11 @@ export const railEntries: RailEntry[] = [
     items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("reports")],
   },
   { label: "About", icon: Building2, items: [page("about")] },
-  { label: "Office", icon: ShieldCheck, items: officeItems },
+  // The office's people-and-programmes desk, the church's configuration, and
+  // the treasury — three rows, because they are three different jobs.
+  { label: "Administration", icon: ShieldCheck, items: officeItems },
+  consoleRow("Church Settings", Settings, "settings", { roles: ["elder", "clerk", "admin"] }),
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
 ];
 
 /** May these roles see this row or page? */
@@ -494,8 +531,13 @@ export function railHere(pathname: string, tab: string | null, entries: RailEntr
    */
   const measure = (item: RailItem): number => {
     // A console tab matches on the query, not the path: every one of them is
-    // /administration, so the tab is what tells them apart.
-    if (item.tab) return pathname === "/administration" && tab === item.tab ? 10_000 + item.tab.length : -1;
+    // /administration, so the tab is what tells them apart. A page that took
+    // over an older tab answers to that name too.
+    if (item.tab) {
+      if (pathname !== "/administration" || tab === null) return -1;
+      const names = [item.tab, ...(item.aliasTabs ?? [])];
+      return names.includes(tab) ? 10_000 + tab.length : -1;
+    }
     if (pathname === item.href.replace(/\?.*$/, "")) return 100_000 + item.href.length;
     const patterns = item.match ?? [item.href];
     return patterns.reduce(
@@ -517,7 +559,14 @@ export function railHere(pathname: string, tab: string | null, entries: RailEntr
         }
       }
     } else if (entry.href) {
-      const length = measure({ href: entry.href, label: entry.label, icon: entry.icon, match: entry.match });
+      const length = measure({
+        href: entry.href,
+        label: entry.label,
+        icon: entry.icon,
+        match: entry.match,
+        tab: entry.tab,
+        aliasTabs: entry.aliasTabs,
+      });
       if (length > bestLength) {
         best = { group: null, href: entry.href };
         bestLength = length;
@@ -530,9 +579,10 @@ export function railHere(pathname: string, tab: string | null, entries: RailEntr
 
 /**
  * The phone's tab bar: the four places members move between all week, and the
- * rail itself behind the last tab. "home" is chrome — the dashboard-or-site-
- * home tab, which also collapses history — and "menu" opens the rail, so the
- * phone carries the same navigation as the desktop rather than a cut-down map.
+ * whole map behind the last tab. "home" is chrome — the dashboard-or-site-
+ * home tab, which also collapses history — and "menu" opens the rail's entries
+ * as cards, so the phone carries the same navigation as the desktop rather
+ * than a cut-down map or a column to read sideways.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "menu")[] = [
   "home",
@@ -601,9 +651,9 @@ export const dashboardTiles: TileSpec[] = [
   {
     key: "administration",
     audience: ["elder", "admin"],
-    task: "Board Meetings",
-    description: "Agendas and minutes",
-    tab: "board",
+    task: "Meetings",
+    description: "Board and business, agendas and minutes",
+    tab: "meetings",
   },
   {
     key: "administration",
