@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberSidebar } from "@/components/sidebars/member-sidebar";
+import { NavRail } from "@/components/nav-rail";
 
 /**
  * The member workspace shell: the rail on the left, the page scrolling in its
@@ -16,7 +16,7 @@ export function MemberWorkspace({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        <MemberSidebar />
+        <NavRail />
         <div className="flex-1 min-w-0 h-full p-4 sm:p-8 lg:p-10 overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">{children}</div>
         </div>

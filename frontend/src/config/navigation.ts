@@ -16,6 +16,7 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  User,
   Users,
   FileText,
 } from "lucide-react";
@@ -30,7 +31,7 @@ import {
  * - the desktop bar (`SiteNav`) picks `barKeys`,
  * - the mobile tab bar picks `tabKeys` (Home is chrome, not a destination),
  * - the signed-in user menu picks `accountMenuKeys`,
- * - the member workspace rail picks `memberWorkspaceKeys`,
+ * - the member workspace rail picks `railBranches` / `railTopKeys`,
  * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
  * - the marketing footer's columns pick `footerColumns`,
  * - the Fellowship hub's cards pick `fellowshipHubKeys`.
@@ -291,6 +292,36 @@ export function isActive(dest: Destination, pathname: string): boolean {
   return patterns.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+/**
+ * The one destination a pathname is on — the most specific match wins.
+ *
+ * Destinations deliberately overlap: `/member` matches the statements page
+ * under it, and the Fellowship hub matches the whole `/community` tree where
+ * welfare and child dedication also live. Asking each destination in turn
+ * therefore lights up two rows at once. Comparing how many characters each
+ * matched, and keeping the longest, leaves exactly one row highlighted — the
+ * rule every surface that draws active state should use.
+ */
+export function activeDestination(pathname: string): Destination | null {
+  let best: Destination | null = null;
+  let bestLength = -1;
+  for (const dest of Object.values(destinations) as Destination[]) {
+    const patterns = dest.match ?? [dest.href];
+    const length = patterns.reduce(
+      (longest, prefix) =>
+        pathname === prefix || pathname.startsWith(`${prefix}/`)
+          ? Math.max(longest, prefix.length)
+          : longest,
+      -1
+    );
+    if (length > bestLength) {
+      best = dest;
+      bestLength = length;
+    }
+  }
+  return best;
+}
+
 /** Does any of these roles reach the office console? */
 export function isStaffRole(roles: readonly string[]): boolean {
   return roles.some((role) => STAFF_ROLES.includes(role));
@@ -314,38 +345,80 @@ export const barKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
  * The phone's tab bar, in the order a member moves through the app. "home"
  * is the dashboard-or-site-home tab; it is chrome (dynamic destination,
  * history collapse), not a destination, so SiteNav renders it specially.
- * The office reaches its console from the tab bar instead of About — About
- * lives in the user menu.
+ * The office reaches its console from the tab bar; a member's account tab
+ * takes that slot.
  */
-export const tabKeys: ({ key: DestinationKey; staffOnly?: boolean } | "home")[] = [
+export const tabKeys: ({ key: DestinationKey; staffOnly?: boolean; memberOnly?: boolean } | "home")[] = [
   "home",
   { key: "fellowship" },
   { key: "materials" },
   { key: "give" },
-  { key: "administration", staffOnly: true },
-];
-
-/** The signed-in user menu: the member's own places, then the office. */
-export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
-  { key: "myAccount" },
-  { key: "give" },
-  { key: "calendar" },
-  { key: "about" },
+  // The rail hides at this width, so a member's own places — account,
+  // statements, welfare, care — would otherwise live only in the avatar
+  // menu. Staff trade this slot for their console tab.
+  { key: "myAccount", memberOnly: true },
   { key: "administration", staffOnly: true },
 ];
 
 /**
- * The member workspace rail: the pages a member's own sidebar lists, in the
- * order the rail shows them. The dashboard leads — it is the workspace's
- * front door, and the rail stays put on it like every other page it lists.
+ * The signed-in user menu. Deliberately short: the top bar shows the
+ * church's places (Fellowship, Materials, Giving, About) and the rail shows
+ * the workspace's, so this menu holds only what neither carries — the
+ * member's own account, the calendar, and the office console.
  */
-export const memberWorkspaceKeys: DestinationKey[] = [
-  "dashboard",
-  "myAccount",
-  "memberReports",
-  "welfare",
-  "prayerVisitation",
+export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
+  { key: "myAccount" },
+  { key: "calendar" },
+  { key: "administration", staffOnly: true },
 ];
+
+/**
+ * The rail's branches — navigation lives in the sidebar and each branch
+ * expands in place to show its own pages.
+ *
+ * The keys name destinations in the registry above: a branch cannot rename
+ * a place or invent an href. The first key is the branch's landing page, so
+ * a branch row navigates there and the caret beside it opens the children.
+ */
+export type NavBranch = {
+  label: string;
+  icon: LucideIcon;
+  keys: DestinationKey[];
+  staffOnly?: boolean;
+};
+
+export const railBranches: NavBranch[] = [
+  { label: "My Church", icon: User, keys: ["myAccount", "memberReports", "welfare", "prayerVisitation"] },
+  {
+    label: "Fellowship",
+    icon: Megaphone,
+    keys: ["fellowship", "announcements", "services", "testimonies", "childDedication", "membership", "ideas", "calendar"],
+  },
+  { label: "Materials", icon: BookOpen, keys: ["materials"] },
+  { label: "Giving", icon: HandHeart, keys: ["give", "fundDrives", "inKind", "budget", "liveReports", "periodicalReports"] },
+  { label: "About", icon: Building2, keys: ["about"] },
+  { label: "Office", icon: ShieldCheck, keys: ["administration"], staffOnly: true },
+];
+
+/** The rail's standalone rows above the branches — nothing to expand. */
+export const railTopKeys: DestinationKey[] = ["dashboard"];
+
+/**
+ * The branch a pathname falls in, or null when it is a standalone row.
+ *
+ * Branches are passed in because the rail renders a filtered list (staff see
+ * the Office branch, members do not), and the active row must be looked for
+ * among the rows that exist.
+ */
+export function branchOf(pathname: string, branches: NavBranch[] = railBranches): NavBranch | null {
+  const here = activeDestination(pathname);
+  if (!here) return null;
+  return (
+    branches.find((branch) =>
+      branch.keys.some((key) => destinationOf(key).href === here.href)
+    ) ?? null
+  );
+}
 
 /**
  * The dashboard's quick tiles. `audience` narrows a tile to the offices that

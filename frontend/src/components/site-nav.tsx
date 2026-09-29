@@ -33,6 +33,7 @@ import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import Swal from "sweetalert2";
 import { normalizePath } from "@/lib/paths";
+import { railCarriesNav, subscribeRailNav } from "@/lib/rail-nav";
 import { clearSession } from "@/lib/auth";
 import { collapseToHome, trackAppHistory } from "@/lib/app-history";
 import {
@@ -343,13 +344,19 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
 
   const isStaff = isStaffRole(userState.roles);
 
+  // When the page's rail carries the navigation, this bar is identity only —
+  // brand, bell, avatar — so a destination is never offered by two surfaces
+  // at once. See lib/rail-nav for how the rail announces itself.
+  const [railHasNav, setRailHasNav] = useState(railCarriesNav());
+  useEffect(() => subscribeRailNav(setRailHasNav), []);
+
   // Desktop navigation items, straight from the nav registry. There is no
   // Dashboard link: the logo on the left already takes a signed-in member to
   // their dashboard, and the links sit beside the logo rather than floating
   // at the centre of the bar.
-  const desktopNavItems = barKeys
-    .filter(({ staffOnly }) => !staffOnly || isStaff)
-    .map(({ key }) => destinationOf(key));
+  const desktopNavItems = railHasNav
+    ? []
+    : barKeys.filter(({ staffOnly }) => !staffOnly || isStaff).map(({ key }) => destinationOf(key));
 
   // Mobile bottom tab navigation items, in the order a member moves through
   // the app on a phone: home, the fellowship hub, study materials, then
@@ -388,6 +395,8 @@ export function SiteNav({ navigationLocked = false }: { navigationLocked?: boole
       ];
     }
     if (entry.staffOnly && !isStaff) return [];
+    // A member's account tab holds the slot staff give their console.
+    if (entry.memberOnly && isStaff) return [];
     const dest = destinationOf(entry.key);
     return [
       {
