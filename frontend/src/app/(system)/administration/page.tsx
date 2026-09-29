@@ -19,6 +19,7 @@ import { ExpenditureManager } from "@/components/expenditure-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
+import { SubNav } from "@/components/sub-nav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -623,32 +624,17 @@ function AdministrationContent() {
             {/* Meetings Manager — board and business behind one toggle */}
             {meetingTab && (isClerk || isElder || isAdmin) && (
               <div className="flex h-full min-h-0 flex-col">
-                <div className="shrink-0 border-b border-sand-line px-4 py-3 sm:px-6">
-                  <div
-                    role="group"
-                    aria-label="Meeting kind"
-                    className="inline-flex h-10 items-center rounded-xl border border-sand-line bg-sand p-0.5"
-                  >
-                    {MEETING_KINDS.map((option) => {
-                      const Icon = option.icon;
-                      const active = meetingKind === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => selectMeeting(option.value)}
-                          aria-pressed={active}
-                          className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
-                            active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
-                          }`}
-                        >
-                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <SubNav
+                  sticky
+                  label="Meeting kind"
+                  items={MEETING_KINDS.map((option) => ({
+                    key: option.value,
+                    label: option.label,
+                    icon: option.icon,
+                  }))}
+                  value={meetingKind}
+                  onChange={(key) => selectMeeting(key as MeetingKind)}
+                />
 
                 <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
                   {meetingKind === "board" ? (

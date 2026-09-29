@@ -288,6 +288,10 @@ export function NavIdentity() {
   return (
     <div ref={controlsRef} className="flex items-center gap-1.5">
       <div className="flex items-center gap-1.5">
+        {/* The light/dark switch leads the controls: the member's own display
+            choice comes before everything the church sends them. */}
+        <ThemeToggle className={barButton} />
+
         <div className="relative">
           <button
             type="button"
@@ -435,8 +439,6 @@ export function NavIdentity() {
             </div>
           )}
         </div>
-
-        <ThemeToggle className={barButton} />
 
         <AccessibilityMenu buttonClassName={barButton} />
 

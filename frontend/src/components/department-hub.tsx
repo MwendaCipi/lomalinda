@@ -3,9 +3,9 @@
 /**
  * Church Departments — the desk's view of every department of the church:
  * Eldership, Clerkship, Deaconate and the ministries. Opening one shows its
- * leadership — the department's roles with their leaders and assistants —
- * plus its roll and calendar (stored server-side and read by the public
- * ministry pages).
+ * roll — the department's leaders first, wearing the office they hold, then
+ * the rest of its people — beside its calendar (stored server-side and read
+ * by the public ministry pages).
  *
  * Backend: /api/members/departments/ (directory), …/leadership/
  * (appointments PUT, role add/remove), …/members/ (roll CRUD), …/events/
@@ -25,12 +25,10 @@ import {
   Handshake,
   Heart,
   Landmark,
-  Mail,
   PenLine,
   Plus,
   Megaphone,
   Pencil,
-  Phone,
   Search,
   Sun,
   UserPlus,
@@ -44,6 +42,7 @@ import { invalidateDepartments } from "@/hooks/use-departments";
 import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
 import { AnnouncementManager } from "./announcement-manager";
 import { RecordList } from "./record-list";
+import { SubNav } from "./sub-nav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -203,6 +202,24 @@ type RollMember = {
   added_at: string;
 };
 
+/**
+ * One row of a department's roll table. The board comes first — the leader,
+ * then each assistant, wearing the office they hold — and the roll's own
+ * members follow, so opening a department reads its leadership at the top of
+ * the table rather than in a card to scroll past.
+ */
+type RollRow = {
+  key: string;
+  name: string;
+  username: string;
+  email: string;
+  phone_number: string;
+  /** The office held on the department's board, when the row is one of them. */
+  office: string | null;
+  /** The roll entry behind the row, when there is one to take off the roll. */
+  member: RollMember | null;
+};
+
 type DeptEvent = {
   id: number;
   title: string;
@@ -228,83 +245,6 @@ function unitQuery(unit: string | null) {
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function contactHolder(holder: Holder) {
-  const buttons: Record<string, string> = {};
-  if (holder.phone_number) buttons[`Call ${holder.phone_number}`] = `tel:${holder.phone_number}`;
-  if (holder.email) buttons[`Email ${holder.email}`] = `mailto:${holder.email}`;
-  if (Object.keys(buttons).length === 0) {
-    showAlert("No contact on record", `${holder.name} has no phone number or email on their account.`, "warning");
-    return;
-  }
-  const result = await showAlert(
-    `Contact ${holder.name}`,
-    [holder.phone_number && `Phone: ${holder.phone_number}`, holder.email && `Email: ${holder.email}`]
-      .filter(Boolean)
-      .join("\n"),
-    "info",
-    {
-      ...buttons,
-      showCancelButton: true,
-      cancelButtonText: "Close",
-      confirmButtonText: "Close",
-      showConfirmButton: false,
-    }
-  );
-  void result;
-}
-
-function HolderCard({
-  holder,
-  roleCaption,
-  onContact,
-  onManageRoles,
-  actions,
-}: {
-  holder: Holder;
-  roleCaption: string;
-  onContact: () => void;
-  onManageRoles?: () => void;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-ember">{roleCaption}</p>
-          <h4 className="mt-0.5 truncate text-sm font-bold text-bark">{holder.name}</h4>
-          <p className="text-[11px] text-moss-faint">@{holder.username}</p>
-          <div className="mt-1.5 space-y-0.5 text-xs text-moss">
-            {holder.phone_number && <p className="truncate">{holder.phone_number}</p>}
-            {holder.email && <p className="truncate">{holder.email}</p>}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {actions}
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={onContact}
-              title="Contact"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
-            >
-              <Phone className="h-3.5 w-3.5" />
-            </button>
-            {holder.email && (
-              <a
-                href={`mailto:${holder.email}`}
-                title="Email"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
-              >
-                <Mail className="h-3.5 w-3.5" />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function AddMemberModal({
@@ -1129,10 +1069,62 @@ function DepartmentDetail({
 
   const rollIds = new Set(roll.map((m) => m.id));
 
+  /**
+   * The table's rows: the department's board first — its leader, then each
+   * assistant, each wearing the office they hold — and the roll's own members
+   * after. Someone who both leads and serves is one row, not two: the board
+   * entry wins and keeps their roll row, so they can still be taken off it.
+   *
+   * This is why the page opens on the table rather than on a card: leadership
+   * is the first thing in it, and the roll reads as one list.
+   */
+  const rollRows: RollRow[] = (() => {
+    const keyOf = (person: { username?: string; id?: number }) =>
+      (person.username || `id:${person.id ?? ""}`).toLowerCase();
+    const seen = new Set<string>();
+    const rows: RollRow[] = [];
+    const boardPeople: { holder: Holder; office: string }[] = [
+      ...(board.leader ? [{ holder: board.leader, office: board.leader.position || "Leader" }] : []),
+      ...board.assistants.map((assistant) => ({
+        holder: assistant,
+        office: assistant.position ? `${assistant.position} · Assistant` : "Assistant",
+      })),
+    ];
+    for (const { holder, office } of boardPeople) {
+      const key = keyOf(holder);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        key,
+        name: holder.name,
+        username: holder.username,
+        email: holder.email,
+        phone_number: holder.phone_number,
+        office,
+        member: roll.find((m) => keyOf(m) === key) ?? null,
+      });
+    }
+    for (const member of roll) {
+      const key = keyOf(member);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        key,
+        name: member.name,
+        username: member.username,
+        email: member.email,
+        phone_number: member.phone_number,
+        office: null,
+        member,
+      });
+    }
+    return rows;
+  })();
+
   const rollQuery = rollSearch.trim().toLowerCase();
-  const filteredRoll = rollQuery
-    ? roll.filter((m) => `${m.name} ${m.username} ${m.phone_number} ${m.email}`.toLowerCase().includes(rollQuery))
-    : roll;
+  const visibleRoll = rollQuery
+    ? rollRows.filter((row) => `${row.name} ${row.username} ${row.phone_number} ${row.email}`.toLowerCase().includes(rollQuery))
+    : rollRows;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
@@ -1161,26 +1153,6 @@ function DepartmentDetail({
                 {events.length} calendar event{events.length === 1 ? "" : "s"}
               </p>
             </div>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => setSubTab("members")}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                subTab === "members" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
-              }`}
-            >
-              <Users className="mr-1 inline h-3.5 w-3.5" /> Members
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubTab("calendar")}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                subTab === "calendar" ? "bg-bark text-white" : "border border-sand-line bg-sand text-moss hover:text-bark"
-              }`}
-            >
-              <CalendarDays className="mr-1 inline h-3.5 w-3.5" /> Calendar
-            </button>
           </div>
         </div>
 
@@ -1214,40 +1186,26 @@ function DepartmentDetail({
             </div>
           </div>
         )}
-
-        {/* Leadership: every named office, filled or open — the same board
-            the leadership modal edits. */}
-        <div className="mt-4 border-t border-sand-line pt-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-moss">
-            Leadership{unit ? ` · ${unit}` : ""}
-          </p>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            {board.leader && (
-              <HolderCard
-                holder={board.leader}
-                roleCaption={board.leader.position || "Leader"}
-                onContact={() => contactHolder(board.leader!)}
-              />
-            )}
-            {board.assistants.map((assistant) => (
-              <HolderCard
-                key={`${assistant.id}-${assistant.position}`}
-                holder={assistant}
-                roleCaption={assistant.position ? `${assistant.position} (assistant)` : "Assistant"}
-                onContact={() => contactHolder(assistant)}
-              />
-            ))}
-            {!board.leader && board.assistants.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-sand-line p-4 text-xs text-moss">
-                No one appointed yet. Use Edit leadership to appoint the leader.
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
+      {/* The department's own views, on the shared strip: the roll first, the
+          calendar beside it. It pins to the top of the page, so the desk can
+          switch views without scrolling back up past the table. */}
+      <SubNav
+        sticky
+        label="Department views"
+        items={[
+          { key: "members", label: "Members", icon: Users },
+          { key: "calendar", label: "Calendar", icon: CalendarDays },
+        ]}
+        value={subTab}
+        onChange={(key) => setSubTab(key as "members" | "calendar")}
+        className="-mx-2 md:-mx-4 lg:-mx-6"
+      />
+
       {/* Members tab — a contained table: the page holds still, the rows
-          scroll, the way the roster and treasury read. */}
+          scroll, the way the roster and treasury read. The department's board
+          leads the table, so opening a department shows who leads it first. */}
       {subTab === "members" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
@@ -1275,9 +1233,9 @@ function DepartmentDetail({
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
-            ) : filteredRoll.length === 0 ? (
+            ) : visibleRoll.length === 0 ? (
               <p className="py-8 text-center text-xs text-moss">
-                {roll.length === 0
+                {rollRows.length === 0
                   ? "Nobody is on this roll yet. Use “Add member” to build the department's list."
                   : "No roll member matches that search."}
               </p>
@@ -1291,22 +1249,33 @@ function DepartmentDetail({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-soft">
-                  {filteredRoll.map((member) => (
-                    <tr key={member.membership_id}>
+                  {visibleRoll.map((row) => (
+                    <tr key={row.key}>
                       <td className={`px-4 ${rowPad} align-middle`}>
-                        <p className="truncate font-semibold text-bark">{member.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate font-semibold text-bark">{row.name}</p>
+                          {row.office && (
+                            <span className="shrink-0 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-bark">
+                              {row.office}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
-                        <span className="truncate text-moss">{member.phone_number || member.email || `@${member.username}`}</span>
+                        <span className="truncate text-moss">{row.phone_number || row.email || `@${row.username}`}</span>
                       </td>
                       <td className={`px-4 ${rowPad} text-right align-middle`}>
-                        <button
-                          type="button"
-                          onClick={() => removeMember(member)}
-                          className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                        >
-                          Remove
-                        </button>
+                        {row.member ? (
+                          <button
+                            type="button"
+                            onClick={() => row.member && removeMember(row.member)}
+                            className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="text-[11px] italic text-moss-faint">Appointed</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1317,8 +1286,8 @@ function DepartmentDetail({
           {/* The bottom row: count on the left, Add Member on the right. */}
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
             <p className="text-xs text-moss">
-              {filteredRoll.length} member{filteredRoll.length === 1 ? "" : "s"}
-              {rollQuery ? ` of ${roll.length}` : ""} on the roll
+              {visibleRoll.length} {visibleRoll.length === 1 ? "person" : "people"}
+              {rollQuery ? ` of ${rollRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             <button
               type="button"

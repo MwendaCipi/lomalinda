@@ -30,7 +30,10 @@ import { NavIdentity } from "./nav-identity";
  */
 export function AppTopBar() {
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-bark px-3 text-white shadow-sm sm:px-5">
+    /* On `lg` the rail says whose app this is, so the brand link is gone and
+       the controls keep the right end of the bar with `lg:justify-end` — the
+       place they held before the bar carried a mark of its own. */
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-bark px-3 text-white shadow-sm sm:px-5 lg:justify-end">
       {/* The way home, where the rail's brand would be. The symbol is white,
           so it sits in the same ghost tile the bar's own controls wear. */}
       <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5 lg:hidden">

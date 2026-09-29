@@ -11,15 +11,16 @@ import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 
 /**
- * The phone's menu — the rail as cards.
+ * The phone's Admin menu — the rail as cards.
  *
  * A drawer asks a phone to read a column written for a desktop: nine narrow
  * rows, each one either a page or a caret. The same map works far better as
- * cards the thumb can hit, so the last tab opens the sections themselves —
- * Dashboard, My Church, Fellowship, the office — and a section that holds
- * pages opens its own cards. Nothing here invents navigation: it is `railFor`,
- * the same registry the rail draws from, so the two can never disagree about
- * who may see what.
+ * cards the thumb can hit, so the leaders' last tab opens the sections
+ * themselves — Dashboard, My Church, Fellowship, the office — and a section
+ * that holds pages opens its own cards. It is for the church's offices, which
+ * is why it wears their name, and it is never the *only* map: nothing here
+ * invents navigation, it is `railFor`, the same registry the rail draws from,
+ * so the two can never disagree about who may see what.
  */
 export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = normalizePath(usePathname());
@@ -78,7 +79,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={drilled ? drilled.label : "Menu"}
+      aria-label={drilled ? drilled.label : "Admin"}
       className="fixed inset-0 z-50 flex flex-col bg-sand-grain md:hidden"
     >
       <header className="flex items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
@@ -89,10 +90,10 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
             className="inline-flex items-center gap-1 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
-            Menu
+            Admin
           </button>
         ) : (
-          <h2 className="text-base font-bold text-bark">Menu</h2>
+          <h2 className="text-base font-bold text-bark">Admin</h2>
         )}
         {drilled && <h2 className="min-w-0 flex-1 truncate text-right text-sm font-bold text-bark">{drilled.label}</h2>}
         <button

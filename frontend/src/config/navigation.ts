@@ -38,7 +38,8 @@ import {
  * Every navigation surface renders from here:
  *
  * - the rail (`NavRail`) picks `railEntries`,
- * - the phone's tab bar picks `tabKeys` (Home and Menu are chrome),
+ * - the phone's tab bar picks `tabKeys` (Home and Admin are chrome; Admin is
+ *   the leaders' door and is hidden from everyone else),
  * - the account menu picks `accountMenuKeys`,
  * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
  * - the marketing footer's columns pick `footerColumns`,
@@ -642,16 +643,18 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
 /**
  * The phone's tab bar: the four places members move between all week, and the
  * whole map behind the last tab. "home" is chrome — the dashboard-or-site-
- * home tab, which also collapses history — and "menu" opens the rail's entries
+ * home tab, which also collapses history — and "admin" opens the rail's entries
  * as cards, so the phone carries the same navigation as the desktop rather
- * than a cut-down map or a column to read sideways.
+ * than a cut-down map or a column to read sideways. The last tab is the
+ * leaders' door: a member who serves in no office is not offered the map here
+ * at all, and its office row opens the console everyone else never sees.
  */
-export const tabKeys: ({ key: DestinationKey } | "home" | "menu")[] = [
+export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   "home",
   { key: "fellowship" },
   { key: "materials" },
   { key: "give" },
-  "menu",
+  "admin",
 ];
 
 /**

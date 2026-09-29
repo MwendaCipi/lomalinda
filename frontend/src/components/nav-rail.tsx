@@ -8,6 +8,7 @@ import { ChevronRight } from "lucide-react";
 
 import { railFor, railHere, type RailEntry, type RailItem, type RailQuery } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
+import { onAppLocationChange } from "@/lib/app-history";
 import { useDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 
@@ -37,9 +38,9 @@ export function NavRail() {
    * through `useSearchParams` — the rail is drawn on every page, including
    * pages that are prerendered, and reading the location directly keeps those
    * pages static. Because Next's client navigation writes the URL through the
-   * history API without firing `popstate`, the two writers are wrapped for as
-   * long as the rail is mounted: clicking another console page updates the
-   * highlight in the same breath as the page.
+   * history API without firing `popstate`, the rail subscribes to the app's
+   * own location notifications (see `app-history`): clicking another console
+   * page updates the highlight in the same breath as the page.
    */
   const [query, setQuery] = useState<RailQuery>({ tab: null, dept: null });
   useEffect(() => {
@@ -48,22 +49,11 @@ export function NavRail() {
       setQuery({ tab: params.get("tab"), dept: params.get("dept") });
     };
     read();
+    const unsubscribe = onAppLocationChange(read);
     window.addEventListener("popstate", read);
-
-    const { pushState, replaceState } = history;
-    history.pushState = function patchedPushState(...args: Parameters<History["pushState"]>) {
-      pushState.apply(this, args);
-      read();
-    };
-    history.replaceState = function patchedReplaceState(...args: Parameters<History["replaceState"]>) {
-      replaceState.apply(this, args);
-      read();
-    };
-
     return () => {
+      unsubscribe();
       window.removeEventListener("popstate", read);
-      history.pushState = pushState;
-      history.replaceState = replaceState;
     };
   }, [pathname]);
 
@@ -103,17 +93,18 @@ export function NavRail() {
       className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-sand-line bg-sand-grain lg:flex"
       aria-label="Navigation"
     >
-      {/* Brand — the way home, at the head of the rail. Its height is the
-          identity bar's (`h-16` in AppTopBar), so the two bottom hairlines
-          meet at one continuous line across the app. */}
-      <div className="flex h-16 items-center justify-between border-b border-sand-line px-4">
+      {/* Brand — the way home, at the head of the rail. It wears the same
+          `bark` chrome as the identity bar beside it (`h-16` in AppTopBar) and
+          the same light inks, so the two read as one band across the app and
+          their bottom hairlines meet at a single continuous line. */}
+      <div className="flex h-16 items-center justify-between border-b border-white/10 bg-bark px-4">
         <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-bark p-1">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 p-1">
             <Image src="/adventist-symbol.svg" alt="SDA Church" width={32} height={32} className="h-full w-auto object-contain" priority />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm leading-tight tracking-tight text-bark">SDA Church</span>
-            <span className="block truncate text-[11px] leading-tight text-moss">Loma Linda</span>
+            <span className="block truncate text-sm leading-tight tracking-tight text-white">SDA Church</span>
+            <span className="block truncate text-[11px] leading-tight text-white/70">Loma Linda</span>
           </span>
         </Link>
       </div>

@@ -237,9 +237,7 @@ export function MemberHome() {
       <header>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">
-          {isDesk
-            ? "The week at church, how the areas you serve are doing, and anything waiting on your answer."
-            : "The week at church: what's on, your giving, and anything waiting on you."}
+          {"The week at church: what's on, your giving, and anything waiting on you."}
         </p>
       </header>
 
@@ -255,15 +253,11 @@ export function MemberHome() {
       <div className="grid gap-6 lg:grid-cols-2">
         <DashboardAnnouncements />
 
-        <section aria-labelledby="your-places">
-          <h2 id="your-places" className="text-base font-bold text-bark">
-            Your places
-          </h2>
-          <p className="mt-1 text-[11px] text-moss">The pages you use most, one tap away.</p>
+        <section aria-label="Your places">
           {loading || !me ? (
-            <p className="mt-4 text-xs text-moss">Loading…</p>
+            <p className="text-xs text-moss">Loading…</p>
           ) : (
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {orderedPlaceTiles.map((tile, index) => (
                 <QuickTile
                   key={tile.href}

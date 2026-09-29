@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Menu, X, type LucideIcon } from "lucide-react";
+import { Home, X, type LucideIcon } from "lucide-react";
 
-import { destinationOf, isActive, tabKeys } from "@/config/navigation";
+import { destinationOf, isActive, isStaffRole, tabKeys } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
-import { collapseToHome, trackAppHistory } from "@/lib/app-history";
+import { atAppFloor, collapseToHome, trackAppHistory } from "@/lib/app-history";
 import { useHeaderData } from "@/hooks/use-header-data";
-import { useUnreadNotifications } from "./nav-identity";
 
 type TabItem = {
   key: string;
@@ -27,14 +26,18 @@ type TabItem = {
  *
  * The rail is not squeezed into a drawer on a phone: the same entries open as
  * cards (MobileMenu), because a column written for a desktop is a poor thing
- * to read on a phone. Whatever a member may see, they see all of it here.
+ * to read on a phone. That last tab is the leaders' door — it wears the
+ * office's name and only the church's offices are offered it, so the map is
+ * theirs and the tab bar a member does not serve is four places, not five.
  */
 export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMenu: () => void }) {
   const pathname = normalizePath(usePathname());
   const router = useRouter();
-  const { hasToken } = useHeaderData();
-  const unread = useUnreadNotifications();
+  const { me, hasToken } = useHeaderData();
   const isLoggedIn = hasToken;
+  const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
+  /** The last tab is the leaders' — the same offices the console admits. */
+  const isStaff = isStaffRole(roles);
 
   // On the surfaces that are read by scrolling — the dashboard, the
   // announcements feed and the live reports board — the bar steps out of the
@@ -75,6 +78,25 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
   }, []);
 
   /**
+   * The dashboard is the app's front door, so it is also the floor of the back
+   * stack: arriving there — by any door, not just the Home tab — drops
+   * everything stacked above it, and the next Back leaves the app instead of
+   * replaying the sign-in form and the pages that led in.
+   *
+   * A browser keeps its back button, so this is the phone's rule, and the
+   * installed app's at any width. At the floor already, there is nothing to
+   * drop and nothing to rewrite.
+   */
+  useEffect(() => {
+    if (pathname !== "/dashboard" || !isLoggedIn || atAppFloor()) return;
+    const appSurface =
+      window.matchMedia("(max-width: 767px)").matches ||
+      window.matchMedia("(display-mode: standalone)").matches;
+    if (!appSurface) return;
+    collapseToHome(() => router.replace("/dashboard"));
+  }, [pathname, isLoggedIn, router]);
+
+  /**
    * Go home, dropping everything stacked above it: in the app Home is the
    * dashboard and the floor of the stack, so the next Back leaves the app.
    */
@@ -98,9 +120,20 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
         },
       ];
     }
-    if (entry === "menu") {
-      // Tapping again puts the cards away — the icon says so.
-      return [{ key: "menu", label: "Menu", icon: menuOpen ? X : Menu, active: menuOpen }];
+    if (entry === "admin") {
+      // The leaders' door: the rail's entries opened as cards, under the
+      // office's own name and mark. Tapping again puts the cards away — the
+      // icon says so. A member who serves in no office gets no last tab.
+      if (!isStaff) return [];
+      const admin = destinationOf("administration");
+      return [
+        {
+          key: "admin",
+          label: admin.short ?? admin.label,
+          icon: menuOpen ? X : admin.icon,
+          active: menuOpen || pathname.startsWith("/administration"),
+        },
+      ];
     }
     const dest = destinationOf(entry.key);
     return [
@@ -130,10 +163,10 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
           item.active ? "border border-white/30 bg-white/20 font-bold text-white shadow-xs" : "text-white/75 hover:text-white"
         }`;
 
-        if (item.key === "menu") {
+        if (item.key === "admin") {
           return (
             <button
-              key="menu"
+              key="admin"
               type="button"
               onClick={onToggleMenu}
               className={className}
@@ -141,11 +174,6 @@ export function MobileTabBar({ menuOpen, onToggleMenu }: { menuOpen: boolean; on
             >
               <Icon className={`mb-0.5 h-5 w-5 ${item.active ? "text-gold" : "text-white/80"}`} />
               <span className="text-[10px] leading-none tracking-tight">{item.label}</span>
-              {unread > 0 && !menuOpen && (
-                <span className="absolute right-2 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
             </button>
           );
         }
