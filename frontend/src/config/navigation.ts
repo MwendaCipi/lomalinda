@@ -8,6 +8,8 @@ import {
   Gift,
   HandHeart,
   Heart,
+  HeartHandshake,
+  LayoutDashboard,
   Lightbulb,
   Megaphone,
   ShieldCheck,
@@ -28,6 +30,7 @@ import {
  * - the desktop bar (`SiteNav`) picks `barKeys`,
  * - the mobile tab bar picks `tabKeys` (Home is chrome, not a destination),
  * - the signed-in user menu picks `accountMenuKeys`,
+ * - the member workspace rail picks `memberWorkspaceKeys`,
  * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
  * - the marketing footer's columns pick `footerColumns`,
  * - the Fellowship hub's cards pick `fellowshipHubKeys`.
@@ -82,6 +85,14 @@ export type NavDestination = {
  * lists that area's destinations.
  */
 export const destinations = {
+  dashboard: {
+    href: "/dashboard",
+    label: "Dashboard",
+    description: "The week's news, your places and your giving, in one place.",
+    icon: LayoutDashboard,
+    area: "account",
+    match: ["/dashboard"],
+  },
   fellowship: {
     href: "/fellowship",
     label: "Fellowship",
@@ -230,7 +241,24 @@ export const destinations = {
     description: "Your details and your giving history.",
     icon: Users,
     area: "account",
+    // `/member/reports` is its own destination below, so it is excluded here.
     match: ["/member"],
+  },
+  memberReports: {
+    href: "/member/reports",
+    label: "Giving Statements",
+    description: "The statements of giving and church finances we publish.",
+    icon: BarChart3,
+    area: "account",
+    match: ["/member/reports"],
+  },
+  welfare: {
+    href: "/community/welfare",
+    label: "Member Welfare",
+    description: "Welfare support for a member who needs a hand.",
+    icon: HeartHandshake,
+    area: "fellowship",
+    match: ["/community/welfare"],
   },
   administration: {
     href: "/administration",
@@ -304,6 +332,19 @@ export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "calendar" },
   { key: "about" },
   { key: "administration", staffOnly: true },
+];
+
+/**
+ * The member workspace rail: the pages a member's own sidebar lists, in the
+ * order the rail shows them. The dashboard leads — it is the workspace's
+ * front door, and the rail stays put on it like every other page it lists.
+ */
+export const memberWorkspaceKeys: DestinationKey[] = [
+  "dashboard",
+  "myAccount",
+  "memberReports",
+  "welfare",
+  "prayerVisitation",
 ];
 
 /**

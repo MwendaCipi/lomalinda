@@ -8,8 +8,6 @@ import { usePathname } from "next/navigation";
  * It stamps `data-scroll-mode` on itself so globals.css can decide how the
  * page scrolls without any page carrying a scroll class:
  *
- * - `document`  the page is a plain scrolling document at every width.
- *               Only the dashboard uses this.
  * - `panel`     the default. Desktop is a fixed viewport and the page's own
  *               `md:h-screen md:overflow-hidden` panel scrolls inside it; on
  *               a phone the document scrolls naturally, clearing the tab bar.
@@ -20,10 +18,9 @@ import { usePathname } from "next/navigation";
  * A new page needs nothing: it gets `panel` by default. A page that owns its
  * scrolling is opted in here, by route, in one line.
  */
-export type ScrollMode = "document" | "panel" | "pinned";
+export type ScrollMode = "panel" | "pinned";
 
 export function scrollModeForPath(pathname: string): ScrollMode {
-  if (pathname === "/dashboard") return "document";
   if (pathname.startsWith("/administration")) return "pinned";
   return "panel";
 }

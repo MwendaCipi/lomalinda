@@ -3,17 +3,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { normalizePath } from "@/lib/paths";
-import { LayoutDashboard, User, BarChart3, HeartHandshake, Heart, ChevronRight, Download } from "lucide-react";
+import { ChevronRight, Download } from "lucide-react";
+import {
+  destinationOf,
+  isActive,
+  memberWorkspaceKeys,
+} from "@/config/navigation";
 import { triggerPwaInstall } from "../pwa-register";
 
-const memberLinks = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/member", label: "My Profile & Status", icon: User },
-  { href: "/member/reports", label: "My Giving Statements", icon: BarChart3 },
-  { href: "/community/welfare", label: "Member Welfare", icon: HeartHandshake },
-  { href: "/community/prayer", label: "Prayer Requests", icon: Heart },
-];
-
+/**
+ * The member workspace rail.
+ *
+ * Its links come from the nav registry (`memberWorkspaceKeys`), so the rail
+ * cannot rename a place or point somewhere the bars and tiles do not — it
+ * lists the dashboard, the member's own account pages and the two care desks,
+ * and it stays mounted on every one of them (including the dashboard, which it
+ * leads with).
+ */
 export function MemberSidebar() {
   const pathname = normalizePath(usePathname());
 
@@ -31,24 +37,28 @@ export function MemberSidebar() {
           </div>
 
           <nav className="space-y-1.5">
-            {memberLinks.map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
+            {memberWorkspaceKeys.map((key) => {
+              const dest = destinationOf(key);
+              const Icon = dest.icon;
+              const active = isActive(dest, pathname);
               return (
                 <Link
-                  key={item.href}
-                  href={item.href}
+                  key={dest.href}
+                  href={dest.href}
+                  aria-current={active ? "page" : undefined}
                   className={`flex items-center justify-between rounded-xl px-3.5 py-3 text-sm font-semibold transition ${
-                    isActive
+                    active
                       ? "bg-bark text-white shadow-sm"
                       : "text-bark hover:bg-sand"
                   }`}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
+                    {/* The rail is 240px wide: it takes the registry's short
+                        label where one exists, never a name of its own. */}
+                    <span className="truncate">{dest.short ?? dest.label}</span>
                   </div>
-                  {isActive && <ChevronRight className="h-4 w-4 font-bold" />}
+                  {active && <ChevronRight className="h-4 w-4 font-bold" />}
                 </Link>
               );
             })}

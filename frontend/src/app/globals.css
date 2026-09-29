@@ -146,13 +146,11 @@ body {
 /* ==========================================================================
    Scroll architecture.
 
-   Three scroll modes, decided once by the layouts — which own the chrome —
+   Two scroll modes, decided once by the layouts — which own the chrome —
    and stamped on the app shell as `data-scroll-mode`. Pages carry no scroll
    classes of their own: a new page works by default, and a page that owns
    its scrolling gets that by route, not by remembering an incantation.
 
-   - `document`  the page is a normal scrolling document at every width
-                 (the dashboard). No viewport lock anywhere.
    - `panel`     the default. Desktop is a fixed viewport and the page's own
                  `md:h-screen md:overflow-hidden` panel scrolls inside it;
                  on a phone the document scrolls naturally, with a trailing
@@ -184,12 +182,11 @@ body {
     height: 100%;
   }
 
-  /* Document and panel pages lay out in normal flow on a phone: the shell's
-     flex height chain would clamp the page to the viewport while overflowing
-     cards paint past it — the tab bar then covers the last card with nothing
-     able to scroll to it. Block flow stacks the content and the trailing
-     reserve in order. */
-  .app-shell[data-scroll-mode="document"],
+  /* Panel pages lay out in normal flow on a phone: the shell's flex height
+     chain would clamp the page to the viewport while overflowing cards paint
+     past it — the tab bar then covers the last card with nothing able to
+     scroll to it. Block flow stacks the content and the trailing reserve in
+     order. */
   .app-shell[data-scroll-mode="panel"] {
     display: block;
     height: auto;
@@ -197,7 +194,6 @@ body {
   /* The tab-bar reserve as a trailing in-flow spacer: bar height + the device
      gesture-bar inset + a small gap. (The bar itself grows by the same env()
      — see SiteNav.) */
-  .app-shell[data-scroll-mode="document"]::after,
   .app-shell[data-scroll-mode="panel"]::after {
     content: "";
     display: block;
