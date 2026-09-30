@@ -21,9 +21,13 @@
    console, whose overview cards carry the desks. No menu sheet remains.
 
    v14 — prayer and visitation are separate desks under Requests; the
-   combined page is a redirect. Chrome changed, so installed apps must take
+   combined page is a redirect.
+
+   v15 — no Home tab on the phone (the topbar's mark is the way home), the
+   join button sits right in the announcement rail, and Moments is a real
+   gallery page in Fellowship. Chrome changed, so installed apps must take
    the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v14";
+const CACHE_NAME = "sda-loma-linda-meru-v15";
 const STATIC_ASSETS = [
   "/",
   "/about/",

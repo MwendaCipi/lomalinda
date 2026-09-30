@@ -126,6 +126,19 @@ export const destinations = {
     area: "fellowship",
     match: ["/announcements"],
   },
+  /**
+   * Moments — the church's photo and video wall: the posted announcements
+   * that carry media, gathered as the church's album rather than its notices.
+   * A page of the Fellowship section, second after Announcements.
+   */
+  moments: {
+    href: "/share/moments",
+    label: "Moments",
+    description: "Pictures and videos posted by the church, from worship to outreach.",
+    icon: Sparkles,
+    area: "fellowship",
+    match: ["/share/moments"],
+  },
   testimonies: {
     href: "/spiritual/testimonies",
     label: "Testimonies",
@@ -541,6 +554,7 @@ export const railEntries: RailEntry[] = [
     icon: Megaphone,
     items: [
       page("announcements"),
+      page("moments"),
       page("testimonies"),
       page("ideas"),
       page("calendar"),
@@ -784,15 +798,14 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
 
   return bestLength >= 0 ? best : { group: null, href: null };
 }/**
- * The phone's tab bar: the places members move between all week. "home" is
- * chrome — the dashboard-or-site-home tab, which also collapses history — and
- * "requests" is the member's own page for asking the church for something.
- * "admin" is the office console, the last tab, hidden from a member who serves
- * in no office — so their bar is Home, Fellowship, Materials, Giving and
- * Requests.
+ * The phone's tab bar: the places members move between all week. "requests"
+ * is the member's own page for asking the church for something and "admin" is
+ * the office console, the last tab, hidden from a member who serves in no
+ * office — so their bar is Fellowship, Materials, Giving and Requests. Home
+ * has no tab of its own: the topbar's church mark is the way back to the
+ * dashboard, which is the floor of the back stack.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
-  "home",
   { key: "fellowship" },
   { key: "materials" },
   { key: "give" },

@@ -237,7 +237,7 @@ export function DashboardAnnouncements() {
               href={current.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+              className="ml-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
             >
               {platformLabel(current.href)}
             </a>

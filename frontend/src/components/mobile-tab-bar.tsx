@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { destinationOf, isActive, isStaffRole, tabKeys } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
@@ -12,12 +12,10 @@ import { useHeaderData } from "@/hooks/use-header-data";
 
 type TabItem = {
   key: string;
-  href?: string;
+  href: string;
   label: string;
   icon: LucideIcon;
   active: boolean;
-  replace?: boolean;
-  collapseHistory?: boolean;
 };
 
 /**
@@ -95,30 +93,10 @@ export function MobileTabBar() {
     collapseToHome(() => router.replace("/dashboard"));
   }, [pathname, isLoggedIn, router]);
 
-  /**
-   * Go home, dropping everything stacked above it: in the app Home is the
-   * dashboard and the floor of the stack, so the next Back leaves the app.
-   */
-  const goHome = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!isLoggedIn) return;
-    event.preventDefault();
-    collapseToHome(() => router.replace("/dashboard"));
-  };
-
   const items: TabItem[] = tabKeys.flatMap((entry): TabItem[] => {
-    if (entry === "home") {
-      return [
-        {
-          key: "home",
-          href: isLoggedIn ? "/dashboard" : "/",
-          label: "Home",
-          icon: Home,
-          active: pathname === "/" || pathname.startsWith("/dashboard"),
-          replace: true,
-          collapseHistory: true,
-        },
-      ];
-    }
+    // "home" remains in the type for future chrome tabs; the bar carries no
+    // Home tab — the topbar's church mark is the way back to the dashboard.
+    if (entry === "home") return [];
     // The last tab is the office console — a link like the rest, whose desks
     // are the cards the console's overview carries. A member who serves in no
     // office is not offered it at all.
@@ -163,9 +141,7 @@ export function MobileTabBar() {
         return (
           <Link
             key={item.key}
-            href={item.href!}
-            replace={item.replace}
-            onClick={item.collapseHistory ? goHome : undefined}
+            href={item.href}
             className={`relative flex flex-col items-center justify-center rounded-xl px-1 py-1 text-center min-w-[46px] min-h-[44px] transition-colors ${
               item.active ? "border border-white/30 bg-white/20 font-bold text-white shadow-xs" : "text-white/75 hover:text-white"
             }`}
