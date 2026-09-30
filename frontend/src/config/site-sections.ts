@@ -6,6 +6,7 @@ import {
   Building2,
   Calendar,
   FileText,
+  Globe,
   Handshake,
   Heart,
   Lightbulb,
@@ -85,15 +86,29 @@ export const newsAndEventsLinks: SectionLink[] = [
   },
 ];
 
-/** The four sections the study materials are grouped into. */
-export type MaterialSection = "hymnals" | "bible-egw" | "adult-weekly" | "children-weekly";
+/**
+ * The four shelves the study materials are grouped into — the toggles on the
+ * Materials page's own topbar, and what a link into the page can name.
+ *
+ * They are the member's reading order rather than a filing order: the week's
+ * study first (the lesson guides, then the mission readings), then the two
+ * shelves that are always open — Scripture with the Spirit of Prophecy, then
+ * the hymnbooks.
+ */
+export type MaterialSection = "lesson-guides" | "mission-readings" | "bible-egw" | "hymnals";
 
 export const materialSections: { value: MaterialSection; label: string; description: string; icon: LucideIcon }[] = [
   {
-    value: "hymnals",
-    label: "Hymnals",
-    description: "SDA Church Hymnal and Nyimbo za Kristo lyrics and song search for worship.",
-    icon: Music,
+    value: "lesson-guides",
+    label: "Lesson Guides",
+    description: "The current Sabbath School guides — adult, young adult and every children's division.",
+    icon: BookOpen,
+  },
+  {
+    value: "mission-readings",
+    label: "Mission Readings",
+    description: "This quarter's mission stories from the Adventist Mission quarterlies.",
+    icon: Globe,
   },
   {
     value: "bible-egw",
@@ -102,16 +117,10 @@ export const materialSections: { value: MaterialSection; label: string; descript
     icon: Book,
   },
   {
-    value: "adult-weekly",
-    label: "Adult Weekly",
-    description: "Current Sabbath School lesson guides and world mission reports for adults and youth.",
-    icon: Users,
-  },
-  {
-    value: "children-weekly",
-    label: "Children Weekly",
-    description: "Age-appropriate lesson guides and mission stories for kids across all age groups.",
-    icon: Baby,
+    value: "hymnals",
+    label: "Hymnals",
+    description: "SDA Church Hymnal and Nyimbo za Kristo lyrics and song search for worship.",
+    icon: Music,
   },
 ];
 

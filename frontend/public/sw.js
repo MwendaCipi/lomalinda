@@ -6,8 +6,13 @@
    that older shell for the routes we hold copies of (everything except
    `/dashboard/`, which was never listed here) until this name moves: their own
    build looks current on the dashboard and stale everywhere else. So bump the
-   version whenever the chrome changes, not only when an icon does. */
-const CACHE_NAME = "sda-loma-linda-meru-v10";
+   version whenever the chrome changes, not only when an icon does.
+
+   v11 — the phone's tab bar carries its section's pages and the leaders' door
+   holds the leadership rows, and the dashboard reads the congregation's pulse
+   instead of a grid of tiles: chrome, so every installed app must take the new
+   shell rather than keep painting the old one from its cache. */
+const CACHE_NAME = "sda-loma-linda-meru-v11";
 const STATIC_ASSETS = [
   "/",
   "/about/",
