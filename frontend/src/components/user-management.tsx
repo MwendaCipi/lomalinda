@@ -8,6 +8,8 @@ import {
   ACCOUNT_TYPE_OPTIONS,
   type AccountTypeOption,
   formatRoles,
+  NO_ROLE_LABEL,
+  leadershipRoles,
   roleDisplayLabel,
   orderRolesBySeniority,
   RolesCombobox,
@@ -193,19 +195,21 @@ function AccountStatus({ member }: { member: MemberUser }) {
 }
 
 /**
- * The Role column: one role plus a count.
+ * The Role column: one office plus a count.
  *
  * The roster is a glance, not a manifest — an officer scanning it needs to know
  * that someone is an Elder without wading through every office they hold. The
  * full set is on the tooltip and in Assign Leadership, which is where roles are
- * actually decided.
+ * actually decided. A member holding no office reads "None": their being on
+ * the roll is the Type column's answer, not a role beside Elder and Clerk.
  */
 function roleSummary(roles: string[], assistants: string[] = []): string {
-  if (!roles || roles.length === 0) return "Member";
+  const offices = leadershipRoles(roles);
+  if (offices.length === 0) return NO_ROLE_LABEL;
   // Senior office leads: the stored order is the register's, which would
   // introduce a first elder who also clerks as "Church Clerk" instead.
-  const first = roleDisplayLabel(orderRolesBySeniority(roles)[0], assistants);
-  const others = roles.length - 1;
+  const first = roleDisplayLabel(orderRolesBySeniority(offices)[0], assistants);
+  const others = offices.length - 1;
   if (others <= 0) return first;
   return `${first} + ${others} other${others === 1 ? "" : "s"}`;
 }
@@ -213,9 +217,9 @@ function roleSummary(roles: string[], assistants: string[] = []): string {
 function RoleCell({ member }: { member: MemberUser }) {
   const roles = member.roles && member.roles.length > 0 ? member.roles : [member.role || "member"];
   const assistants = member.assistant_roles || [];
-  const full = orderRolesBySeniority(roles)
+  const full = orderRolesBySeniority(leadershipRoles(roles))
     .map((code) => roleDisplayLabel(code, assistants))
-    .join(", ");
+    .join(", ") || NO_ROLE_LABEL;
   return (
     <span className="block truncate text-xs text-bark" title={full}>
       {roleSummary(roles, assistants)}
@@ -2111,7 +2115,8 @@ export function UserManagement() {
         <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <h2 className="text-xl font-bold text-bark">User Management</h2>
+            {/* Named by the strip above on a wide screen. */}
+            <h2 className="text-xl font-bold text-bark md:hidden">User Management</h2>
           </span>
           <div className="ml-auto flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:w-auto sm:justify-end">
             <span className="flex shrink-0 items-center gap-2">
@@ -3132,7 +3137,8 @@ export function UserManagement() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1 text-xs text-bark">Member</p>
+                  // No office held: `member` is the default state, not a role.
+                  <p className="mt-1 text-xs text-bark">{NO_ROLE_LABEL}</p>
                 )}
               </section>
 
@@ -3412,9 +3418,15 @@ export function UserManagement() {
                 </p>
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
                   <span className="min-w-0 flex-1 truncate text-xs text-bark">
-                    {orderRolesBySeniority(leadershipMember.roles && leadershipMember.roles.length > 0 ? leadershipMember.roles : [leadershipMember.role || "member"])
+                    {orderRolesBySeniority(
+                      leadershipRoles(
+                        leadershipMember.roles && leadershipMember.roles.length > 0
+                          ? leadershipMember.roles
+                          : [leadershipMember.role || "member"]
+                      )
+                    )
                       .map((code) => roleDisplayLabel(code, leadershipMember.assistant_roles || []))
-                      .join(", ") || "Member"}
+                      .join(", ") || NO_ROLE_LABEL}
                   </span>
                   <RolesCombobox
                     fill={false}

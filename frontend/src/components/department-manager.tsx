@@ -17,6 +17,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { NO_ROLE_LABEL } from "./roles-combobox";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
@@ -425,7 +426,11 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                           </td>
                           <td className={`px-4 ${rowPad}`}>
                             <span className="rounded-md bg-bark px-2 py-0.5 text-[10px] font-bold text-white capitalize">
-                              {m.account_type === "friend" ? "Friend of Church" : m.role || "Member"}
+                              {m.account_type === "friend"
+                                ? "Friend of Church"
+                                : m.role && m.role !== "member"
+                                  ? m.role
+                                  : NO_ROLE_LABEL}
                             </span>
                           </td>
                         </tr>
