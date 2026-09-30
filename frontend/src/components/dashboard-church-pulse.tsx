@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, UserRoundPlus, Users } from "lucide-react";
 import { HorizontalBars } from "@/components/mini-charts";
@@ -70,28 +70,31 @@ export function DashboardChurchPulse() {
   const [data, setData] = useState<Pulse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "hidden">("loading");
 
-  const load = useCallback(async () => {
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/dashboard/church-pulse/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      // Refused, or the figures cannot be reached: the card simply is not
-      // there. A dashboard is not the place to explain a permissions check.
-      if (!res.ok) {
-        setState("hidden");
-        return;
-      }
-      setData((await res.json()) as Pulse);
-      setState("ready");
-    } catch {
-      setState("hidden");
-    }
-  }, []);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    const token = localStorage.getItem("access_token");
+    let alive = true;
+    fetch(`${API_URL}/api/members/dashboard/church-pulse/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? (res.json() as Promise<Pulse>) : null))
+      .then((payload) => {
+        if (!alive) return;
+        // Refused, or the figures cannot be reached: the card simply is not
+        // there. A dashboard is not the place to explain a permissions check.
+        if (!payload) {
+          setState("hidden");
+          return;
+        }
+        setData(payload);
+        setState("ready");
+      })
+      .catch(() => {
+        if (alive) setState("hidden");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   if (state !== "ready" || !data) return null;
 

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
-import { MobileMenu } from "./mobile-menu";
+import { MobileMenu, type MenuView } from "./mobile-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
 import { railFor } from "@/config/navigation";
@@ -23,7 +23,9 @@ import { useRailHere } from "@/hooks/use-rail-location";
  * sits at the top of the page column beside it, and under the bar is the strip
  * of the place you are in — the pages that used to hang under the rail's row.
  * The page scrolls in what is left. On a phone the rail steps aside and the
- * same map is opened as cards from the last tab — see MobileMenu.
+ * same map opens as cards, a level at a time: the last tab is the leaders'
+ * door, and a tab naming a section carries that section's pages, because a
+ * phone has no strip to show them — see MobileMenu.
  *
  * The strip rides the top of the content card — inside it, on its surface, above
  * the page — rather than in a band of its own between the bar and the card. It
@@ -74,7 +76,27 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    */
   const [menuOpenedAt, setMenuOpenedAt] = useState<string | null>(null);
   const menuOpen = menuOpenedAt === pathname;
-  const setMenuOpen = (open: boolean) => setMenuOpenedAt(open ? pathname : null);
+  /**
+   * What that sheet is showing — the leaders' door, or one row's pages. The
+   * shell owns it because the tab bar opens it too: the Admin tab opens the
+   * door, and a tab naming a section opens that section's cards.
+   */
+  const [menuView, setMenuView] = useState<MenuView>({ kind: "door" });
+  const openMenu = (view: MenuView) => {
+    setMenuView(view);
+    setMenuOpenedAt(pathname);
+  };
+  const closeMenu = () => setMenuOpenedAt(null);
+  /** The leaders' door: opening it, or putting it away if it is already up. */
+  const toggleDoor = () => {
+    if (menuView.kind === "door" && menuOpen) closeMenu();
+    else openMenu({ kind: "door" });
+  };
+  /** A section's tab: its pages as cards, or away again if they are already up. */
+  const openRow = (label: string) => {
+    if (menuOpen && menuView.kind === "row" && menuView.label === label) closeMenu();
+    else openMenu({ kind: "row", label, fromSheet: false });
+  };
   const mode = scrollModeForPath(pathname);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -84,10 +106,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   /**
    * The place you are in. From tablet up its pages are the strip under the
    * bar — the list that used to expand under the rail's row. On a phone the
-   * pages are cards inside the drill-in menu instead, so a page opens clean
-   * rather than under a deck of its own navigation (see MobileMenu). A place
-   * with a single page gets no strip: a toggle that switches to itself is
-   * noise.
+   * pages are cards behind the tab that names the section instead, so a page
+   * opens clean rather than under a deck of its own navigation (see
+   * MobileMenu). A place with a single page gets no strip: a toggle that
+   * switches to itself is noise.
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
   const sectionPages = (section?.items ?? []).map((item) => ({
@@ -140,8 +162,17 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
-      <MobileTabBar menuOpen={menuOpen} onToggleMenu={() => setMenuOpen(!menuOpen)} />
+      <MobileMenu
+        open={menuOpen}
+        view={menuView}
+        onViewChange={setMenuView}
+        onClose={closeMenu}
+      />
+      <MobileTabBar
+        menuView={menuOpen ? menuView : null}
+        onToggleMenu={toggleDoor}
+        onOpenRow={openRow}
+      />
     </>
   );
 }

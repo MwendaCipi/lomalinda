@@ -39,9 +39,10 @@ import {
  *
  * - the rail (`NavRail`) picks `railEntries`,
  * - the phone's tab bar picks `tabKeys` (Home and Admin are chrome; Admin is
- *   the leaders' door and is hidden from everyone else),
- * - the account menu picks `accountMenuKeys`,   * - the dashboard's quick tiles pick `dashboardTiles` (audiences applied),
-   * - the marketing footer's columns pick `footerColumns`.
+ *   the leaders' door and is hidden from everyone else), and asks
+ *   `tabSectionFor` whether a tab is a page or a section of pages,
+ * - the account menu picks `accountMenuKeys`,
+ * - the marketing footer's columns pick `footerColumns`.
    *
  * A destination may appear on several surfaces, but it is *described* in
  * exactly one place: label, href, icon and active-matchers live here. Renaming
@@ -621,6 +622,25 @@ export function entryHref(entry: RailEntry): string | null {
   return entry.href ?? entry.items?.[0]?.href ?? null;
 }
 
+/**
+ * The row a phone tab should open as cards, or null when that tab is one page
+ * and should go straight there.
+ *
+ * A phone has no strip above the page (see AppFrame), so a section's siblings
+ * are only reachable if something lists them. That something is the tab naming
+ * the section: the Giving tab opens Giving's pages as cards — money giving,
+ * fund drives, in-kind giving, the budget, the reports — instead of dropping
+ * the member into money giving with no way from there to the rest of the
+ * section. A row of a single page is a page, so its tab still opens it.
+ */
+export function tabSectionFor(key: DestinationKey, entries: RailEntry[]): RailEntry | null {
+  const href = destinations[key].href;
+  const row = entries.find(
+    (entry) => entryHref(entry) === href || (entry.items ?? []).some((item) => item.href === href),
+  );
+  return row && (row.items?.length ?? 0) > 1 ? row : null;
+}
+
 /** May these roles see this row or page? */
 export function canSee(
   entry: { roles?: readonly string[]; hiddenFor?: readonly string[] },
@@ -775,20 +795,6 @@ export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "administration", staffOnly: true },
 ];
 
-/**
- * The dashboard's quick tiles. `audience` narrows a tile to the offices that
- * use it; `task` names the work that office does on the console (the tile may
- * say "Treasury" while opening Administration's accounts tab); `tab` appends
- * the query that opens that tab — surfaces never invent these hrefs.
- */
-export type TileSpec = {
-  key: DestinationKey;
-  audience?: readonly string[];
-  task?: string;
-  description?: string;
-  tab?: string;
-};
-
 /** The Requests tile: the desk for leadership, the forms for everyone else. */
 export const REQUESTS_TILE = {
   label: "Requests",
@@ -799,41 +805,7 @@ export const REQUESTS_TILE = {
   /** The desks that answer requests — same list the Requests managers gate by. */
   deskAudience: ["elder", "admin", "clerk", "pastor", "chaplaincy", "welfare_leader", "children_ministry"],
 };
-export const dashboardTiles: TileSpec[] = [
-  { key: "announcements" },
-  { key: "give" },
-  { key: "calendar" },
-  { key: "materials" },
-  { key: "myAccount" },
-  {
-    key: "administration",
-    audience: ["treasurer", "admin"],
-    task: "Treasury",
-    description: "Accounts, receipts, refunds",
-    tab: "accounts",
-  },
-  {
-    key: "administration",
-    audience: ["elder", "admin", "clerk"],
-    task: "Members",
-    description: "Directory, roles, invites",
-    tab: "users",
-  },
-  {
-    key: "administration",
-    audience: ["elder", "admin"],
-    task: "Meetings",
-    description: "Board and business, agendas and minutes",
-    tab: "meetings",
-  },
-  {
-    key: "administration",
-    audience: ["elder", "admin"],
-    task: "Church Settings",
-    description: "Configuration",
-    tab: "settings",
-  },
-];
+
 
 /**
  * The marketing footer's columns. A link either names a destination `key`
