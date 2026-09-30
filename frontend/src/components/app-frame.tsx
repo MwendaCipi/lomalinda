@@ -104,21 +104,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * toggles, so a section's siblings are one glance away without opening any
    * menu. A place with a single page gets no strip: a toggle that switches to
    * itself is noise.
-   *
-   * A page marked `landingPage` is left out: it is the section's way in from
-   * the rail, not one of its views, so listing it would put the section's own
-   * name on the strip as a tab that switches to the page being read.
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
-  const sectionPages = (section?.items ?? [])
-    .filter((item) => !item.landingPage)
-    .map((item) => ({
-      key: item.href,
-      href: item.href,
-      label: item.short ?? item.label,
-      icon: item.icon,
-      help: item.label,
-    }));
+  const sectionPages = (section?.items ?? []).map((item) => ({
+    key: item.href,
+    href: item.href,
+    label: item.short ?? item.label,
+    icon: item.icon,
+    help: item.label,
+  }));
 
   // The rail is for members in the app. The website keeps its own header, and
   // the forced-profile gate shows nothing but the form.

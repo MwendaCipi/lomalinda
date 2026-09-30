@@ -275,19 +275,21 @@ export const destinations = {
     match: ["/administration"],
   },
   /**
-   * The member's own Requests page — the forms: prayer and visitation, child
-   * dedication, joining. The office answers the same requests from the
-   * console's Requests desk, which is a different page and is named by the
-   * desk's own tile (`REQUESTS_TILE`); the two are separate destinations on
-   * purpose, because a member asking and an officer answering are two jobs.
+   * The member's Requests row — the forms: prayer and visitation, child
+   * dedication, joining. The row opens on the prayer & visitation form, the
+   * most-made request, and the strip on it names the rest. The office answers
+   * the same requests from the console's Requests desk, which is a different
+   * page and is named by the desk's tile (`REQUESTS_TILE`); the two are
+   * separate destinations on purpose, because a member asking and an officer
+   * answering are two jobs.
    */
   requests: {
-    href: "/requests",
+    href: "/community/prayer-visitation",
     label: "Requests",
-    description: "Ask for prayer, a visit, or to dedicate a child — one page for it.",
+    description: "Request prayer or a pastoral visit, dedicate a child, or join the church.",
     icon: HeartHandshake,
     area: "fellowship",
-    match: ["/requests"],
+    match: ["/requests", "/community"],
   },
 } satisfies Record<string, NavDestination>;
 
@@ -353,16 +355,6 @@ export type RailItem = {
   roles?: readonly string[];
   /** Roles that hide it even where `roles` matches (the admin's rule). */
   hiddenFor?: readonly string[];
-  /**
-   * A section's way in, rather than one of its strip's tabs.
-   *
-   * It still belongs in the row's list — it has to be `items[0]` for
-   * `entryHref` to open it and for `railHere` to claim the section's own path
-   * — but the strip above the section's pages leaves it out: the row and the
-   * strip already carry the section's name, so a tab repeating that name is a
-   * toggle that switches to the page you are looking at.
-   */
-  landingPage?: boolean;
 };
 
 /** A row: a place — a page (`href`), or a section whose pages are `items`. */
@@ -542,16 +534,14 @@ export const railEntries: RailEntry[] = [
   // dedicated and joining pages belong to this row too: a member opening them
   // is asking the church for something, not browsing what it shares.
   //
-  // The row opens the section's hub (`/requests`, its landing page), but the
-  // hub is not one of the strip's tabs: the strip's job here is to name the
-  // three things a member can ask for, and "Requests" is the section they are
-  // already standing in.
+  // The row opens on the prayer & visitation form — the most-made request —
+  // and the strip on it names the other ways to ask: dedication, joining. The
+  // old `/requests` hub page is a redirect for links already in the world.
   {
     label: "Requests",
     icon: HeartHandshake,
     items: [
-      page("requests", { landingPage: true }),
-      page("prayerVisitation"),
+      page("requests"),
       page("childDedication"),
       page("membership"),
     ],
