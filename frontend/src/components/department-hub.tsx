@@ -1582,6 +1582,16 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
   const [leadershipDept, setLeadershipDept] = useState<DepartmentRow | null>(null);
   // The Add area modal.
   const [showAddArea, setShowAddArea] = useState(false);
+  // The directory search: narrows by area or by any name seated at it.
+  const [directorySearch, setDirectorySearch] = useState("");
+  const directoryNeedle = directorySearch.trim().toLowerCase();
+  const visibleDepartments = directoryNeedle
+    ? departments.filter((d) =>
+        `${shortDeptLabel(d)} ${d.label} ${d.leader?.name ?? ""} ${d.assistants.map((a) => a.name).join(" ")}`
+          .toLowerCase()
+          .includes(directoryNeedle)
+      )
+    : departments;
 
   const loadDirectory = useCallback(() => {
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
@@ -1632,6 +1642,19 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
         </p>
       </div>
 
+      {/* One search above the directory: find an area or anyone seated in
+          one, at either width. */}
+      <div className="shrink-0">
+        <input
+          type="text"
+          value={directorySearch}
+          onChange={(e) => setDirectorySearch(e.target.value)}
+          placeholder="Search areas or the people leading them…"
+          aria-label="Search the leadership directory"
+          className="w-full rounded-xl border border-sand-line bg-white px-4 py-2.5 text-xs shadow-sm focus:border-ember focus:outline-none"
+        />
+      </div>
+
       {/* One table, one row per department — the directory a desk scans, not
           a stack of cards. On phones the same rows are cards. */}
       <div className="hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm md:flex">
@@ -1650,7 +1673,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
             </tr>
           </thead>
           <tbody>
-            {departments.map((department) => {
+            {visibleDepartments.map((department) => {
               const style = areaStyle(department.code);
               const [firstAssistant, secondAssistant] = department.assistants;
               return (
@@ -1715,7 +1738,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
             right — communication goes through announcements. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
           <p className="text-xs text-moss">
-            {departments.length} leadership area{departments.length === 1 ? "" : "s"}
+            {visibleDepartments.length} of {departments.length} leadership area{departments.length === 1 ? "" : "s"}
           </p>
           <button
             type="button"
@@ -1729,7 +1752,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
 
       {/* Phones: the same directory as cards. */}
       <div className="space-y-3 md:hidden">
-        {departments.map((department) => {
+        {visibleDepartments.map((department) => {
           const style = areaStyle(department.code);
           return (
             <div key={department.code} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
