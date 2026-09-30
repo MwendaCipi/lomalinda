@@ -25,9 +25,11 @@
 
    v15 — no Home tab on the phone (the topbar's mark is the way home), the
    join button sits right in the announcement rail, and Moments is a real
-   gallery page in Fellowship. Chrome changed, so installed apps must take
-   the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v15";
+   gallery page in Fellowship.
+
+   v16 — the announcements feed is compact by default with no density
+   toggle, and its photo previews shrink so a card's actions stay on screen. */
+const CACHE_NAME = "sda-loma-linda-meru-v16";
 const STATIC_ASSETS = [
   "/",
   "/about/",

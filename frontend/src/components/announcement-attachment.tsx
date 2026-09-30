@@ -38,6 +38,12 @@ interface AnnouncementAttachmentProps {
   compact?: boolean;
   /** Set false when the block already sits inside a parent link. */
   linked?: boolean;
+  /**
+   * How tall an inline photo preview may be. `lg` (the default) is the
+   * feed's original 18rem; `sm` fits the preview under a feed card's text so
+   * the card's actions stay on screen; `md` sits between, for gallery tiles.
+   */
+  mediaHeight?: "sm" | "md" | "lg";
   className?: string;
 }
 
@@ -64,6 +70,7 @@ export function AnnouncementAttachment({
   size,
   compact = false,
   linked = true,
+  mediaHeight = "lg",
   className = "",
 }: AnnouncementAttachmentProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -122,6 +129,8 @@ export function AnnouncementAttachment({
   };
 
   if (isImageAttachment(fileName, url)) {
+    const mediaHeightClass =
+      mediaHeight === "sm" ? "max-h-40" : mediaHeight === "md" ? "max-h-52" : "max-h-72";
     const viewer = viewerOpen ? (
       <div
         role="dialog"
@@ -190,7 +199,7 @@ export function AnnouncementAttachment({
             alt={fileName}
             loading="lazy"
             className={`w-full rounded-2xl border border-sand-line bg-sand object-contain shadow-sm ${
-              compact ? "max-h-28" : "max-h-72"
+              compact ? "max-h-28" : mediaHeightClass
             }`}
           />
           <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/55 p-1.5 text-white opacity-70 transition group-hover:opacity-100">
