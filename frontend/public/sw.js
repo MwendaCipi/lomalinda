@@ -50,8 +50,12 @@
 
    v20 — the rail files the church's areas under one heading: Ministries and
    Departments rows join as one Ministry list beside the desks' Leadership.
+   Chrome changed, so installed apps must take the new shell.
+
+   v21 — the rail's first two headings merge: Dashboard rows join the My
+   church list, leaving Leadership and Ministry as the other headings.
    Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v20";
+const CACHE_NAME = "sda-loma-linda-meru-v21";
 const STATIC_ASSETS = [
   "/",
   "/about/",

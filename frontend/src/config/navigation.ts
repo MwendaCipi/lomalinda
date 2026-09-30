@@ -545,8 +545,8 @@ export const treasuryItems: RailItem[] = [
  * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
-  // The member's own page, alone under the first heading.
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"] },
+  // The member's own page, first under the My church heading.
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"], sectionKey: "my-church" },
   {
     label: "Fellowship",
     icon: Megaphone,
@@ -615,14 +615,14 @@ export const railEntries: RailEntry[] = [
 /**
  * How the rail groups its rows. A heading is a reading aid, not a click
  * target — every row under it is a place, exactly as it was flat. The
- * church's areas — ministries and departments alike — read as one list
- * under the single "Ministry" heading, beside the desks' Leadership.
+ * member's own page and the church's life read as one My church list, the
+ * church's areas — ministries and departments alike — as one Ministry list
+ * beside the desks' Leadership.
  */
-export type RailSection = "dashboard" | "my-church" | "leadership" | "ministry";
+export type RailSection = "my-church" | "leadership" | "ministry";
 
 /** The heading each section goes by, on the rail. */
 export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
-  { key: "dashboard", label: "Dashboard" },
   { key: "my-church", label: "My church" },
   { key: "leadership", label: "Leadership" },
   { key: "ministry", label: "Ministry" },
@@ -651,7 +651,8 @@ export function railSectionsFor(
 ): { key: RailSection; label: string; entries: RailEntry[] }[] {
   const grouped = new Map<RailSection, RailEntry[]>();
   for (const entry of entries) {
-    const key = entry.sectionKey ?? RAIL_SECTION_OF[entry.label] ?? "dashboard";
+    // Anything unmapped falls to My church rather than vanishing from the rail.
+    const key = entry.sectionKey ?? RAIL_SECTION_OF[entry.label] ?? "my-church";
     const list = grouped.get(key) ?? [];
     list.push(entry);
     grouped.set(key, list);
