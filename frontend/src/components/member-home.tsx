@@ -68,9 +68,9 @@ function QuickTile({ tile }: { tile: Tile }) {
  *
  * 1. the week's announcement across the top, then anything waiting on the
  *    member personally (a proposed profile edit they must approve or decline),
- * 2. "Your areas" — how the departments and ministries this member leads are
- *    doing, which only a leader ever sees (phone and tablet: from `lg` the rail
- *    names every department already),
+ * 2. "Your roles" — how the departments and ministries this member serves in
+ *    are doing, naming the office they hold there, for anyone with a row in
+ *    the leadership table,
  * 3. the congregation — its roll, its folds, and what the desks still owe
  *    somebody an answer on, for the offices that shepherd it,
  * 4. the church's finances, for the officers who keep the books.
@@ -177,15 +177,21 @@ export function MemberHome() {
     };
   });
 
-  // ── The areas this member leads ─────────────────────────────────────────
+  // ── The roles this member holds ─────────────────────────────────────────
   // A leadership row in the church's own table is what makes someone answer
-  // for an area, so "my areas" is read from that table rather than guessed
-  // from role flags: a member who serves nowhere gets no metrics at all.
+  // for an area, so "my roles" is read from that table rather than guessed
+  // from role flags: a member who serves nowhere gets no metrics at all. The
+  // chip names the office itself — "Treasurer", not the generic kind — and a
+  // member holding two offices in one area (rare, but the table allows it)
+  // gets one card naming both.
   const myUsername = me?.username ?? "";
-  const myAreas: (DepartmentRow & { as: "leader" | "assistant" })[] = myUsername
+  const myAreas: (DepartmentRow & { as: string })[] = myUsername
     ? departments.flatMap((department) => {
-        const mine = department.holders.find((holder) => holder.username === myUsername);
-        return mine ? [{ ...department, as: mine.kind }] : [];
+        const offices = department.holders
+          .filter((holder) => holder.username === myUsername)
+          .map((holder) => (holder.role || (holder.kind === "assistant" ? "Assistant" : "Leader")));
+        if (offices.length === 0) return [];
+        return [{ ...department, as: offices.join(" · ") }];
       })
     : [];
 
@@ -307,28 +313,23 @@ export function MemberHome() {
             </section>
           )}
 
-          {/* The areas this member answers for. A member serving nowhere gets
+          {/* The roles this member holds. A member serving nowhere gets
               no metrics at all — this section exists for leaders, and it is
               the church's own leadership table that decides who that is.
-
-              Phone and tablet only. From `lg` up the rail already names every
-              department and ministry the church has, so the cards were a second
-              copy of that list — and they are the less useful copy, because a
-              department opens from the rail in one tap either way. Below `lg`
-              they are not a duplicate but the only way through: at tablet
-              width the rail and the tab bar are both absent, so these cards are
-              how a leader reaches the desk they answer for. */}
+              The card names the office itself ("Treasurer", not the generic
+              leader/assistant pair), because a title the church keeps is
+              worth reading. */}
           {myAreas.length > 0 && (
-            <section aria-labelledby="your-areas" className="lg:hidden">
-              <h2 id="your-areas" className="text-base font-bold text-bark">
-                Your areas
+            <section aria-labelledby="your-roles">
+              <h2 id="your-roles" className="text-base font-bold text-bark">
+                Your roles
               </h2>
               <p className="mt-1 text-[11px] text-moss">
                 How the departments and ministries you serve are doing.
               </p>
-              {/* One area takes the whole width rather than a quarter of a
+              {/* One role takes the whole width rather than a fraction of a
                   row with a gap beside it — a lone card looks like a mistake
-                  in a three-column grid. */}
+                  in a grid. */}
               <div
                 className={`mt-4 grid gap-3 ${
                   myAreas.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"

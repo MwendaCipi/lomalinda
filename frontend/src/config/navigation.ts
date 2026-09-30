@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   Megaphone,
+  Music,
   Receipt,
   Scale,
   Settings,
@@ -410,7 +411,10 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * clerk's work is not an elder's — and the treasury has always had its own.
  */
 export const eldershipItems: RailItem[] = [
-  officeTab("leaders", "Departments & Ministries", Crown, { roles: ELDERSHIP_ROLES }),
+  // The departments themselves are the two rows under this one — Ministries
+  // and Departments, filled from the church's own records — so the console's
+  // directory tab is not an item here: an office tab sharing another row's
+  // URL lit every one of them up at once.
   officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
   // Board and business meetings are one desk now; the page switches between
   // them. A deep link that still names either one lands on the same page.
@@ -456,6 +460,7 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   ambassadors: Sparkles,
   apm: HandHeart,
   chaplaincy: Crown,
+  choir: Music,
   music: Gift,
   personal_ministries: Megaphone,
 };
@@ -554,19 +559,20 @@ export const railEntries: RailEntry[] = [
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
   // The two lists of the church's own departments, filled from its records.
-  // Their `href` is the directory that lists them: the rail row is a place, and
-  // the departments themselves are the pages of it, drawn as a strip on top.
+  // They carry no `href` of their own: `entryHref` opens their first
+  // department's desk — the same desk any of the strip's tabs opens — and the
+  // strip carries the rest of the siblings, so the row and its tabs agree on
+  // where things are and no two rows can claim the same URL. A row whose
+  // department list is empty is dropped by `railFor` entirely.
   {
     label: "Ministries",
     icon: HeartHandshake,
-    href: "/administration?tab=leaders",
     fromDepartments: "ministry",
     roles: STAFF_ROLES,
   },
   {
     label: "Departments",
     icon: Users,
-    href: "/administration?tab=leaders",
     fromDepartments: "department",
     roles: STAFF_ROLES,
   },

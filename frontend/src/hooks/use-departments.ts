@@ -6,8 +6,8 @@ import type { DepartmentSummary } from "@/config/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TTL = 60 * 1000;
 
-/** One person on a department's leadership table. */
-export type DepartmentHolder = { username: string; kind: "leader" | "assistant" };
+/** One person on a department's leadership table, and the office they hold. */
+export type DepartmentHolder = { username: string; kind: "leader" | "assistant"; role: string };
 
 /**
  * A department as the church records it, with the counts its desk reports.
@@ -52,7 +52,7 @@ async function fetchDepartments(): Promise<DepartmentRow[] | null> {
         group?: string;
         member_count?: number;
         event_count?: number;
-        roles?: { holders?: { username?: string; kind?: string }[] }[];
+        roles?: { name?: string; holders?: { username?: string; kind?: string }[] }[];
       }) => ({
         code: row.code,
         label: row.label,
@@ -60,13 +60,16 @@ async function fetchDepartments(): Promise<DepartmentRow[] | null> {
         memberCount: Number(row.member_count ?? 0),
         eventCount: Number(row.event_count ?? 0),
         // Everyone the leadership table carries — leader and assistant alike,
-        // because holding a row is what makes someone the area's leadership.
+        // because holding a row is what makes someone the area's leadership —
+        // with the office they hold, so a dashboard can say "Treasurer"
+        // rather than the generic leader/assistant pair.
         holders: (row.roles ?? []).flatMap((role) =>
           (role.holders ?? [])
             .filter((holder) => Boolean(holder.username))
             .map((holder) => ({
               username: String(holder.username),
               kind: holder.kind === "assistant" ? ("assistant" as const) : ("leader" as const),
+              role: String(role.name ?? ""),
             })),
         ),
       }),
