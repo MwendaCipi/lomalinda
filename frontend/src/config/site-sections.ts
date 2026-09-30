@@ -5,7 +5,6 @@ import {
   BookOpen,
   Building2,
   Calendar,
-  Camera,
   FileText,
   Handshake,
   Heart,
@@ -83,13 +82,6 @@ export const newsAndEventsLinks: SectionLink[] = [
     label: "Events Calendar",
     description: "Everything happening in the church year.",
     icon: Calendar,
-  },
-  {
-    key: "services",
-    href: "/services",
-    label: "Order of Service",
-    description: "The Sabbath programme and order of service.",
-    icon: BookOpen,
   },
 ];
 
@@ -190,7 +182,7 @@ export const stewardshipLinks: SectionLink[] = (
 
 /**
  * Beside Fellowship & Community: what the church family is saying and doing.
- * Shared by the Fellowship hub and the live services page.
+ * Shared by the Fellowship hub and the pages that point back into it.
  */
 export const fellowshipLinks: SectionLink[] = [
   {
@@ -199,13 +191,6 @@ export const fellowshipLinks: SectionLink[] = [
     label: "Announcements",
     description: "Notices and updates shared with the church family.",
     icon: Megaphone,
-  },
-  {
-    key: "services",
-    href: "/services",
-    label: "Live Services",
-    description: "Join worship online, or catch up on a service you missed.",
-    icon: Camera,
   },
   {
     key: "moments",

@@ -407,6 +407,50 @@ class DepartmentMembership(models.Model):
         return f"{self.member.get_username()} — {self.department}"
 
 
+class WeeklyMeeting(models.Model):
+    """One gathering in the church's ordinary week.
+
+    The week used to be three strings in Church Settings — "Wednesday · 8:00
+    PM – 9:00 PM" — which every screen had to parse back into a day and a
+    clock. A record says the same thing in the shape the app can read, and it
+    carries what a string could not: where the meeting is, whether it is
+    online, and the link to join it.
+
+    These are church-wide, not one department's: two of them are the whole
+    congregation's worship. The personal ministries leader keeps them, because
+    that office runs the church's weekly rhythm — the desk lives on that
+    ministry in the hub (see the frontend's meeting panel).
+    """
+
+    WEEKDAY_CHOICES = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    ]
+
+    title = models.CharField(max_length=120)
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAY_CHOICES)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    place = models.CharField(max_length=160, blank=True, help_text='Where it meets, e.g. "Church sanctuary"; blank when it meets online')
+    online = models.BooleanField(default=False, help_text='Meets over a web conference rather than in person')
+    meeting_link = models.URLField(blank=True, help_text='Where members join when the meeting is online')
+    notes = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True, help_text='Unticked to retire a meeting without losing its history')
+    sort_order = models.PositiveIntegerField(default=100)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('weekday', 'start_time', 'title')
+
+    def __str__(self):
+        return f'{self.title} — {self.get_weekday_display()} {self.start_time:%H:%M}'
+
+
 class DepartmentEvent(models.Model):
     """One entry on a department's calendar.
 
@@ -1183,12 +1227,9 @@ class ChurchSettings(models.Model):
     address = models.CharField(max_length=255, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    midweek_vespers_link = models.URLField(blank=True)
-    live_service_link = models.URLField(blank=True)
-    live_service_active = models.BooleanField(default=False)
-    midweek_vespers_time = models.CharField(max_length=120, default='Wednesday · 8:00 PM – 9:00 PM')
-    friday_vespers_time = models.CharField(max_length=120, default='Friday · 5:30 PM – 6:30 PM')
-    sabbath_time = models.CharField(max_length=120, default='Saturday · 8:00 AM – 4:00 PM')
+    # The church's weekly gatherings are records now, not strings here — see
+    # WeeklyMeeting. What a settings page cannot hold: where a meeting is,
+    # whether it is online, and the link to join it.
     clarion_call_heading = models.TextField(default='A place to belong.\nA faith to share.\nA hope that transforms lives.')
     clarion_call_subtext = models.TextField(default="Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
     RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]

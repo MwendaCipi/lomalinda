@@ -22,6 +22,7 @@ import {
   CalendarDays,
   ChevronDown,
   Church,
+  Clock,
   Handshake,
   Heart,
   Landmark,
@@ -37,6 +38,7 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
 import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
@@ -908,6 +910,344 @@ function LeadershipEditModal({
     </div>
   );
 }
+/** One weekly meeting as the desk edits it. */
+type MeetingDraft = {
+  id: number | null;
+  title: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  place: string;
+  online: boolean;
+  meeting_link: string;
+};
+
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/** A new meeting starts on the day the church is likeliest to add one. */
+const BLANK_MEETING: MeetingDraft = {
+  id: null,
+  title: "",
+  weekday: 6,
+  start_time: "09:00",
+  end_time: "11:00",
+  place: "Church sanctuary",
+  online: false,
+  meeting_link: "",
+};
+
+/**
+ * The church's week, kept where its keeper works.
+ *
+ * These are the whole congregation's meetings — midweek vespers, Friday
+ * vespers, the Sabbath — not this department's own activities, which is why
+ * they sit on Personal Ministries' page rather than in its calendar: that
+ * office runs the church's weekly rhythm. Every screen that draws the week
+ * reads these rows: the website's gathering card, the calendar, the homepage's
+ * weekly calendar and the Live badge on the identity bar.
+ *
+ * Retiring is offered beside removing because a meeting a church pauses for a
+ * season is not a meeting it never held — the row stays, out of the week.
+ */
+function WeeklyMeetingsPanel() {
+  const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
+  const [draft, setDraft] = useState<MeetingDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    // The desk sees the retired ones too, so a meeting put down can be picked
+    // back up; every other reader is served only the live week.
+    fetch(`${API_URL}/api/members/weekly-meetings/?include_inactive=true`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { meetings: [] }))
+      .then((data) => setMeetings(data.meetings || []))
+      .catch(() => setMeetings([]));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save() {
+    if (!draft || saving) return;
+    if (!draft.title.trim()) {
+      setError("Give the meeting a name — \"Midweek Vespers\", \"Sabbath Worship\".");
+      return;
+    }
+    if (draft.end_time <= draft.start_time) {
+      setError("A meeting has to end after it starts.");
+      return;
+    }
+    if (draft.online && !draft.meeting_link.trim()) {
+      setError("An online meeting needs the link members join by.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(
+        draft.id ? `${API_URL}/api/members/weekly-meetings/${draft.id}/` : `${API_URL}/api/members/weekly-meetings/`,
+        {
+          method: draft.id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            title: draft.title.trim(),
+            weekday: draft.weekday,
+            start_time: draft.start_time,
+            end_time: draft.end_time,
+            online: draft.online,
+            // A meeting is one or the other: online needs a link, in person
+            // needs somewhere to be. The API clears the field it is not using.
+            place: draft.online ? "" : draft.place.trim(),
+            meeting_link: draft.online ? draft.meeting_link.trim() : "",
+          }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const first = Object.values(data as Record<string, unknown>).flat()[0];
+        throw new Error(typeof first === "string" ? first : "Could not save the meeting.");
+      }
+      setDraft(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the meeting.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(meeting: WeeklyMeeting) {
+    try {
+      const response = await fetch(`${API_URL}/api/members/weekly-meetings/${meeting.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ is_active: !meeting.is_active }),
+      });
+      if (!response.ok) throw new Error("Could not change the meeting.");
+      load();
+    } catch (err) {
+      showAlert("Not changed", err instanceof Error ? err.message : "Try again.", "error");
+    }
+  }
+
+  async function remove(meeting: WeeklyMeeting) {
+    const answer = await showAlert(
+      "Remove this meeting?",
+      `${meeting.title} will come off the church's week everywhere it is shown.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        cancelButtonText: "Keep",
+        confirmButtonColor: brand.alert,
+      }
+    );
+    if (!answer.isConfirmed) return;
+    try {
+      const response = await fetch(`${API_URL}/api/members/weekly-meetings/${meeting.id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error("Could not remove the meeting.");
+      load();
+    } catch (err) {
+      showAlert("Not removed", err instanceof Error ? err.message : "Try again.", "error");
+    }
+  }
+
+  const field =
+    "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember";
+
+  return (
+    <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-bark">The church&apos;s week</h3>
+          <p className="mt-0.5 text-[11px] text-moss">
+            The regular meetings every screen draws. A meeting that is online and running right now puts the Live
+            badge on the identity bar.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft({ ...BLANK_MEETING });
+            setError("");
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add meeting
+        </button>
+      </div>
+
+      {draft && (
+        <div className="mt-4 rounded-xl border border-sand-line bg-sand-plate p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-bark">
+              Meeting
+              <input
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                placeholder="Midweek Vespers"
+                className={field}
+              />
+            </label>
+            <label className="text-xs font-semibold text-bark">
+              Day
+              <select
+                value={draft.weekday}
+                onChange={(e) => setDraft({ ...draft, weekday: Number(e.target.value) })}
+                className={field}
+              >
+                {WEEKDAY_NAMES.map((name, index) => (
+                  <option key={name} value={index}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-bark">
+              Starts
+              <input
+                type="time"
+                value={draft.start_time}
+                onChange={(e) => setDraft({ ...draft, start_time: e.target.value })}
+                className={field}
+              />
+            </label>
+            <label className="text-xs font-semibold text-bark">
+              Ends
+              <input
+                type="time"
+                value={draft.end_time}
+                onChange={(e) => setDraft({ ...draft, end_time: e.target.value })}
+                className={field}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-bark sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={draft.online}
+                onChange={(e) => setDraft({ ...draft, online: e.target.checked })}
+                className="h-3.5 w-3.5 accent-ember"
+              />
+              Meets online, as a web conference
+            </label>
+            {draft.online ? (
+              <label className="text-xs font-semibold text-bark sm:col-span-2">
+                Joining link
+                <input
+                  type="url"
+                  value={draft.meeting_link}
+                  onChange={(e) => setDraft({ ...draft, meeting_link: e.target.value })}
+                  placeholder="https://zoom.us/j/..."
+                  className={field}
+                />
+              </label>
+            ) : (
+              <label className="text-xs font-semibold text-bark sm:col-span-2">
+                Where it meets
+                <input
+                  value={draft.place}
+                  onChange={(e) => setDraft({ ...draft, place: e.target.value })}
+                  placeholder="Church sanctuary"
+                  className={field}
+                />
+              </label>
+            )}
+          </div>
+          {error && <p className="mt-2 text-[11px] font-semibold text-alert-shade">{error}</p>}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(null);
+                setError("");
+              }}
+              className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {saving ? "Saving…" : draft.id ? "Save meeting" : "Add meeting"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {meetings === null ? (
+        <p className="py-8 text-center text-xs text-moss">Loading the church&apos;s week…</p>
+      ) : meetings.length === 0 ? (
+        <p className="py-8 text-center text-xs text-moss">
+          No weekly meetings yet. Add the ones the church keeps — midweek vespers, Friday vespers, the Sabbath.
+        </p>
+      ) : (
+        <div className="mt-3 divide-y divide-sand-soft">
+          {meetings.map((meeting) => (
+            <div key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <p className={`text-xs font-semibold ${meeting.is_active ? "text-bark" : "text-moss-faint line-through"}`}>
+                  {meeting.title}
+                  {meeting.online && (
+                    <span className="ml-2 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss-dark">
+                      Online
+                    </span>
+                  )}
+                </p>
+                <p className="text-[11px] text-moss">
+                  {meetingDay(meeting)} · {meetingHours(meeting)}
+                  {!meeting.online && meeting.place ? ` · ${meeting.place}` : ""}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft({
+                      id: meeting.id,
+                      title: meeting.title,
+                      weekday: meeting.weekday,
+                      start_time: meeting.start_time,
+                      end_time: meeting.end_time,
+                      place: meeting.place,
+                      online: meeting.online,
+                      meeting_link: meeting.meeting_link,
+                    });
+                    setError("");
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleActive(meeting)}
+                  className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                >
+                  {meeting.is_active ? "Retire" : "Restore"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(meeting)}
+                  className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DepartmentDetail({
   department,
   onBack,
@@ -921,6 +1261,9 @@ function DepartmentDetail({
 }) {
   const style = areaStyle(department.code);
   const units = department.units ?? [];
+  // Personal Ministries runs the church's weekly rhythm, so the church's own
+  // week is kept on its page — see WeeklyMeetingsPanel.
+  const keepsTheWeek = department.code === "personal_ministries";
   // Which unit's desk is open; null is the whole department.
   const [unit, setUnit] = useState<string | null>(null);
   // The unit's own leadership, when one is selected: the directory's board is
@@ -933,7 +1276,7 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showLeadership, setShowLeadership] = useState(false);
-  const [subTab, setSubTab] = useState<"members" | "calendar">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings">(initialTab);
   // The roll's search box and row density, shared with the other desks.
   const [rollSearch, setRollSearch] = useState("");
   const { dense, toggleDensity } = useTableDensity();
@@ -1197,9 +1540,11 @@ function DepartmentDetail({
         items={[
           { key: "members", label: "Members", icon: Users },
           { key: "calendar", label: "Calendar", icon: CalendarDays },
+          // Only the ministry that keeps the church's week carries its panel.
+          ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
         ]}
         value={subTab}
-        onChange={(key) => setSubTab(key as "members" | "calendar")}
+        onChange={(key) => setSubTab(key as "members" | "calendar" | "meetings")}
         className="-mx-2 md:-mx-4 lg:-mx-6"
       />
 
@@ -1345,6 +1690,10 @@ function DepartmentDetail({
           )}
         </div>
       )}
+
+      {/* Weekly meetings — the church's own week, on the ministry that keeps
+          it. Church-wide, so it is its own view rather than a calendar entry. */}
+      {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel />}
 
       {showAddMember && (
         <AddMemberModal

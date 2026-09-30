@@ -11,8 +11,8 @@ export default function FellowshipPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Fellowship hub</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Fellowship &amp; Community</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
-            Connect with SDA Loma Linda through announcements, live worship services, shared testimonies, and the
-            everyday life of the church family.
+            Connect with SDA Loma Linda through announcements, shared testimonies, and the everyday life of the
+            church family.
           </p>
         </div>
       </section>
@@ -22,8 +22,7 @@ export default function FellowshipPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">Stay connected</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome to fellowship</h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
-            Stay up to date with church announcements, watch live worship broadcasts, and read what God is doing among
-            us.
+            Stay up to date with church announcements and read what God is doing among us.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
@@ -36,7 +35,7 @@ export default function FellowshipPage() {
               href="/share/moments"
               className="rounded-full border border-white/25 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white/50"
             >
-              Live services &amp; moments
+              Photos &amp; moments
             </Link>
           </div>
         </div>

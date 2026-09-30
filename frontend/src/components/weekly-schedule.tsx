@@ -3,54 +3,25 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type ChurchSettings = {
-  midweek_vespers_time?: string;
-  friday_vespers_time?: string;
-  sabbath_time?: string;
-};
-
-// Each gathering is stored in Church Settings as one string, "Wednesday · 8:00 PM – 9:00 PM".
-function splitWhen(value: string | undefined, fallbackDay: string, fallbackTime: string) {
-  const [rawDay, rawTime] = (value || "").split("·");
-  return {
-    day: (rawDay || "").trim() || fallbackDay,
-    time: (rawTime || "").trim() || fallbackTime,
-  };
-}
-
 /**
- * The week at a glance. Times come from Church Settings, so a change there
- * shows up on the website without a redeploy.
+ * The week at a glance: one card per weekly meeting, in the order the church
+ * meets. The times used to be three strings in Church Settings; they are now
+ * the records the personal ministries leader keeps, so a change there shows up
+ * on the website without a redeploy and without a clerk.
  */
 export function WeeklySchedule() {
-  const [settings, setSettings] = useState<ChurchSettings | null>(null);
+  const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/members/church-settings/`)
+    fetch(`${API_URL}/api/members/weekly-meetings/`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: ChurchSettings) => setSettings(data))
-      .catch(() => setSettings(null));
+      .then((data) => setMeetings(Array.isArray(data?.meetings) ? data.meetings : []))
+      .catch(() => setMeetings([]));
   }, []);
-
-  const gatherings = [
-    {
-      ...splitWhen(settings?.midweek_vespers_time, "Wednesday", "8:00 PM – 9:00 PM"),
-      name: "Midweek Vespers",
-      place: "Online",
-    },
-    {
-      ...splitWhen(settings?.friday_vespers_time, "Friday", "5:30 PM – 6:30 PM"),
-      name: "Friday Vespers",
-      place: "Church sanctuary",
-    },
-    {
-      ...splitWhen(settings?.sabbath_time, "Saturday", "8:00 AM – 4:00 PM"),
-      name: "Sabbath worship",
-      place: "Church grounds",
-    },
-  ];
 
   return (
     <section id="calendar" className="border-y border-sand-line bg-white/60 px-6 py-16 lg:px-8 lg:py-20">
@@ -65,15 +36,26 @@ export function WeeklySchedule() {
           </Link>
         </div>
 
-        <div className="mt-10 grid gap-8 border-t border-sand-line md:grid-cols-3 md:gap-0 md:divide-x md:divide-sand-line">
-          {gatherings.map((gathering) => (
-            <article key={gathering.name} className="pt-6 md:px-7 md:first:pl-0 md:last:pr-0">
-              <p className="text-sm font-semibold text-ember">{gathering.day}</p>
-              <h3 className="mt-3 text-xl font-semibold">{gathering.name}</h3>
-              <p className="mt-2 text-sm font-medium text-bark">{gathering.time}</p>
-              <p className="mt-1 text-sm text-moss">{gathering.place}</p>
+        <div className="mt-10 grid gap-8 border-t border-sand-line pt-6 sm:grid-cols-2 lg:grid-cols-3">
+          {(meetings || []).map((meeting) => (
+            <article key={meeting.id}>
+              <p className="text-sm font-semibold text-ember">{meetingDay(meeting)}</p>
+              <h3 className="mt-3 text-xl font-semibold">{meeting.title}</h3>
+              <p className="mt-2 text-sm font-medium text-bark">{meetingHours(meeting)}</p>
+              <p className="mt-1 text-sm text-moss">
+                {meeting.online ? "Online" : meeting.place || "Church grounds, Loma Linda, Meru"}
+              </p>
             </article>
           ))}
+          {meetings !== null && meetings.length === 0 && (
+            <p className="text-sm text-moss">
+              The week&apos;s meetings are still being set up — check the{" "}
+              <Link href="/calendar" className="font-semibold text-ember hover:underline">
+                church calendar
+              </Link>{" "}
+              for what is on.
+            </p>
+          )}
         </div>
 
         <p className="mt-8 text-sm text-moss">

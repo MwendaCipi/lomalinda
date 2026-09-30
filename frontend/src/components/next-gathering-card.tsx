@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { nextGathering, gatheringLabel, type ChurchTimes } from "@/lib/gathering";
+import { nextMeeting, gatheringLabel, type WeeklyMeeting } from "@/lib/gathering";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type ChurchSettings = ChurchTimes & {
+type ChurchSettings = {
   latitude: string | null;
   longitude: string | null;
-  midweek_vespers_link: string;
-  live_service_link: string;
-  live_service_active: boolean;
 };
 
 type Announcement = {
@@ -41,6 +38,7 @@ type Announcement = {
  */
 export function NextGatheringCard() {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
+  const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [slide, setSlide] = useState(0);
@@ -59,6 +57,11 @@ export function NextGatheringCard() {
       .then((response) => (response.ok ? response.json() : null))
       .then(setSettings)
       .catch(() => setSettings(null));
+    // The week itself: the settings are read only for the church's map pin.
+    fetch(`${API_URL}/api/members/weekly-meetings/`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setMeetings(Array.isArray(data?.meetings) ? data.meetings : []))
+      .catch(() => setMeetings([]));
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
@@ -76,13 +79,13 @@ export function NextGatheringCard() {
       .catch(() => undefined);
   }, []);
 
-  const gathering = useMemo(() => nextGathering(settings, now), [settings, now]);
+  const gathering = useMemo(() => nextMeeting(meetings, now), [meetings, now]);
 
   // Slide 0 is always the gathering; the announcements follow it.
   const slideCount = 1 + announcements.length;
   const index = Math.min(slide, slideCount - 1);
   const current = index > 0 ? announcements[index - 1] : undefined;
-  const canRotate = slideCount > 1 && !gathering.active;
+  const canRotate = slideCount > 1 && !gathering?.active;
 
   useEffect(() => {
     if (!canRotate || isPaused || isInteracting) return;
@@ -93,9 +96,8 @@ export function NextGatheringCard() {
   const mapsUrl = settings?.latitude && settings.longitude
     ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
     : null;
-  const liveHref = gathering.active && settings?.live_service_active && settings.live_service_link ? settings.live_service_link : null;
-  const actionHref = liveHref || (gathering.online ? settings?.midweek_vespers_link : mapsUrl);
-  const joinOpen = gathering.online && gathering.active && Boolean(actionHref);
+  const actionHref = gathering?.online ? gathering.link : mapsUrl;
+  const joinOpen = Boolean(gathering?.online && gathering.active && actionHref);
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
 
@@ -166,7 +168,7 @@ export function NextGatheringCard() {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ember">
-          {current ? `Announcement ${index} of ${announcements.length}` : gathering.active ? "Now happening" : "Next gathering"}
+          {current ? `Announcement ${index} of ${announcements.length}` : gathering?.active ? "Now happening" : "Next gathering"}
         </p>
 
         {slideCount > 1 && (
@@ -203,17 +205,25 @@ export function NextGatheringCard() {
       </div>
 
       <div className="mt-4">
-        <h2 className="text-3xl font-semibold">{current ? current.title : gatheringLabel(gathering, now)}</h2>
+        <h2 className="text-3xl font-semibold">
+          {current ? current.title : gathering ? gatheringLabel(gathering, now) : "Our week together"}
+        </h2>
         {current ? (
           <>
             <p className="mt-3 text-base leading-7 text-moss-dark">{current.text}</p>
             {current.detail && <p className="mt-2 text-sm leading-6 text-moss">{current.detail}</p>}
           </>
-        ) : (
+        ) : gathering ? (
           <>
             <p className="mt-3 text-lg leading-7 text-moss-dark">{gathering.time}</p>
-            <p className="mt-3 text-sm text-moss">{gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}</p>
+            <p className="mt-3 text-sm text-moss">
+              {gathering.online ? "Online" : gathering.place || "Church grounds, Loma Linda, Meru"}
+            </p>
           </>
+        ) : (
+          <p className="mt-3 text-lg leading-7 text-moss-dark">
+            The week&apos;s meetings are still being set up — the church calendar has what is on.
+          </p>
         )}
       </div>
 
@@ -303,14 +313,10 @@ export function NextGatheringCard() {
               </form>
             )}
           </div>
-        ) : !current ? (
+        ) : !current && gathering ? (
           <div className="border-t border-sage-line pt-6">
             <p className="text-sm text-moss">{gathering.date.toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric" })}</p>
-            {liveHref ? (
-              <Link href={liveHref} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-ember hover:underline">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />Join live &rarr;
-              </Link>
-            ) : gathering.online ? (
+            {gathering.online ? (
               joinOpen ? (
                 <Link href={actionHref!} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-semibold text-ember hover:underline">Join meeting &rarr;</Link>
               ) : (

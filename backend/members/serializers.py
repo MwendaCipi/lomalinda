@@ -12,7 +12,8 @@ from .models import (
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
-    SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest
+    SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest,
+    WeeklyMeeting,
 )
 from .meetings import PLACEHOLDERS as MEETING_PLACEHOLDERS
 from .requests import APPROVAL_PLACEHOLDERS, REQUEST_PLACEHOLDERS
@@ -889,9 +890,8 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchSettings
         fields = (
-            'church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude', 'midweek_vespers_link',
-            'live_service_link', 'live_service_active', 'midweek_vespers_time',
-            'friday_vespers_time', 'sabbath_time', 'clarion_call_heading',
+            'church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude',
+            'clarion_call_heading',
             'clarion_call_subtext', 'default_receipt_message', 'split_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',
             'default_board_meeting_invitation_message',
@@ -1015,6 +1015,44 @@ class BoardMeetingSerializer(serializers.ModelSerializer):
 
     def get_time_range(self, obj):
         return obj.time_range_display()
+
+
+class WeeklyMeetingSerializer(serializers.ModelSerializer):
+    """A meeting in the church's ordinary week.
+
+    The two times leave as "20:00", not "20:00:00": every reader of this
+    record — the gathering card, the calendar, the homepage week — is drawing
+    a clock, and none of them wants the seconds.
+    """
+
+    weekday_label = serializers.SerializerMethodField()
+    start_time = serializers.TimeField(format='%H:%M')
+    end_time = serializers.TimeField(format='%H:%M')
+
+    class Meta:
+        model = WeeklyMeeting
+        fields = (
+            'id', 'title', 'weekday', 'weekday_label', 'start_time', 'end_time',
+            'place', 'online', 'meeting_link', 'notes', 'is_active', 'sort_order',
+        )
+        read_only_fields = ('id',)
+
+    def get_weekday_label(self, obj):
+        return obj.get_weekday_display()
+
+    def validate(self, attrs):
+        """A meeting has to make sense as a window, and an online one needs
+        the link members actually join by."""
+        start = attrs.get('start_time', getattr(self.instance, 'start_time', None))
+        end = attrs.get('end_time', getattr(self.instance, 'end_time', None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({'end_time': 'A meeting has to end after it starts.'})
+
+        online = attrs.get('online', getattr(self.instance, 'online', False))
+        link = attrs.get('meeting_link', getattr(self.instance, 'meeting_link', ''))
+        if online and not (link or '').strip():
+            raise serializers.ValidationError({'meeting_link': 'An online meeting needs the link members join by.'})
+        return attrs
 
 
 class ChurchNotificationSerializer(serializers.ModelSerializer):

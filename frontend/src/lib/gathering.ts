@@ -1,68 +1,127 @@
 /**
- * The church's weekly programme windows, shared by the website's gathering
- * card and the dashboard's announcements slider.
+ * The church's ordinary week, told from its meetings.
  *
- * The Sabbath itself runs Friday 6:00 PM to Saturday 6:00 PM — a fixed
- * sunset-to-sunset window, not the programme hours. The programme hours from
- * settings remain the description shown to members.
+ * The week used to be three strings in Church Settings — "Wednesday · 8:00 PM
+ * – 9:00 PM" — which this module parsed back into a day and a clock. It is now
+ * told from WeeklyMeeting records the personal ministries leader keeps, so the
+ * app reads a day and two times instead of guessing them out of a sentence.
+ *
+ * Everything that draws the church's week comes through here: the website's
+ * gathering card, the dashboard's slider, the calendar, the homepage's weekly
+ * calendar and the identity bar's live badge. One clock, one answer.
  */
 
-export type ChurchTimes = {
-  midweek_vespers_time: string;
-  friday_vespers_time: string;
-  sabbath_time: string;
+/** One meeting as the API returns it. `weekday` is 0 = Monday … 6 = Sunday. */
+export type WeeklyMeeting = {
+  id: number;
+  title: string;
+  weekday: number;
+  weekday_label: string;
+  /** "20:00" — the API sends a clock, not seconds. */
+  start_time: string;
+  end_time: string;
+  place: string;
+  online: boolean;
+  meeting_link: string;
+  notes: string;
+  is_active: boolean;
+  sort_order: number;
 };
 
 export type Gathering = {
+  /** The meeting's id, or null when the week is empty and nothing stands in. */
+  id: number | null;
   name: string;
+  /** "Wednesday · 8:00 PM – 9:00 PM" — the week said out loud. */
   time: string;
+  place: string;
   online: boolean;
+  /** Where members join when it meets online. */
+  link: string;
   active: boolean;
   date: Date;
 };
 
-function clockRange(value: string | undefined, fallbackStart: [number, number], fallbackEnd: [number, number]) {
-  const matches = (value || "").match(/(\d{1,2}):(\d{2})\s*([AP]M)/gi) || [];
-  const parse = (text: string | undefined, fallback: [number, number]) => {
-    if (!text) return fallback;
-    const match = text.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
-    if (!match) return fallback;
-    let hour = Number(match[1]) % 12;
-    if (match[3].toUpperCase() === "PM") hour += 12;
-    return [hour, Number(match[2])] as [number, number];
-  };
-  return [parse(matches[0], fallbackStart), parse(matches[1], fallbackEnd)] as const;
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/** "20:00" as a clock face: "8:00 PM". */
+function clockFace(value: string): string {
+  const [rawHour, rawMinute] = (value || "").split(":");
+  const hour = Number(rawHour);
+  if (!Number.isFinite(hour)) return "";
+  const minute = Number(rawMinute);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const face = hour % 12 === 0 ? 12 : hour % 12;
+  return `${face}:${String(Number.isFinite(minute) ? minute : 0).padStart(2, "0")} ${suffix}`;
 }
 
-/** The next gathering on the church's weekly rhythm — or the one happening now. */
-export function nextGathering(settings: ChurchTimes | null, now: Date): Gathering {
-  const definitions = [
-    { day: 3, name: "Midweek Vespers", time: settings?.midweek_vespers_time || "Wednesday · 8:00 PM – 9:00 PM", range: clockRange(settings?.midweek_vespers_time, [20, 0], [21, 0]), online: true },
-    { day: 5, name: "Friday Vespers", time: settings?.friday_vespers_time || "Friday · 5:30 PM – 6:30 PM", range: clockRange(settings?.friday_vespers_time, [17, 30], [18, 30]), online: false },
-    { day: 5, name: "Sabbath program", time: settings?.sabbath_time || "Saturday · 8:00 AM – 4:00 PM", range: [[18, 0], [18, 0]] as [[number, number], [number, number]], online: false },
-  ];
+function minutesOf(value: string): [number, number] {
+  const [rawHour, rawMinute] = (value || "").split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  return [Number.isFinite(hour) ? hour : 0, Number.isFinite(minute) ? minute : 0];
+}
+
+/** The day a meeting falls on: "Wednesday". */
+export function meetingDay(meeting: WeeklyMeeting): string {
+  return WEEKDAY_NAMES[meeting.weekday] ?? meeting.weekday_label ?? "";
+}
+
+/** The meeting's hours, as a window: "8:00 PM – 9:00 PM". */
+export function meetingHours(meeting: WeeklyMeeting): string {
+  return [clockFace(meeting.start_time), clockFace(meeting.end_time)].filter(Boolean).join(" – ");
+}
+
+/** How the week says one meeting: "Wednesday · 8:00 PM – 9:00 PM". */
+export function meetingWhen(meeting: WeeklyMeeting): string {
+  const day = meetingDay(meeting);
+  const hours = meetingHours(meeting);
+  return hours ? `${day} · ${hours}` : day;
+}
+
+/**
+ * The meeting happening now, or the next one on the church's week.
+ *
+ * A meeting's own hours are its window — no second notion of when a service
+ * "really" runs. A meeting whose end is not after its start runs past
+ * midnight, which is why the end is allowed to land on the following day.
+ */
+export function nextMeeting(meetings: WeeklyMeeting[] | null, now: Date): Gathering | null {
+  const week = (meetings || []).filter((meeting) => meeting.is_active !== false);
+  if (week.length === 0) return null;
+
   const candidates: Gathering[] = [];
-  for (let week = -1; week <= 1; week += 1) {
-    definitions.forEach((definition) => {
+  for (let offset = -1; offset <= 1; offset += 1) {
+    week.forEach((meeting) => {
+      const [startHour, startMinute] = minutesOf(meeting.start_time);
+      const [endHour, endMinute] = minutesOf(meeting.end_time);
+      // JS counts from Sunday; the record counts from Monday.
+      const daysAhead = ((meeting.weekday + 1) % 7) - now.getDay() + offset * 7;
       const date = new Date(now);
-      const difference = definition.day - now.getDay() + week * 7;
-      date.setDate(now.getDate() + difference);
-      date.setHours(definition.range[0][0], definition.range[0][1], 0, 0);
+      date.setDate(now.getDate() + daysAhead);
+      date.setHours(startHour, startMinute, 0, 0);
       const end = new Date(date);
-      end.setHours(definition.range[1][0], definition.range[1][1], 0, 0);
+      end.setHours(endHour, endMinute, 0, 0);
       if (end <= date) end.setDate(end.getDate() + 1);
       candidates.push({
-        name: definition.name,
-        time: definition.time,
-        online: definition.online,
+        id: meeting.id,
+        name: meeting.title,
+        time: meetingWhen(meeting),
+        place: meeting.place,
+        online: meeting.online,
+        link: meeting.meeting_link,
         active: now >= date && now < end,
         date,
       });
     });
   }
+
   const active = candidates.find((candidate) => candidate.active);
   if (active) return active;
-  return candidates.filter((candidate) => candidate.date > now).sort((a, b) => a.date.getTime() - b.date.getTime())[0] || candidates[0];
+  const upcoming = candidates
+    .filter((candidate) => candidate.date > now)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  return upcoming[0] || candidates[0] || null;
 }
 
 /**

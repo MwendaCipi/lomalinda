@@ -7,7 +7,7 @@
    `/dashboard/`, which was never listed here) until this name moves: their own
    build looks current on the dashboard and stale everywhere else. So bump the
    version whenever the chrome changes, not only when an icon does. */
-const CACHE_NAME = "sda-loma-linda-meru-v9";
+const CACHE_NAME = "sda-loma-linda-meru-v10";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -19,7 +19,6 @@ const STATIC_ASSETS = [
   "/requests/",
   "/share/",
   "/share/sabbath-school/",
-  "/share/services/",
   "/share/moments/",
   "/spiritual/",
   "/support/",

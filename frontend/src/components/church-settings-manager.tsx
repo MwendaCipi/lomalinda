@@ -21,12 +21,6 @@ export function ChurchSettingsManager() {
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [midweekVespersLink, setMidweekVespersLink] = useState("");
-  const [liveServiceLink, setLiveServiceLink] = useState("");
-  const [liveServiceActive, setLiveServiceActive] = useState(false);
-  const [midweekVespersTime, setMidweekVespersTime] = useState("Wednesday · 8:00 PM – 9:00 PM");
-  const [fridayVespersTime, setFridayVespersTime] = useState("Friday · 5:30 PM – 6:30 PM");
-  const [sabbathTime, setSabbathTime] = useState("Saturday · 8:00 AM – 4:00 PM");
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly");
@@ -81,12 +75,6 @@ export function ChurchSettingsManager() {
           setAddress(data.address || "");
           if (data.latitude) setLatitude(Number(data.latitude));
           if (data.longitude) setLongitude(Number(data.longitude));
-          setMidweekVespersLink(data.midweek_vespers_link || "");
-          setLiveServiceLink(data.live_service_link || "");
-          setLiveServiceActive(Boolean(data.live_service_active));
-          setMidweekVespersTime(data.midweek_vespers_time || "Wednesday · 8:00 PM – 9:00 PM");
-          setFridayVespersTime(data.friday_vespers_time || "Friday · 5:30 PM – 6:30 PM");
-          setSabbathTime(data.sabbath_time || "Saturday · 8:00 AM – 4:00 PM");
           if (data.clarion_call_heading) setClarionCallHeading(data.clarion_call_heading);
           if (data.clarion_call_subtext) setClarionCallSubtext(data.clarion_call_subtext);
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
@@ -152,12 +140,6 @@ export function ChurchSettingsManager() {
         address,
         latitude,
         longitude,
-        midweek_vespers_link: midweekVespersLink,
-        live_service_link: liveServiceLink,
-        live_service_active: liveServiceActive,
-        midweek_vespers_time: midweekVespersTime,
-        friday_vespers_time: fridayVespersTime,
-        sabbath_time: sabbathTime,
         clarion_call_heading: clarionCallHeading,
         clarion_call_subtext: clarionCallSubtext,
         default_receipt_message: defaultReceiptMessage,
@@ -672,56 +654,16 @@ export function ChurchSettingsManager() {
           </div>
         </div>
 
-        {/* Service Times & Links */}
+        {/* Service Times & Links: the church's week is records now, not three
+            strings typed here. A settings field cannot carry a day, two
+            times, a place and a joining link per meeting, so the meetings
+            carry their own — see WeeklyMeeting and the hub's meeting panel. */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs font-semibold text-bark">
-              Midweek Vespers Time
-            </label>
-            <input
-              type="text"
-              value={midweekVespersTime}
-              onChange={(e) => setMidweekVespersTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-bark">
-              Friday Vespers Time
-            </label>
-            <input
-              type="text"
-              value={fridayVespersTime}
-              onChange={(e) => setFridayVespersTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-bark">
-              Sabbath Worship Time
-            </label>
-            <input
-              type="text"
-              value={sabbathTime}
-              onChange={(e) => setSabbathTime(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-bark">
-              Live Stream URL (YouTube / Zoom)
-            </label>
-            <input
-              type="url"
-              placeholder="https://youtube.com/..."
-              value={liveServiceLink}
-              onChange={(e) => setLiveServiceLink(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
-            />
-          </div>
+          <p className="rounded-xl border border-sand-line bg-sand-plate px-4 py-3 text-xs leading-5 text-moss sm:col-span-2">
+            Regular meeting times live with the meetings themselves — midweek vespers, Friday vespers and the
+            Sabbath — set on <span className="font-semibold text-bark">Departments &amp; Ministries</span>, under
+            Personal Ministries.
+          </p>
 
           <div>
             <label className="block text-xs font-semibold text-bark">

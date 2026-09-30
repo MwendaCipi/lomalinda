@@ -7,12 +7,15 @@ import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbat
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { newsAndEventsLinks } from "@/config/site-sections";
+import { meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-type ChurchSettings = { address: string; latitude: string | null; longitude: string | null; midweek_vespers_link: string; midweek_vespers_time: string; friday_vespers_time: string; sabbath_time: string };
-type CalendarEvent = { date: string; name: string; department?: string; program_text?: string; program_file?: string | null; program_items?: [string, string][]; kind?: "online" | "onsite" | "sabbath" | "special"; time?: string; meeting_link?: string; location_link?: string };
+type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
+// `recurring` marks a row the church's weekly meetings put on every matching
+// weekday, as opposed to something the church wrote down for one date.
+type CalendarEvent = { date: string; name: string; department?: string; program_text?: string; program_file?: string | null; program_items?: [string, string][]; kind?: "online" | "onsite" | "sabbath" | "special"; time?: string; meeting_link?: string; location_link?: string; recurring?: boolean };
 
 function dateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
 function getDates(year: number, day: number) { const dates: Date[] = []; const date = new Date(year, 0, 1); while (date.getFullYear() === year) { if (date.getDay() === day) dates.push(new Date(date)); date.setDate(date.getDate() + 1); } return dates; }
@@ -40,6 +43,7 @@ function CalendarPageContent() {
   const currentYear = today.getFullYear();
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [meetings, setMeetings] = useState<WeeklyMeeting[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => { const requestedYear = Number(searchParams.get("year")); return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear; });
@@ -57,21 +61,51 @@ function CalendarPageContent() {
     return () => document.removeEventListener("mousedown", closeActions);
   }, []);
 
-  useEffect(() => { Promise.all([fetch(`${API_URL}/api/members/sabbath-events/`).then((response) => response.ok ? response.json() : []), fetch(`${API_URL}/api/members/church-settings/`).then((response) => response.ok ? response.json() : null)]).then(([calendarEvents, churchSettings]) => { setEvents(calendarEvents); setSettings(churchSettings); }).catch(() => setEvents([])).finally(() => setLoaded(true)); }, []);
+  useEffect(() => { Promise.all([fetch(`${API_URL}/api/members/sabbath-events/`).then((response) => response.ok ? response.json() : []), fetch(`${API_URL}/api/members/church-settings/`).then((response) => response.ok ? response.json() : null), fetch(`${API_URL}/api/members/weekly-meetings/`).then((response) => (response.ok ? response.json() : null))]).then(([calendarEvents, churchSettings, week]) => { setEvents(calendarEvents); setSettings(churchSettings); setMeetings(Array.isArray(week?.meetings) ? week.meetings : []); }).catch(() => setEvents([])).finally(() => setLoaded(true)); }, []);
 
   const rows = useMemo(() => {
     const eventMap = new Map(events.filter((event) => event.date.startsWith(`${selectedYear}-`)).map((event) => [event.date, { ...event, time: timeOnly(event.time) }]));
     const mapUrl = mapsLink(settings);
     const entries: { date: string; event: CalendarEvent }[] = [];
-    getDates(selectedYear, 3).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Midweek Vespers", department: "Prayer ministry", kind: "online", time: timeOnly(settings?.midweek_vespers_time || "Wednesday - 8:00 PM - 9:00 PM"), meeting_link: settings?.midweek_vespers_link } }));
-    getDates(selectedYear, 5).forEach((date) => entries.push({ date: dateKey(date), event: { date: dateKey(date), name: "Friday Vespers", department: "Worship ministry", kind: "onsite", time: timeOnly(settings?.friday_vespers_time || "Friday - 5:30 PM - 6:30 PM"), location_link: mapUrl } }));
-    getDates(selectedYear, 6).forEach((date) => { const key = dateKey(date); const customEvent = eventMap.get(key); entries.push({ date: key, event: customEvent ? { ...customEvent, kind: "sabbath", time: timeOnly(customEvent.time || settings?.sabbath_time || "Saturday - 8:00 AM - 4:00 PM"), location_link: mapUrl } : { date: key, name: "Sabbath Worship", kind: "sabbath", time: timeOnly(settings?.sabbath_time || "Saturday - 8:00 AM - 4:00 PM"), location_link: mapUrl } }); });
+    // The church's week, from the meetings the personal ministries leader
+    // keeps: every meeting lands on each of its own weekdays in the year.
+    // The Sabbath is the one day a stored programme can take over, so that
+    // row is answered by the church's own notes when it has written any.
+    meetings.forEach((meeting) => {
+      const weekday = (meeting.weekday + 1) % 7;
+      getDates(selectedYear, weekday).forEach((date) => {
+        const key = dateKey(date);
+        const hours = meetingHours(meeting);
+        if (weekday === 6) {
+          const customEvent = eventMap.get(key);
+          entries.push({
+            date: key,
+            event: customEvent
+              ? { ...customEvent, kind: "sabbath", time: timeOnly(customEvent.time || hours), location_link: mapUrl }
+              : { date: key, name: meeting.title, kind: "sabbath", time: hours, location_link: mapUrl, recurring: true },
+          });
+          return;
+        }
+        entries.push({
+          date: key,
+          event: {
+            date: key,
+            name: meeting.title,
+            kind: meeting.online ? "online" : "onsite",
+            time: hours,
+            meeting_link: meeting.online ? meeting.meeting_link : undefined,
+            location_link: meeting.online ? undefined : mapUrl,
+            recurring: true,
+          },
+        });
+      });
+    });
     const newYear = newYearsThanksgiving(selectedYear); entries.push({ date: newYear.date, event: newYear });
     eventMap.forEach((event, date) => { if (!entries.some((entry) => entry.date === date)) entries.push({ date, event }); });
     return entries.sort((a, b) => a.date.localeCompare(b.date)).filter(({ date, event }) => { const monthMatches = selectedMonth === "all" || Number(date.slice(5, 7)) - 1 === Number(selectedMonth); const dateText = new Date(`${date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }); return monthMatches && `${date} ${dateText} ${event.name} ${event.department ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()); });
-  }, [events, search, selectedMonth, selectedYear, settings]);
+  }, [events, meetings, search, selectedMonth, selectedYear, settings]);
 
-  function openProgram(row: { date: string; event: CalendarEvent }) { const file = row.event.program_file ? (row.event.program_file.startsWith("http") ? row.event.program_file : `${API_URL}${row.event.program_file}`) : null; setActiveProgram({ name: row.event.name, department: row.event.department, date: new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }), programText: row.event.program_text, programFile: file, programItems: row.event.program_items, isDesignated: row.event.kind === "special" || row.event.name !== "Sabbath Worship" }); }
+  function openProgram(row: { date: string; event: CalendarEvent }) { const file = row.event.program_file ? (row.event.program_file.startsWith("http") ? row.event.program_file : `${API_URL}${row.event.program_file}`) : null; setActiveProgram({ name: row.event.name, department: row.event.department, date: new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }), programText: row.event.program_text, programFile: file, programItems: row.event.program_items, isDesignated: row.event.kind === "special" || !row.event.recurring }); }
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   return (

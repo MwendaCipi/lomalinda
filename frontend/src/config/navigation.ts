@@ -111,10 +111,10 @@ export const destinations = {
   fellowship: {
     href: "/announcements",
     label: "Fellowship",
-    description: "Where the church family gathers — news, services, testimony and care.",
+    description: "Where the church family gathers — news, testimony and care.",
     icon: Megaphone,
     area: "fellowship",
-    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/services", "/community", "/enroll"],
+    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/community", "/enroll"],
   },
   announcements: {
     href: "/announcements",
@@ -123,14 +123,6 @@ export const destinations = {
     icon: Megaphone,
     area: "fellowship",
     match: ["/announcements"],
-  },
-  services: {
-    href: "/services",
-    label: "Live Services",
-    description: "Join worship online, or catch up on a service you missed.",
-    icon: Gift,
-    area: "fellowship",
-    match: ["/services"],
   },
   testimonies: {
     href: "/spiritual/testimonies",
@@ -521,10 +513,7 @@ export const railEntries: RailEntry[] = [
     icon: Megaphone,
     items: [
       page("announcements"),
-      page("services"),
       page("testimonies"),
-      page("childDedication"),
-      page("membership"),
       page("ideas"),
       page("calendar"),
     ],
@@ -537,8 +526,14 @@ export const railEntries: RailEntry[] = [
   },
   // Asking the church for something is its own place, not a page of Fellowship:
   // prayer and visitation, dedication, joining — the member's requests live
-  // here, while the office answers them at the console's Requests desk.
-  { label: "Requests", icon: HeartHandshake, items: [page("requests")] },
+  // here, while the office answers them at the console's Requests desk. The
+  // dedicated and joining pages belong to this row too: a member opening them
+  // is asking the church for something, not browsing what it shares.
+  {
+    label: "Requests",
+    icon: HeartHandshake,
+    items: [page("requests"), page("childDedication"), page("membership")],
+  },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
   // treasurer's has always stood on its own.

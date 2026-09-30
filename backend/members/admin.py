@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest, WeeklyMeeting
 from .roles import (
     ADMIN_ROLE,
     ROLE_CHOICES,
@@ -328,12 +328,20 @@ class InvitationAdmin(ChurchRolesAdminMixin, admin.ModelAdmin):
         self.message_user(request, f'{updated} invitation(s) revoked.')
 
 
+@admin.register(WeeklyMeeting)
+class WeeklyMeetingAdmin(admin.ModelAdmin):
+    """The church's ordinary week — the records behind the meeting panel,
+    which the personal ministries leader keeps from the hub."""
+
+    list_display = ('title', 'weekday', 'start_time', 'end_time', 'online', 'place', 'is_active', 'sort_order')
+    list_filter = ('online', 'is_active', 'weekday')
+    ordering = ('weekday', 'start_time')
+
+
 @admin.register(ChurchSettings)
 class ChurchSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Church location', {'fields': ('church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude')}),
-        ('Regular gatherings', {'fields': ('midweek_vespers_time', 'midweek_vespers_link', 'friday_vespers_time', 'sabbath_time')}),
-        ('Live service', {'fields': ('live_service_link', 'live_service_active')}),
         ('M-Pesa payment details', {'fields': ('mpesa_paybill_number', 'mpesa_account_number', 'mpesa_account_name', 'mpesa_phone_number')}),
     )
 

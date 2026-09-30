@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { nextGathering, gatheringLabel, type ChurchTimes } from "@/lib/gathering";
+import { nextMeeting, gatheringLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
@@ -45,7 +45,7 @@ function platformLabel(href: string | null | undefined) {
  */
 export function DashboardAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [settings, setSettings] = useState<ChurchTimes | null>(null);
+  const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [slide, setSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -64,17 +64,17 @@ export function DashboardAnnouncements() {
       .then((data: Announcement[]) => setAnnouncements(Array.isArray(data) ? data : []))
       .catch(() => setAnnouncements([]));
 
-    // The gathering windows are greeting-grade public copy: same read the
-    // website's card makes.
-    fetch(`${API_URL}/api/members/church-settings/`)
+    // The church's week is greeting-grade public copy: the same records the
+    // website's card draws.
+    fetch(`${API_URL}/api/members/weekly-meetings/`)
       .then((response) => (response.ok ? response.json() : null))
-      .then(setSettings)
-      .catch(() => setSettings(null));
+      .then((data) => setMeetings(Array.isArray(data?.meetings) ? data.meetings : []))
+      .catch(() => setMeetings([]));
     const clock = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(clock);
   }, []);
 
-  const gathering = useMemo(() => nextGathering(settings, now), [settings, now]);
+  const gathering = useMemo(() => nextMeeting(meetings, now), [meetings, now]);
 
   // Announcements lead; the gathering is the fallback slide — and it is also
   // what shows when the church has published nothing.
@@ -176,10 +176,14 @@ export function DashboardAnnouncements() {
             tight under the text so the extra line costs no height. */}
         <div className="mt-2.5">
           <h2 className="line-clamp-1 text-lg font-bold leading-snug text-bark sm:text-xl">
-            {current ? current.title : gatheringLabel(gathering, now)}
+            {current ? current.title : gathering ? gatheringLabel(gathering, now) : "Our week together"}
           </h2>
           <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
-            {current ? current.text : `${gathering.time} · ${gathering.online ? "Online" : "Church grounds, Loma Linda, Meru"}`}
+            {current
+              ? current.text
+              : gathering
+                ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || "Church grounds, Loma Linda, Meru"}`
+                : "The week's meetings are still being set up."}
           </p>
           <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
             {current?.detail || ""}

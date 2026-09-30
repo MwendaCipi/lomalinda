@@ -61,7 +61,7 @@ export default function MaterialsPage() {
           <PublicSectionNav
             eyebrow="Fellowship"
             title="More from the church family"
-            description="Announcements, live services, testimonies and the ideas that help us grow."
+            description="Announcements, testimonies and the ideas that help us grow."
             links={fellowshipLinks}
             className="border-t border-sand-line bg-white/60"
           />

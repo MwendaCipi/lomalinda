@@ -42,7 +42,7 @@ const ways = [
   {
     href: "/share",
     title: "Share your story",
-    text: "Testimonies, live services and the fellowship that happens between Sabbaths.",
+    text: "Testimonies and the fellowship that happens between Sabbaths.",
   },
 ];
 

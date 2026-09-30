@@ -42,7 +42,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentMembership, DepartmentRole
+from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -80,7 +80,7 @@ from .meetings import (
     create_agendas,
     parse_clock,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -3274,6 +3274,130 @@ class DashboardAnalyticsView(APIView):
             'pending_refunds': {
                 'count': pending_refunds.count(),
                 'amount': float(pending_refunds.aggregate(total=Sum('amount'))['total'] or 0),
+            },
+        })
+
+
+def is_church_office(user):
+    """Who reads the congregation's own figures: the church's offices.
+
+    The pulse counts people, not money, so it follows the office gate the
+    department desks use — admin, elder, clerk, pastor — rather than the
+    treasury one. An elder shepherds the roll and answers the requests, so the
+    roll and the queue are theirs to see; the treasurer reads the same
+    congregation through the finance panel instead.
+    """
+    if user is None or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    return department_office_profile(user) is not None
+
+
+#: The statuses that mean nobody has answered a request yet, per desk: a
+#: request waits until somebody has said yes, said no, or marked it done. The
+#: requests desk and the sidebar badge follow the same rule on the frontend
+#: (see ``reviewBucket`` in its request vocabulary), so the three agree.
+#:
+#: Welfare is the exception and has no status at all — a submission is an idea,
+#: a request for prayer or an offer of partnership, and every one of them is
+#: still somebody's to pick up.
+WAITING_JOIN_STATUSES = ('verification_pending', 'pending')
+WAITING_PRAYER_STATUSES = ('new',)
+WAITING_VISITATION_STATUSES = ('pending',)
+WAITING_DEDICATION_STATUSES = ('pending',)
+WAITING_TRANSFER_STATUSES = ('pending', 'under_review')
+
+
+class ChurchPulseView(APIView):
+    """The congregation's own numbers, for the offices that shepherd it.
+
+    An elder should open the dashboard and see the church rather than a
+    spreadsheet: how many people are on the roll and in its folds, and what the
+    desks still owe somebody an answer on. Two things it deliberately is not —
+    it carries no money (that is the finance panel, and its gate), and it names
+    nobody: a count of prayer requests, never who asked one.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_church_office(request.user):
+            return Response(
+                {'detail': 'Only church officers can view the congregation\u2019s figures.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        today = timezone.localdate()
+        month_start = _month_start(today)
+        year_start = today.replace(month=1, day=1)
+
+        # The roster the register and the printed roll use, so "on the roll"
+        # means the same thing here as on every other screen.
+        roster = roster_queryset()
+        profiles = MemberProfile.objects.filter(user__in=roster)
+        members = {
+            # The roll proper: members who are still members. Someone
+            # disfellowshipped keeps their account and moves to ex_members, so
+            # the two counts never describe the same person twice.
+            'total': profiles.filter(account_type='member', is_disfellowshipped=False).count(),
+            'friends': profiles.filter(account_type='friend').count(),
+            'sabbath_school': profiles.filter(account_type='sabbath_school').count(),
+            'ex_members': profiles.filter(is_disfellowshipped=True).count(),
+            'new_this_month': roster.filter(date_joined__date__gte=month_start).count(),
+            'new_this_year': roster.filter(date_joined__date__gte=year_start).count(),
+            'pending_invitations': Invitation.objects.filter(status='pending').count(),
+        }
+
+        # One row per desk, each telling the same two things: what is still
+        # unanswered, and how much arrived this month.
+        desks = [
+            {
+                'key': 'join',
+                'label': 'Join requests',
+                'waiting': EnrollmentRequest.objects.filter(status__in=WAITING_JOIN_STATUSES).count(),
+                'this_month': EnrollmentRequest.objects.filter(created_at__date__gte=month_start).count(),
+            },
+            {
+                'key': 'prayer',
+                'label': 'Prayer requests',
+                'waiting': PrayerRequest.objects.filter(status__in=WAITING_PRAYER_STATUSES).count(),
+                'this_month': PrayerRequest.objects.filter(created_at__date__gte=month_start).count(),
+            },
+            {
+                'key': 'visitation',
+                'label': 'Visitation',
+                'waiting': VisitationRequest.objects.filter(status__in=WAITING_VISITATION_STATUSES).count(),
+                'this_month': VisitationRequest.objects.filter(created_at__date__gte=month_start).count(),
+            },
+            {
+                'key': 'dedication',
+                'label': 'Child dedications',
+                'waiting': ChildDedicationRequest.objects.filter(status__in=WAITING_DEDICATION_STATUSES).count(),
+                'this_month': ChildDedicationRequest.objects.filter(created_at__date__gte=month_start).count(),
+            },
+            {
+                'key': 'welfare',
+                'label': 'Welfare & support',
+                'waiting': SupportSubmission.objects.count(),
+                'this_month': SupportSubmission.objects.filter(created_at__date__gte=month_start).count(),
+            },
+            {
+                'key': 'transfer',
+                'label': 'Membership transfers',
+                'waiting': MembershipTransferRequest.objects.filter(status__in=WAITING_TRANSFER_STATUSES).count(),
+                'this_month': MembershipTransferRequest.objects.filter(created_at__date__gte=month_start).count(),
+            },
+        ]
+
+        return Response({
+            'as_of': today.isoformat(),
+            'month_label': month_start.strftime('%B %Y'),
+            'members': members,
+            'requests': {
+                'waiting_total': sum(desk['waiting'] for desk in desks),
+                'this_month_total': sum(desk['this_month'] for desk in desks),
+                'desks': desks,
             },
         })
 
@@ -7512,6 +7636,90 @@ class DepartmentEventsView(APIView):
         if not deleted:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Event removed from the calendar.'})
+
+
+def can_manage_weekly_meetings(user):
+    """Who keeps the church's week: the personal ministries office.
+
+    These meetings are the whole congregation's — midweek vespers, Friday
+    vespers, Sabbath worship — not one department's activity. The personal
+    ministries leader maintains them because that office runs the church's
+    weekly rhythm, so the gate is that ministry's desk plus the hub's own rule
+    for a department (its leader and assistants, and the church officers). A
+    ``pm_leader`` role holder counts too: a church may grant the office without
+    a leaders-table row, and the desk must still open for them.
+    """
+    # The week is read by signed-out visitors too, and this gate is reached on
+    # that path when they ask for the retired meetings, so the anonymous case
+    # is answered here rather than in the query below.
+    if user is None or not user.is_authenticated:
+        return False
+    if can_manage_department(user, 'personal_ministries'):
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('pm_leader'))
+
+
+class WeeklyMeetingsView(APIView):
+    """The church's ordinary week: read by anyone, written by its keeper.
+
+    Public on GET because the website's week, the calendar and the dashboard
+    card all draw it for signed-out visitors too. The desk asks for
+    ``?include_inactive=true`` to see the meetings it has retired, so a
+    meeting can be put down and picked up again without being deleted.
+    """
+
+    def get_permissions(self):
+        return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
+
+    def get(self, request):
+        queryset = WeeklyMeeting.objects.all()
+        wants_retired = request.query_params.get('include_inactive') == 'true'
+        if not (wants_retired and can_manage_weekly_meetings(request.user)):
+            queryset = queryset.filter(is_active=True)
+        return Response({'meetings': WeeklyMeetingSerializer(queryset, many=True).data})
+
+    def post(self, request):
+        if not can_manage_weekly_meetings(request.user):
+            return Response(
+                {'detail': 'Only the personal ministries leader can set the church\u2019s weekly meetings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = WeeklyMeetingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class WeeklyMeetingDetailView(APIView):
+    """One weekly meeting: change it, retire it, or take it off the week."""
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not can_manage_weekly_meetings(request.user):
+            return Response(
+                {'detail': 'Only the personal ministries leader can set the church\u2019s weekly meetings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        meeting = WeeklyMeeting.objects.filter(pk=pk).first()
+        if meeting is None:
+            return Response({'detail': 'Meeting not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = WeeklyMeetingSerializer(meeting, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        if not can_manage_weekly_meetings(request.user):
+            return Response(
+                {'detail': 'Only the personal ministries leader can set the church\u2019s weekly meetings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        deleted, _ = WeeklyMeeting.objects.filter(pk=pk).delete()
+        if not deleted:
+            return Response({'detail': 'Meeting not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Meeting removed from the week.'})
 
 
 class AnnouncementResponsesCsvView(APIView):
