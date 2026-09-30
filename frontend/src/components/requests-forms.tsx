@@ -91,10 +91,15 @@ export function PrayerRequestForm({
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
-    setIsLoggedIn(true);
-    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+    // Deferred by a microtask: the effect's own body stays setState-free, so
+    // the profile read cannot cascade a render from inside the effect.
+    void Promise.resolve().then(async () => {
+      setIsLoggedIn(true);
+      try {
+        const res = await fetch(`${API_URL}/api/members/me/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = res.ok ? await res.json() : null;
         if (!data) return;
         const name =
           data.full_name ||
@@ -103,8 +108,10 @@ export function PrayerRequestForm({
           data.username ||
           "";
         setProfileName(name);
-      })
-      .catch(() => {});
+      } catch {
+        // The form still works signed out — the name field just stays empty.
+      }
+    });
   }, []);
 
   async function submitPrayerRequest(event: FormEvent<HTMLFormElement>) {
@@ -302,7 +309,9 @@ export function VisitationRequestForm({
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (token) void handleLookup();
+    if (!token) return;
+    // Deferred by a microtask, as the prayer form's profile read is.
+    void Promise.resolve().then(() => handleLookup());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
