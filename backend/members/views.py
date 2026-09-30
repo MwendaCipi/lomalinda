@@ -1735,7 +1735,7 @@ class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         serializer.save()
 
 
-def can_manage_announcements(user):
+class AnnouncementView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
 
     def get_permissions(self):
