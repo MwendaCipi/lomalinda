@@ -172,19 +172,17 @@ export default function AnnouncementsPage() {
   return (
     <main className="min-h-screen bg-white text-bark">
       <div className="flex h-full md:h-full md:overflow-hidden">
-        <div className="flex-1 min-w-0 h-full md:h-full bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
-          <div className="max-w-5xl mx-auto space-y-6 container">
-            {/* The strip at the top names the page, so the h1 is for screen
-                readers only, and the density toggle keeps its row. Members of
-                a department also get tabs: All, or the posts addressed to
-                each group they belong to. */}
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <h1 className="sr-only">Announcements</h1>
-                <DensityToggle dense={dense} onToggle={toggleDensity} />
-              </div>
+        <div className="flex-1 min-w-0 h-full md:h-full bg-white px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-5 lg:px-10 lg:pb-10 lg:pt-6 md:overflow-y-auto custom-hover-scrollbar">
+          <div className="max-w-5xl mx-auto space-y-4">
+            {/* One toolbar row, not three stacked ones: the department tabs read
+                left, the density toggle sits right at the end of the same line,
+                and the feed follows immediately under it. The strip above
+                already names the page, so the h1 is for screen readers only.
+                Members of no department get the toggle alone. */}
+            <div className="flex items-center gap-2">
+              <h1 className="sr-only">Announcements</h1>
               {myDepartments.length > 0 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                <div className="flex min-w-0 gap-1.5 overflow-x-auto">
                   <button
                     type="button"
                     onClick={() => setDeptFilter(null)}
@@ -206,6 +204,7 @@ export default function AnnouncementsPage() {
                   ))}
                 </div>
               )}
+              <DensityToggle dense={dense} onToggle={toggleDensity} className="ml-auto" />
             </div>
 
             {loading ? <p className="text-sm text-moss">Loading announcements…</p> : visibleItems.length === 0 ? (
