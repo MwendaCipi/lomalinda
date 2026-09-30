@@ -82,6 +82,7 @@ export function CampaignManagement({
   openCreate = false,
   presetAccount = "",
   presetAccountLabel = "",
+  skipList = false,
 }: {
   mode?: CampaignMode;
   /** Open the creation form as soon as the officer is allowed to see it. */
@@ -90,6 +91,9 @@ export function CampaignManagement({
   presetAccount?: string;
   /** The account's human wording, used to name the drive being promoted. */
   presetAccountLabel?: string;
+  /** While the Fund Drives entry page picks the drive to open, the list holds
+      back so the redirect never flashes a page we are leaving anyway. */
+  skipList?: boolean;
 }) {
   const isAdminMode = mode === "admin";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -1031,6 +1035,7 @@ export function CampaignManagement({
           />
 
           {/* Existing Campaigns List */}
+          {!skipList ? (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-bark">
               {isAdminMode ? `All Fund Drives (${filteredCampaigns.length})` : `Active Fund Drives (${filteredCampaigns.length})`}
@@ -1293,6 +1298,9 @@ export function CampaignManagement({
               </>
             )}
           </div>
+          ) : (
+            <p className="py-16 text-center text-sm font-semibold text-moss">Opening the active fund drive…</p>
+          )}
         </div>
       </div>
     </main>

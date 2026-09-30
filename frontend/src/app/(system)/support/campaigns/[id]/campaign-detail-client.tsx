@@ -300,8 +300,9 @@ export default function CampaignDetailClient() {
             </div>
           )}
 
-          {/* 1. The drive itself */}
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
+          {/* 1. The story and its progress sit side by side on a PC. */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
             <h1 className="text-xl font-bold tracking-tight text-bark sm:text-2xl">{campaign.title || campaign.name}</h1>
             {campaign.description ? (
               <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-moss-soft">{campaign.description}</p>
@@ -325,8 +326,8 @@ export default function CampaignDetailClient() {
             )}
           </div>
 
-          {/* 2. Fund drive progress */}
-          <div className="rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
+            {/* Progress rides beside the story on a PC, under it on a phone. */}
+            <div className="rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-moss">Fund Drive Progress</span>
@@ -419,8 +420,10 @@ export default function CampaignDetailClient() {
             </div>
           </div>
 
-          {/* 3. Contribution breakdown */}
-          <div className="space-y-6">
+          </div>
+
+          {/* 3. Breakdown and ministry giving sit side by side on a PC. */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
               <h3 className="text-base font-bold text-bark">
                 {signedIn ? "My Contribution Breakdown" : "Contribution Breakdown"}
@@ -474,7 +477,6 @@ export default function CampaignDetailClient() {
               )}
             </div>
 
-            {/* Ministry columns */}
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
               <h3 className="text-base font-bold text-bark">Giving by Ministry</h3>
               {ministries.length === 0 ? (
@@ -501,9 +503,10 @@ export default function CampaignDetailClient() {
               )}
             </div>
 
-            {/* Ministry-group leaderboard, kept for drives issued by group. */}
+            {/* Ministry-group leaderboard, kept for drives issued by group:
+                full width even when the two cards above sit side by side. */}
             {campaign.top_fundraisers && campaign.top_fundraisers.length > 0 && (
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line lg:col-span-2">
                 <h3 className="text-base font-bold text-bark">Top Fundraisers</h3>
                 <div className="mt-4 space-y-3">
                   {campaign.top_fundraisers.map((f, i) => (

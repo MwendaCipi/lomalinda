@@ -70,8 +70,13 @@
    Chrome changed, so installed apps must take the new shell.
 
    v25 — announcement photos take another thirty pixels (md now 238px).
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v25";
+
+   v26 — the Fund Drives row in Giving opens the active drive directly, no
+   listing page in between (the list remains for when no drive is active),
+   and the drive's report reads as two columns on a PC: story beside
+   progress, breakdown beside ministry giving. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v26";
 const STATIC_ASSETS = [
   "/",
   "/about/",
