@@ -130,7 +130,7 @@ export function AnnouncementAttachment({
 
   if (isImageAttachment(fileName, url)) {
     const mediaHeightClass =
-      mediaHeight === "sm" ? "max-h-40" : mediaHeight === "md" ? "max-h-52" : "max-h-72";
+      mediaHeight === "sm" ? "max-h-40" : mediaHeight === "md" ? "max-h-[238px]" : "max-h-72";
     const viewer = viewerOpen ? (
       <div
         role="dialog"

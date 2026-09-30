@@ -67,8 +67,11 @@
 
    v24 — the rail's headings settle: the desks and the ministries read as
    one Service list, with the departments a Departments list of their own.
+   Chrome changed, so installed apps must take the new shell.
+
+   v25 — announcement photos take another thirty pixels (md now 238px).
    Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v24";
+const CACHE_NAME = "sda-loma-linda-meru-v25";
 const STATIC_ASSETS = [
   "/",
   "/about/",
