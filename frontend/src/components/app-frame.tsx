@@ -25,9 +25,10 @@ import { useRailHere } from "@/hooks/use-rail-location";
  * The page scrolls in what is left. On a phone the rail steps aside and the
  * same map is opened as cards from the last tab — see MobileMenu.
  *
- * The strip lives in the page column rather than inside the scrolling panel, so
- * it stays put in both scroll modes and no page has to draw navigation of its
- * own.
+ * The strip rides the top of the content card — inside it, on its surface, above
+ * the page — rather than in a band of its own between the bar and the card. It
+ * sits outside the scrolling panel either way, so it stays put in both scroll
+ * modes and no page has to draw navigation of its own.
  *
  * The few surfaces that are the *public website* — the landing page and the
  * sign-in journey — keep their own header and get no rail: they are the shop
@@ -81,9 +82,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const entries = railFor(roles, departments);
   const here = useRailHere(pathname, entries);
   /**
-   * The place you are in. Its pages are the strip under the bar — the list that
-   * used to expand under the rail's row. A place with a single page gets no
-   * strip: a toggle that switches to itself is noise.
+   * The place you are in. From tablet up its pages are the strip under the
+   * bar — the list that used to expand under the rail's row. On a phone the
+   * pages are cards inside the drill-in menu instead, so a page opens clean
+   * rather than under a deck of its own navigation (see MobileMenu). A place
+   * with a single page gets no strip: a toggle that switches to itself is
+   * noise.
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
   const sectionPages = (section?.items ?? []).map((item) => ({
@@ -113,21 +117,26 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               it starts after the rail, so nothing is drawn above it. */}
           <div className="app-panel-column">
             <AppTopBar />
-            {sectionPages.length > 1 && (
-              /* On a phone the pages are a card grid that scrolls with the
-                 content — pinning it would eat back the screen the cards
-                 gave, so the band's chrome is md-only. From md up the
-                 segmented strip is pinned under the identity bar, above the
-                 panel that scrolls beneath it. */
-              <div className="shrink-0 px-3 py-3 sm:px-5 md:sticky md:top-16 md:z-20 md:border-b md:border-sand-line md:bg-sand-grain">
-                <SectionNav
-                  label={`${section?.label ?? ""} pages`}
-                  activeHref={here.href}
-                  items={sectionPages}
-                />
-              </div>
-            )}
-            <div className="app-panel">{children}</div>
+            {/* The content card: the place's strip at its top, the page under
+                it. Both are inside the same surface, so the tabs read as the
+                card's first row rather than chrome above it. */}
+            <div className="app-content">
+              {sectionPages.length > 1 && (
+                /* Tablet and up only: the section's pages as the card's top
+                   row. On a phone the section's pages live in the menu
+                   (MobileMenu), not on the page — a card band above the
+                   content read as a navigation deck that a tap was supposed
+                   to clear. */
+                <div className="hidden shrink-0 border-b border-sand-line bg-white px-3 py-3 sm:px-5 md:block">
+                  <SectionNav
+                    label={`${section?.label ?? ""} pages`}
+                    activeHref={here.href}
+                    items={sectionPages}
+                  />
+                </div>
+              )}
+              <div className="app-panel">{children}</div>
+            </div>
           </div>
         </div>
       </div>
