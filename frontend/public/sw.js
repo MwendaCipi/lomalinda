@@ -91,9 +91,12 @@
    v30 — Elders' Desk and Clerk's Desk merge into one Eldership row: the
    two offices saw the same items, and the rail carries the register, the
    transfers, the settings, the meetings, the announcements and the
-   requests under one heading. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v30";
+   requests under one heading.
+
+   v31 — the rail's ministry and department rows read their short forms
+   (AMM, AWM, APM, Personal…), so no row ever ellipsises. Chrome changed,
+   so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v31";
 const STATIC_ASSETS = [
   "/",
   "/about/",

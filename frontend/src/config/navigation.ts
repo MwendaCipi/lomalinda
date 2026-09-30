@@ -699,6 +699,19 @@ export function canSee(
  * left with nothing under it dropped with them (an office tab a member may
  * not open is not a section they should see at all).
  */
+/** The rail's wording for an area — the short forms, so a 256px rail never
+ *  has to ellipsis "Adventist Possibility Ministries (APM)" into mush. The
+ *  full names stay everywhere else (the directory, the desks, the titles). */
+const RAIL_AREA_LABELS: Record<string, string> = {
+  amm: "AMM",
+  awm: "AWM",
+  aym: "Young Adults",
+  apm: "APM",
+  chaplaincy: "Chaplaincy",
+  children: "Children",
+  personal_ministries: "Personal",
+};
+
 export function railFor(
   roles: readonly string[],
   departments: readonly DepartmentSummary[] = []
@@ -714,7 +727,7 @@ export function railFor(
       return departments
         .filter((department) => department.group === group)
         .map((department) => ({
-          label: department.label,
+          label: RAIL_AREA_LABELS[department.code] ?? department.label,
           icon: DEPARTMENT_ICONS[department.code] ?? Users,
           href: `/administration?tab=leaders&dept=${department.code}`,
           match: ["/administration"],
