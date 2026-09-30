@@ -755,7 +755,9 @@ function LeadershipEditModal({
                     </button>
                   )}
                 </div>
-                <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                {/* Each seat takes the whole row — one role or several, the
+                    boxes are never squeezed side by side. */}
+                <div className="mt-1.5 grid gap-1.5">
                   {seats.map(({ seat, person }) => (
                     <div key={seat} className="min-w-0 rounded-lg border border-sand-line bg-white px-2.5 py-2">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-moss">
@@ -763,7 +765,7 @@ function LeadershipEditModal({
                       </p>
                       {person ? (
                         <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <span className="truncate text-xs font-semibold text-bark">{person.name}</span>
+                          <span className="truncate text-xs font-semibold text-bark" title={person.name}>{person.name}</span>
                           <button
                             type="button"
                             onClick={() => releasePerson(role, person)}
