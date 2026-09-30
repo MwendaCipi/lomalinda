@@ -247,18 +247,21 @@ SEED_DEPARTMENTS = (
     ('chaplaincy', 'Chaplaincy Ministry', 16),
 )
 
-#: The roles each seeded department starts with — (name, has_assistant).
-#: Departments without an entry take the Leader/Secretary/Treasurer
-#: template. Eldership keeps its three seats; Clerkship and Deaconate keep
-#: the offices the church-wide register carried. Appointing into one of the
-#: named church offices still grants the matching church-wide role flag so
-#: permissions follow the person.
+#: The roles each area carries — (name, has_assistant). Every area keeps
+#: just its Leader and its Assistant: those two positions are what the
+#: leadership desk appoints by search (one leader, two assistants). Areas
+#: added before this shape carried named offices (Head Deacon, Church
+#: Clerk, Secretary, Treasurer…); 0146 prunes them, and old appointments
+#: under those names keep syncing their church-wide flags by title, so no
+#: permission is lost. Eldership is its own shape — the three elders the
+#: church elects, each an office of its own.
 SEED_DEPARTMENT_ROLES = {
     'eldership': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
-    'clerkship': (('Church Clerk', True),),
-    'deaconate': (('Head Deacon', True), ('Head Deaconess', True)),
 }
-DEFAULT_DEPARTMENT_ROLES = (('Leader', True), ('Secretary', False), ('Treasurer', False))
+
+#: The roles a new department starts with: its Leader and the Assistant
+#: appointed beside them.
+DEFAULT_DEPARTMENT_ROLES = (('Leader', True), ('Assistant', True))
 
 
 class Department(models.Model):
@@ -318,12 +321,13 @@ class Department(models.Model):
 class DepartmentRole(models.Model):
     """One role inside a department, and whether it takes an assistant.
 
-    A department's roles live here — "Leader", "Secretary", "Music
-    Leader" — each scoped to its department, so two departments can both
-    have a Treasurer without the titles colliding. ``has_assistant`` is the
-    one switch that matters: when it is set, the department may appoint
-    assistants beside the holder, which is how "Music Leader" grows an
-    "Assistant Music Leader" without a second role row.
+    A department's roles live here — "Leader", "Assistant", a custom
+    "Music Leader" — each scoped to its department, so two departments can
+    both have a Music Leader without the titles colliding. The desk seeds
+    every area with a Leader and an Assistant and lets its leaders add the
+    roles the area needs; ``has_assistant`` stays on the row for old data
+    but no longer gates anything — any seat can be filled leader-side or
+    assistant-side.
     """
 
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='roles')

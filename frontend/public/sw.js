@@ -40,8 +40,14 @@
    Leadership button (no actions popover, checkboxes or Communicate), and the
    leadership modal appoints by seat — search under Leader or under Assistant
    — while custom roles move to a Create role form. Chrome changed, so
-   installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v18";
+   installed apps must take the new shell.
+
+   v19 — the leadership modal appoints by position: one Leader (search bar
+   beneath with a Set leader button) and up to two Assistants (their own
+   search bar with a Set assistant button), elders keep their three named
+   offices, and areas carry only Leader and Assistant roles. Chrome changed,
+   so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v19";
 const STATIC_ASSETS = [
   "/",
   "/about/",

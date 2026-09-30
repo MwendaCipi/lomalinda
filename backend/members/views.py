@@ -7264,6 +7264,12 @@ def sync_role_flags_from_assignments():
                 lead = lead_role_by_department.get(assignment.department.code)
                 named = lead if assignment.role.name.strip().lower() in ('leader', 'assistant') else None
             if named is None:
+                # A pruned office that kept its holder through 0146 — "Church
+                # Clerk" left standing after its DepartmentRole row went —
+                # still carries the seat's flag by title, so nobody loses a
+                # permission because the desk simplified the roles list.
+                named = OFFICE_ROLE_CODES.get(assignment.role.name.strip().lower())
+            if named is None:
                 continue
             if assignment.kind == 'assistant':
                 granted_assistant.add(named)
@@ -7347,12 +7353,11 @@ class DepartmentLeadershipView(APIView):
     """A department's leadership: read it, appoint and release, add roles.
 
     The PUT body is ``assignments: [{role_id, member_id, kind}]`` — one entry
-    per person being appointed, ``kind`` either ``leader`` or ``assistant``
-    (assistants only where the role takes one). Appointing replaces whoever
-    held that leader seat; releasing is a DELETE by assignment id. The desk
-    adds department-specific roles with ``name`` and ``has_assistant`` and
-    removes the ones it added. Every save reconciles the church-wide role
-    flags so permissions and audiences follow at once.
+    per person being appointed, ``kind`` either ``leader`` or ``assistant``.
+    Appointing replaces whoever held that leader seat; releasing is a DELETE
+    by assignment id. The desk creates department-specific roles with
+    ``name`` and removes the ones it added. Every save reconciles the
+    church-wide role flags so permissions and audiences follow at once.
     """
 
     permission_classes = [IsAuthenticated]
@@ -7419,8 +7424,6 @@ class DepartmentLeadershipView(APIView):
             kind = entry.get('kind') or 'leader'
             if kind not in ('leader', 'assistant'):
                 return Response({'detail': 'An appointment is a leader or an assistant.'}, status=status.HTTP_400_BAD_REQUEST)
-            if kind == 'assistant' and not role.has_assistant:
-                return Response({'detail': f"{role.name} does not take an assistant."}, status=status.HTTP_400_BAD_REQUEST)
             member = members.get(pk=entry.get('member_id'))
             if kind == 'leader':
                 # One leader per role: the new appointment replaces whoever

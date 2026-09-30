@@ -6383,10 +6383,9 @@ class DepartmentApiTests(APITestCase):
     def test_role_add_and_remove(self):
         self._auth(self.elder)
         res = self.client.post('/api/members/departments/amm/leadership/', {
-            'name': 'Pianist', 'has_assistant': True,
+            'name': 'Pianist',
         }, format='json')
         self.assertEqual(res.status_code, 201)
-        self.assertTrue(res.data['has_assistant'])
         res = self.client.delete('/api/members/departments/amm/leadership/', {
             'role_id': res.data['id'],
         }, format='json')
@@ -6406,7 +6405,7 @@ class DepartmentApiTests(APITestCase):
         department = Department.objects.get(code=res.data['code'])
         self.assertEqual(
             list(department.roles.values_list('name', flat=True)),
-            ['Leader', 'Secretary', 'Treasurer'],
+            ['Leader', 'Assistant'],
         )
         # Duplicate names are refused.
         res = self.client.post('/api/members/departments/create/', {'name': 'pathfinders'}, format='json')
