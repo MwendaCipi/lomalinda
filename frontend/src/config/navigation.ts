@@ -39,9 +39,8 @@ import {
  * Every navigation surface renders from here:
  *
  * - the rail (`NavRail`) picks `railEntries`,
- * - the phone's tab bar picks `tabKeys` (Home and Admin are chrome; Admin is
- *   the leaders' door and is hidden from everyone else), and asks
- *   `tabSectionFor` whether a tab is a page or a section of pages,
+ * - the phone's tab bar picks `tabKeys` (Home is chrome; Admin is hidden from
+ *   members who serve in no office),
  * - the dashboard's quick tiles pick `dashboardTiles`,
  * - the account menu picks `accountMenuKeys`,
  * - the marketing footer's columns pick `footerColumns`.
@@ -639,25 +638,6 @@ export function entryHref(entry: RailEntry): string | null {
   return entry.href ?? entry.items?.[0]?.href ?? null;
 }
 
-/**
- * The row a phone tab should open as cards, or null when that tab is one page
- * and should go straight there.
- *
- * A phone has no strip above the page (see AppFrame), so a section's siblings
- * are only reachable if something lists them. That something is the tab naming
- * the section: the Giving tab opens Giving's pages as cards — money giving,
- * fund drives, in-kind giving, the budget, the reports — instead of dropping
- * the member into money giving with no way from there to the rest of the
- * section. A row of a single page is a page, so its tab still opens it.
- */
-export function tabSectionFor(key: DestinationKey, entries: RailEntry[]): RailEntry | null {
-  const href = destinations[key].href;
-  const row = entries.find(
-    (entry) => entryHref(entry) === href || (entry.items ?? []).some((item) => item.href === href),
-  );
-  return row && (row.items?.length ?? 0) > 1 ? row : null;
-}
-
 /** May these roles see this row or page? */
 export function canSee(
   entry: { roles?: readonly string[]; hiddenFor?: readonly string[] },
@@ -783,14 +763,12 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
 
   return bestLength >= 0 ? best : { group: null, href: null };
 }/**
- * The phone's tab bar: the places members move between all week, and the map
- * behind the leaders' last tab. "home" is chrome — the dashboard-or-site-home
- * tab, which also collapses history — and "requests" is the member's own page
- * for asking the church for something. "admin" opens the rail's entries as
- * cards, so the phone carries the same navigation as the desktop rather than a
- * cut-down map or a column to read sideways. The last tab is the leaders' door:
- * a member who serves in no office is not offered it at all, so their bar is
- * Home, Fellowship, Materials, Giving and Requests.
+ * The phone's tab bar: the places members move between all week. "home" is
+ * chrome — the dashboard-or-site-home tab, which also collapses history — and
+ * "requests" is the member's own page for asking the church for something.
+ * "admin" is the office console, the last tab, hidden from a member who serves
+ * in no office — so their bar is Home, Fellowship, Materials, Giving and
+ * Requests.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   "home",

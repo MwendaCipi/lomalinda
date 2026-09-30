@@ -21,9 +21,8 @@ import { useRailHere } from "@/hooks/use-rail-location";
  * longer hang under its row as a tree of carets: they are the strip at the top
  * of each of them (`SectionNav`, drawn by the shell), so the rail stays a
  * short, scannable list of where you can be and every page still shows its
- * siblings one tap away. A phone does not get a narrower column to read — the
- * same entries open as cards, a level at a time, drawn by MobileMenu: the last
- * tab is the leaders' door, and a tab naming a section carries its pages.
+ * siblings one tap away. A phone does not get a narrower column to read — its
+ * tab bar carries the top rows and the console's own cards carry the desks.
  */
 export function NavRail() {
   const pathname = normalizePath(usePathname());

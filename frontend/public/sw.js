@@ -15,8 +15,11 @@
 
    v12 — every tab navigates now: a section's pages are the chip strip on the
    page itself at every width, the phone's menu sheet is the leaders' door
-   only, and the Materials shelves carry the children's divisions directly. */
-const CACHE_NAME = "sda-loma-linda-meru-v12";
+   only, and the Materials shelves carry the children's divisions directly.
+
+   v13 — the door is gone: the Admin tab is ordinary navigation to the
+   console, whose overview cards carry the desks. No menu sheet remains. */
+const CACHE_NAME = "sda-loma-linda-meru-v13";
 const STATIC_ASSETS = [
   "/",
   "/about/",

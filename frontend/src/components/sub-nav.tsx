@@ -46,7 +46,7 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
  * One strip at every width — the views of a page are a handful, and the
  * control switches *within* the page you already opened, so it rides above
  * the content it swaps. (The section's *pages* are a different thing: those
- * are navigation, and on a phone they live in the menu — see MobileMenu.)
+ * are navigation, and they are the strip the shell draws above this page.)
  *
  * `sticky` pins the strip — and anything passed as `trailing` — to the top of
  * the scrolling page under a hairline, for a page whose own table scrolls
@@ -54,8 +54,7 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
  *
  * The items are toggle buttons (`aria-pressed`) rather than links, because
  * they swap content in place. `SectionNav` below is the other half — the
- * sibling pages of a section, which are links, and which phones get in the
- * menu rather than here.
+ * sibling pages of a section, which are links.
  */
 export function SubNav({
   items,
@@ -105,14 +104,12 @@ export function SubNav({
 }
 
 /**
- * A section's pages, as a strip at the top of each of them — tablet and up.
+ * A section's pages, as a strip at the top of each of them — every width.
  *
  * These are the rows that used to hang under a rail item: the same list, on
- * the page rather than hidden behind a caret in the sidebar. On a phone the
- * section's pages are not drawn here at all: they are cards in the menu
- * (`MobileMenu`) — behind the tab that names the section, so the section's own
- * tab carries them — and a page opens clean instead of wearing a deck of its
- * own navigation above the content.
+ * the page rather than hidden behind a caret in the sidebar. A phone shows the
+ * same strip: its tab bar is plain navigation, so the page's siblings ride
+ * above the content exactly as they do on a desktop, and a page opens clean.
  */
 export function SectionNav({
   items,

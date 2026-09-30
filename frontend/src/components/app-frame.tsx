@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
-import { MobileMenu, type MenuView } from "./mobile-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
 import { railFor } from "@/config/navigation";
@@ -22,10 +20,9 @@ import { useRailHere } from "@/hooks/use-rail-location";
  * console: the rail (flat, one row per place) is on the left, the identity bar
  * sits at the top of the page column beside it, and under the bar is the strip
  * of the place you are in — the pages that used to hang under the rail's row.
- * The page scrolls in what is left. On a phone the rail steps aside and the
- * same map opens as cards, a level at a time: the last tab is the leaders'
- * door, and a tab naming a section carries that section's pages, because a
- * phone has no strip to show them — see MobileMenu.
+ * The page scrolls in what is left. On a phone the rail steps aside and every
+ * tab is ordinary navigation: the strip on the page carries a section's
+ * siblings, and the console's overview cards carry its desks.
  *
  * The strip rides the top of the content card — inside it, on its surface, above
  * the page — rather than in a band of its own between the bar and the card. It
@@ -69,29 +66,6 @@ const LOCKED_PREFIXES = ["/complete-profile"];
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
   const { me, hasToken } = useHeaderData();
-  /**
-   * The menu remembers the page it was opened on, not a boolean: arriving
-   * somewhere else closes it by derivation, so a route change needs no effect
-   * and the menu can never linger over the page it navigated to.
-   */
-  const [menuOpenedAt, setMenuOpenedAt] = useState<string | null>(null);
-  const menuOpen = menuOpenedAt === pathname;
-  /**
-   * What that sheet is showing — the leaders' door, or one row's pages. The
-   * shell owns it because the tab bar opens it too: the Admin tab opens the
-   * door, and a tab naming a section opens that section's cards.
-   */
-  const [menuView, setMenuView] = useState<MenuView>({ kind: "door" });
-  const openMenu = (view: MenuView) => {
-    setMenuView(view);
-    setMenuOpenedAt(pathname);
-  };
-  const closeMenu = () => setMenuOpenedAt(null);
-  /** The leaders' door: opening it, or putting it away if it is already up. */
-  const toggleDoor = () => {
-    if (menuView.kind === "door" && menuOpen) closeMenu();
-    else openMenu({ kind: "door" });
-  };
   const mode = scrollModeForPath(pathname);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -154,13 +128,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
-      <MobileMenu
-        open={menuOpen}
-        view={menuView}
-        onViewChange={setMenuView}
-        onClose={closeMenu}
-      />
-      <MobileTabBar menuView={menuOpen ? menuView : null} onToggleMenu={toggleDoor} />
+      <MobileTabBar />
     </>
   );
 }
