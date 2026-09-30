@@ -110,6 +110,7 @@ export function CampaignManagement({
     name: "",
     title: "",
     account_name: "",
+    description: "",
     is_temporary: true,
     target_amount: "",
     start_date: todayStr,
@@ -289,6 +290,7 @@ export function CampaignManagement({
       name: "",
       title: "",
       account_name: "",
+      description: "",
       is_temporary: true,
       target_amount: "",
       start_date: todayStr,
@@ -311,6 +313,7 @@ export function CampaignManagement({
       name: campaign.name || "",
       title: campaign.title || "",
       account_name: campaign.account_name || "",
+      description: campaign.description || "",
       is_temporary: campaign.is_temporary ?? true,
       target_amount: campaign.target_amount ? String(campaign.target_amount) : "",
       start_date: campaign.start_date || todayStr,
@@ -355,6 +358,7 @@ export function CampaignManagement({
           name: form.name.trim(),
           title: form.title.trim() || form.name.trim(),
           account_name: form.account_name.trim() || form.name.trim(),
+          description: form.description.trim(),
           is_temporary: form.is_temporary,
           target_amount: numericTarget,
           start_date: form.start_date || todayStr,
@@ -408,6 +412,7 @@ export function CampaignManagement({
         name: form.name.trim(),
         title: form.title.trim() || form.name.trim(),
         account_name: form.account_name.trim() || form.name.trim(),
+        description: form.description.trim(),
         is_temporary: form.is_temporary,
         target_amount: numericTarget,
         start_date: form.start_date || todayStr,
@@ -723,6 +728,18 @@ export function CampaignManagement({
                       />
                     </label>
                   </div>
+
+                  {/* The description members read on the drive's page. */}
+                  <label className="block text-xs font-semibold text-bark">
+                    Description
+                    <textarea
+                      rows={3}
+                      placeholder="Tell members what the drive is for and why it matters…"
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                    />
+                  </label>
 
                   {/* Attachment (flyer / poster) */}
                   <label className="block text-xs font-semibold text-bark">
