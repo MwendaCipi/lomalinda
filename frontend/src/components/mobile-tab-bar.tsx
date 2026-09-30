@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Home, X, type LucideIcon } from "lucide-react";
 
-import { destinationOf, isActive, isStaffRole, railFor, tabKeys, tabSectionFor } from "@/config/navigation";
+import { destinationOf, isActive, isStaffRole, railFor, tabKeys } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { atAppFloor, collapseToHome, trackAppHistory } from "@/lib/app-history";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -19,38 +19,26 @@ type TabItem = {
   active: boolean;
   replace?: boolean;
   collapseHistory?: boolean;
-  /**
-   * Set when the tab names a section rather than a page: the rail row whose
-   * pages the tab opens as cards, instead of going straight to the section's
-   * first page.
-   */
-  opensRow?: string;
 };
 
 /**
- * The phone's tab bar — the places a member moves between all week, the pages
- * of a section on the tab that names it, and the leaders' door behind the last
- * tab.
+ * The phone's tab bar — the places a member moves between all week, and the
+ * leaders' door behind the last tab.
  *
- * The rail is not squeezed into a drawer on a phone: the same entries open as
- * cards (MobileMenu), because a column written for a desktop is a poor thing
- * to read on a phone. A phone also has no strip above the page naming a
- * section's siblings, so a tab that names a section carries them itself: the
- * Giving tab opens Giving's pages as cards rather than dropping the member
- * into money giving, and the Fellowship tab opens Fellowship's. A tab naming a
- * single page still goes straight there. The last tab is the leaders' door —
- * it wears the office's name and only the church's offices are offered it, so
- * the tab bar a member does not serve is four places, not five.
+ * Every tab navigates: a section's tab opens the section's first page, and the
+ * section's own pages are the chip strip at the top of the page (the same
+ * strip Materials uses for its shelves), so nothing needs a card sheet of its
+ * own. The last tab is the leaders' door — it wears the office's name and
+ * opens the sheet of desks; only the church's offices are offered it, so the
+ * tab bar a member who serves in no office sees is four places, not five.
  */
 export function MobileTabBar({
   menuView,
   onToggleMenu,
-  onOpenRow,
 }: {
   /** The open sheet, or null when none is; its tabs are also its openers. */
   menuView: MenuView | null;
   onToggleMenu: () => void;
-  onOpenRow: (label: string) => void;
 }) {
   const pathname = normalizePath(usePathname());
   const router = useRouter();
@@ -62,7 +50,6 @@ export function MobileTabBar({
   // The rail's rows, read for their shape only (which of them hold several
   // pages). No departments are needed: those rows belong to the leaders' door.
   const entries = railFor(roles);
-  const openRow = menuView?.kind === "row" ? menuView.label : null;
   const doorOpen = menuView?.kind === "door";
 
   // On the surfaces that are read by scrolling — the dashboard, the
@@ -162,21 +149,8 @@ export function MobileTabBar({
       ];
     }
     const dest = destinationOf(entry.key);
-    // A section's tab opens the section's pages as cards: on a phone the strip
-    // that shows them on a wide screen is not there, so without this the tab
-    // would strand the member on the section's first page.
-    const section = tabSectionFor(entry.key, entries);
-    if (section) {
-      return [
-        {
-          key: entry.key,
-          label: section.label,
-          icon: section.icon,
-          active: isActive(dest, pathname) || openRow === section.label,
-          opensRow: section.label,
-        },
-      ];
-    }
+    // Every tab navigates: the section's own pages ride the strip on the
+    // page it opens (AppFrame), so the tab itself goes to the section's way in.
     return [
       {
         key: entry.key,
@@ -215,24 +189,6 @@ export function MobileTabBar({
             >
               <Icon className={`mb-0.5 h-5 w-5 ${item.active ? "text-gold" : "text-white/80"}`} />
               <span className="text-[10px] leading-none tracking-tight">{item.label}</span>
-            </button>
-          );
-        }
-
-        // A section's tab opens its pages as cards; the same tab closes them
-        // again, which is what the active state and the icon say.
-        if (item.opensRow) {
-          const row = item.opensRow;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onOpenRow(row)}
-              className={className}
-              aria-expanded={openRow === row}
-            >
-              <Icon className={`mb-0.5 h-5 w-5 ${item.active ? "text-gold" : "text-white/80"}`} />
-              <span className="max-w-[52px] truncate text-[10px] leading-none tracking-tight">{item.label}</span>
             </button>
           );
         }

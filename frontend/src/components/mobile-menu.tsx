@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, X, type LucideIcon } from "lucide-react";
+import { ChevronRight, X, type LucideIcon } from "lucide-react";
 
 import { railFor, railSectionsFor, type RailEntry, type RailItem } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
@@ -14,22 +14,11 @@ import { useRailHere } from "@/hooks/use-rail-location";
 /**
  * What the phone's menu sheet is showing.
  *
- * The sheet is not a drawer of the rail: a column written for a desktop is a
- * poor thing to read on a phone, so the same entries open as cards — one
- * level at a time, and only ever the level the member asked for.
- *
- * - `door` — the rail's Leadership rows as cards, with no heading over them.
- *   The tab that opens it is already the leaders' tab, so a heading naming
- *   those rows would be the tab said twice.
- * - `row` — one row's pages as cards: a section's pages, when a tab that names
- *   the section opened the sheet, or one desk's pages, when a card in the door
- *   was tapped. `fromSheet` says the card came from inside the sheet, so there
- *   is a way back to the door; a row a *tab* opened has nowhere behind it and
- *   shows no way back — closing is the way out, and the tab is still there.
+ * The sheet is the leaders' door and nothing else now: a section's pages ride
+ * the strip on the page (AppFrame), so the only cards left are the desks —
+ * the rail's Leadership rows, which have no tab of their own to name them.
  */
-export type MenuView =
-  | { kind: "door" }
-  | { kind: "row"; label: string; fromSheet: boolean };
+export type MenuView = { kind: "door" };
 
 /**
  * The phone's menu, as cards.
@@ -68,9 +57,6 @@ export function MobileMenu({
 
   if (!open) return null;
 
-  /** The row whose pages are on show, when the sheet is showing a row. */
-  const row = view.kind === "row" ? entries.find((entry) => entry.label === view.label) ?? null : null;
-
   /**
    * The door: the rail's own rows, filed under Leadership — the desks, the
    * ministries and the departments — in the rail's own order. A member who
@@ -83,13 +69,17 @@ export function MobileMenu({
   const doorRows: RailEntry[] =
     leadership && leadership.entries.length > 0 ? leadership.entries : sections.flatMap((section) => section.entries);
 
-  /** A row holding a single page is that page, so its card goes straight there. */
-  const pageOf = (entry: RailEntry): { href: string; label: string } | null => {
+  /**
+   * The page a row's card opens: the row's own page where it has one, else
+   * its first page — the section's siblings ride the strip on the page this
+   * opens, so the door never needs a second level of its own.
+   */
+  const pageOf = (entry: RailEntry): { href: string; label: string } => {
     if (entry.href && !entry.items) return { href: entry.href, label: entry.label };
-    if (entry.items && entry.items.length === 1) {
-      return { href: entry.items[0].href, label: entry.items[0].label };
-    }
-    return null;
+    const first = entry.items?.[0];
+    return first
+      ? { href: first.href, label: first.label }
+      : { href: entry.href ?? "/dashboard", label: entry.label };
   };
 
   const isHereItem = (item: RailItem) => here.href !== null && here.href === item.href;
@@ -107,33 +97,15 @@ export function MobileMenu({
 
   const chevron = <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" />;
 
-  const backToDoor = view.kind === "row" && view.fromSheet;
-
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={view.kind === "row" ? view.label : "Menu"}
+      aria-label="Menu"
       className="fixed inset-0 z-50 flex flex-col bg-sand-grain md:hidden"
     >
       <header className="flex items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-        {backToDoor ? (
-          <button
-            type="button"
-            onClick={() => onViewChange({ kind: "door" })}
-            className="inline-flex items-center gap-1 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Menu
-          </button>
-        ) : (
-          <h2 className="min-w-0 truncate text-base font-bold text-bark">
-            {view.kind === "row" ? view.label : "Menu"}
-          </h2>
-        )}
-        {backToDoor && view.kind === "row" && (
-          <h2 className="min-w-0 flex-1 truncate text-right text-sm font-bold text-bark">{view.label}</h2>
-        )}
+        <h2 className="min-w-0 truncate text-base font-bold text-bark">Menu</h2>
         <button
           type="button"
           onClick={onClose}
@@ -148,61 +120,34 @@ export function MobileMenu({
           out; the reserve at the foot keeps its height off the last card. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar p-4 pb-24">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {row
-            ? (row.items ?? []).map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  aria-current={isHereItem(item) ? "page" : undefined}
-                  className={cardClass(isHereItem(item))}
-                >
-                  {tile(item.icon)}
-                  <span className="min-w-0 flex-1 text-sm font-bold text-bark">{item.label}</span>
-                  {chevron}
-                </Link>
-              ))
-            : doorRows.map((entry) => {
-                const page = pageOf(entry);
-                const items = entry.items ?? [];
-                const current = page ? here.href === page.href : here.group === entry.label;
+          {doorRows.map((entry) => {
+            const page = pageOf(entry);
+            const current = here.group === entry.label;
 
-                if (page) {
-                  return (
-                    <Link
-                      key={entry.label}
-                      href={page.href}
-                      onClick={onClose}
-                      aria-current={current ? "page" : undefined}
-                      className={cardClass(current)}
-                    >
-                      {tile(entry.icon)}
-                      <span className="min-w-0 flex-1 text-sm font-bold text-bark">{page.label}</span>
-                      {chevron}
-                    </Link>
-                  );
-                }
-
-                return (
-                  <button
-                    key={entry.label}
-                    type="button"
-                    onClick={() => onViewChange({ kind: "row", label: entry.label, fromSheet: true })}
-                    className={cardClass(current)}
-                  >
-                    {tile(entry.icon)}
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-bark">{entry.label}</span>
-                      {/* What is inside, in the rail's own words — so the
-                          card is a decision rather than a guess. */}
-                      <span className="mt-0.5 block truncate text-xs text-moss">
-                        {items.map((item) => item.short ?? item.label).join(" · ")}
-                      </span>
-                    </span>
-                    {chevron}
-                  </button>
-                );
-              })}
+            return (
+              <Link
+                key={entry.label}
+                href={page.href}
+                onClick={onClose}
+                aria-current={current ? "page" : undefined}
+                className={cardClass(current)}
+              >
+                {tile(entry.icon)}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-bark">{entry.label}</span>
+                  {/* Where the card lands, in the rail's own words — the row
+                      opens on its first page, and the strip on that page
+                      carries the rest of its siblings. */}
+                  <span className="mt-0.5 block truncate text-xs text-moss">
+                    {(entry.items ?? []).length > 1
+                      ? (entry.items ?? []).map((item) => item.short ?? item.label).join(" · ")
+                      : page.label}
+                  </span>
+                </span>
+                {chevron}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

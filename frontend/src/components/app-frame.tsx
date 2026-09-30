@@ -92,11 +92,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     if (menuView.kind === "door" && menuOpen) closeMenu();
     else openMenu({ kind: "door" });
   };
-  /** A section's tab: its pages as cards, or away again if they are already up. */
-  const openRow = (label: string) => {
-    if (menuOpen && menuView.kind === "row" && menuView.label === label) closeMenu();
-    else openMenu({ kind: "row", label, fromSheet: false });
-  };
   const mode = scrollModeForPath(pathname);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -104,12 +99,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const entries = railFor(roles, departments);
   const here = useRailHere(pathname, entries);
   /**
-   * The place you are in. From tablet up its pages are the strip under the
-   * bar — the list that used to expand under the rail's row. On a phone the
-   * pages are cards behind the tab that names the section instead, so a page
-   * opens clean rather than under a deck of its own navigation (see
-   * MobileMenu). A place with a single page gets no strip: a toggle that
-   * switches to itself is noise.
+   * The place you are in. Its pages are the strip at the top of the content
+   * card, at every width — on a phone exactly as Materials renders its shelf
+   * toggles, so a section's siblings are one glance away without opening any
+   * menu. A place with a single page gets no strip: a toggle that switches to
+   * itself is noise.
    *
    * A page marked `landingPage` is left out: it is the section's way in from
    * the rail, not one of its views, so listing it would put the section's own
@@ -150,12 +144,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 card's first row rather than chrome above it. */}
             <div className="app-content">
               {sectionPages.length > 1 && (
-                /* Tablet and up only: the section's pages as the card's top
-                   row. On a phone the section's pages live in the menu
-                   (MobileMenu), not on the page — a card band above the
-                   content read as a navigation deck that a tap was supposed
-                   to clear. */
-                <div className="hidden shrink-0 border-b border-sand-line bg-white px-3 py-3 sm:px-5 md:block">
+                /* The section's pages as the card's top row, at every width —
+                   on a phone the same chip strip Materials uses for its
+                   shelves, so no section needs a card sheet of its own. */
+                <div className="shrink-0 border-b border-sand-line bg-white px-3 py-3 sm:px-5">
                   <SectionNav
                     label={`${section?.label ?? ""} pages`}
                     activeHref={here.href}
@@ -174,11 +166,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         onViewChange={setMenuView}
         onClose={closeMenu}
       />
-      <MobileTabBar
-        menuView={menuOpen ? menuView : null}
-        onToggleMenu={toggleDoor}
-        onOpenRow={openRow}
-      />
+      <MobileTabBar menuView={menuOpen ? menuView : null} onToggleMenu={toggleDoor} />
     </>
   );
 }

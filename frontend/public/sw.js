@@ -11,8 +11,12 @@
    v11 — the phone's tab bar carries its section's pages and the leaders' door
    holds the leadership rows, and the dashboard reads the congregation's pulse
    instead of a grid of tiles: chrome, so every installed app must take the new
-   shell rather than keep painting the old one from its cache. */
-const CACHE_NAME = "sda-loma-linda-meru-v11";
+   shell rather than keep painting the old one from its cache.
+
+   v12 — every tab navigates now: a section's pages are the chip strip on the
+   page itself at every width, the phone's menu sheet is the leaders' door
+   only, and the Materials shelves carry the children's divisions directly. */
+const CACHE_NAME = "sda-loma-linda-meru-v12";
 const STATIC_ASSETS = [
   "/",
   "/about/",

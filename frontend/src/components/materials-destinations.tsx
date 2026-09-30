@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import {
+  Baby,
   BookOpen,
   ExternalLink,
   Feather,
   Globe,
+  GraduationCap,
   Library,
   Lightbulb,
   Music,
   Music2,
+  Pencil,
   Shapes,
+  Sparkles,
   Sprout,
   type LucideIcon,
 } from "lucide-react";
@@ -44,9 +48,9 @@ export type MaterialDestination = {
  * anyone who linked or bookmarked them; each carries the same readers and then
  * hands back to the shelf it belongs to.
  *
- * Children's lessons stay a small family of their own — five age divisions,
- * Beginner through Teens — so that one card opens the divisions rather than
- * making the shelf seven cards deep.
+ * The children's divisions sit on the shelf themselves — one card per age
+ * group, each opening that division's current student guide — because a card
+ * that opens a page of more cards was a step where a reader was wanted.
  */
 export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
   "lesson-guides": [
@@ -67,12 +71,44 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
       isExternal: true,
     },
     {
-      key: "children-lessons",
-      href: "/materials/children-lessons",
-      label: "Children Lessons",
-      description: "Lesson guides for every age group — Beginner through Teens. Choose a division inside.",
+      key: "beginners",
+      href: `${API_URL}/api/members/lesson-reading/children/beginner/students/`,
+      label: "Beginners",
+      description: "Ages 0–2. First steps in knowing Jesus, for the very youngest and their parents.",
+      icon: Baby,
+      isExternal: true,
+    },
+    {
+      key: "kindergarten",
+      href: `${API_URL}/api/members/lesson-reading/children/kindergarten/students/`,
+      label: "Kindergarten",
+      description: "Ages 3–4. Bible stories and activities for preschool hearts and hands.",
       icon: Shapes,
-      isExternal: false,
+      isExternal: true,
+    },
+    {
+      key: "primary",
+      href: `${API_URL}/api/members/lesson-reading/children/primary/students/`,
+      label: "Primary",
+      description: "Ages 5–9. Weekly lessons that grow faith through the primary years.",
+      icon: Pencil,
+      isExternal: true,
+    },
+    {
+      key: "junior",
+      href: `${API_URL}/api/members/lesson-reading/children/junior/students/`,
+      label: "Junior PowerPoints",
+      description: "Ages 10–14. Guides for pre-teens — discussion, discovery and daily walk.",
+      icon: GraduationCap,
+      isExternal: true,
+    },
+    {
+      key: "teens",
+      href: `${API_URL}/api/members/lesson-reading/children/teens/students/`,
+      label: "Teens (Cornerstone)",
+      description: "Ages 15–18. Cornerstone Connections for teens facing real life with real faith.",
+      icon: Sparkles,
+      isExternal: true,
     },
   ],
   "mission-readings": [
