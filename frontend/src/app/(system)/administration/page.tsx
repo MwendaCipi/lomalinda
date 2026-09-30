@@ -294,7 +294,7 @@ function AdministrationContent() {
                       <SectionHeadingCard
                         icon={<Armchair size={18} aria-hidden="true" />}
                         label="Elders' Desk"
-                        description="Users, departments, meetings, announcements and requests."
+                        description="Meetings, announcements and requests."
                         onClick={() => setOverviewSection("elders")}
                       />
                     )}
@@ -304,6 +304,17 @@ function AdministrationContent() {
                         label="Clerk's Desk"
                         description="The register, membership transfers and the church's settings."
                         onClick={() => setOverviewSection("clerks")}
+                      />
+                    )}
+                    {(isElder || isClerk) && (
+                      <SectionHeadingCard
+                        icon={<Crown size={18} aria-hidden="true" />}
+                        label="Leadership"
+                        description="Every ministry and department's leadership, roll and calendar, in one place."
+                        onClick={() => {
+                          setActiveTab("leaders");
+                          router.replace("/administration?tab=leaders", { scroll: false });
+                        }}
                       />
                     )}
                     {isFinance && (
@@ -362,7 +373,7 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Crown size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Departments &amp; Ministries</span>
+                          <span className="block text-sm font-bold text-bark">Leadership</span>
                           <span className="mt-0.5 block text-xs leading-5 text-moss">Every ministry and department&apos;s leadership, roll and calendar, in one place.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
@@ -615,10 +626,9 @@ function AdministrationContent() {
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
 
-            {/* Departments & Ministries — the church's offices and every
-                ministry and department, opened on one of them when a rail row
-                (or a link) names it. The API decides who may edit; the page
-                itself is open to every office. */}
+            {/* Leadership — the directory of the church's areas, opened on
+                one of them when a rail row (or a link) names it. The API
+                decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub initialDept={searchDept} />}
 
             {/* Meetings Manager — board and business behind one toggle */}

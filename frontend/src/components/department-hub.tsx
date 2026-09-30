@@ -1803,7 +1803,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
       {/* The strip above the card names the place on a wide screen, so the
           heading here is the phone's telling only. */}
       <div className="shrink-0 md:hidden">
-        <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
+        <h2 className="text-lg font-bold text-bark">Leadership</h2>
         <p className="mt-0.5 text-xs text-moss">
           Every leadership area — the church's offices and each department — with its roles filled office by office. Tick rows to address several departments at once.
         </p>

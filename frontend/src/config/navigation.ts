@@ -399,16 +399,21 @@ export type RailEntry = {
   /** For a row that *is* a console tab, the `?tab=` value that is this page. */
   tab?: string;
   aliasTabs?: readonly string[];
+  /** For a row that is one department's desk: the `?dept=` value naming it. */
+  dept?: string;
   items?: RailItem[];
   roles?: readonly string[];
   hiddenFor?: readonly string[];
   /**
    * A row whose pages are the church's own records rather than a list here.
-   * Ministries and Departments hold whatever the elder's desk has created —
-   * they cannot be named in this file without going stale the day a ministry
-   * is added.
+   * The Ministries and Departments headings are filled from whatever the
+   * desk has created — they cannot be named in this file without going stale
+   * the day a ministry is added — and `railFor` expands each group into one
+   * row per area, each keeping the heading its group names.
    */
   fromDepartments?: DepartmentGroup;
+  /** The heading a generated row belongs under, carried through expansion. */
+  sectionKey?: RailSection;
 };
 
 /** A rail page, described by the registry where the registry has it. */
@@ -436,18 +441,13 @@ const ELDERSHIP_ROLES = ["elder", "admin"];
 const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
- * The elders' office: the church's people and its programmes.
- *
- * Departments & Ministries, the register, the meetings, what is announced and
- * what is asked of the church. The office bodies sit on their own rows — a
- * clerk's work is not an elder's — and the treasury has always had its own.
+ * The elders' office: the church's programmes and its people's requests —
+ * meetings, what is announced, what is asked. The register is the clerk's;
+ * the two desks are separate jobs and now separate rows, and assigning
+ * leaders of the church's areas is the Leadership desk, which both offices
+ * hold together.
  */
 export const eldershipItems: RailItem[] = [
-  // The departments themselves are the two rows under this one — Ministries
-  // and Departments, filled from the church's own records — so the console's
-  // directory tab is not an item here: an office tab sharing another row's
-  // URL lit every one of them up at once.
-  officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
   // Board and business meetings are one desk now; the page switches between
   // them. A deep link that still names either one lands on the same page.
   officeTab("meetings", "Meetings", Armchair, {
@@ -463,6 +463,17 @@ export const clerkshipItems: RailItem[] = [
   officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES }),
   officeTab("transfers", "Membership Transfers", ClipboardList, { roles: CLERKSHIP_ROLES }),
   officeTab("settings", "Church Settings", Settings, { roles: CLERKSHIP_ROLES }),
+];
+
+/**
+ * The Leadership desk — the returned directory of the church's areas, where
+ * an elder or a clerk fills each office: leaders, assistants, rolls. Both
+ * offices hold it because appointing a leader is work they do together; the
+ * desks either side of it stay their own.
+ */
+const LEADERSHIP_ROLES = ["elder", "clerk", "admin"];
+const leadershipItems: RailItem[] = [
+  officeTab("leaders", "Leadership", Crown, { roles: LEADERSHIP_ROLES }),
 ];
 
 /** The deaconate: the church's property, its duty and its ordinances. */
@@ -496,19 +507,6 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   music: Gift,
   personal_ministries: Megaphone,
 };
-
-/** One department's desk: the hub, opened straight on that department. */
-export function departmentItem(department: DepartmentSummary): RailItem {
-  return {
-    href: `/administration?tab=leaders&dept=${department.code}`,
-    label: department.label,
-    icon: DEPARTMENT_ICONS[department.code] ?? Users,
-    match: ["/administration"],
-    tab: "leaders",
-    dept: department.code,
-    roles: STAFF_ROLES,
-  };
-}
 
 /**
  * The treasury's pages — the treasurer's desk, as its own row on the rail.
@@ -587,42 +585,48 @@ export const railEntries: RailEntry[] = [
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
-  // treasurer's has always stood on its own.
+  // treasurer's has always stood on its own. The Leadership desk between them
+  // is the one both offices share: assigning the church's leaders.
   { label: "Elders' Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
   { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
-  // The two lists of the church's own departments, filled from its records.
-  // They carry no `href` of their own: `entryHref` opens their first
-  // department's desk — the same desk any of the strip's tabs opens — and the
-  // strip carries the rest of the siblings, so the row and its tabs agree on
-  // where things are and no two rows can claim the same URL. A row whose
-  // department list is empty is dropped by `railFor` entirely.
+  { label: "Leadership", icon: Crown, items: leadershipItems, roles: LEADERSHIP_ROLES },
+  // The church's own areas, each one its own row under its own heading.
+  // These two placeholders carry no pages of their own: `railFor` swaps each
+  // for one row per ministry (or department), every row opening that area's
+  // desk directly, and a group the desk has not filled yet disappears.
   {
     label: "Ministries",
     icon: HeartHandshake,
     fromDepartments: "ministry",
     roles: STAFF_ROLES,
+    sectionKey: "ministries",
   },
   {
     label: "Departments",
     icon: Users,
     fromDepartments: "department",
     roles: STAFF_ROLES,
+    sectionKey: "departments",
   },
 ];
 
 /**
  * How the rail groups its rows. A heading is a reading aid, not a click
- * target — every row under it is a place, exactly as it was flat.
+ * target — every row under it is a place, exactly as it was flat. Ministries
+ * and Departments are headings of their own, so the church's areas read as
+ * two lists rather than one mixed crowd under "Leadership".
  */
-export type RailSection = "dashboard" | "my-church" | "leadership";
+export type RailSection = "dashboard" | "my-church" | "leadership" | "ministries" | "departments";
 
-/** The heading each section goes by, on the rail and in the phone's menu. */
+/** The heading each section goes by, on the rail. */
 export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "my-church", label: "My church" },
   { key: "leadership", label: "Leadership" },
+  { key: "ministries", label: "Ministries" },
+  { key: "departments", label: "Departments" },
 ];
 
 /** Which heading a row is filed under; a row with none sits before the first. */
@@ -635,8 +639,7 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Clerk's Desk": "leadership",
   "Treasury": "leadership",
   "Deaconate": "leadership",
-  "Ministries": "leadership",
-  "Departments": "leadership",
+  "Leadership": "leadership",
 };
 
 /**
@@ -649,7 +652,7 @@ export function railSectionsFor(
 ): { key: RailSection; label: string; entries: RailEntry[] }[] {
   const grouped = new Map<RailSection, RailEntry[]>();
   for (const entry of entries) {
-    const key = RAIL_SECTION_OF[entry.label] ?? "dashboard";
+    const key = entry.sectionKey ?? RAIL_SECTION_OF[entry.label] ?? "dashboard";
     const list = grouped.get(key) ?? [];
     list.push(entry);
     grouped.set(key, list);
@@ -694,14 +697,24 @@ export function railFor(
 ): RailEntry[] {
   return railEntries.flatMap((entry) => {
     if (!canSee(entry, roles)) return [];
-    // A row whose pages are the church's own records: its list is whatever
-    // the desk has created, so a ministry added this morning is on the rail
-    // this afternoon and an empty list leaves the row out entirely.
+    // A heading of the church's own areas: it expands into one row per
+    // ministry (or department), each row opening that area's desk directly
+    // and keeping the heading its group names. A group the desk has not
+    // filled yet contributes nothing, so the heading vanishes with it.
     if (entry.fromDepartments) {
-      const items = departments
-        .filter((department) => department.group === entry.fromDepartments)
-        .map(departmentItem);
-      return items.length === 0 ? [] : [{ ...entry, items }];
+      const group = entry.fromDepartments;
+      return departments
+        .filter((department) => department.group === group)
+        .map((department) => ({
+          label: department.label,
+          icon: DEPARTMENT_ICONS[department.code] ?? Users,
+          href: `/administration?tab=leaders&dept=${department.code}`,
+          match: ["/administration"],
+          tab: "leaders",
+          dept: department.code,
+          roles: STAFF_ROLES,
+          sectionKey: entry.sectionKey,
+        }));
     }
     if (!entry.href && entry.items) {
       const items = entry.items.filter((item) => canSee(item, roles));
@@ -788,6 +801,9 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
         match: entry.match,
         tab: entry.tab,
         aliasTabs: entry.aliasTabs,
+        // A department row is one desk of the leaders tab: the dept is what
+        // tells it apart from the desk itself and from its sibling rows.
+        dept: entry.dept,
       });
       if (length > bestLength) {
         best = { group: null, href: entry.href };

@@ -28,8 +28,13 @@
    gallery page in Fellowship.
 
    v16 — the announcements feed is compact by default with no density
-   toggle, and its photo previews shrink so a card's actions stay on screen. */
-const CACHE_NAME = "sda-loma-linda-meru-v16";
+   toggle, and its photo previews shrink so a card's actions stay on screen.
+
+   v17 — the rail grows two headings (Ministries, Departments) with each area
+   as its own row, the Leadership desk returns shared by elders and clerks,
+   and the two desks are decoupled. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v17";
 const STATIC_ASSETS = [
   "/",
   "/about/",
