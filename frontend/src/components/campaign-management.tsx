@@ -363,7 +363,7 @@ export function CampaignManagement({
           target_amount: numericTarget,
           start_date: form.start_date || todayStr,
           end_date: form.end_date || null,
-          member_message: form.member_message.trim(),
+          member_message: "",
           allow_personal_invitations: form.allow_personal_invitations,
         }),
       });
@@ -399,11 +399,6 @@ export function CampaignManagement({
       showAlert("Missing Date", "Please select a beginning date.", "error");
       return;
     }
-    if (form.schedule_message && !form.scheduled_at) {
-      showAlert("Scheduled Date Required", "Please enter the date and time to broadcast this message.", "error");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       // Multipart when a flyer rides along, JSON otherwise — the endpoint
@@ -418,10 +413,10 @@ export function CampaignManagement({
         start_date: form.start_date || todayStr,
         end_date: form.end_date || null,
         generate_card: false,
-        member_message: form.member_message.trim(),
-        schedule_message: form.schedule_message,
-        scheduled_at: form.schedule_message && form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
-        message_frequency: form.message_frequency,
+        member_message: "",
+        schedule_message: false,
+        scheduled_at: null,
+        message_frequency: "once",
         allow_personal_invitations: form.allow_personal_invitations,
       };
       let body: BodyInit;
@@ -769,61 +764,8 @@ export function CampaignManagement({
                     </span>
                   </label>
 
-                  {/* Broadcast Message Options */}
-                  <div className="rounded-2xl bg-sand-card p-4 ring-1 ring-sand-line space-y-3">
-                    <label className="block text-xs font-bold text-bark">
-                      Member Announcement Broadcast <span className="font-normal text-moss">(Optional)</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      placeholder="Write an encouragement message to broadcast to members regarding this drive..."
-                      value={form.member_message}
-                      onChange={(e) => setForm({ ...form, member_message: e.target.value })}
-                      className="w-full rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs text-bark outline-none focus:border-ember"
-                    />
-
-                    {form.member_message && (
-                      <div className="space-y-3 pt-2 border-t border-sand-line/60">
-                        <label className="flex items-center gap-2.5 text-xs font-medium text-bark cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={form.schedule_message}
-                            onChange={(e) => setForm({ ...form, schedule_message: e.target.checked })}
-                            className="h-4 w-4 rounded accent-sage"
-                          />
-                          <span>Schedule broadcast message for later</span>
-                        </label>
-
-                        {form.schedule_message && (
-                          <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                            <label className="block text-xs font-semibold text-bark">
-                              Broadcast Date &amp; Time
-                              <input
-                                type="datetime-local"
-                                value={form.scheduled_at}
-                                onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })}
-                                className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                              />
-                            </label>
-
-                            <label className="block text-xs font-semibold text-bark">
-                              Broadcast Frequency
-                              <select
-                                value={form.message_frequency}
-                                onChange={(e) => setForm({ ...form, message_frequency: e.target.value })}
-                                className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                              >
-                                <option value="once">One-time broadcast</option>
-                                <option value="weekly">Weekly (Every Sabbath reminder)</option>
-                                <option value="daily">Daily reminder</option>
-                                <option value="biweekly">Bi-weekly reminder</option>
-                              </select>
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {/* No broadcast block: the description above is what the
+                      drive broadcasts, when the office asks it to. */}
 
                   <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
                     <button

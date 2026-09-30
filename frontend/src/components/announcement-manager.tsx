@@ -313,6 +313,8 @@ export function AnnouncementManager({
     announcement_type: "awareness" as "awareness" | "web_conference" | "promotion" | "opinion",
     action_type: "none",
     support_account: "",
+    // Promotion posts only: the goal the post's fund drive opens with.
+    promotion_target: "",
     // Opinion posts only: how members answer, and the fixed options for a
     // closed question (one per line).
     response_mode: "open" as "open" | "closed",
@@ -462,6 +464,7 @@ export function AnnouncementManager({
       announcement_type: item.announcement_type ?? "awareness",
       action_type: item.action_type ?? "none",
       support_account: item.support_account ?? "",
+      promotion_target: "",
       response_mode: item.response_mode === "closed" ? "closed" : "open",
       response_options: item.response_options ?? "",
       sharing_option: item.sharing_option || "site,email",
@@ -481,6 +484,7 @@ export function AnnouncementManager({
       announcement_type: "awareness",
       action_type: "none",
       support_account: "",
+      promotion_target: "",
       response_mode: "open",
       response_options: "",
       sharing_option: "site,email",
@@ -535,6 +539,17 @@ export function AnnouncementManager({
       showAlert("Account Missing", err, "error");
       return;
     }
+    // A promotion mints its fund drive at once, so a new post needs the goal
+    // the drive opens with; an edit of a drive-carrying post does not.
+    if (form.announcement_type === "promotion" && !editingId) {
+      const target = parseFloat(form.promotion_target);
+      if (isNaN(target) || target <= 0) {
+        const err = "A promotion announcement needs a target amount for its fund drive.";
+        setMessage(err);
+        showAlert("Target Missing", err, "error");
+        return;
+      }
+    }
     // A closed opinion question must offer at least two choices, or members
     // have nothing to pick between.
     if (
@@ -558,8 +573,10 @@ export function AnnouncementManager({
           return;
         }
         // Optional fields are omitted when blank so the row keeps a real null
-        // (an empty string would fail date parsing server-side).
-        const optional = key === "href" || key === "event_date_from" || key === "event_date_to";
+        // (an empty string would fail date parsing server-side). The drive
+        // goal rides along only when written — the API requires it of a new
+        // promotion and ignores it on edits.
+        const optional = key === "href" || key === "event_date_from" || key === "event_date_to" || key === "promotion_target";
         if (optional && !value) return;
         // The list-valued audience returned above; everything left is a string.
         payload.append(key, String(value));
@@ -808,21 +825,39 @@ export function AnnouncementManager({
               )}
 
               {form.announcement_type === "promotion" && (
-                <label className="block text-xs font-semibold text-bark">
-                  Support account *
-                  <select
-                    value={form.support_account}
-                    onChange={(e) => setForm({ ...form, support_account: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                  >
-                    <option value="">-- Select account --</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.description || account.name}>
-                        {account.description || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <>
+                  <label className="block text-xs font-semibold text-bark">
+                    Support account *
+                    <select
+                      value={form.support_account}
+                      onChange={(e) => setForm({ ...form, support_account: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                    >
+                      <option value="">-- Select account --</option>
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.description || account.name}>
+                          {account.description || account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-bark">
+                    Target amount (KES) *
+                    <input
+                      type="number"
+                      min="1"
+                      step="any"
+                      required
+                      value={form.promotion_target}
+                      onChange={(e) => setForm({ ...form, promotion_target: e.target.value })}
+                      placeholder="e.g. 500000"
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember"
+                    />
+                    <span className="mt-1 block text-[10px] font-normal text-moss">
+                      The goal of the fund drive this post opens — its progress shows beneath the post as members give.
+                    </span>
+                  </label>
+                </>
               )}
 
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
@@ -900,6 +935,11 @@ export function AnnouncementManager({
                     placeholder="Write full announcement content..."
                     className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
+                  {form.announcement_type === "promotion" && (
+                    <span className="mt-1 block text-[10px] font-normal text-moss">
+                      This text is the drive&apos;s description and the message broadcast to its audience — there is no second letter to write.
+                    </span>
+                  )}
                   <span
                     className={`mt-1 block text-right text-[10px] font-semibold ${
                       form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-moss"

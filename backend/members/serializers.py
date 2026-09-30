@@ -363,6 +363,11 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     )
     campaign_id = serializers.IntegerField(read_only=True, allow_null=True)
     fund_drive = serializers.SerializerMethodField()
+    # Promotion posts mint their own fund drive: this is the goal it opens
+    # with (write-only; the drive's numbers read back through ``fund_drive``).
+    promotion_target = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True, write_only=True,
+    )
 
     FUND_DRIVE_FIELDS = ('id', 'name', 'title', 'description', 'target_amount', 'total_raised', 'percentage_raised', 'end_date', 'donor_count', 'attachment', 'attachment_name', 'attachment_size')
 
@@ -463,6 +468,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
             if not (support_account or '').strip():
                 raise serializers.ValidationError('A promotion / contribution announcement needs a treasury account.')
+            # A promotion is a drive: on create it must open with a goal. An
+            # edit of a post that already carries its drive needs no target —
+            # the drive's numbers are managed on the drive itself.
+            if instance is None:
+                target = attrs.get('promotion_target')
+                if target is None or float(target) <= 0:
+                    raise serializers.ValidationError('A promotion announcement needs a target amount for its fund drive.')
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
@@ -493,7 +505,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

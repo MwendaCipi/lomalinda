@@ -1755,6 +1755,41 @@ class AnnouncementView(generics.ListCreateAPIView):
         return Response(self.get_serializer(dated + undated, many=True).data)
 
     def perform_create(self, serializer):
+        # A promotion is a fund drive: one post, one drive. The announcement's
+        # own words are the drive's description and its broadcast text — there
+        # is no second message to write — and its audience carries over, so
+        # the drive invites exactly the people the post addresses. The target
+        # came in with the post (the serializer requires it); the drive starts
+        # immediately and retires the day after the post's event ends.
+        # The goal is composer input, not a stored announcement field — read
+        # and drop it before the row is built.
+        target = serializer.validated_data.pop('promotion_target', None)
+        if serializer.validated_data.get('announcement_type') == 'promotion':
+            account = (serializer.validated_data.get('support_account') or '').strip()
+            end = serializer.validated_data.get('event_date_to') or serializer.validated_data.get('event_date_from')
+            name_base = (serializer.validated_data.get('title') or serializer.validated_data.get('text') or 'Fund drive')[:110]
+            name = name_base
+            suffix = 2
+            while FundraisingCampaign.objects.filter(name__iexact=name).exists():
+                name = f"{name_base} ({suffix})"
+                suffix += 1
+            drive = FundraisingCampaign.objects.create(
+                name=name,
+                title=name_base,
+                account_name=account,
+                description=serializer.validated_data.get('text') or '',
+                member_message=serializer.validated_data.get('text') or '',
+                target_amount=target,
+                start_date=timezone.localdate(),
+                end_date=end,
+                is_active=True,
+                is_temporary=True,
+                generate_card=False,
+                allow_personal_invitations=False,
+                created_by=self.request.user,
+            )
+            serializer.validated_data['campaign'] = drive
+
         # Leadership was already established by CanManageAnnouncements.
         announcement = serializer.save()
 
@@ -4549,7 +4584,11 @@ class ProfessionListCreateView(generics.ListCreateAPIView):
 
 def broadcast_campaign_message(campaign, custom_message=None):
     from django.contrib.auth.models import User
-    msg_text = custom_message or campaign.member_message or (
+    # The description is the broadcast: what the office wrote about the drive
+    # is what members read. A drive from a promotion announcement carries its
+    # own text in both fields already; one composed on the fund-drives desk
+    # falls back to the description, then to a plain restatement of the goal.
+    msg_text = custom_message or campaign.member_message or campaign.description or (
         f"Support our church fund drive: {campaign.title or campaign.name}. "
         f"Goal: KES {campaign.target_amount:,.2f}. Giving reference: {campaign.account_name or campaign.name}."
     )
@@ -4679,9 +4718,11 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
                         message=f"You have been assigned a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
                     )
 
-        # Broadcast member message if immediate dispatch is requested
-        if campaign.member_message:
-            is_immediate = not campaign.schedule_message or not campaign.scheduled_at or campaign.scheduled_at <= timezone.now()
+        # Broadcast on create only when the office scheduled one: a drive's
+        # description is its standing broadcast text (and a promotion post's
+        # announcement is already out), so nothing is dispatched silently.
+        if campaign.schedule_message and campaign.scheduled_at:
+            is_immediate = campaign.scheduled_at <= timezone.now()
             if is_immediate:
                 broadcast_campaign_message(campaign)
 
