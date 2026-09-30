@@ -1681,17 +1681,36 @@ class CanManageAnnouncements(permissions.BasePermission):
         return can_manage_announcements(request.user)
 
 
+class CanManageMoments(permissions.BasePermission):
+    """Moments is the administrators' gallery: only the admin role posts,
+    adds media, unpublishes or deletes — normal members and the other
+    offices read the wall."""
+
+    def has_permission(self, request, view):
+        return can_manage_moments(request.user)
+
+
+def can_manage_moments(user):
+    """The Moments gate: administrators only (staff and superusers count)."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('admin'))
+
+
 class ChurchEventView(generics.ListCreateAPIView):
     """The Moments wall: the church's event albums, newest day first.
 
-    Everyone may read the published albums; only the leadership that posts
-    announcements may open albums, add to them or take them down — Moments is
-    the church's own record of its life, and the same officers keep it.
+    Everyone may read the published albums; only administrators open
+    albums, add to them or take them down — Moments is the church's own
+    record of its life, kept by the administrators.
     """
     serializer_class = ChurchEventSerializer
 
     def get_permissions(self):
-        return [IsAuthenticated(), CanManageAnnouncements()] if self.request.method == 'POST' else [AllowAny()]
+        return [IsAuthenticated(), CanManageMoments()] if self.request.method == 'POST' else [AllowAny()]
 
     def get_queryset(self):
         queryset = ChurchEvent.objects.all()
@@ -1711,13 +1730,13 @@ class ChurchEventView(generics.ListCreateAPIView):
 class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
     """One event album — read, retitle, add files, take files down, unpublish.
 
-    Writes are leadership's: the right that posts announcements is the right
-    that keeps the church's albums. Deleting the event deletes its files.
+    Writes are the administrators': Moments is their gallery. Deleting the
+    event deletes its files.
     """
     serializer_class = ChurchEventSerializer
 
     def get_permissions(self):
-        return [IsAuthenticated(), CanManageAnnouncements()] if self.request.method != 'GET' else [AllowAny()]
+        return [IsAuthenticated(), CanManageMoments()] if self.request.method != 'GET' else [AllowAny()]
 
     def get_object(self):
         event = generics.get_object_or_404(ChurchEvent, pk=self.kwargs['pk'])

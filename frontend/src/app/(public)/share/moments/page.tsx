@@ -47,8 +47,10 @@ const dayLabel = (iso: string | null) =>
  */
 export default function MomentsPage() {
   const { me } = useHeaderData();
+  // Moments is the administrators' gallery: only the admin role (or Django
+  // staff) posts albums and keeps them; everyone else reads the wall.
   const canManage = Boolean(
-    me && (me.is_staff || me.is_superuser || me.roles.includes("admin") || me.roles.includes("clerk") || me.roles.includes("elder") || me.roles.includes("pastor"))
+    me && (me.is_staff || me.is_superuser || me.roles.includes("admin"))
   );
 
   const [events, setEvents] = useState<MomentEvent[]>([]);

@@ -129,14 +129,14 @@ export const destinations = {
     match: ["/announcements"],
   },
   /**
-   * Moments — the church's photo and video wall: the posted announcements
-   * that carry media, gathered as the church's album rather than its notices.
-   * A page of the Fellowship section, second after Announcements.
+   * Moments — the church's photo and video wall, kept as event albums by
+   * the administrators. A page of its own; the rail leaves it to the
+   * Fellowship pages that link it (the announcements page among them).
    */
   moments: {
     href: "/share/moments",
     label: "Moments",
-    description: "Pictures and videos posted by the church, from worship to outreach.",
+    description: "The church's events, album by album — kept by the administrators.",
     icon: Sparkles,
     area: "fellowship",
     match: ["/share/moments"],
@@ -562,7 +562,6 @@ export const railEntries: RailEntry[] = [
     icon: Megaphone,
     items: [
       page("announcements"),
-      page("moments"),
       page("testimonies"),
       page("ideas"),
       page("calendar"),

@@ -94,9 +94,13 @@
    requests under one heading.
 
    v31 — the rail's ministry and department rows read their short forms
-   (AMM, AWM, APM, Personal…), so no row ever ellipsises. Chrome changed,
-   so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v31";
+   (AMM, AWM, APM, Personal…), so no row ever ellipsises.
+
+   v32 — Moments leaves the Fellowship strip: the wall is the
+   administrators' gallery now, reached from its own page, and posting is
+   theirs alone. Chrome changed, so installed apps must take the new
+   shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v32";
 const STATIC_ASSETS = [
   "/",
   "/about/",

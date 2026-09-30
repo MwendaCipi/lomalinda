@@ -7646,9 +7646,9 @@ class DepartmentGroupAndUnitTests(APITestCase):
 class ChurchEventMomentsTests(APITestCase):
     """Moments stores church events: an album with a title and its media.
 
-    Anyone may read the published albums; only the office that posts
-    announcements opens albums, adds files or takes one down — and an album
-    holds pictures and videos, not any other kind of file.
+    Anyone may read the published albums; only administrators open albums,
+    add files or take one down — Moments is the administrators' gallery,
+    and even an elder or clerk with the announcements right is refused.
     """
 
     def setUp(self):
@@ -7689,6 +7689,18 @@ class ChurchEventMomentsTests(APITestCase):
 
     def test_a_member_may_not_post_an_album(self):
         self.client.force_authenticate(self.member)
+        response = self.client.post('/api/members/church-events/', {'title': 'Choir Sunday'}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_an_elder_without_the_admin_role_may_not_post_an_album(self):
+        """Moments is the administrators' gallery: the announcements right
+        posts notices, not albums, so an elder is refused where an admin
+        role or Django staff is waved through."""
+        elder = User.objects.create_user(
+            'moments.elder', 'moments.elder@example.com', 'ChurchPass#2026',
+        )
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder')
+        self.client.force_authenticate(elder)
         response = self.client.post('/api/members/church-events/', {'title': 'Choir Sunday'}, format='json')
         self.assertEqual(response.status_code, 403)
 
