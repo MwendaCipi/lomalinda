@@ -23,15 +23,19 @@ type Announcement = {
   event_date_to?: string | null;
 };
 
-/** The join button names the platform the link points at, so a member knows
-    what tapping it will open — Google Meet, Zoom, YouTube, Teams. */
+/** The join button names the platform the link points at *and* says what
+    tapping it does — "Open on Google Meet", "Open on Zoom" — so the button
+    reads as an action rather than as a bare product name. Every platform gets
+    the same verb; a lone "Zoom" beside "Open on Google Meet" would read as a
+    different kind of control. `Join online` stays the fallback when the link
+    points somewhere unrecognised. */
 function platformLabel(href: string | null | undefined) {
   if (!href) return "Join online";
   const url = href.toLowerCase();
-  if (url.includes("meet.google.com")) return "Google Meet";
-  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Zoom";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "YouTube";
-  if (url.includes("teams.microsoft.com")) return "Teams";
+  if (url.includes("meet.google.com")) return "Open on Google Meet";
+  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open on Zoom";
+  if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open on YouTube";
+  if (url.includes("teams.microsoft.com")) return "Open on Teams";
   return "Join online";
 }
 
