@@ -46,8 +46,12 @@
    beneath with a Set leader button) and up to two Assistants (their own
    search bar with a Set assistant button), elders keep their three named
    offices, and areas carry only Leader and Assistant roles. Chrome changed,
-   so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v19";
+   so installed apps must take the new shell.
+
+   v20 — the rail files the church's areas under one heading: Ministries and
+   Departments rows join as one Ministry list beside the desks' Leadership.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v20";
 const STATIC_ASSETS = [
   "/",
   "/about/",

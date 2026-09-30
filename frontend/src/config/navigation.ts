@@ -601,32 +601,31 @@ export const railEntries: RailEntry[] = [
     icon: HeartHandshake,
     fromDepartments: "ministry",
     roles: STAFF_ROLES,
-    sectionKey: "ministries",
+    sectionKey: "ministry",
   },
   {
     label: "Departments",
     icon: Users,
     fromDepartments: "department",
     roles: STAFF_ROLES,
-    sectionKey: "departments",
+    sectionKey: "ministry",
   },
 ];
 
 /**
  * How the rail groups its rows. A heading is a reading aid, not a click
- * target — every row under it is a place, exactly as it was flat. Ministries
- * and Departments are headings of their own, so the church's areas read as
- * two lists rather than one mixed crowd under "Leadership".
+ * target — every row under it is a place, exactly as it was flat. The
+ * church's areas — ministries and departments alike — read as one list
+ * under the single "Ministry" heading, beside the desks' Leadership.
  */
-export type RailSection = "dashboard" | "my-church" | "leadership" | "ministries" | "departments";
+export type RailSection = "dashboard" | "my-church" | "leadership" | "ministry";
 
 /** The heading each section goes by, on the rail. */
 export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "my-church", label: "My church" },
   { key: "leadership", label: "Leadership" },
-  { key: "ministries", label: "Ministries" },
-  { key: "departments", label: "Departments" },
+  { key: "ministry", label: "Ministry" },
 ];
 
 /** Which heading a row is filed under; a row with none sits before the first. */
