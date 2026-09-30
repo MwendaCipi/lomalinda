@@ -428,48 +428,17 @@ type RoleDraft = {
   people: RolePerson[];
 };
 
-/** One position's read-only line: the label and whoever holds it now —
-    the seats themselves are changed only through the search above. */
-function SeatLine({
-  title,
-  role,
-  seat,
-  max,
-}: {
-  title: string;
-  role: RoleDraft;
-  seat: "leader" | "assistant";
-  max: number;
-}) {
-  const holders = role.people.filter((p) => p.kind === seat);
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
-      <p className="shrink-0 text-xs font-bold text-bark">{title}</p>
-      {holders.length > 0 ? (
-        <p className="min-w-0 truncate text-right text-xs font-semibold text-bark">
-          {holders.map((h) => h.name).join(", ")}
-        </p>
-      ) : (
-        <span className="text-[11px] italic text-moss-faint">
-          open{holders.length < max ? "" : ""} — set from the search above
-        </span>
-      )}
-    </div>
-  );
-}
-
 /**
- * Edit leadership: the area's positions, each with its holder.
+ * Edit leadership: appointments staged against a search.
  *
- * An area seats one Leader and two Assistants — Eldership's three elders
- * lead under their own offices — and people are appointed by searching
- * under the position they fill: one search bar under Leader whose results
- * carry a Set leader button, one under Assistants whose results carry Set
- * assistant. Replacing a seated holder asks first; releasing is a remove
- * button, saved at once. "Create role" adds the area's own custom roles,
- * which take extra assistant seats under the same Assistants search. One
- * PUT saves appointments; the server reconciles the derived role flags so
- * permissions and audiences follow.
+ * The modal opens on the search alone — no roles listed until the desk
+ * acts. Finding a member and pressing Set leader / Set elder / Set assistant
+ * stages the appointment, which appears under the search as one line naming
+ * the person and the position they were given; assistants are uncapped, so
+ * every press adds another line. Setting a leader over a seated one asks
+ * first, and the save replaces them server-side. One PUT carries the staged
+ * lines; the server reconciles the derived role flags so permissions and
+ * audiences follow.
  */
 function LeadershipEditModal({
   department,
@@ -584,9 +553,30 @@ function LeadershipEditModal({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  /** Stage one appointment under a position's seat. Replacing a seated
-      holder asks first, the way an appointment lands in person; the seat
-      swaps as soon as the answer lands. */
+  /** The staged lines: every appointment the desk has set that the area
+      does not already carry. One per press, person first, position under. */
+  const staged: { roleId: number; positionLabel: string; person: RolePerson }[] = [];
+  for (const role of draft) {
+    const before = department.roles.find((r) => r.id === role.id);
+    for (const p of role.people) {
+      if (!before?.holders.some((h) => h.id === p.id && h.kind === p.kind)) {
+        staged.push({ roleId: role.id, positionLabel: p.kind === "leader" ? role.name : `Assistant ${role.name}`, person: p });
+      }
+    }
+  }
+
+  /** Take one staged appointment back off the list before the save. */
+  const unstage = (line: { roleId: number; person: RolePerson }) => {
+    setDraft((current) => current.map((r) =>
+      r.id === line.roleId
+        ? { ...r, people: r.people.filter((p) => !(p.id === line.person.id && p.kind === line.person.kind)) }
+        : r
+    ));
+  };
+
+  /** Stage one appointment. A leader seat already filled asks first — the
+      staged line will replace that holder at save; assistants are uncapped,
+      so every press adds another staged line. */
   const appoint = (role: RoleDraft, seat: "leader" | "assistant", member: { id: number; name: string; username: string }, clearQuery: () => void) => {
     const go = () => {
       setDraft((current) => current.map((r) => {
@@ -599,17 +589,20 @@ function LeadershipEditModal({
       }));
       clearQuery();
     };
-    const holder = role.people.find((p) => p.kind === seat);
-    if (holder && holder.id !== member.id) {
-      showAlert(
-        seat === "leader" ? "Seat is taken" : "Assistant already appointed",
-        `${seat === "leader" ? role.name : `Assistant ${role.name}`} is ${holder.name}. Appointing ${member.name} replaces them.`,
-        "warning",
-        { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
-      ).then((answer) => {
-        if (answer.isConfirmed) go();
-      });
-      return;
+    if (seat === "leader") {
+      const before = department.roles.find((r) => r.id === role.id);
+      const holder = role.people.find((p) => p.kind === "leader") ?? before?.holders.find((h) => h.kind === "leader");
+      if (holder && holder.id !== member.id) {
+        showAlert(
+          "Seat is taken",
+          `${role.name} is ${holder.name}. Appointing ${member.name} replaces them at save.`,
+          "warning",
+          { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
+        ).then((answer) => {
+          if (answer.isConfirmed) go();
+        });
+        return;
+      }
     }
     go();
   };
@@ -731,15 +724,29 @@ function LeadershipEditModal({
           </div>
         </div>
 
-        {/* The seats as they stand, read-only: who holds each position now,
-            so the save's confirm names exactly what it replaces. */}
+        {/* The staged appointments: one line per press — person, then the
+            position they were given. Nothing shows until something is set. */}
         <div className="mt-4 space-y-2">
-          {leaderRole && <SeatLine title="Leader" role={leaderRole} seat="leader" max={1} />}
-          {elderRoles.map((role) => (
-            <SeatLine key={role.id} title={role.name} role={role} seat="leader" max={1} />
+          {staged.map((line) => (
+            <div key={`${line.roleId}-${line.person.id}-${line.person.kind}`} className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-bark">{line.person.name}</p>
+                <p className="text-[11px] text-moss">{line.positionLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => unstage(line)}
+                title="Remove this appointment"
+                className="shrink-0 rounded-full p-1 text-moss transition hover:bg-white hover:text-red-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
-          {assistantRole && elderRoles.length === 0 && (
-            <SeatLine title="Assistants" role={assistantRole} seat="assistant" max={2} />
+          {staged.length === 0 && (
+            <p className="rounded-xl border border-dashed border-sand-line px-3 py-2 text-[11px] italic text-moss-faint">
+              No appointments set yet — search above, then set a position.
+            </p>
           )}
         </div>
 
