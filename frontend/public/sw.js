@@ -58,8 +58,13 @@
 
    v22 — announcement photos in the feed are a step taller again (md), a
    little over fifty pixels more than the compact height. Chrome changed,
-   so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v22";
+   so installed apps must take the new shell.
+
+   v23 — the Elders' Desk submenu carries Board and Business Meetings as two
+   rows (no Meetings middleman), and User Management's header reads one
+   record row: tabs left, search right. Chrome changed, so installed apps
+   must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v23";
 const STATIC_ASSETS = [
   "/",
   "/about/",

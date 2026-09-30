@@ -60,13 +60,8 @@ type Transfer = {
   other_church: string;
 };
 
-/** The two kinds of meeting the Meetings desk keeps the minutes for. */
+/** The two kinds of meeting the Elders' Desk keeps the minutes for. */
 type MeetingKind = "board" | "business";
-
-const MEETING_KINDS: { value: MeetingKind; label: string; icon: typeof Armchair }[] = [
-  { value: "board", label: "Board Meetings", icon: Armchair },
-  { value: "business", label: "Business Meetings", icon: Briefcase },
-];
 
 /** Session cache of the gate result — the API still enforces every request. */
 const ADMIN_GATE_KEY = "admin_gate_profile";
@@ -233,19 +228,12 @@ function AdministrationContent() {
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   /**
-   * Meetings — board and business, switched by a toggle at the top of the page.
-   *
-   * They were two rows in the rail for one desk (who met, what was agreed), so
-   * the rail names the desk once and the page asks which meeting. The two old
-   * `?tab=` values still open the page on the right half, so a bookmark, a
-   * dashboard tile or an emailed link keeps working.
+   * Meetings — board and business are rows of the Elders' Desk submenu, so
+   * the kind is the tab itself: `?tab=board` and `?tab=business` each open
+   * their own list, and an old `?tab=meetings` link still lands on board.
    */
   const meetingTab = activeTab === "meetings" || activeTab === "board" || activeTab === "business";
   const meetingKind: MeetingKind = activeTab === "business" ? "business" : "board";
-  const selectMeeting = (kind: MeetingKind) => {
-    setActiveTab(kind);
-    router.replace(`/administration?tab=${kind}`, { scroll: false });
-  };
 
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
@@ -631,32 +619,20 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub initialDept={searchDept} />}
 
-            {/* Meetings Manager — board and business behind one toggle */}
+            {/* Board and Business Meetings — two rows of the Elders' Desk
+                submenu, so the desk opens on the kind the row named and no
+                second toggle sits between the two. */}
             {meetingTab && (isClerk || isElder || isAdmin) && (
-              <div className="flex h-full min-h-0 flex-col">
-                <SubNav
-                  sticky
-                  label="Meeting kind"
-                  items={MEETING_KINDS.map((option) => ({
-                    key: option.value,
-                    label: option.label,
-                    icon: option.icon,
-                  }))}
-                  value={meetingKind}
-                  onChange={(key) => selectMeeting(key as MeetingKind)}
-                />
-
-                <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
-                  {meetingKind === "board" ? (
-                    <div className="p-4 sm:p-6 lg:p-8">
-                      <BoardMeetingManager />
-                    </div>
-                  ) : (
-                    <div className="p-4 sm:p-6 lg:p-8">
-                      <BusinessMeetingManager />
-                    </div>
-                  )}
-                </div>
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
+                {meetingKind === "board" ? (
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    <BoardMeetingManager />
+                  </div>
+                ) : (
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    <BusinessMeetingManager />
+                  </div>
+                )}
               </div>
             )}
 

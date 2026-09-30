@@ -2135,64 +2135,46 @@ export function UserManagement() {
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {/* ── Header ── */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:px-6">
-        {/* Top row: heading, record count, density and the list tabs together.
-            Wraps on the narrowest phones rather than hanging off the edge. */}
+        {/* Top row: the way back and the desk's name. */}
         <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span className="flex items-center gap-1">
             <BackToOverviewArrow />
             {/* Named by the strip above on a wide screen. */}
             <h2 className="text-xl font-bold text-bark md:hidden">User Management</h2>
           </span>
-          <div className="ml-auto flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:w-auto sm:justify-end">
-            <span className="flex shrink-0 items-center gap-2">
-              <p className="text-xs text-moss">
-                {visibleMembers.length} records registered
-              </p>
-              {/* Row density: one setting for every desk table, so it sits with
-                  the record count rather than among the filters. */}
-              <DensityToggle dense={dense} onToggle={toggleDensity} />
-            </span>
-            {/* The list tabs ride the top row with the heading and the count.
-                Confirmed tabs by account state; Pending tabs by what the
-                person is joining as. On a phone the group scrolls rather than
-                wraps, keeping the band to one line. */}
-            {/* The list tabs, on the shared strip. Confirmed tabs by account
-                state; Pending tabs by what the person is joining as. The
-                counts ride the tabs, so the same control reads the same way
-                here as on every other desk. */}
-            {/* The one tab strip: All / Active / Inactive over the confirmed
-                roster, Invites (pending) over the invitation, transfer and
-                awaiting lists — with each tab counting what the search leaves. */}
-            <SubNav
-              className="w-full sm:w-auto"
-              label="Record filter"
-              value={invitationFilter === "pending" ? "awaiting" : statusFilter}
-              onChange={(key) => {
-                if (key === "awaiting") {
-                  setInvitationFilter("pending");
-                  return;
-                }
-                setInvitationFilter("confirmed");
-                setStatusFilter(key as StatusFilter);
-              }}
-              items={STATUS_TABS.map((tab) => ({
-                key: tab.key,
-                label: tab.label,
-                help: tab.help,
-                count: tab.key === "awaiting" ? statusCounts.awaiting : tab.key === "all" ? rosterScoped.length + statusCounts.awaiting : statusCounts[tab.key as Exclude<StatusFilter, "all">],
-              }))}
-            />
-          </div>
+          {/* Row density: one setting for every desk table. */}
+          <DensityToggle dense={dense} onToggle={toggleDensity} />
         </div>
-        {/* Second row: the search box, full width — the record filters live
-            on the tab strip above, so nothing else sits beside it. */}
-        <div className="flex w-full">
+        {/* The record row: the tab strip on the left, the search beside it
+            on the right — All / Active / Inactive over the confirmed roster,
+            Invites (pending) over the invitation, transfer and awaiting
+            lists — with each tab counting what the search leaves. */}
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <SubNav
+            className="w-full sm:w-auto"
+            label="Record filter"
+            value={invitationFilter === "pending" ? "awaiting" : statusFilter}
+            onChange={(key) => {
+              if (key === "awaiting") {
+                setInvitationFilter("pending");
+                return;
+              }
+              setInvitationFilter("confirmed");
+              setStatusFilter(key as StatusFilter);
+            }}
+            items={STATUS_TABS.map((tab) => ({
+              key: tab.key,
+              label: tab.label,
+              help: tab.help,
+              count: tab.key === "awaiting" ? statusCounts.awaiting : tab.key === "all" ? rosterScoped.length + statusCounts.awaiting : statusCounts[tab.key as Exclude<StatusFilter, "all">],
+            }))}
+          />
           <input
             type="text"
             placeholder="Search by name, email, phone, gifts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
+            className="h-12 w-full min-w-0 rounded-xl border border-sand-line bg-white px-4 text-xs focus:border-ember focus:outline-none sm:ml-auto sm:w-auto sm:min-w-[220px] sm:flex-1 sm:max-w-sm"
           />
         </div>
       </div>

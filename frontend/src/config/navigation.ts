@@ -9,6 +9,7 @@ import {
   Calendar,
   ClipboardList,
   Crown,
+  Briefcase,
   Gift,
   HandHeart,
   Heart,
@@ -448,12 +449,13 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * hold together.
  */
 export const eldershipItems: RailItem[] = [
-  // Board and business meetings are one desk now; the page switches between
-  // them. A deep link that still names either one lands on the same page.
-  officeTab("meetings", "Meetings", Armchair, {
+  // Board and business meetings are two rows of this submenu, not a desk
+  // behind another menu. The old "meetings" tab still opens the board list.
+  officeTab("board", "Board Meetings", Armchair, {
     roles: ELDERSHIP_ROLES,
-    aliasTabs: ["board", "business"],
+    aliasTabs: ["meetings"],
   }),
+  officeTab("business", "Business Meetings", Briefcase, { roles: ELDERSHIP_ROLES }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
 ];
