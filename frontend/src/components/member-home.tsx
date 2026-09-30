@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserRoundCheck } from "lucide-react";
+import { ClipboardList, UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigation";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
+import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -21,6 +23,43 @@ type ProfileChange = {
   proposed_at: string;
 };
 
+/** One quick tile, already resolved to a href/label/icon. */
+type Tile = {
+  href: string;
+  label: string;
+  desc: string;
+  icon: LucideIcon;
+  /** How much is waiting behind it — only the Requests desk carries one. */
+  badge?: number;
+};
+
+/** One everyday place, as a card. */
+function QuickTile({ tile }: { tile: Tile }) {
+  const Icon = tile.icon;
+  return (
+    <Link
+      href={tile.href}
+      className="group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
+    >
+      <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-mist-select text-bark transition group-hover:bg-gold">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <h3 className="text-sm font-bold text-bark">{tile.label}</h3>
+        {tile.badge ? (
+          <span
+            title={`${tile.badge} request${tile.badge === 1 ? "" : "s"} awaiting review`}
+            className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
+          >
+            {tile.badge}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-0.5 text-[11px] leading-snug text-moss">{tile.desc}</p>
+    </Link>
+  );
+}
+
 /**
  * The member dashboard, in role-tailored tiers.
  *
@@ -30,16 +69,18 @@ type ProfileChange = {
  * 1. the week's announcement across the top, then anything waiting on the
  *    member personally (a proposed profile edit they must approve or decline),
  * 2. "Your areas" — how the departments and ministries this member leads are
- *    doing, which only a leader ever sees,
+ *    doing, which only a leader ever sees (phone and tablet: from `lg` the rail
+ *    names every department already),
  * 3. the congregation — its roll, its folds, and what the desks still owe
  *    somebody an answer on, for the offices that shepherd it,
  * 4. the church's finances, for the officers who keep the books.
  *
- * The everyday destinations used to sit here as a grid of tiles. They are gone:
- * the rail beside the page already carries every one of them, in the same order
- * and wearing the same names, so the grid was a second copy of the map rather
- * than a shortcut through it. What is left is what only this page can say —
- * the week, what is waiting on you, and how the church you serve is doing.
+ * The everyday destinations sit beside the week's announcements as four quick
+ * tiles — announcements, giving, requests and the calendar — with no heading,
+ * since four named cards do not need one to be read. On a phone they drop
+ * beneath the announcement card. Everything else the page says is what only
+ * this page can say: the week, what is waiting on you, and how the church you
+ * serve is doing.
  *
  * The rail is that same member workspace every page under it renders, so
  * tapping "Dashboard" from the rail does not lose the rail.
@@ -96,6 +137,45 @@ export function MemberHome() {
   // analytics endpoint refuses anyone outside treasury, and the panel hides
   // itself if it ever gets a 403, so this gate is a courtesy, not the wall.
   const keepsTheBooks = hasAny(["treasurer", "admin"]);
+
+  // Leadership lands on the desks, not on the member-facing pages: a clerk or
+  // elder tapping Requests wants the desk that answers requests, and the desk
+  // carries the number still waiting so the tile says whether it needs them.
+  const isDesk = hasAny(REQUESTS_TILE.deskAudience);
+
+  // What leadership still owes an answer on, from the same hook the sidebar's
+  // badge and the Requests manager read — the three can never disagree.
+  const pendingRequests = usePendingRequestCounts(isDesk);
+
+  // ── The quick tiles ──────────────────────────────────────────────────────
+  // The four everyday actions, beside the week's announcements. Requests keeps
+  // its two faces — the desk for the offices that answer requests, the forms
+  // for everyone else — and only the desk's face carries a count.
+  const quickTiles: Tile[] = dashboardTiles.map((key) => {
+    if (key === "requests") {
+      return isDesk
+        ? {
+            href: REQUESTS_TILE.deskHref,
+            label: REQUESTS_TILE.label,
+            desc: REQUESTS_TILE.deskDescription,
+            icon: ClipboardList,
+            badge: pendingRequests.total,
+          }
+        : {
+            href: REQUESTS_TILE.memberHref,
+            label: REQUESTS_TILE.label,
+            desc: REQUESTS_TILE.memberDescription,
+            icon: ClipboardList,
+          };
+    }
+    const dest = destinationOf(key);
+    return {
+      href: dest.href,
+      label: dest.label,
+      desc: dest.description ?? "",
+      icon: dest.icon,
+    };
+  });
 
   // ── The areas this member leads ─────────────────────────────────────────
   // A leadership row in the church's own table is what makes someone answer
@@ -158,11 +238,27 @@ export function MemberHome() {
         </p>
       </header>
 
-      {/* The week's announcements lead the page: the whole card opens the
+      {/* The week's announcements lead the page, with the quick tiles beside
+          them on a wide screen: the whole announcement card opens the
           Fellowship feed and each one carries its own action — Support, Give
           input, or its conference platform — and the next gathering stands in
-          when nothing is published. */}
-      <DashboardAnnouncements />
+          when nothing is published. The tiles carry no heading — four named
+          cards do not need one — and on a phone they drop beneath the card
+          rather than being squeezed into a sliver. */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <DashboardAnnouncements />
+        <section aria-label="Quick actions">
+          {loading || !me ? (
+            <p className="text-xs text-moss">Loading…</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {quickTiles.map((tile) => (
+                <QuickTile key={tile.href} tile={tile} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       {loading || !me ? (
         <p className="text-center text-sm text-moss">Loading your dashboard…</p>
@@ -213,16 +309,31 @@ export function MemberHome() {
 
           {/* The areas this member answers for. A member serving nowhere gets
               no metrics at all — this section exists for leaders, and it is
-              the church's own leadership table that decides who that is. */}
+              the church's own leadership table that decides who that is.
+
+              Phone and tablet only. From `lg` up the rail already names every
+              department and ministry the church has, so the cards were a second
+              copy of that list — and they are the less useful copy, because a
+              department opens from the rail in one tap either way. Below `lg`
+              they are not a duplicate but the only way through: at tablet
+              width the rail and the tab bar are both absent, so these cards are
+              how a leader reaches the desk they answer for. */}
           {myAreas.length > 0 && (
-            <section aria-labelledby="your-areas">
+            <section aria-labelledby="your-areas" className="lg:hidden">
               <h2 id="your-areas" className="text-base font-bold text-bark">
                 Your areas
               </h2>
               <p className="mt-1 text-[11px] text-moss">
                 How the departments and ministries you serve are doing.
               </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {/* One area takes the whole width rather than a quarter of a
+                  row with a gap beside it — a lone card looks like a mistake
+                  in a three-column grid. */}
+              <div
+                className={`mt-4 grid gap-3 ${
+                  myAreas.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"
+                }`}
+              >
                 {myAreas.map((area) => (
                   <Link
                     key={area.code}

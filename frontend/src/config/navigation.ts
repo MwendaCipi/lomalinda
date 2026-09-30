@@ -41,6 +41,7 @@ import {
  * - the phone's tab bar picks `tabKeys` (Home and Admin are chrome; Admin is
  *   the leaders' door and is hidden from everyone else), and asks
  *   `tabSectionFor` whether a tab is a page or a section of pages,
+ * - the dashboard's quick tiles pick `dashboardTiles`,
  * - the account menu picks `accountMenuKeys`,
  * - the marketing footer's columns pick `footerColumns`.
    *
@@ -825,6 +826,24 @@ export const REQUESTS_TILE = {
   /** The desks that answer requests — same list the Requests managers gate by. */
   deskAudience: ["elder", "admin", "clerk", "pastor", "chaplaincy", "welfare_leader", "children_ministry"],
 };
+
+/**
+ * The dashboard's quick tiles: the four everyday actions, as cards beside the
+ * week's announcements.
+ *
+ * Keys only — the label, description and icon come from the registry above, so
+ * a tile cannot rename a place the bars call something else, and a destination
+ * renamed once is renamed on the dashboard too. Four is the number that fits
+ * two rows beside the announcement card and stays level with it: the rail
+ * already carries every other destination, so a longer list would be a second
+ * copy of the map competing with the card next to it.
+ */
+export const dashboardTiles: readonly DestinationKey[] = [
+  "announcements",
+  "give",
+  "requests",
+  "calendar",
+];
 
 
 /**
