@@ -54,8 +54,12 @@
 
    v21 — the rail's first two headings merge: Dashboard rows join the My
    church list, leaving Leadership and Ministry as the other headings.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v21";
+   Chrome changed, so installed apps must take the new shell.
+
+   v22 — announcement photos in the feed are a step taller again (md), a
+   little over fifty pixels more than the compact height. Chrome changed,
+   so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v22";
 const STATIC_ASSETS = [
   "/",
   "/about/",

@@ -325,7 +325,7 @@ export default function AnnouncementsPage() {
                             attachment={item.attachment}
                             name={item.attachment_name}
                             size={item.attachment_size}
-                            mediaHeight="sm"
+                            mediaHeight="md"
                           />
                         </div>
                       )}
