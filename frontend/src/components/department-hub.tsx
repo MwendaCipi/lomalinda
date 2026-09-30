@@ -8,7 +8,7 @@
  * by the public ministry pages).
  *
  * Backend: /api/members/departments/ (directory), …/leadership/
- * (appointments PUT, role add/remove), …/members/ (roll CRUD), …/events/
+ * (appointments PUT, custom roles), …/members/ (roll CRUD), …/events/
  * (calendar CRUD). Saving appointments reconciles the derived role flags
  * server-side, so permissions and audiences follow without a second save.
  */
@@ -20,7 +20,6 @@ import {
   ArrowLeft,
   Baby,
   CalendarDays,
-  ChevronDown,
   Church,
   Clock,
   Handshake,
@@ -28,7 +27,6 @@ import {
   Landmark,
   PenLine,
   Plus,
-  Megaphone,
   Pencil,
   Search,
   Sun,
@@ -42,7 +40,6 @@ import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
 import { DensityToggle, densityCellPad, useTableDensity } from "@/lib/table-density";
-import { AnnouncementManager } from "./announcement-manager";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 
@@ -70,82 +67,36 @@ function areaStyle(code: string) {
   return DEPARTMENT_STYLES[code] ?? { icon: <Users className="h-4 w-4" />, accent: "text-bark", chip: "bg-sand text-moss" };
 }
 
+/** Long directory names, shortened where a table column would otherwise
+    stretch: the badge keeps the area recognisable, the label keeps the row
+    narrow. */
+const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
+  amm: "AMM",
+  awm: "AWM",
+  aym: "AYM",
+  apm: "APM",
+};
+
+function shortDeptLabel(department: { code: string; label: string }) {
+  return DEPARTMENT_SHORT_LABELS[department.code] ?? department.label;
+}
+
 /**
- * The row's actions behind one ⋯ button — Edit leadership, Budget, Calendar,
- * Members, Communicate — a popover rather than a strip of icons. Closes on an
- * outside click, and unmounts cleanly when the row re-renders.
+ * The one action a directory row keeps: opening the leadership editor.
+ * Budget, calendar and members live inside the department's own desk, and
+ * communication goes through announcements.
  */
-function DepartmentActionsMenu({
-  department,
-  onEditLeadership,
-  onCalendar,
-  onMembers,
-  onBudget,
-  onCommunicate,
-}: {
-  department: DepartmentRow;
-  onEditLeadership: () => void;
-  onCalendar: () => void;
-  onMembers: () => void;
-  onBudget: () => void;
-  onCommunicate: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocMouseDown = (event: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-  }, [open]);
-
-  const items: { label: string; icon: React.ReactNode; run: () => void }[] = [
-    { label: "Edit leadership", icon: <Pencil className="h-4 w-4" />, run: onEditLeadership },
-    { label: "Budget", icon: <Landmark className="h-4 w-4" />, run: onBudget },
-    { label: "Calendar", icon: <CalendarDays className="h-4 w-4" />, run: onCalendar },
-    { label: "Members", icon: <Users className="h-4 w-4" />, run: onMembers },
-    { label: "Communicate", icon: <Megaphone className="h-4 w-4" />, run: onCommunicate },
-  ];
-
+function EditLeadershipButton({ departmentLabel, onClick }: { departmentLabel: string; onClick: () => void }) {
   return (
-    <div className="relative inline-block" ref={wrapRef} data-dept-menu={department.code}>
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Actions for ${department.label}`}
-        onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-8 items-center gap-1 rounded-xl border border-sand-line bg-white px-2.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-      >
-        Actions
-        <ChevronDown className={`h-3.5 w-3.5 text-moss transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                item.run();
-              }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Edit ${departmentLabel} leadership`}
+      className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-2.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+    >
+      <Pencil className="h-3.5 w-3.5" />
+      Edit Leadership
+    </button>
   );
 }
 
@@ -458,8 +409,8 @@ function AddEventModal({
   );
 }
 
-/** One department role staged in the leadership modal: the people the save
-    will appoint into it, leaders first, assistants where the role takes them. */
+/** One seat staged in the leadership modal: the person the save will appoint
+    into it — a role's leader, or its assistant where the role takes one. */
 type RolePerson = {
   id: number;
   name: string;
@@ -478,15 +429,17 @@ type RoleDraft = {
 };
 
 /**
- * Edit leadership: the department's roles, each with its people.
+ * Edit leadership: the department's seats, each with its holder.
  *
- * The modal is the picture the user asked for — roles and an add-people
- * box: search a member and slot them into any role; only roles that take
- * an assistant offer the Leader/Assistant choice. A leader appointment
- * replaces the previous holder; releasing is a remove button, saved at
- * once. "Add role" creates department-specific roles ("Music Leader")
- * with the assistant switch. One PUT saves appointments; the server
- * reconciles the derived role flags so permissions and audiences follow.
+ * Every role takes an assistant, so each role reads as two seats — Leader
+ * and Assistant — and people are appointed by searching under the seat they
+ * fill: a name found under "Leader" becomes the leader, one found under
+ * "Assistant" becomes the assistant. A leader appointment replaces the
+ * previous holder; releasing is a remove button, saved at once. "Create
+ * role" adds department-specific roles ("Music Leader"), which seat a
+ * leader and an assistant the same way. One PUT saves appointments; the
+ * server reconciles the derived role flags so permissions and audiences
+ * follow.
  */
 function LeadershipEditModal({
   department,
@@ -546,9 +499,8 @@ function LeadershipEditModal({
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newRole, setNewRole] = useState("");
-  const [newRoleAssistant, setNewRoleAssistant] = useState(false);
-  const [addingRole, setAddingRole] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [creatingRole, setCreatingRole] = useState(false);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -581,26 +533,81 @@ function LeadershipEditModal({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  const addRole = async () => {
-    if (!newRole.trim() || addingRole) return;
-    setAddingRole(true);
+  /** Create a role the department added itself — "Music Leader", a
+      "Sponsor" — which seats a leader and an assistant like the rest. */
+  const createRole = async () => {
+    if (!newRoleName.trim() || creatingRole) return;
+    setCreatingRole(true);
     try {
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRole.trim(), has_assistant: newRoleAssistant }),
+        body: JSON.stringify({ name: newRoleName.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.name || data.detail || "Could not add the role.");
       setDraft((current) => [...current, { id: data.id, name: data.name, has_assistant: data.has_assistant, is_custom: true, people: [] }]);
-      setNewRole("");
-      setNewRoleAssistant(false);
+      setNewRoleName("");
     } catch (error) {
       showAlert("Could not add role", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
-      setAddingRole(false);
+      setCreatingRole(false);
     }
-  };  /** Release one person now — a remove on a role row calls the API at
+  };
+
+  /** Stage one appointment — under the seat the search result was filed
+      into. Replacing a seated leader asks first, the way an appointment
+      lands in person; the seat swaps as soon as the answer lands. */
+  const appoint = (role: RoleDraft, seat: "leader" | "assistant", member: { id: number; name: string; username: string }) => {
+    const go = () => {
+      setDraft((current) => current.map((r) => {
+        if (r.id !== role.id) return r;
+        const people = r.people.filter((p) => !(p.kind === seat && p.id === member.id));
+        const person: RolePerson = { id: member.id, name: member.name, username: member.username, kind: seat };
+        if (seat === "leader") people.unshift(person);
+        else people.push(person);
+        return { ...r, people };
+      }));
+      setQuery("");
+      setResults([]);
+    };
+    const holder = role.people.find((p) => p.kind === seat);
+    if (holder && holder.id !== member.id) {
+      showAlert(
+        seat === "leader" ? "Seat is taken" : "Assistant already appointed",
+        `${seat === "leader" ? role.name : `Assistant ${role.name}`} is ${holder.name}. Appointing ${member.name} replaces them.`,
+        "warning",
+        { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
+      ).then((answer) => {
+        if (answer.isConfirmed) go();
+      });
+      return;
+    }
+    go();
+  };
+
+  /** The appoint buttons one search result carries — one per seat of each
+      role: the leader's, then the assistant's where the role takes one. */
+  const seatButtons = (member: { id: number; name: string; username: string }) =>
+    draft.flatMap((role) =>
+      (role.has_assistant ? (["leader", "assistant"] as const) : (["leader"] as const)).map((seat) => {
+        const here = role.people.find((p) => p.kind === seat && p.id === member.id);
+        return (
+          <button
+            key={`${role.id}-${seat}`}
+            type="button"
+            onClick={() => appoint(role, seat, member)}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              here
+                ? "bg-ember text-white"
+                : "border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
+            }`}
+          >
+            {here ? `${seat === "leader" ? role.name : `Assistant ${role.name}`} ✓` : `Appoint as ${seat === "leader" ? role.name : `Assistant ${role.name}`}`}
+          </button>
+        );
+      })
+    );  /** Release one person now — a remove on a role row calls the API at
       once, so a mis-tap never waits for a save. */
   const releasePerson = async (role: RoleDraft, person: RolePerson) => {
     const answer = await showAlert(
@@ -717,7 +724,7 @@ function LeadershipEditModal({
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             <h3 className="text-lg font-bold text-bark">{department.label} — Leadership</h3>
-            <p className="text-[11px] text-moss">Search a member and slot them into a role. Contacts stay on their accounts.</p>
+            <p className="text-[11px] text-moss">Search a member under the seat they fill. Contacts stay on their accounts.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
@@ -726,50 +733,60 @@ function LeadershipEditModal({
 
         {/* The roles, each with the people who serve in them. */}
         <div className="mt-4 space-y-2">
-          {draft.map((role) => (
-            <div key={role.id} className="rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-bold text-bark">{role.name}</p>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {role.has_assistant && (
-                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-semibold text-moss">Assistant</span>
-                  )}
+          {draft.map((role) => {
+            const leader = role.people.find((p) => p.kind === "leader");
+            const assistant = role.people.find((p) => p.kind === "assistant");
+            const seats: { seat: "leader" | "assistant"; person: RolePerson | undefined }[] = [
+              { seat: "leader", person: leader },
+              { seat: "assistant", person: assistant },
+            ];
+            return (
+              <div key={role.id} className="rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-bold text-bark">{role.name}</p>
                   {role.is_custom && (
                     <button
                       type="button"
                       onClick={() => removeRole(role)}
                       title="Remove this role"
-                      className="rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                      className="shrink-0 rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
+                <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                  {seats.map(({ seat, person }) => (
+                    <div key={seat} className="min-w-0 rounded-lg border border-sand-line bg-white px-2.5 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-moss">
+                        {seat === "leader" ? "Leader" : "Assistant"}
+                      </p>
+                      {person ? (
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-semibold text-bark">{person.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => releasePerson(role, person)}
+                            title={`Release ${person.name}`}
+                            className="shrink-0 rounded-full p-0.5 text-moss transition hover:bg-sand hover:text-red-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-0.5 text-[11px] italic text-moss-faint">
+                          Open — search {seat === "leader" ? "under Leader" : "under Assistant"} below
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {role.people.map((person) => (
-                  <span
-                    key={`${person.kind}-${person.id}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-sand-line bg-white py-0.5 pl-2.5 pr-1 text-[11px] font-semibold text-bark"
-                  >
-                    {person.name}{person.kind === "assistant" ? " (assistant)" : ""}
-                    <button
-                      type="button"
-                      onClick={() => releasePerson(role, person)}
-                      title={`Release ${person.name}`}
-                      className="rounded-full p-0.5 text-moss transition hover:bg-sand hover:text-red-600"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {role.people.length === 0 && <span className="text-[11px] text-moss">Open — search below to appoint</span>}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {draft.length === 0 && (
             <p className="rounded-xl border border-dashed border-sand-line p-3 text-xs text-moss">
-              No roles yet. Add one below.
+              No roles yet. Create one below.
             </p>
           )}
         </div>
@@ -781,7 +798,7 @@ function LeadershipEditModal({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search members to appoint…"
+            placeholder="Search a member, then appoint them under a seat…"
             className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
           />
         </div>
@@ -796,97 +813,36 @@ function LeadershipEditModal({
                 <span className="font-semibold text-bark">{member.name}</span>
                 <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
               </p>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {draft.map((role) => {
-                  const here = role.people.find((p) => p.id === member.id);
-                  const leadingElsewhere = role.people.some((p) => p.kind === "leader" && p.id !== member.id);
-                  const go = (kind: "leader" | "assistant") => {
-                    setDraft((current) => current.map((r) => {
-                      if (r.id !== role.id) return r;
-                      const people = r.people.filter((p) => p.id !== member.id);
-                      if (kind === "leader") people.unshift({ id: member.id, name: member.name, username: member.username, kind });
-                      else people.push({ id: member.id, name: member.name, username: member.username, kind });
-                      return { ...r, people };
-                    }));
-                    setQuery("");
-                    setResults([]);
-                  };
-                  return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => {
-                        if (here) {
-                          go(here.kind === "leader" ? "assistant" : "leader");
-                          return;
-                        }
-                        if (leadingElsewhere) {
-                          showAlert(
-                            "Role is led",
-                            `${role.name} is led by ${role.people.find((p) => p.kind === "leader")?.name}. Appointing ${member.name} replaces them.`,
-                            "warning",
-                            { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
-                          ).then((answer) => {
-                            if (answer.isConfirmed) go("leader");
-                          });
-                          return;
-                        }
-                        go("leader");
-                      }}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                        here
-                          ? "bg-ember text-white"
-                          : "border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
-                      }`}
-                    >
-                      {here
-                        ? here.kind === "leader" && role.has_assistant
-                          ? "Move to assistant"
-                          : here.kind === "assistant"
-                            ? "Make leader"
-                            : `${role.name} ✓`
-                        : `Appoint as ${role.name}`}
-                    </button>
-                  );
-                })}
-              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">{seatButtons(member)}</div>
             </div>
           ))}
         </div>
 
-        {/* Add a role beyond the seeded ones — "Music Leader", with its
-            assistant switch when the department wants one. */}
+        {/* Create a role beyond the seeded ones — "Music Leader", a
+            "Sponsor" — which seats a leader and an assistant like the rest. */}
         <form
           className="mt-4 border-t border-sand-line pt-3"
           onSubmit={(e) => {
             e.preventDefault();
-            addRole();
+            createRole();
           }}
         >
           <div className="flex items-center gap-2">
             <input
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
+              value={newRoleName}
+              onChange={(e) => setNewRoleName(e.target.value)}
               placeholder="New role, e.g. Music Leader"
               className="min-w-0 flex-1 rounded-xl border border-sand-line px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
             <button
               type="submit"
-              disabled={addingRole || !newRole.trim()}
+              disabled={creatingRole || !newRoleName.trim()}
               className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
             >
-              <Plus className="h-3.5 w-3.5" /> Add role
+              <Plus className="h-3.5 w-3.5" /> Create role
             </button>
           </div>
-          <label className="mt-2 flex w-fit items-center gap-2 text-[11px] font-semibold text-moss">
-            <input
-              type="checkbox"
-              checked={newRoleAssistant}
-              onChange={(e) => setNewRoleAssistant(e.target.checked)}
-              className="h-3.5 w-3.5 accent-[var(--color-ember)]"
-            />
-            This role takes an assistant
-          </label>
+          <p className="mt-2 text-[11px] text-moss">Each role seats a leader and an assistant.</p>
         </form>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
@@ -1733,11 +1689,6 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.
   const [leadershipDept, setLeadershipDept] = useState<DepartmentRow | null>(null);
-  // Communicate targets: one department, or several ticked in the table.
-  const [communicateDept, setCommunicateDept] = useState<DepartmentRow | null>(null);
-  const [communicateSet, setCommunicateSet] = useState<DepartmentRow[] | null>(null);
-  // The table's checked rows.
-  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   // The Add area modal.
   const [showAddArea, setShowAddArea] = useState(false);
 
@@ -1762,27 +1713,6 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
     loadDirectory();
   }, [loadDirectory]);
 
-  const toggleDept = (code: string) => {
-    setSelectedCodes((current) => {
-      const next = new Set(current);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    setSelectedCodes((current) =>
-      current.size === departments.length ? new Set() : new Set(departments.map((d) => d.code))
-    );
-  };
-
-  const openMultiCommunicate = () => {
-    const chosen = departments.filter((d) => selectedCodes.has(d.code));
-    if (chosen.length === 0) return;
-    setCommunicateSet(chosen);
-  };
-
   if (loading) {
     return <p className="py-16 text-center text-sm text-moss">Loading departments…</p>;
   }
@@ -1805,7 +1735,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
       <div className="shrink-0 md:hidden">
         <h2 className="text-lg font-bold text-bark">Leadership</h2>
         <p className="mt-0.5 text-xs text-moss">
-          Every leadership area — the church's offices and each department — with its roles filled office by office. Tick rows to address several departments at once.
+          Every leadership area — the church's offices and each department — with its leader and assistants.
         </p>
       </div>
 
@@ -1813,85 +1743,73 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
           a stack of cards. On phones the same rows are cards. */}
       <div className="hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm md:flex">
         <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
-        <table className="w-full text-left text-sm">
+        {/* Fixed columns: each office gets the same width, so a long name
+            never stretches its neighbour — the text truncates instead. */}
+        <table className="w-full table-fixed text-left text-sm">
           <thead>
             <tr className="border-b border-sand-line bg-sand-veil text-[10px] uppercase tracking-wider text-moss">
-              <th className="w-10 px-3 py-3">
-                <input
-                  type="checkbox"
-                  aria-label="Select all departments"
-                  checked={departments.length > 0 && selectedCodes.size === departments.length}
-                  onChange={toggleAll}
-                  className="h-3.5 w-3.5 accent-ember"
-                />
-              </th>
-              <th className="px-4 py-3 font-bold">Department</th>
-              <th className="px-4 py-3 font-bold">Leader</th>
-              <th className="px-4 py-3 font-bold">Other offices</th>
-              <th className="px-4 py-3 text-center font-bold">Roll</th>
-              <th className="px-4 py-3 text-right font-bold">Actions</th>
+              <th className="px-3 py-3 font-bold">Department</th>
+              <th className="px-3 py-3 font-bold">Leader</th>
+              <th className="px-3 py-3 font-bold">First Assistant</th>
+              <th className="px-3 py-3 font-bold">Second Assistant</th>
+              <th className="w-[9%] px-3 py-3 text-center font-bold">Roll</th>
+              <th className="w-[16%] px-3 py-3 text-right font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {departments.map((department) => {
               const style = areaStyle(department.code);
+              const [firstAssistant, secondAssistant] = department.assistants;
               return (
                 <tr key={department.code} className="border-b border-sand-soft last:border-0 hover:bg-sand/60">
                   <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${department.label}`}
-                      checked={selectedCodes.has(department.code)}
-                      onChange={() => toggleDept(department.code)}
-                      className="h-3.5 w-3.5 accent-ember"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
                         {style.icon}
                       </span>
-                      <span className={`text-sm font-bold ${style.accent}`}>{department.label}</span>
+                      <span className={`truncate text-sm font-bold ${style.accent}`} title={department.label}>
+                        {shortDeptLabel(department)}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {department.leader ? (
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-bark">{department.leader.name}</p>
+                        <p className="truncate text-xs font-semibold text-bark" title={department.leader.name}>{department.leader.name}</p>
                         <p className="truncate text-[11px] text-moss">{department.leader.phone_number || department.leader.email || ""}</p>
                       </div>
                     ) : (
                       <span className="text-xs italic text-moss-faint">not set</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    {department.assistants.length > 0 ? (
+                  <td className="px-3 py-3">
+                    {firstAssistant ? (
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-bark">{department.assistants.map((a) => a.name).join(", ")}</p>
-                        <p className="truncate text-[11px] text-moss">{department.assistants[0].phone_number || department.assistants[0].email || ""}</p>
+                        <p className="truncate text-xs font-semibold text-bark" title={firstAssistant.name}>{firstAssistant.name}</p>
+                        <p className="truncate text-[11px] text-moss">{firstAssistant.phone_number || firstAssistant.email || ""}</p>
                       </div>
                     ) : (
                       <span className="text-xs italic text-moss-faint">not set</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center text-xs text-moss">
+                  <td className="px-3 py-3">
+                    {secondAssistant ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-bark" title={secondAssistant.name}>{secondAssistant.name}</p>
+                        <p className="truncate text-[11px] text-moss">{secondAssistant.phone_number || secondAssistant.email || ""}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs italic text-moss-faint">not set</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-center text-xs text-moss">
                     {department.member_count}
                     <span className="block text-[10px] text-moss-faint">{department.event_count} event{department.event_count === 1 ? "" : "s"}</span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <DepartmentActionsMenu
-                      department={department}
-                      onEditLeadership={() => setLeadershipDept(department)}
-                      onCalendar={() => {
-                        setDetailTab("calendar");
-                        setSelected(department);
-                      }}
-                      onMembers={() => {
-                        setDetailTab("members");
-                        setSelected(department);
-                      }}
-                      onBudget={() => setBudgetDept(department)}
-                      onCommunicate={() => setCommunicateDept(department)}
+                  <td className="px-3 py-3 text-right">
+                    <EditLeadershipButton
+                      departmentLabel={department.label}
+                      onClick={() => setLeadershipDept(department)}
                     />
                   </td>
                 </tr>
@@ -1900,31 +1818,19 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
           </tbody>
         </table>
         </div>
-        {/* The bottom row: what's ticked on the left, Add Department and
-            Communicate on the right. */}
+        {/* The bottom row: the count on the left, Add Department on the
+            right — communication goes through announcements. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
           <p className="text-xs text-moss">
-            {selectedCodes.size === 0
-              ? "Tick departments to message several at once"
-              : `${selectedCodes.size} department${selectedCodes.size === 1 ? "" : "s"} selected`}
+            {departments.length} leadership area{departments.length === 1 ? "" : "s"}
           </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAddArea(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand/60"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add Department
-            </button>
-            <button
-              type="button"
-              onClick={openMultiCommunicate}
-              disabled={selectedCodes.size === 0}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Megaphone className="h-3.5 w-3.5" /> Communicate
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddArea(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand/60"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Department
+          </button>
         </div>
       </div>
 
@@ -1941,19 +1847,9 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
                   </span>
                   <h3 className={`truncate text-sm font-bold ${style.accent}`}>{department.label}</h3>
                 </div>
-                <DepartmentActionsMenu
-                  department={department}
-                  onEditLeadership={() => setLeadershipDept(department)}
-                  onCalendar={() => {
-                    setDetailTab("calendar");
-                    setSelected(department);
-                  }}
-                  onMembers={() => {
-                    setDetailTab("members");
-                    setSelected(department);
-                  }}
-                  onBudget={() => setBudgetDept(department)}
-                  onCommunicate={() => setCommunicateDept(department)}
+                <EditLeadershipButton
+                  departmentLabel={department.label}
+                  onClick={() => setLeadershipDept(department)}
                 />
               </div>
               <div className="mt-2 space-y-1 text-xs">
@@ -1966,7 +1862,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
                   )}
                 </p>
                 <p className="text-bark">
-                  <span className="font-semibold text-moss">Other offices:</span>{" "}
+                  <span className="font-semibold text-moss">Assistants:</span>{" "}
                   {department.assistants.length > 0 ? (
                     <span className="font-semibold">{department.assistants.map((a) => `${a.name}${a.position ? ` (${a.position})` : ""}`).join(", ")}</span>
                   ) : (
@@ -2010,21 +1906,6 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
           onSaved={() => {
             setLeadershipDept(null);
             loadDirectory();
-          }}
-        />
-      )}
-      {communicateDept && (
-        <CommunicateModal
-          departments={[communicateDept]}
-          onClose={() => setCommunicateDept(null)}
-        />
-      )}
-      {communicateSet && (
-        <CommunicateModal
-          departments={communicateSet}
-          onClose={() => {
-            setCommunicateSet(null);
-            setSelectedCodes(new Set());
           }}
         />
       )}
@@ -2209,49 +2090,6 @@ function DepartmentBudgetModal({
 }
 
 /**
- * Communicate: the announcement composer, opened already addressed to the
- * chosen departments. The audience codes are the departments' own
- * whole-department codes — the roll plus its leaders, exactly that group and
- * nobody else — and several departments at once compose a single post to all
- * of them. The composer's Post-to list carries the same vocabulary, so the
- * preselection renders correctly and the sender can widen it if they choose.
- */
-function CommunicateModal({
-  departments,
-  onClose,
-}: {
-  departments: DepartmentRow[];
-  onClose: () => void;
-}) {
-  const audienceCodes = [...new Set(departments.map((d) => `dept_${d.code}`))];
-  const audienceLabel = departments.map((d) => d.label).join(", ");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Post an announcement to ${audienceLabel}`}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-sand-line bg-white px-6 py-4">
-          <h3 className="text-base font-bold text-bark">Announcement — {audienceLabel}</h3>
-          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-6">
-          <AnnouncementManager
-            presetAudience={audienceCodes}
-            composerOnly
-            onDone={onClose}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * Add Department: a new department of the church, created with the Leader
  * (assistant-capable), Secretary and Treasurer roles, fillable the moment
  * it exists. Its audience code (`dept_<code>`) rides the same announcement
@@ -2363,7 +2201,7 @@ function AddAreaModal({
             </span>
           </label>
           <p className="text-[11px] text-moss">
-            Created with Leader (assistant-capable), Secretary and Treasurer roles — add more when editing leadership.
+            Created with Leader, Secretary and Treasurer roles — appoint their holders when editing leadership.
           </p>
           <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
             <button

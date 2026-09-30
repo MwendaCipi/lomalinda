@@ -33,8 +33,15 @@
    v17 — the rail grows two headings (Ministries, Departments) with each area
    as its own row, the Leadership desk returns shared by elders and clerks,
    and the two desks are decoupled. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v17";
+   take the new shell.
+
+   v18 — the leadership desk is rebuilt: the directory reads Leader / First
+   Assistant / Second Assistant in fixed columns, rows keep one Edit
+   Leadership button (no actions popover, checkboxes or Communicate), and the
+   leadership modal appoints by seat — search under Leader or under Assistant
+   — while custom roles move to a Create role form. Chrome changed, so
+   installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v18";
 const STATIC_ASSETS = [
   "/",
   "/about/",
