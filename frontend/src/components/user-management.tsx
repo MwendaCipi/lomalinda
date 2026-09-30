@@ -15,7 +15,7 @@ import {
   RolesCombobox,
   refreshRoleRegister,
 } from "./roles-combobox";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
@@ -1223,10 +1223,9 @@ export function UserManagement() {
   // lists. The filter here is which list is on show.
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  // Comfortable or compact, whichever the officer left it on — one setting
-  // shared with every other desk table.
-  const { dense, toggleDensity } = useTableDensity();
-  const cellPad = densityCellPad(dense);
+  // The roster reads comfortable rows, always — the Compact toggle left this
+  // desk so the strip and search can own the header.
+  const cellPad = densityCellPad(false);
   const [churchName, setChurchName] = useState("this church");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStep, setAddStep] = useState<1 | 2>(1);
@@ -2142,8 +2141,7 @@ export function UserManagement() {
             {/* Named by the strip above on a wide screen. */}
             <h2 className="text-xl font-bold text-bark md:hidden">User Management</h2>
           </span>
-          {/* Row density: one setting for every desk table. */}
-          <DensityToggle dense={dense} onToggle={toggleDensity} />
+          {/* Row density left this desk: the roster reads comfortable rows. */}
         </div>
         {/* The record row: the tab strip on the left, the search beside it
             on the right — All / Active / Inactive over the confirmed roster,
@@ -2244,7 +2242,7 @@ export function UserManagement() {
               </tr>
             )}
             renderCard={(row) => (
-              <div key={`${row.kind}-${row.id}`} className={`rounded-2xl border border-sand-line bg-sand-plate ${dense ? "px-3 py-2" : "px-4 py-3"}`}>
+              <div key={`${row.kind}-${row.id}`} className="rounded-2xl border border-sand-line bg-sand-plate px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-bark">{pendingRowName(row)}</p>
@@ -2283,7 +2281,7 @@ export function UserManagement() {
             { label: "Sex", className: COL_SEX },
             { label: "Actions", className: `${COL_ACTIONS} text-right` },
           ]}
-          cardsClassName={dense ? "grid gap-2" : undefined}
+          cardsClassName="grid gap-2"
           loadingLabel="Loading members..."
           tableEmpty="No members match these filters."
           cardsEmpty="No members match these filters."
@@ -2293,16 +2291,12 @@ export function UserManagement() {
                     <td className={`${cellPad} font-semibold text-bark ${COL_NAME}`}>
                       <div className="min-w-0">
                         <div className="truncate">{m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username}</div>
-                        {/* The compact view drops the second line: it is where
-                            most of a row's height goes. */}
-                        {!dense && (
-                          <div className="truncate text-[11px] font-normal text-moss-faint">@{m.username}</div>
-                        )}
+                        <div className="truncate text-[11px] font-normal text-moss-faint">@{m.username}</div>
                       </div>
                     </td>
-                    <td className={`${cellPad} text-moss ${COL_CONTACT}`} title={dense ? m.email : undefined}>
+                    <td className={`${cellPad} text-moss ${COL_CONTACT}`}>
                       <div className="truncate">{m.phone_number || m.email || "—"}</div>
-                      {!dense && m.phone_number && m.email && <div className="truncate text-[11px]">{m.email}</div>}
+                      {m.phone_number && m.email && <div className="truncate text-[11px]">{m.email}</div>}
                     </td>
                     <td className={`${cellPad} ${COL_STATUS}`}>
                       <AccountStatus member={m} />
@@ -2383,16 +2377,14 @@ export function UserManagement() {
               const name = m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
               const contact = m.phone_number || m.email || "—";
               return (
-                <div key={m.id} className={`rounded-2xl border border-sand-line shadow-sm space-y-2 ${dense ? "p-2.5" : "p-4"} ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-sand-glow" : ""}`}>
+                <div key={m.id} className={`rounded-2xl border border-sand-line shadow-sm space-y-2 p-4 ${m.is_disfellowshipped ? "border-red-200 bg-red-50/30" : ""} ${pendingChangeIds.includes(m.id) ? "bg-sand-glow" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <h3 className="font-bold text-sm text-bark">
                         {name}
 
                       </h3>
-                      {!dense && (
-                        <p className="text-[11px] text-moss-faint mt-0.5">@{m.username}</p>
-                      )}
+                      <p className="text-[11px] text-moss-faint mt-0.5">@{m.username}</p>
                       <p className="text-xs text-moss mt-0.5">{contact}</p>
                       <div className="mt-0.5 truncate text-xs font-semibold text-bark">
                         <RoleCell member={m} />

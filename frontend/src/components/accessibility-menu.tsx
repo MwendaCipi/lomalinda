@@ -92,16 +92,17 @@ export function AccessibilityMenu({ buttonClassName, style }: AccessibilityMenuP
               <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-bark">
                 <Type size={14} className="text-ember" /> Text Scaling
               </label>
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-sand p-1 border border-sand-line">
+              <div className="grid grid-cols-3 gap-1.5">
                 {(["normal", "large", "xlarge"] as FontSizeOption[]).map((size) => (
                   <button
                     key={size}
                     type="button"
                     onClick={() => setFontSize(size)}
-                    className={`rounded-lg py-1.5 text-xs font-semibold transition ${
+                    aria-pressed={fontSize === size}
+                    className={`rounded-xl py-1.5 text-xs font-semibold transition ${
                       fontSize === size
                         ? "bg-bark text-white shadow-xs"
-                        : "text-moss hover:text-bark"
+                        : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
                     }`}
                   >
                     {size === "normal" ? "Standard" : size === "large" ? "Large A+" : "XL A++"}

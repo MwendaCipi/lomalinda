@@ -653,17 +653,18 @@ function GivePageContent() {
                           </div>
                         )}
                       </div>
-                      {/* Desktop: full segmented control. */}
-                      <div className="hidden h-9 shrink-0 items-center rounded-xl border border-sand-line bg-sand p-0.5 md:flex" role="group" aria-label="Filter by status">
+                      {/* Desktop: one independent button per status. */}
+                      <div className="hidden h-9 shrink-0 items-center gap-1.5 md:flex" role="group" aria-label="Filter by status">
                         {(["successful", "failed", "all"] as const).map((key) => (
                           <button
                             key={key}
                             type="button"
                             onClick={() => setGivingStatusFilter(key)}
-                            className={`h-8 rounded-lg px-2.5 text-[11px] font-semibold capitalize transition ${
+                            aria-pressed={givingStatusFilter === key}
+                            className={`h-8 rounded-xl px-2.5 text-[11px] font-semibold capitalize transition ${
                               givingStatusFilter === key
                                 ? "bg-bark text-white shadow-sm"
-                                : "text-moss hover:text-bark"
+                                : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
                             }`}
                           >
                             {key}

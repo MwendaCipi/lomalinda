@@ -17,13 +17,12 @@ export type SubNavItem = {
 /** One page of a section, as the section's own strip names it. */
 export type SectionNavItem = SubNavItem & { href: string };
 
-/** The segmented strip. `flex` is composed per use site. */
-const stripClass =
-  "h-12 w-full items-center gap-1 overflow-x-auto rounded-xl border border-sand-line bg-sand p-1 sm:w-auto sm:shrink-0";
+/** The segmented strip. Independent buttons: no pill around them. */
+const stripClass = "h-12 w-full items-center gap-1.5 overflow-x-auto sm:w-auto sm:shrink-0";
 
 const tabClass = (active: boolean) =>
-  `flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-sm font-semibold transition sm:flex-none ${
-    active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+  `flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition sm:flex-none ${
+    active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
   }`;
 
 /** The inside of a strip tab — the mark, the name and any count. */

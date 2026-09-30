@@ -468,8 +468,8 @@ export default function ReconciliationPage() {
               </h1>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
-                {/* View Mode Switcher occupying full width */}
-                <div className="flex w-full flex-1 rounded-xl border border-sand-mute bg-sand p-1">
+                {/* View Mode Switcher: two independent buttons, full width. */}
+                <div className="flex w-full flex-1 gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -477,10 +477,11 @@ export default function ReconciliationPage() {
                       setViewMode("all_givings");
                       loadAllGivings();
                     }}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
+                    aria-pressed={viewMode === "all_givings"}
+                    className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "all_givings"
                         ? "bg-bark text-white shadow-sm"
-                        : "text-moss hover:text-bark"
+                        : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
                     }`}
                   >
                     Individual Givings
@@ -490,10 +491,11 @@ export default function ReconciliationPage() {
                     onClick={() => {
                       setViewMode("summary");
                     }}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
+                    aria-pressed={viewMode === "summary"}
+                    className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "summary"
-                        ? "bg-white text-bark shadow-sm"
-                        : "text-moss hover:text-bark"
+                        ? "bg-bark text-white shadow-sm"
+                        : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
                     }`}
                   >
                     Summary Breakdown

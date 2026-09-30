@@ -1360,11 +1360,7 @@ function DepartmentDetail({
         {units.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-sand-line pt-4">
             <span className="text-[10px] font-bold uppercase tracking-wider text-moss">Unit</span>
-            <div
-              role="group"
-              aria-label="Department unit"
-              className="inline-flex h-9 items-center rounded-xl border border-sand-line bg-sand p-0.5"
-            >
+            <div role="group" aria-label="Department unit" className="flex flex-wrap items-center gap-1.5">
               {[{ value: null as string | null, label: "All" }, ...units.map((name) => ({ value: name as string | null, label: name }))].map((option) => {
                 const active = unit === option.value;
                 return (
@@ -1373,8 +1369,8 @@ function DepartmentDetail({
                     type="button"
                     onClick={() => setUnit(option.value)}
                     aria-pressed={active}
-                    className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-semibold transition ${
-                      active ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+                    className={`inline-flex h-8 items-center rounded-xl px-3 text-xs font-semibold transition ${
+                      active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
                     }`}
                   >
                     {option.label}
