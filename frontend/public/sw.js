@@ -102,9 +102,12 @@
 
    v33 — the Fellowship strip reads Announcements, Calendar, Moments,
    Testimonies, Ideas, Ideas & Suggestions shortens to Ideas, and every
-   top-bar button drops its icon: names only. Chrome changed, so
-   installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v33";
+   top-bar button drops its icon: names only.
+
+   v34 — Leadership rides the Eldership strip as its second page, and the
+   choir hangs with the music desk on one Music row: two fewer rows on
+   the rail. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v34";
 const STATIC_ASSETS = [
   "/",
   "/about/",

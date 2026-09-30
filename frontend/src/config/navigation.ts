@@ -460,6 +460,10 @@ const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
  */
 export const eldershipItems: RailItem[] = [
   officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
+  // Assigning the church's leaders rides the Eldership strip: appointing a
+  // leader is work the offices do together, so it is a page of their desk
+  // rather than a row of its own.
+  officeTab("leaders", "Leadership", Crown, { roles: ELDERSHIP_ROLES }),
   // Board and business meetings are two rows of this strip, not a desk
   // behind another menu. The old "meetings" tab still opens the board list.
   officeTab("board", "Board Meetings", Armchair, {
@@ -471,17 +475,6 @@ export const eldershipItems: RailItem[] = [
   officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
-];
-
-/**
- * The Leadership desk — the returned directory of the church's areas, where
- * an elder or a clerk fills each office: leaders, assistants, rolls. Both
- * offices hold it because appointing a leader is work they do together; the
- * desks either side of it stay their own.
- */
-const LEADERSHIP_ROLES = ["elder", "clerk", "admin"];
-const leadershipItems: RailItem[] = [
-  officeTab("leaders", "Leadership", Crown, { roles: LEADERSHIP_ROLES }),
 ];
 
 /** The deaconate: the church's property, its duty and its ordinances. */
@@ -596,12 +589,40 @@ export const railEntries: RailEntry[] = [
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
-  // treasurer's has always stood on its own. The Leadership desk between them
-  // is the one both offices share: assigning the church's leaders.
+  // treasurer's has always stood on its own. Assigning the church's leaders
+  // rides the Eldership strip, the one work both offices share.
   { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
-  { label: "Leadership", icon: Crown, items: leadershipItems, roles: LEADERSHIP_ROLES },
+  // The church's music: one row whose strip carries the music desk and the
+  // choir's own — the two areas no longer hang off the Ministries heading.
+  // If the office removes either area, its chip opens an empty desk.
+  {
+    label: "Music",
+    icon: Music,
+    items: [
+      {
+        href: "/administration?tab=leaders&dept=music",
+        label: "Music",
+        icon: Music,
+        match: ["/administration"],
+        tab: "leaders",
+        dept: "music",
+        roles: STAFF_ROLES,
+      },
+      {
+        href: "/administration?tab=leaders&dept=choir",
+        label: "Choir",
+        icon: Music,
+        match: ["/administration"],
+        tab: "leaders",
+        dept: "choir",
+        roles: STAFF_ROLES,
+      },
+    ],
+    roles: STAFF_ROLES,
+    sectionKey: "service",
+  },
   // The church's own areas, each one its own row under its own heading.
   // These two placeholders carry no pages of their own: `railFor` swaps each
   // for one row per ministry (or department), every row opening that area's
@@ -647,7 +668,6 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Eldership": "service",
   "Treasury": "service",
   "Deaconate": "service",
-  "Leadership": "service",
 };
 
 /**
@@ -703,6 +723,10 @@ export function canSee(
 /** The rail's wording for an area — the short forms, so a 256px rail never
  *  has to ellipsis "Adventist Possibility Ministries (APM)" into mush. The
  *  full names stay everywhere else (the directory, the desks, the titles). */
+/** The areas the rail carries in a row of their own rather than under the
+ *  Ministries heading. */
+const RAIL_AREA_CODES_MOVED = new Set(["choir", "music"]);
+
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "AMM",
   awm: "AWM",
@@ -727,6 +751,9 @@ export function railFor(
       const group = entry.fromDepartments;
       return departments
         .filter((department) => department.group === group)
+        // The music areas have a row of their own, so the heading stops
+        // generating them.
+        .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
         .map((department) => ({
           label: RAIL_AREA_LABELS[department.code] ?? department.label,
           icon: DEPARTMENT_ICONS[department.code] ?? Users,
