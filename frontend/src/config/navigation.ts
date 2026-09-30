@@ -352,6 +352,16 @@ export type RailItem = {
   roles?: readonly string[];
   /** Roles that hide it even where `roles` matches (the admin's rule). */
   hiddenFor?: readonly string[];
+  /**
+   * A section's way in, rather than one of its strip's tabs.
+   *
+   * It still belongs in the row's list — it has to be `items[0]` for
+   * `entryHref` to open it and for `railHere` to claim the section's own path
+   * — but the strip above the section's pages leaves it out: the row and the
+   * strip already carry the section's name, so a tab repeating that name is a
+   * toggle that switches to the page you are looking at.
+   */
+  landingPage?: boolean;
 };
 
 /** A row: a place — a page (`href`), or a section whose pages are `items`. */
@@ -530,10 +540,20 @@ export const railEntries: RailEntry[] = [
   // here, while the office answers them at the console's Requests desk. The
   // dedicated and joining pages belong to this row too: a member opening them
   // is asking the church for something, not browsing what it shares.
+  //
+  // The row opens the section's hub (`/requests`, its landing page), but the
+  // hub is not one of the strip's tabs: the strip's job here is to name the
+  // three things a member can ask for, and "Requests" is the section they are
+  // already standing in.
   {
     label: "Requests",
     icon: HeartHandshake,
-    items: [page("requests"), page("childDedication"), page("membership")],
+    items: [
+      page("requests", { landingPage: true }),
+      page("prayerVisitation"),
+      page("childDedication"),
+      page("membership"),
+    ],
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
