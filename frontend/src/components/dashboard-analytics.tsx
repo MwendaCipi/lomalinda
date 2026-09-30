@@ -391,10 +391,10 @@ export function DashboardAnalytics() {
             Reconciliation
           </Link>
           <Link
-            href="/support/reports"
+            href="/support/financial"
             className="rounded-full border border-sand-mute bg-white px-3.5 py-2 text-[11px] font-semibold text-bark hover:border-ember"
           >
-            Live reports
+            Live balances
           </Link>
         </div>
       </div>

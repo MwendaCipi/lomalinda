@@ -29,7 +29,9 @@ def initialize_checkout(contribution):
             'amount': amount_in_minor_units,
             'currency': contribution.currency,
             'reference': f'LLM-{contribution.id}',
-            'callback_url': f'{settings.FRONTEND_URL}/support/financial?payment=success',
+            # The giving form is where a payer lands back; /support/financial
+            # is the Live Balances page now, not the giving journey.
+            'callback_url': f'{settings.FRONTEND_URL}/give?payment=success',
             'metadata': {
                 'contribution_id': str(contribution.id),
                 'purpose': contribution.purpose,

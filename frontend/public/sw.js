@@ -74,9 +74,13 @@
    v26 — the Fund Drives row in Giving opens the active drive directly, no
    listing page in between (the list remains for when no drive is active),
    and the drive's report reads as two columns on a PC: story beside
-   progress, breakdown beside ministry giving. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v26";
+   progress, breakdown beside ministry giving.
+
+   v27 — Giving's strip carries Live Balances and Reports as two pages
+   again: the toggle that switched between them on one page is gone, and
+   each opens on its own route. Chrome changed, so installed apps must take
+   the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v27";
 const STATIC_ASSETS = [
   "/",
   "/about/",

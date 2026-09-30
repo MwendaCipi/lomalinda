@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   Armchair,
   Baby,
   BarChart3,
@@ -10,6 +11,7 @@ import {
   ClipboardList,
   Crown,
   Briefcase,
+  FileText,
   Gift,
   HandHeart,
   Heart,
@@ -26,7 +28,6 @@ import {
   Sparkles,
   Sun,
   Target,
-  TrendingUp,
   Undo2,
   UserCheck,
   Users,
@@ -227,7 +228,7 @@ export const destinations = {
     area: "stewardship",
     // The whole Stewardship & Support section reads as "Giving" on the bars —
     // except Ideas & Suggestions, which belongs to Fellowship.
-    match: ["/give", "/support/campaigns", "/support/in-kind", "/support/budget", "/support/reports", "/support/periodical-reports", "/support/financial"],
+    match: ["/give", "/support/campaigns", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
   },
   fundDrives: {
     href: "/support/campaigns",
@@ -253,15 +254,23 @@ export const destinations = {
     area: "stewardship",
     match: ["/support/budget"],
   },
+  financial: {
+    href: "/support/financial",
+    label: "Live Balances",
+    short: "Live Balances",
+    description: "What the church's treasury accounts hold right now.",
+    icon: Activity,
+    area: "stewardship",
+    match: ["/support/financial"],
+  },
   reports: {
     href: "/support/reports",
     label: "Reports",
-    description: "Live treasury balances and the statements the church publishes.",
-    icon: TrendingUp,
+    description: "The financial statements the church publishes.",
+    icon: FileText,
     area: "stewardship",
-    // Live balances and the published statements share one page now, switched
-    // by a toggle at the top. The retired /support/periodical-reports path
-    // still highlights this row: it redirects here with that view selected.
+    // The retired /support/periodical-reports path still highlights this row:
+    // it redirects here, so a bookmarked link opens the statements it named.
     match: ["/support/reports", "/support/periodical-reports"],
   },
   about: {
@@ -564,7 +573,7 @@ export const railEntries: RailEntry[] = [
   {
     label: "Giving",
     icon: HandHeart,
-    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("reports")],
+    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
   // Asking the church for something is its own place, not a page of Fellowship:
   // prayer and visitation, dedication, joining — the member's requests live

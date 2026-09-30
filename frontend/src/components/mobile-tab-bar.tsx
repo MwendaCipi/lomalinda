@@ -37,11 +37,11 @@ export function MobileTabBar() {
   const isStaff = isStaffRole(roles);
 
   // On the surfaces that are read by scrolling — the dashboard, the
-  // announcements feed and the live reports board — the bar steps out of the
-  // way on the way down and comes straight back on any upward movement, so a
-  // long read gets the whole screen without stranding anyone.
+  // announcements feed and the live balances board — the bar steps out of
+  // the way on the way down and comes straight back on any upward movement,
+  // so a long read gets the whole screen without stranding anyone.
   const navHidesOnScroll =
-    pathname === "/dashboard" || pathname.startsWith("/announcements") || pathname === "/support/reports";
+    pathname === "/dashboard" || pathname.startsWith("/announcements") || pathname === "/support/financial";
   const [scrolledDown, setScrolledDown] = useState(false);
   // The route decides whether hiding is in play at all; the scroll only ever
   // says which way the reader is going. Deriving the bar's state keeps a route
