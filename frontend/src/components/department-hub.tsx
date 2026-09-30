@@ -1325,33 +1325,27 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-      {/* Header */}
-      <div className="shrink-0 rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Back to all departments"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-bark transition hover:bg-sand hover:text-ember"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
-                  {style.icon}
-                </span>
-                <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
-              </div>
-              <p className="mt-1 text-xs text-moss">
-                {unit ? `${unit} · ` : ""}
-                {roll.length} member{roll.length === 1 ? "" : "s"} on the roll ·{" "}
-                {events.length} calendar event{events.length === 1 ? "" : "s"}
-              </p>
-            </div>
-          </div>
+      {/* Top bar — flat, not a card: the desk's name on the left and the
+          count inline beside it. */}
+      <div className="shrink-0 border-b border-sand-line pb-3">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to all departments"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-bark transition hover:bg-sand hover:text-ember"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
+            {style.icon}
+          </span>
+          <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
+          <p className="min-w-0 truncate text-xs text-moss">
+            · {unit ? `${unit} · ` : ""}{roll.length} member{roll.length === 1 ? "" : "s"} · {events.length} event{events.length === 1 ? "" : "s"}
+          </p>
         </div>
+      </div>
 
         {/* A department that runs as units reads one at a time — the roll,
             the calendar and the leadership all follow the toggle, so
@@ -1383,7 +1377,6 @@ function DepartmentDetail({
             </div>
           </div>
         )}
-      </div>
 
       {/* The department's own views, on the shared strip: the roll first, the
           calendar beside it. It pins to the top of the page, so the desk can
@@ -1597,8 +1590,10 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
         setDepartments(data.departments || []);
         setSelected((current) => {
           // A rail row names the department it opens (`?dept=children`), so the
-          // hub lands on it rather than on the table it is listed in.
-          const code = current?.code ?? initialDept;
+          // hub lands on it rather than on the table it is listed in. The URL
+          // wins over whatever is on screen — clicking a different area's row
+          // while one is open must move the desk, not keep the old one.
+          const code = initialDept ?? current?.code;
           if (!code) return null;
           return (data.departments || []).find((d: DepartmentRow) => d.code === code) ?? null;
         });
