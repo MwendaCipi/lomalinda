@@ -5,7 +5,7 @@ their position, one thanking whoever the save replaced — edited beside the
 receipts and meeting invitations.
 """
 
-from django.db import migrations
+from django.db import migrations, models
 import django.db.models.deletion
 
 
