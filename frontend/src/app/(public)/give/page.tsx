@@ -564,6 +564,12 @@ function GivePageContent() {
             {/* ── My Givings (signed-in members) ── */}
             {signedIn && (
               <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"}>
+                {/* Everything above the action bar scrolls as one on a phone —
+                    the title, the dates and filters, and the record itself —
+                    so the buttons are the only part that stays put. On md+ the
+                    wrapper clips again and the desktop table scrolls inside it
+                    with the header pinned, as it always did. */}
+                <div className={signedIn ? "custom-table-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:overflow-hidden" : ""}>
                 <div className="shrink-0 space-y-3 border-b border-sand-line px-5 py-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
@@ -681,7 +687,7 @@ function GivePageContent() {
                     </button>
                   </div>
                 ) : (
-                <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3" : "px-5 py-3"}>
+                <div className={signedIn ? "flex flex-col px-5 py-3 md:min-h-0 md:flex-1 md:overflow-hidden" : "px-5 py-3"}>
                   {/* Desktop table */}
                   <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
                     <table className="w-full text-left text-xs">
@@ -736,8 +742,11 @@ function GivePageContent() {
                   </div>
 
                   {/* Mobile cards */}
-                  {/* Mobile cards scroll inside the card between the pinned filters and the pinned footer. */}
-                  <div className={signedIn ? "custom-table-scrollbar min-h-0 flex-1 grid gap-3 overflow-y-auto overscroll-contain pb-2 md:hidden" : "grid gap-3 md:hidden"}>
+                  {/* Mobile cards — one scroller with the header above them:
+                      everything above the action bar moves together. */}
+                  {/* Mobile cards ride the wrapper's scroller — one scroll for
+                      everything above the action bar. */}
+                  <div className={signedIn ? "grid gap-3 pb-2 md:hidden" : "grid gap-3 md:hidden"}>
                     {loadingGivings ? (
                       <div className="py-8 text-center text-xs text-moss">Loading your givings...</div>
                     ) : filteredGivings.length === 0 ? (
@@ -769,6 +778,7 @@ function GivePageContent() {
                   </div>
                 </div>
                 )}
+                </div>
 
                 {/* Footer actions — hidden with the record: the count and
                     total would leak the giving it conceals. */}
