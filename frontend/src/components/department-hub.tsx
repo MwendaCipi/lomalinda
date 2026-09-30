@@ -482,7 +482,7 @@ function SeatBox({
         {open > 0 && (
           <div className="rounded-lg border border-dashed border-sand-line bg-white/60 px-2.5 py-2">
             <p className="text-[11px] italic text-moss-faint">
-              Open — search under {seat === "leader" ? "Leader" : "Assistant"} below
+              Open — set from the search above
             </p>
           </div>
         )}
@@ -573,33 +573,26 @@ function LeadershipEditModal({
   const elderRoles = draft.filter((r) => !r.is_custom && r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
 
   const [query, setQuery] = useState("");
-  const [assistantQuery, setAssistantQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
-  const [assistantResults, setAssistantResults] = useState<{ id: number; name: string; username: string }[]>([]);
-  const [searchingLeader, setSearchingLeader] = useState(false);
-  const [searchingAssistant, setSearchingAssistant] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [creatingRole, setCreatingRole] = useState(false);
 
-  /** One debounced member search shared by both position bars; ``target``
-      says which bar fired, so results land under the right section. The
-      state writes ride a microtask, which is what keeps the effect from
-      cascading the render. */
-  const searchMembers = useCallback((raw: string, target: "leader" | "assistant") => {
-    const value = raw.trim();
-    const setRows = target === "leader" ? setResults : setAssistantResults;
-    const setBusy = target === "leader" ? setSearchingLeader : setSearchingAssistant;
+  /** The one search the modal runs, debounced. The state writes ride a
+      microtask, which is what keeps the effect from cascading the render. */
+  useEffect(() => {
+    const value = query.trim();
     if (value.length < 2) {
       void Promise.resolve().then(() => {
-        setRows([]);
-        setBusy(false);
+        setResults([]);
+        setSearching(false);
       });
       return;
     }
     void Promise.resolve().then(() => {
-      setRows([]);
-      setBusy(true);
+      setResults([]);
+      setSearching(true);
     });
     const timer = window.setTimeout(() => {
       // The office users list is the roster the elder's desk already has.
@@ -607,7 +600,7 @@ function LeadershipEditModal({
         .then((res) => (res.ok ? res.json() : []))
         .then((rows) => {
           const q = value.toLowerCase();
-          setRows(
+          setResults(
             (Array.isArray(rows) ? rows : [])
               .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) =>
                 `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
@@ -620,14 +613,11 @@ function LeadershipEditModal({
               }))
           );
         })
-        .catch(() => setRows([]))
-        .finally(() => setBusy(false));
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => searchMembers(query, "leader"), [query, searchMembers]);
-  useEffect(() => searchMembers(assistantQuery, "assistant"), [assistantQuery, searchMembers]);
+  }, [query]);
 
   /** Stage one appointment under a position's seat. Replacing a seated
       holder asks first, the way an appointment lands in person; the seat
@@ -659,13 +649,9 @@ function LeadershipEditModal({
     go();
   };
 
-  const clearLeaderSearch = () => {
+  const clearSearch = () => {
     setQuery("");
     setResults([]);
-  };
-  const clearAssistantSearch = () => {
-    setAssistantQuery("");
-    setAssistantResults([]);
   };
 
   /** Create a role the department added itself — "Music Leader", a
@@ -803,7 +789,7 @@ function LeadershipEditModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${department.label} leadership`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
@@ -815,8 +801,68 @@ function LeadershipEditModal({
           </button>
         </div>
 
-        {/* The positions: the Leader's seat, Eldership's three offices,
-            then the Assistant seats — each holder releasable in place. */}
+        {/* One search at the top: find a member, then set them into a
+            position — the leader's seat, one of the assistants', or an
+            elder's office. */}
+        <div className="mt-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search a member to appoint…"
+              className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
+            />
+          </div>
+          <div className="mt-2 divide-y divide-sand-soft">
+            {results.map((member) => (
+              <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <p className="min-w-0 truncate text-xs">
+                  <span className="font-semibold text-bark">{member.name}</span>
+                  <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
+                </p>
+                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                  {leaderRole && (
+                    <button
+                      type="button"
+                      onClick={() => appoint(leaderRole, "leader", member, clearSearch)}
+                      className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
+                    >
+                      Set leader
+                    </button>
+                  )}
+                  {elderRoles.map((role) => (
+                    <button
+                      key={role.id}
+                      type="button"
+                      onClick={() => appoint(role, "leader", member, clearSearch)}
+                      className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
+                    >
+                      Set {role.name}
+                    </button>
+                  ))}
+                  {assistantRole && (
+                    <button
+                      type="button"
+                      onClick={() => appoint(assistantRole, "assistant", member, clearSearch)}
+                      className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    >
+                      Set assistant
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!searching && query.trim().length >= 2 && results.length === 0 && (
+              <p className="py-2 text-center text-xs text-moss">No members match that search.</p>
+            )}
+            {searching && <p className="py-2 text-center text-xs text-moss">Searching…</p>}
+          </div>
+        </div>
+
+        {/* The positions, each card the modal's whole width: the Leader's
+            seat, Eldership's three offices, then the Assistant seats. */}
         <div className="mt-4 space-y-3">
           {leaderRole && (
             <SeatBox
@@ -848,108 +894,9 @@ function LeadershipEditModal({
           )}
         </div>
 
-        {/* Appoint by position: the Leader bar sets the leader; the
-            Assistants bar fills the assistant seats. */}
-        <div className="mt-4 border-t border-sand-line pt-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search under Leader…"
-              className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
-            />
-          </div>
-          <div className="mt-2 divide-y divide-sand-soft">
-            {results.length > 0 && (
-              <p className="pb-1 text-[10px] font-bold uppercase tracking-wider text-moss">
-                {leaderRole ? "Set as leader" : "Set as elder"}
-              </p>
-            )}
-            {results.map((member) => (
-              <div key={member.id} className="flex items-center justify-between gap-2 py-2">
-                <p className="min-w-0 truncate text-xs">
-                  <span className="font-semibold text-bark">{member.name}</span>
-                  <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
-                </p>
-                {/* Eldership has no generic Leader seat — the bar sets the
-                    named elder office instead, one button per elder. */}
-                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                  {leaderRole ? (
-                    <button
-                      type="button"
-                      onClick={() => appoint(leaderRole, "leader", member, clearLeaderSearch)}
-                      className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
-                    >
-                      Set leader
-                    </button>
-                  ) : (
-                    elderRoles.map((role) => (
-                      <button
-                        key={role.id}
-                        type="button"
-                        onClick={() => appoint(role, "leader", member, clearLeaderSearch)}
-                        className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
-                      >
-                        Set {role.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-            {!searchingLeader && query.trim().length >= 2 && results.length === 0 && (
-              <p className="py-2 text-center text-xs text-moss">No members match that search.</p>
-            )}
-            {searchingLeader && <p className="py-2 text-center text-xs text-moss">Searching…</p>}
-          </div>
-        </div>
-
-        <div className="mt-3 border-t border-sand-line pt-3">
-          {assistantRole && (
-            <>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
-            <input
-              type="text"
-              value={assistantQuery}
-              onChange={(e) => setAssistantQuery(e.target.value)}
-              placeholder="Search under Assistant…"
-              className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
-            />
-          </div>
-          <div className="mt-2 divide-y divide-sand-soft">
-            {assistantResults.length > 0 && (
-              <p className="pb-1 text-[10px] font-bold uppercase tracking-wider text-moss">Set as assistant</p>
-            )}
-            {assistantResults.map((member) => (
-              <div key={member.id} className="flex items-center justify-between gap-2 py-2">
-                <p className="min-w-0 truncate text-xs">
-                  <span className="font-semibold text-bark">{member.name}</span>
-                  <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => assistantRole && appoint(assistantRole, "assistant", member, clearAssistantSearch)}
-                  className="shrink-0 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Set assistant
-                </button>
-              </div>
-            ))}
-            {!searchingAssistant && assistantQuery.trim().length >= 2 && assistantResults.length === 0 && (
-              <p className="py-2 text-center text-xs text-moss">No members match that search.</p>
-            )}
-            {searchingAssistant && <p className="py-2 text-center text-xs text-moss">Searching…</p>}
-          </div>
-            </>
-          )}
-        </div>
-
         {/* Create a role beyond the seeded ones — "Music Leader", a
-            "Sponsor" — which takes its assistant seats under the Assistants
-            search like the area's own. */}
+            "Sponsor" — which takes its assistant seats under the search
+            above, like the area's own. */}
         <form
           className="mt-4 border-t border-sand-line pt-3"
           onSubmit={(e) => {
