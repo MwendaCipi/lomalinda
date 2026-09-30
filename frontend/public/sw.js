@@ -82,9 +82,13 @@
 
    v28 — Moments keeps church events as albums: an event's own page holds
    every picture and video of the day, with a composer for the office and
-   videos that play on the wall. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v28";
+   videos that play on the wall.
+
+   v29 — the Treasury strip reads Ledger, Accounts, Expenditure, Drives,
+   Budget, M-Pesa Refunds: a Budget desk of its own joins the row, where
+   the treasurer posts the year's plan and publishes it. Chrome changed,
+   so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v29";
 const STATIC_ASSETS = [
   "/",
   "/about/",

@@ -158,6 +158,8 @@ export function ExpenditureManager() {
     return matchesCategory && matchesSearch;
   });
 
+  const filteredTotal = filteredExpenditures.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+
   const categoryOptions = [
     { key: "operations", label: "Church Operations" },
     { key: "evangelism", label: "Evangelism & Missions" },
@@ -183,13 +185,6 @@ export function ExpenditureManager() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-full bg-ember px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-ember-dark"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Record Expenditure</span>
-        </button>
       </div>
 
       {actionMessage && (
@@ -301,6 +296,22 @@ export function ExpenditureManager() {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Footer: what the filtered spending comes to, with the Record
+          button beside it — the shape the accounts desk's bar uses. */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-5">
+        <p className="text-xs text-moss">
+          Showing <strong className="text-bark">{filteredExpenditures.length}</strong> of {expenditures.length} records ·
+          Total: <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+        </p>
+        <button
+          onClick={() => setShowModal(true)}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Record Expenditure</span>
+        </button>
       </div>
 
       {/* Record Expenditure Modal */}

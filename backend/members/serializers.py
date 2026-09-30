@@ -944,7 +944,7 @@ class ChurchFinancialReportSerializer(serializers.ModelSerializer):
 class ChurchBudgetSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChurchBudget
-        fields = ('id', 'year', 'total_income', 'total_expenses', 'notes')
+        fields = ('id', 'year', 'total_income', 'total_expenses', 'notes', 'published_to_public')
 
     def validate(self, attrs):
         if attrs.get('year') and (attrs['year'] < 2000 or attrs['year'] > 2100):

@@ -38,7 +38,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-youth",
     title: "Adventist Youth Ministries (AY)",
-    givingPurpose: "Young Adults Ministry",
+    givingPurpose: "Adventist Youth Ministry",
     description: "Helping young people grow in faith, friendship, leadership, and missionary service.",
     department: "Adventist Youth Ministries",
     sections: [
@@ -121,7 +121,7 @@ export function getMinistryGivingPurpose(departmentOrName?: string): string {
 
   // Match against known keywords. The words returned are the treasury
   // accounts' own labels, so a deep link preselects a real account.
-  if (lower.includes("youth") || lower.includes("ay") || lower.includes("ambassador")) return "Young Adults Ministry";
+  if (lower.includes("youth") || lower.includes("ay") || lower.includes("aym") || lower.includes("ambassador")) return "Adventist Youth Ministry";
   if (lower.includes("possibility") || lower.includes("apm") || lower.includes("special need") || lower.includes("disabilit")) return "Possibility";
   if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children Ministry";
   if (lower.includes("men") || lower.includes("amm") || lower.includes("amo")) return "Adventist Men Ministry";

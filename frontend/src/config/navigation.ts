@@ -526,22 +526,25 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
  * which is why it is not buried among the office's people-and-programmes rows.
  */
 export const treasuryItems: RailItem[] = [
-  officeTab("accounts", "Accounts", Landmark, { roles: ["treasurer", "admin"] }),
-  {
-    href: "/administration/fund-drives",
-    label: "Fund Drives",
-    icon: Target,
-    match: ["/administration/fund-drives"],
-    roles: ["treasurer", "admin"],
-  },
-  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
   {
     href: "/administration/reconciliation",
-    label: "Contributions Ledger",
+    label: "Ledger",
+    short: "Ledger",
     icon: Scale,
     match: ["/administration/reconciliation"],
     roles: ["treasurer", "admin"],
   },
+  officeTab("accounts", "Accounts", Landmark, { roles: ["treasurer", "admin"] }),
+  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
+  {
+    href: "/administration/fund-drives",
+    label: "Fund Drives",
+    short: "Drives",
+    icon: Target,
+    match: ["/administration/fund-drives"],
+    roles: ["treasurer", "admin"],
+  },
+  officeTab("budget", "Budget", BarChart3, { roles: ["treasurer", "admin"] }),
   officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
 ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, Undo2, Users } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, Undo2, Users } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -15,6 +15,7 @@ import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
+import { ChurchBudgetManager } from "@/components/church-budget-manager";
 import { ExpenditureManager } from "@/components/expenditure-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
@@ -83,6 +84,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   transfers: "membership transfers",
   accounts: "treasury accounts",
   expenditures: "expenditure records",
+  budget: "the church budget",
   refunds: "M-Pesa refunds",
   inventory: "the inventory register",
   "deaconate-rota": "the duty rota",
@@ -225,7 +227,7 @@ function AdministrationContent() {
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Elders' Desk submenu, so
@@ -483,6 +485,20 @@ function AdministrationContent() {
 
                   {showFinanceItems && (
                     <>
+                      {/* The desk's order mirrors the strip: Ledger, Accounts,
+                          Expenditure, Drives, Budget, Refunds. */}
+                      <Link
+                        href="/administration/reconciliation"
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Scale size={20} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-bark">Ledger</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record cash receipts and track all giving breakdown ledgers.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
+                      </Link>
+
                       {/* The finances' own desk. It was only reachable from the
                           desktop sidebar, so a treasurer on a phone had no card
                           for the accounts they open most. */}
@@ -501,17 +517,20 @@ function AdministrationContent() {
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
 
-                      <Link
-                        href="/administration/reconciliation"
+                      <div
+                        onClick={() => {
+                          setActiveTab("expenditures");
+                          router.replace("/administration?tab=expenditures", { scroll: false });
+                        }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Scale size={20} /></span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Receipt size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Contributions Ledger</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record cash receipts and track all giving breakdown ledgers.</span>
+                          <span className="block text-sm font-bold text-bark">Expenditure</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record what the church spends, per account, and keep the books balanced.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </Link>
+                      </div>
 
                       <Link
                         href="/administration/fund-drives"
@@ -527,15 +546,15 @@ function AdministrationContent() {
 
                       <div
                         onClick={() => {
-                          setActiveTab("expenditures");
-                          router.replace("/administration?tab=expenditures", { scroll: false });
+                          setActiveTab("budget");
+                          router.replace("/administration?tab=budget", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Receipt size={20} /></span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><BarChart3 size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Expenditure</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record what the church spends, per account, and keep the books balanced.</span>
+                          <span className="block text-sm font-bold text-bark">Budget</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Post the year's plan — income, spending — and publish it to the congregation.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -658,6 +677,14 @@ function AdministrationContent() {
             {activeTab === "accounts" && isFinance && (
               <div className="h-full min-h-0">
                 <TreasuryAccountsManager />
+              </div>
+            )}
+
+            {/* Church Budget Manager — the treasurer posts the year's plan
+                and decides when the congregation sees it. */}
+            {activeTab === "budget" && isFinance && (
+              <div className="h-full min-h-0">
+                <ChurchBudgetManager />
               </div>
             )}
 

@@ -4428,12 +4428,48 @@ class ChurchFinancialReportSuggestionsView(APIView):
         })
 
 
-class ChurchBudgetsView(generics.ListAPIView):
-    permission_classes = [AllowAny]
+class ChurchBudgetsView(generics.ListCreateAPIView):
+    """The church's yearly budgets — read by anyone, written by the treasurer.
+
+    The desk posts a budget (or updates the year's figures) and decides when
+    it goes out: a budget the treasurer has not published stays behind the
+    desk and the public budget page never shows it. One row per year.
+    """
     serializer_class = ChurchBudgetSerializer
 
+    def get_permissions(self):
+        return [IsAuthenticated(), IsTreasurerOrAdmin()] if self.request.method == 'POST' else [AllowAny()]
+
     def get_queryset(self):
-        return ChurchBudget.objects.all()
+        queryset = ChurchBudget.objects.all()
+        if not is_treasurer_or_admin(self.request.user):
+            queryset = queryset.filter(published_to_public=True)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class ChurchBudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """One year's budget — the treasurer's to correct, publish or withdraw."""
+
+    serializer_class = ChurchBudgetSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated(), IsTreasurerOrAdmin()] if self.request.method != 'GET' else [AllowAny()]
+
+    def get_object(self):
+        budget = generics.get_object_or_404(ChurchBudget, pk=self.kwargs['pk'])
+        if self.request.method == 'GET' and not budget.published_to_public and not is_treasurer_or_admin(self.request.user):
+            raise Http404
+        return budget
+
+
+class IsTreasurerOrAdmin(permissions.BasePermission):
+    """Budget writing is the treasurer's work, decided before validation."""
+
+    def has_permission(self, request, view):
+        return is_treasurer_or_admin(request.user)
 
 
 class SabbathEventsView(generics.ListAPIView):
