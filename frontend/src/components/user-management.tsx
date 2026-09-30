@@ -92,10 +92,9 @@ export type MemberUser = {
   is_superuser?: boolean;
 };
 
-type MemberFilter = "all" | "members" | "friends" | "ex_members";
+/** The two lists the desk reads: the confirmed roster and the invite tab. */
 type InvitationFilter = "confirmed" | "pending";
-/** The pending list groups by what the person is joining as, transfers included. */
-type PendingKindFilter = "all" | "members" | "friends" | "sabbath_school" | "transfers";
+
 /**
  * Whether an account can sign in, and why not when it cannot.
  *
@@ -104,21 +103,6 @@ type PendingKindFilter = "all" | "members" | "friends" | "sabbath_school" | "tra
  * office's to act on, so they are told apart here rather than merged.
  */
 type StatusFilter = "all" | "active" | "inactive" | "awaiting";
-
-/**
- * The pending list's grouping tabs — the same shape the confirmed roster
- * filters by account type, so switching between Confirmed and Pending keeps
- * the page's structure. Members/Friends/S. School read the invitation's
- * account type; Transfers are membership transfer requests, which never
- * carry an account type of their own.
- */
-const PENDING_KIND_TABS: { key: PendingKindFilter; label: string; help: string }[] = [
-  { key: "all", label: "All", help: "Every pending invitation and transfer request" },
-  { key: "members", label: "Members", help: "Pending accounts joining as members" },
-  { key: "friends", label: "Friends", help: "Pending friend accounts" },
-  { key: "sabbath_school", label: "S. School", help: "Pending Sabbath School accounts" },
-  { key: "transfers", label: "Transfers", help: "Membership transfer requests awaiting review" },
-];
 
 const STATUS_TABS: { key: StatusFilter; label: string; help: string }[] = [
   { key: "all", label: "All", help: "Every confirmed record" },
@@ -130,8 +114,8 @@ const STATUS_TABS: { key: StatusFilter; label: string; help: string }[] = [
   },
   {
     key: "awaiting",
-    label: "Awaiting",
-    help: "Join requests leadership has not approved yet — they cannot sign in until then",
+    label: "Invites (pending)",
+    help: "Invitations, transfer requests and accounts still awaiting approval — none can sign in yet",
   },
 ];
 
@@ -1086,25 +1070,27 @@ type TransferRow = {
   created_at: string;
 };
 
-/** One pending-list row: an invitation or a transfer request. */
+/** One invite-tab row: a pending invitation, a transfer request, or a
+    confirmed account nobody has approved yet. */
 type PendingRow =
   | { kind: "invitation"; id: number; invitation: InvitationRow }
-  | { kind: "transfer"; id: number; transfer: TransferRow };
+  | { kind: "transfer"; id: number; transfer: TransferRow }
+  | { kind: "account"; id: number; member: MemberUser };
 
-/** Which pending tab a row belongs to. Transfers never carry an account type, so they group on their own. */
-function pendingKindOf(row: PendingRow): PendingKindFilter {
-  if (row.kind === "transfer") return "transfers";
-  return (row.invitation.account_type as PendingKindFilter) || "members";
-}
-
-/** Name, category, status pill and available actions for either pending row kind. */
+/** Name, category, status pill and available actions for any invite row. */
 function pendingRowName(row: PendingRow): string {
-  return row.kind === "invitation" ? invitationName(row.invitation) : row.transfer.member_name;
+  if (row.kind === "invitation") return invitationName(row.invitation);
+  if (row.kind === "transfer") return row.transfer.member_name;
+  const m = row.member;
+  return m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.username;
 }
 
 function pendingRowCategory(row: PendingRow): string {
   if (row.kind === "transfer") {
     return row.transfer.transfer_type === "outgoing" ? "Transfer · out" : "Transfer · in";
+  }
+  if (row.kind === "account") {
+    return accountTypeLabel(accountTypeOf(row.member.account_type, row.member.is_disfellowshipped));
   }
   return row.invitation.account_type_display;
 }
@@ -1116,6 +1102,9 @@ function pendingRowBadge(row: PendingRow) {
         ? "Under review"
         : row.transfer.status.charAt(0).toUpperCase() + row.transfer.status.slice(1);
     return <span className="rounded-full bg-gold-pale px-2.5 py-1 text-[10px] font-bold text-ember-deep">{label}</span>;
+  }
+  if (row.kind === "account") {
+    return <span className="rounded-full bg-gold-blush px-2.5 py-1 text-[10px] font-bold text-ember-deep">Awaiting approval</span>;
   }
   return invitationStatusBadge(row.invitation);
 }
@@ -1158,20 +1147,33 @@ function TransferActions({
   );
 }
 
-/** Actions for any pending row: resend/withdraw for invitations, cancel for transfers. */
+/** Actions for any invite row: resend/withdraw for invitations, cancel for
+    transfers, and approve for an account still awaiting the office's yes. */
 function PendingRowActions({
   row,
   onInviteAction,
   onCancelTransfer,
+  onApproveAccount,
 }: {
   row: PendingRow;
   onInviteAction: (id: number, action: "resend" | "revoke") => void;
   onCancelTransfer: (transfer: TransferRow) => void;
+  onApproveAccount: (member: MemberUser) => void;
 }) {
-  return row.kind === "invitation" ? (
-    <InvitationActions invitation={row.invitation} onAction={onInviteAction} />
-  ) : (
-    <TransferActions transfer={row.transfer} onCancel={onCancelTransfer} />
+  if (row.kind === "invitation") {
+    return <InvitationActions invitation={row.invitation} onAction={onInviteAction} />;
+  }
+  if (row.kind === "transfer") {
+    return <TransferActions transfer={row.transfer} onCancel={onCancelTransfer} />;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onApproveAccount(row.member)}
+      className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark hover:border-ember"
+    >
+      Approve
+    </button>
   );
 }
 
@@ -1216,11 +1218,10 @@ export function UserManagement() {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
+  // One tab strip drives the desk: All / Active / Inactive read the confirmed
+  // roster, Invites (pending) reads the invitation, transfer and awaiting
+  // lists. The filter here is which list is on show.
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
-  // Which kind of pending record is showing. Meaningless while Confirmed is
-  // selected; the pending tabs only render there.
-  const [pendingKindFilter, setPendingKindFilter] = useState<PendingKindFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   // Comfortable or compact, whichever the officer left it on — one setting
   // shared with every other desk table.
@@ -1468,6 +1469,35 @@ export function UserManagement() {
       fetchInvitations();
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Could not update the invitation." });
+    }
+  };
+
+  /** Approve an account still waiting on the office's yes — the same
+      activation call Actions uses, so the account signs in at once. */
+  const handleApproveAccount = async (member: MemberUser) => {
+    const name = member.first_name || member.last_name
+      ? `${member.first_name} ${member.last_name}`.trim()
+      : member.username;
+    const answer = await showAlert(
+      "Approve this account?",
+      `${name} will be able to sign in immediately.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Approve", cancelButtonText: "Cancel", confirmButtonColor: brand.bark }
+    );
+    if (!answer.isConfirmed) return;
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/members/users/${member.id}/activation/`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not approve the account.");
+      showAlert("Account approved", `${name} can now sign in.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      fetchMembers();
+    } catch (error) {
+      showAlert("Could not approve", error instanceof Error ? error.message : "Try again.", "error");
     }
   };
 
@@ -1841,13 +1871,6 @@ export function UserManagement() {
   // among the congregation.)
   const visibleMembers = members.filter((member) => !member.is_superuser);
 
-  const matchesMemberFilter = (member: MemberUser) => {
-    if (memberFilter === "friends") return member.account_type === "friend" && !member.is_disfellowshipped;
-    if (memberFilter === "members") return member.account_type !== "friend" && !member.is_disfellowshipped;
-    if (memberFilter === "ex_members") return Boolean(member.is_disfellowshipped);
-    return true;
-  };
-
   const matchesStatusFilter = (member: MemberUser) =>
     statusFilter === "all" || statusOf(member) === statusFilter;
 
@@ -1880,23 +1903,22 @@ export function UserManagement() {
     const bTime = b.kind === "invitation" ? b.invitation.created_at : b.transfer.created_at;
     return (bTime || "").localeCompare(aTime || "");
   });
-  // Search and the type dropdown narrow the pending list the same way they
-  // narrow the roster, so the tabs count within what those two leave — a tab
-  // never looks busy and then opens on nothing.
+  // Search narrows the invite list the same way it narrows the roster, so
+  // the tab's count is what the search leaves — never busy then empty.
   const pendingScoped = pendingRows.filter((row) => {
-    if (memberFilter !== "all" && pendingKindOf(row) !== memberFilter) return false;
     const query = search.trim().toLowerCase();
     if (!query) return true;
-    const email = (row.kind === "invitation" ? row.invitation.email : row.transfer.email || "").toLowerCase();
+    const email = (row.kind === "invitation" ? row.invitation.email : row.kind === "transfer" ? row.transfer.email || "" : row.member.email || "").toLowerCase();
     const extra = row.kind === "transfer" ? row.transfer.other_church.toLowerCase() : "";
     return pendingRowName(row).toLowerCase().includes(query) || email.includes(query) || extra.includes(query);
   });
-  const filteredPendingRows =
-    pendingKindFilter === "all" ? pendingScoped : pendingScoped.filter((row) => pendingKindOf(row) === pendingKindFilter);
+  const filteredPendingRows = pendingScoped;
 
-  // The status tabs count within what the type filter and the search leave, so
-  // a tab never looks busy and then opens on an empty list.
-  const rosterScoped = visibleMembers.filter((m) => matchesMemberFilter(m) && matchesSearchQuery(m));
+  // The roster tabs count within what the search leaves, so a tab never
+  // looks busy and then opens on an empty list. Awaiting accounts are not
+  // roster rows — they sit under Invites (pending) with the invitations and
+  // transfer requests.
+  const rosterScoped = visibleMembers.filter((m) => statusOf(m) !== "awaiting" && matchesSearchQuery(m));
 
   const statusCounts = rosterScoped.reduce(
     (counts, member) => {
@@ -1905,6 +1927,9 @@ export function UserManagement() {
     },
     { active: 0, inactive: 0, awaiting: 0 },
   );
+  // The Invites tab counts every row the invite list carries: pending
+  // invitations, transfer requests and accounts awaiting approval.
+  statusCounts.awaiting = pendingRows.length;
 
   const filteredMembers = rosterScoped.filter(matchesStatusFilter);
 
@@ -2135,103 +2160,39 @@ export function UserManagement() {
                 state; Pending tabs by what the person is joining as. The
                 counts ride the tabs, so the same control reads the same way
                 here as on every other desk. */}
+            {/* The one tab strip: All / Active / Inactive over the confirmed
+                roster, Invites (pending) over the invitation, transfer and
+                awaiting lists — with each tab counting what the search leaves. */}
             <SubNav
               className="w-full sm:w-auto"
-              label={invitationFilter === "confirmed" ? "Account status filter" : "Pending record type filter"}
-              value={invitationFilter === "confirmed" ? statusFilter : pendingKindFilter}
-              onChange={(key) =>
-                invitationFilter === "confirmed"
-                  ? setStatusFilter(key as StatusFilter)
-                  : setPendingKindFilter(key as PendingKindFilter)
-              }
-              items={(invitationFilter === "confirmed" ? STATUS_TABS : PENDING_KIND_TABS).map((tab) => ({
+              label="Record filter"
+              value={invitationFilter === "pending" ? "awaiting" : statusFilter}
+              onChange={(key) => {
+                if (key === "awaiting") {
+                  setInvitationFilter("pending");
+                  return;
+                }
+                setInvitationFilter("confirmed");
+                setStatusFilter(key as StatusFilter);
+              }}
+              items={STATUS_TABS.map((tab) => ({
                 key: tab.key,
                 label: tab.label,
                 help: tab.help,
-                count:
-                  invitationFilter === "confirmed"
-                    ? tab.key === "all"
-                      ? rosterScoped.length
-                      : statusCounts[tab.key as Exclude<StatusFilter, "all">]
-                    : pendingScoped.filter((row) => pendingKindOf(row) === tab.key).length,
+                count: tab.key === "awaiting" ? statusCounts.awaiting : tab.key === "all" ? rosterScoped.length + statusCounts.awaiting : statusCounts[tab.key as Exclude<StatusFilter, "all">],
               }))}
             />
           </div>
         </div>
-        {/* Second row: the list chooser, the type filter and the search box. */}
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            {/* Phones keep one compact popover; desktop has room for the two
-                status filters as separate controls side by side. */}
-            <select
-              value={invitationFilter}
-              onChange={(e) => {
-                const key = e.target.value as InvitationFilter;
-                setInvitationFilter(key);
-                setMemberFilter((current) => (key === "pending" && current === "ex_members" ? "all" : current));
-                setStatusFilter("all");
-                setPendingKindFilter("all");
-              }}
-              className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none md:hidden"
-              aria-label="Account confirmation filter"
-            >
-              <option value="confirmed">Confirmed</option>
-              <option value="pending">Pending</option>
-            </select>
-            <div
-              className="hidden h-[38px] shrink-0 items-center rounded-xl border border-sand-line bg-sand p-0.5 md:flex"
-              role="group"
-              aria-label="Account confirmation filter"
-            >
-              {(["confirmed", "pending"] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setInvitationFilter(key);
-                    // Each list remembers its own narrowed state: switching
-                    // lists resets the dependent filters, so neither opens
-                    // pre-narrowed by a choice made for the other.
-                    setMemberFilter((current) => (key === "pending" && current === "ex_members" ? "all" : current));
-                    setStatusFilter("all");
-                    setPendingKindFilter("all");
-                  }}
-                  className={`h-8 rounded-lg px-3 text-xs font-semibold capitalize transition ${
-                    invitationFilter === key
-                      ? "bg-bark text-white shadow-sm"
-                      : "text-moss hover:text-bark"
-                  }`}
-                >
-                  {key}
-                  {key === "pending" && pendingRows.length > 0 ? ` (${pendingRows.length})` : ""}
-                </button>
-              ))}
-            </div>
-            {/* Account type — every list groups by it: the confirmed roster
-                includes ex-members, the pending list offers Sabbath School
-                instead, since nobody pending was ever a member here. */}
-            <select
-              value={invitationFilter === "confirmed" ? memberFilter : memberFilter === "ex_members" ? "all" : memberFilter}
-              onChange={(e) => setMemberFilter(e.target.value as MemberFilter)}
-              className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
-              aria-label={invitationFilter === "confirmed" ? "Member type filter" : "Pending record type filter"}
-            >
-              <option value="all">All types</option>
-              <option value="members">Members</option>
-              <option value="friends">Friends</option>
-              {invitationFilter === "confirmed" ? (
-                <option value="ex_members">Ex-members</option>
-              ) : (
-                <option value="sabbath_school">S. School</option>
-              )}
-            </select>
-          </div>
+        {/* Second row: the search box, full width — the record filters live
+            on the tab strip above, so nothing else sits beside it. */}
+        <div className="flex w-full">
           <input
             type="text"
             placeholder="Search by name, email, phone, gifts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:min-w-[180px] sm:flex-1"
+            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
           />
         </div>
       </div>
@@ -2284,7 +2245,7 @@ export function UserManagement() {
                 <td className={`${cellPad} text-moss w-8`}>{idx + 1}</td>
                 <td className={`${cellPad} font-semibold text-bark`}>{pendingRowName(row)}</td>
                 <td className={`${cellPad} text-moss`}>
-                  {row.kind === "invitation" ? row.invitation.email : row.transfer.email || "—"}
+                  {row.kind === "invitation" ? row.invitation.email : row.kind === "transfer" ? row.transfer.email || "—" : row.member.email || "—"}
                 </td>
                 <td className={`${cellPad} text-moss`}>
                   {row.kind === "invitation"
@@ -2295,7 +2256,7 @@ export function UserManagement() {
                 <td className={cellPad}>{pendingRowBadge(row)}</td>
                 <td className={`${cellPad} text-right`}>
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <PendingRowActions row={row} onInviteAction={handleInviteAction} onCancelTransfer={handleCancelTransfer} />
+                    <PendingRowActions row={row} onInviteAction={handleInviteAction} onCancelTransfer={handleCancelTransfer} onApproveAccount={handleApproveAccount} />
                   </div>
                 </td>
               </tr>
@@ -2308,14 +2269,16 @@ export function UserManagement() {
                     <p className="truncate text-xs text-moss">
                       {row.kind === "invitation"
                         ? `${row.invitation.email} · ${formatRoles(row.invitation.role_codes)} · ${row.invitation.account_type_display}`
-                        : `${row.transfer.email || "no email"} · ${row.transfer.other_church}`
+                        : row.kind === "transfer"
+                          ? `${row.transfer.email || "no email"} · ${row.transfer.other_church}`
+                          : `@${row.member.username}${row.member.email ? ` · ${row.member.email}` : ""}`
                       }
                     </p>
                   </div>
                   {pendingRowBadge(row)}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <PendingRowActions row={row} onInviteAction={handleInviteAction} onCancelTransfer={handleCancelTransfer} />
+                  <PendingRowActions row={row} onInviteAction={handleInviteAction} onCancelTransfer={handleCancelTransfer} onApproveAccount={handleApproveAccount} />
                 </div>
               </div>
             )}
@@ -2541,7 +2504,7 @@ export function UserManagement() {
       <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* The count line is a desktop nicety; on phones the buttons need the width. */}
         <p className="hidden text-[11px] text-moss sm:block">
-          {invitationFilter === "pending" ? `${filteredPendingRows.length} of ${pendingRows.length} pending record${pendingRows.length === 1 ? "" : "s"} shown` : `${filteredMembers.length} of ${visibleMembers.length} confirmed records shown`}
+          {invitationFilter === "pending" ? `${filteredPendingRows.length} of ${pendingRows.length} pending invite${pendingRows.length === 1 ? "" : "s"} shown` : `${filteredMembers.length} of ${rosterScoped.length} confirmed records shown`}
         </p>
         {/* Large screens get one row of three equal-width buttons under their
             full names; below that the same actions stay a three-column grid of
