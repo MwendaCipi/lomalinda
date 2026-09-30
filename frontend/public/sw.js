@@ -78,9 +78,13 @@
 
    v27 — Giving's strip carries Live Balances and Reports as two pages
    again: the toggle that switched between them on one page is gone, and
-   each opens on its own route. Chrome changed, so installed apps must take
-   the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v27";
+   each opens on its own route.
+
+   v28 — Moments keeps church events as albums: an event's own page holds
+   every picture and video of the day, with a composer for the office and
+   videos that play on the wall. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v28";
 const STATIC_ASSETS = [
   "/",
   "/about/",

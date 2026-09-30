@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
@@ -41,7 +41,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
@@ -85,7 +85,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -1681,7 +1681,61 @@ class CanManageAnnouncements(permissions.BasePermission):
         return can_manage_announcements(request.user)
 
 
-class AnnouncementView(generics.ListCreateAPIView):
+class ChurchEventView(generics.ListCreateAPIView):
+    """The Moments wall: the church's event albums, newest day first.
+
+    Everyone may read the published albums; only the leadership that posts
+    announcements may open albums, add to them or take them down — Moments is
+    the church's own record of its life, and the same officers keep it.
+    """
+    serializer_class = ChurchEventSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated(), CanManageAnnouncements()] if self.request.method == 'POST' else [AllowAny()]
+
+    def get_queryset(self):
+        queryset = ChurchEvent.objects.all()
+        # The desk can read what it has not let out yet; the wall serves only
+        # what is published — the flag means nothing to a member's request.
+        wants_drafts = self.request.query_params.get('include_unpublished') == 'true'
+        if not (wants_drafts and can_manage_announcements(self.request.user)):
+            queryset = queryset.filter(published=True)
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(posted_by=self.request.user)
+
+
+class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """One event album — read, retitle, add files, take files down, unpublish.
+
+    Writes are leadership's: the right that posts announcements is the right
+    that keeps the church's albums. Deleting the event deletes its files.
+    """
+    serializer_class = ChurchEventSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated(), CanManageAnnouncements()] if self.request.method != 'GET' else [AllowAny()]
+
+    def get_object(self):
+        event = generics.get_object_or_404(ChurchEvent, pk=self.kwargs['pk'])
+        if self.request.method == 'GET' and not event.published:
+            raise Http404
+        return event
+
+    def perform_destroy(self, instance):
+        for media in instance.media.all():
+            if media.file:
+                media.file.delete(save=False)
+        instance.delete()
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+
+def can_manage_announcements(user):
     serializer_class = AnnouncementSerializer
 
     def get_permissions(self):

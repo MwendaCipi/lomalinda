@@ -800,6 +800,45 @@ class AnnouncementResponse(models.Model):
         return f"{self.action_type} for {self.announcement.title} by {self.respondent_name or self.user or 'Guest'}"
 
 
+class ChurchEvent(models.Model):
+    """A church event's album in Moments — the day itself, and its pictures.
+
+    Moments used to gather the announcements that happened to carry a
+    picture: one file per post, the notice's words riding along. A church
+    event is its own thing — ``Baptism 3rd October 2026`` — and keeps all
+    of that day's pictures and videos together, so Moments stores them as
+    events holding media rather than as announcements holding one file.
+    """
+    title = models.CharField(max_length=200, help_text="The event and its day, e.g. Baptism 3rd October 2026")
+    description = models.TextField(blank=True, default='')
+    # The day the event happened, as the album's own date line. Blank for an
+    # album whose day is simply the title's wording.
+    happened_on = models.DateField(null=True, blank=True, help_text="The day the event happened; orders the albums, newest first")
+    posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='church_events')
+    published = models.BooleanField(default=True, help_text="Unpublished albums stay behind the desk until the office lets them out")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-happened_on', '-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class ChurchEventMedia(models.Model):
+    """One picture or video inside an event's album."""
+    event = models.ForeignKey(ChurchEvent, on_delete=models.CASCADE, related_name='media')
+    file = models.FileField(upload_to='church-event-media/')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='church_event_media')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.file.name} in {self.event.title}"
+
+
 class Contribution(models.Model):
     GIVING_TYPE_CHOICES = [('financial', 'Financial')]
     STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')]

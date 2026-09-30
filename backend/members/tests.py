@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentMembership, DepartmentRole, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentMembership, DepartmentRole, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -7640,4 +7640,99 @@ class DepartmentGroupAndUnitTests(APITestCase):
         response = self.client.post('/api/members/departments/amm/members/', {
             'member_id': self.one.id, 'unit': 'Kindergarten',
         }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+
+class ChurchEventMomentsTests(APITestCase):
+    """Moments stores church events: an album with a title and its media.
+
+    Anyone may read the published albums; only the office that posts
+    announcements opens albums, adds files or takes one down — and an album
+    holds pictures and videos, not any other kind of file.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.SimpleUploadedFile = SimpleUploadedFile
+        self.admin = User.objects.create_user(
+            'moments.admin', 'moments.admin@example.com', 'ChurchPass#2026',
+            is_staff=True, is_superuser=True,
+        )
+        MemberProfile.objects.create(user=self.admin, role='member', roles='member')
+        self.member = User.objects.create_user(
+            'moments.member', 'moments.member@example.com', 'ChurchPass#2026',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.event = ChurchEvent.objects.create(
+            title='Baptism 3rd October 2026',
+            description='A Sabbath of new members.',
+        )
+
+    def _jpg(self, name='pool.jpg'):
+        return self.SimpleUploadedFile(name, b'\xff\xd8\xff\xe0fakejpeg', content_type='image/jpeg')
+
+    def test_anyone_may_read_the_published_albums(self):
+        response = self.client.get('/api/members/church-events/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['title'] for row in response.data], ['Baptism 3rd October 2026'])
+        self.assertEqual(response.data[0]['media_count'], 0)
+
+    def test_unpublished_albums_wait_behind_the_desk(self):
+        self.event.published = False
+        self.event.save()
+        self.assertEqual(self.client.get('/api/members/church-events/').data, [])
+        self.assertEqual(self.client.get(f'/api/members/church-events/{self.event.pk}/').status_code, 404)
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/members/church-events/?include_unpublished=true')
+        self.assertEqual([row['title'] for row in response.data], ['Baptism 3rd October 2026'])
+
+    def test_a_member_may_not_post_an_album(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post('/api/members/church-events/', {'title': 'Choir Sunday'}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_the_office_posts_an_album_with_pictures_and_a_video(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/members/church-events/', {
+            'title': 'Baptism 3rd October 2026',
+            'description': 'Twelve names added to the book.',
+            'happened_on': '2026-10-03',
+            'media_files': [
+                self._jpg('baptism.jpg'),
+                self.SimpleUploadedFile('clip.mp4', b'\x00\x00\x00\x18ftypmp4', content_type='video/mp4'),
+            ],
+        }, format='multipart')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['media_count'], 2)
+        self.assertEqual(sorted(entry['is_video'] for entry in response.data['media']), [False, True])
+
+    def test_an_album_takes_only_pictures_and_videos(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/members/church-events/', {
+            'title': 'Baptism 3rd October 2026',
+            'media_files': [self.SimpleUploadedFile('notice.pdf', b'%PDF-1.4', content_type='application/pdf')],
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_editing_adds_files_and_takes_one_down(self):
+        self.client.force_authenticate(self.admin)
+        media = ChurchEventMedia.objects.create(event=self.event, file=self._jpg('first.jpg'))
+        response = self.client.patch(f'/api/members/church-events/{self.event.pk}/', {
+            'media_files': [self._jpg('second.jpg')],
+            'remove_media_ids': [media.pk],
+        }, format='multipart')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([entry['file_name'] for entry in response.data['media']], ['second.jpg'])
+
+    def test_the_office_takes_an_album_down(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.delete(f'/api/members/church-events/{self.event.pk}/')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ChurchEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertFalse(ChurchEventMedia.objects.exists())
+
+    def test_an_album_needs_a_title(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/members/church-events/', {'title': '   '}, format='json')
         self.assertEqual(response.status_code, 400)

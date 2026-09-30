@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 
-from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest, WeeklyMeeting
+from .models import Announcement, BoardMeeting, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, EnrollmentRequest, ExternalResourceLink, Friend, Invitation, MemberProfile, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, Profession, SabbathEvent, SupportSubmission, Testimony, VisitationRequest, WeeklyMeeting
 from .roles import (
     ADMIN_ROLE,
     ROLE_CHOICES,
@@ -255,6 +255,13 @@ class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ('title', 'visibility', 'published', 'expires_at', 'created_at')
     list_filter = ('visibility', 'published', 'expires_at', 'created_at')
     search_fields = ('title', 'text')
+
+
+@admin.register(ChurchEvent)
+class ChurchEventAdmin(admin.ModelAdmin):
+    list_display = ('title', 'happened_on', 'published', 'created_at')
+    list_filter = ('published', 'happened_on')
+    search_fields = ('title', 'description')
 
 
 @admin.register(Invitation)

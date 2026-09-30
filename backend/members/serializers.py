@@ -7,7 +7,7 @@ from rest_framework import serializers
 
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
-    ChurchCorrespondence, ChurchFinancialReport, ChurchNotification,
+    ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionReconciliation, Department, EnrollmentRequest, FundraisingCampaign, Invitation,
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
@@ -343,6 +343,121 @@ class EnrollmentAdminSerializer(serializers.ModelSerializer):
 
     def get_has_account(self, obj):
         return obj.user_id is not None
+
+
+IMAGE_SUFFIX_PATTERN = re.compile(r'\.(png|jpe?g|gif|webp|avif|bmp|heic|heif)$', re.IGNORECASE)
+VIDEO_SUFFIX_PATTERN = re.compile(r'\.(mp4|mov|webm|avi|mkv|m4v|3gp|mpg|mpeg)$', re.IGNORECASE)
+
+
+class ChurchEventMediaSerializer(serializers.ModelSerializer):
+    """One picture or video of an event's album.
+
+    The reader gets the file's URL, its original name (so a tile can label a
+    download) and whether it plays as video — every moment the tiles need,
+    and nothing that would leak the server's file layout.
+    """
+    file_name = serializers.SerializerMethodField()
+    is_video = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChurchEventMedia
+        fields = ('id', 'url', 'file_name', 'is_video', 'created_at')
+        read_only_fields = fields
+
+    def get_file_name(self, obj):
+        return obj.file.name.rsplit('/', 1)[-1] if obj.file else None
+
+    def get_is_video(self, obj):
+        return not IMAGE_SUFFIX_PATTERN.search(obj.file.name or '')
+
+
+class ChurchEventSerializer(serializers.ModelSerializer):
+    """An event's album: its words, its day, and every picture and video.
+
+    Creating carries the album's files in one request — ``media_files``, a
+    list of uploads — so an officer picks the day's pictures once. Editing
+    adds more files the same way, or takes one down with ``remove_media_ids``
+    (which also deletes the file from storage). ``posted_by_name`` credits
+    whoever posted it, the way a receipt greets its giver.
+    """
+    media = ChurchEventMediaSerializer(many=True, read_only=True)
+    media_files = serializers.ListField(
+        child=serializers.FileField(),
+        write_only=True,
+        required=False,
+        help_text="New pictures or videos to add to the album",
+    )
+    remove_media_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text="Ids of media to remove from the album (files are deleted)",
+    )
+    posted_by_name = serializers.SerializerMethodField()
+    media_count = serializers.IntegerField(source='media.count', read_only=True)
+
+    class Meta:
+        model = ChurchEvent
+        fields = (
+            'id', 'title', 'description', 'happened_on', 'published',
+            'posted_by_name', 'media_count', 'media',
+            'media_files', 'remove_media_ids', 'created_at',
+        )
+        read_only_fields = ('created_at',)
+
+    def get_posted_by_name(self, obj):
+        if not obj.posted_by_id:
+            return None
+        return giver_display_name('', member=obj.posted_by) or 'Member'
+
+    def validate_title(self, value):
+        title = (value or '').strip()
+        if not title:
+            raise serializers.ValidationError('Give the event a title, e.g. Baptism 3rd October 2026.')
+        return title
+
+    def validate_media_files(self, files):
+        if len(files) > 30:
+            raise serializers.ValidationError('An album takes at most 30 files at once.')
+        for file in files:
+            name = getattr(file, 'name', '') or ''
+            if not (IMAGE_SUFFIX_PATTERN.search(name) or VIDEO_SUFFIX_PATTERN.search(name)):
+                raise serializers.ValidationError(f'"{name}" is neither a picture nor a video an album can hold.')
+        return files
+
+    def _save_uploaded_files(self, event, files, user):
+        ChurchEventMedia.objects.bulk_create([
+            ChurchEventMedia(event=event, file=file, uploaded_by=user)
+            for file in files
+        ])
+
+    def _remove_media(self, event, media_ids):
+        for media in event.media.filter(pk__in=media_ids):
+            file = media.file
+            media.delete()
+            if file:
+                file.delete(save=False)
+
+    def create(self, validated_data):
+        files = validated_data.pop('media_files', [])
+        validated_data.pop('remove_media_ids', None)
+        request = self.context.get('request')
+        event = ChurchEvent.objects.create(**validated_data)
+        self._save_uploaded_files(event, files, request.user if request else None)
+        return event
+
+    def update(self, instance, validated_data):
+        files = validated_data.pop('media_files', [])
+        media_ids = validated_data.pop('remove_media_ids', None)
+        request = self.context.get('request')
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if files:
+            self._save_uploaded_files(instance, files, request.user if request else None)
+        if media_ids:
+            self._remove_media(instance, media_ids)
+        return instance
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
