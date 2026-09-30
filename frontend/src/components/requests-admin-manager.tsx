@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
+import { reviewBucket, type StatusFilter } from "@/lib/requests";
 import { Check, Handshake, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
@@ -111,9 +112,6 @@ const statusPillClass = (status: string) =>
         ? "bg-rose-100 text-rose-800"
         : "bg-sand text-moss";
 
-/** The review-state filter: everything, still to answer, or already answered. */
-type StatusFilter = "all" | "pending" | "approved" | "rejected";
-
 const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   join: { label: "Join requests", badge: "bg-ember/10 text-ember" },
   prayer: { label: "Prayer requests", badge: "bg-gold/25 text-ember-deep" },
@@ -130,31 +128,6 @@ const JOINING_MODE_LABELS: Record<string, string> = {
   friend: "Friend of the church",
   sabbath_school: "Sabbath School attendee",
 };
-
-/**
- * Which review-state bucket a row belongs in — the one place that maps every
- * desk's own statuses onto the filter's choices, so a new desk or a renamed
- * status only has to be added here:
- *
- *   pending  — waiting on the office (incl. "received" welfare items and
- *              "new" prayer requests, which nobody has answered yet)
- *   approved — answered yes / done (approved, completed, prayed)
- *   rejected — answered no or lapsed (rejected, cancelled, closed, expired)
- *   all      — everything
- */
-function reviewBucket(row: { status: string }): StatusFilter {
-  if (row.status === "pending" || row.status === "verification_pending" || row.status === "under_review" || row.status === "received" || row.status === "new") {
-    return "pending";
-  }
-  if (row.status === "approved" || row.status === "completed" || row.status === "prayed") {
-    return "approved";
-  }
-  if (row.status === "rejected" || row.status === "cancelled" || row.status === "closed" || row.status === "expired") {
-    return "rejected";
-  }
-  // Unknown status: show it among the unanswered rather than dropping it.
-  return "pending";
-}
 
 function statusOfJoin(item: JoinItem): { status: string; statusLabel: string } {
   if (item.status === "verification_pending") return { status: "verification_pending", statusLabel: "Awaiting their email" };

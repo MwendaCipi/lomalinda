@@ -3415,6 +3415,122 @@ class DashboardAnalyticsTests(APITestCase):
         self.assertEqual(response.data['budget']['income_actual'], 0.0)
 
 
+from .models import ChildDedicationRequest, PrayerRequest, SupportSubmission, VisitationRequest
+
+
+class ChurchPulseTests(APITestCase):
+    """The congregation's own numbers: the church's offices, and no money in it.
+
+    The pulse is the elder's half of the dashboard — how many people the church
+    has and what its desks still owe somebody an answer on. It is not the
+    finance panel: an office that keeps no books reads counts of people, and a
+    treasurer who keeps them reads the money, each under its own gate.
+    """
+
+    URL = '/api/members/dashboard/church-pulse/'
+
+    def setUp(self):
+        self.elder = User.objects.create_user('pulse.elder', 'pulse.elder@example.com', 'ElderPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.member = User.objects.create_user('pulse.member', 'pulse.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.friend = User.objects.create_user('pulse.friend', 'pulse.friend@example.com', 'FriendPass#2026')
+        MemberProfile.objects.create(user=self.friend, role='member', roles='member', account_type='friend')
+        User.objects.create_superuser('pulse.owner', 'pulse.owner@example.com', 'OwnerPass#2026')
+        self.today = timezone.localdate()
+        self.client.force_authenticate(self.elder)
+
+    def test_only_the_church_offices_read_it(self):
+        self.client.force_authenticate(self.member)
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
+
+        # A department leader is not an office: this is the whole
+        # congregation's record, not one desk's queue.
+        leader = User.objects.create_user('pulse.leader', 'pulse.leader@example.com', 'LeaderPass#2026')
+        MemberProfile.objects.create(user=leader, role='welfare_leader', roles='welfare_leader')
+        self.client.force_authenticate(leader)
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_signed_out_visitor_is_turned_away(self):
+        self.client.force_authenticate(None)
+        self.assertIn(
+            self.client.get(self.URL).status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
+
+    def test_the_roll_counts_members_apart_from_the_folds_and_the_fallen_away(self):
+        ex = User.objects.create_user('pulse.ex', 'pulse.ex@example.com', 'ExPass#2026')
+        MemberProfile.objects.create(user=ex, role='member', roles='member', is_disfellowshipped=True)
+        school = User.objects.create_user('pulse.school', 'pulse.school@example.com', 'SchoolPass#2026')
+        MemberProfile.objects.create(user=school, role='member', roles='member', account_type='sabbath_school')
+
+        members = self.client.get(self.URL).data['members']
+
+        # The elder and the plain member are on the roll; the friend, the
+        # Sabbath School attendee and the disfellowshipped are counted apart
+        # from it, so nobody is counted twice. The superuser owns the
+        # installation rather than belonging to the congregation, and is out.
+        self.assertEqual(members['total'], 2)
+        self.assertEqual(members['friends'], 1)
+        self.assertEqual(members['sabbath_school'], 1)
+        self.assertEqual(members['ex_members'], 1)
+        # Every account but the owner's joined this month, whichever fold it
+        # belongs to — arrivals are people, not offices.
+        self.assertEqual(members['new_this_month'], 5)
+        self.assertEqual(members['new_this_year'], 5)
+
+    def test_a_request_waits_until_somebody_has_answered_it(self):
+        PrayerRequest.objects.create(request_text='Please pray for my exams.', status='new')
+        PrayerRequest.objects.create(request_text='Answered and prayed over.', status='prayed')
+        VisitationRequest.objects.create(requester_name='Mary', phone_number='0700000000', status='pending')
+        VisitationRequest.objects.create(requester_name='John', phone_number='0700000001', status='completed')
+        ChildDedicationRequest.objects.create(
+            child_name='Baby Hope', child_dob=self.today - timedelta(days=30),
+            phone_number='0700000002', status='pending',
+        )
+        # Welfare submissions carry no status at all: every one of them is
+        # still somebody's to pick up.
+        SupportSubmission.objects.create(submission_type='idea', content='A second service?')
+
+        requests = self.client.get(self.URL).data['requests']
+        waiting = {desk['key']: desk['waiting'] for desk in requests['desks']}
+
+        self.assertEqual(waiting['prayer'], 1)
+        self.assertEqual(waiting['visitation'], 1)
+        self.assertEqual(waiting['dedication'], 1)
+        self.assertEqual(waiting['welfare'], 1)
+        self.assertEqual(waiting['join'], 0)
+        self.assertEqual(requests['waiting_total'], 4)
+
+    def test_an_old_request_still_waits_but_did_not_arrive_this_month(self):
+        old = PrayerRequest.objects.create(request_text='Asked in the spring.', status='new')
+        PrayerRequest.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=60))
+
+        requests = self.client.get(self.URL).data['requests']
+        prayer = next(desk for desk in requests['desks'] if desk['key'] == 'prayer')
+
+        self.assertEqual(prayer['waiting'], 1)
+        self.assertEqual(prayer['this_month'], 0)
+        self.assertEqual(requests['this_month_total'], 0)
+
+    def test_it_carries_the_roll_and_the_queues_and_nothing_else(self):
+        Contribution.objects.create(
+            amount='900.00', purpose='Tithe', status='completed',
+            paid_at=timezone.now(), payment_method='mpesa',
+        )
+        TreasuryAccount.objects.create(name='Main Bank', account_type='bank', balance=Decimal('900.00'))
+        ChildDedicationRequest.objects.create(
+            child_name='Baby Grace', child_dob=self.today, phone_number='0700000003',
+        )
+
+        response = self.client.get(self.URL)
+
+        # No money on this endpoint at all: the church's figures live behind
+        # the treasury gate, and a count of people is not one of them.
+        self.assertEqual(sorted(response.data.keys()), ['as_of', 'members', 'month_label', 'requests'])
+        self.assertEqual(response.data['requests']['desks'][3]['waiting'], 1)
+
+
 class AccountTypeChangeTests(APITestCase):
     """Member, friend, ex-member: one three-way choice, owned in one place.
 

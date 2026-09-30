@@ -253,6 +253,10 @@ function ProgressRow({
  * plan. Members never reach this panel — the caller renders it for finance
  * roles only, and the endpoint refuses anyone else — because these are the
  * whole church's figures.
+ *
+ * It holds what a treasurer is asked for, and no more: the month, the window,
+ * the balance, the refunds owed and the year's plan, with the shape of the
+ * window drawn over the figures so a total never has to be read alone.
  */
 export function DashboardAnalytics() {
   const [data, setData] = useState<Analytics | null>(null);
@@ -310,6 +314,9 @@ export function DashboardAnalytics() {
 
   const rangeLabel = `last ${data.window_weeks} weeks`;
   const net = data.giving.window_total - data.expenditure.window_total;
+  // Which way this month's giving moved on last month's; null when there was
+  // nothing recorded last month to move from.
+  const givingChange = changePercent(data.giving.this_month, data.giving.last_month);
   const insights = buildInsights(data);
 
   // The four quarters of the calendar year — January to March is always the
@@ -403,28 +410,71 @@ export function DashboardAnalytics() {
         </ul>
       )}
 
-      {/* Headline figures */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+      {/* Headline figures. The month leads — it is the period a treasurer is
+          asked about in passing, and the one the giving report is written on —
+          then the window the officer picked, the church's balance, the money
+          it owes back and the people behind it. */}
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatTile
+          label="Giving this month"
+          value={fmtAmount(data.giving.this_month)}
+          hint={deltaHint(data.giving.this_month, data.giving.last_month)}
+          tone={givingChange === null ? undefined : givingChange < 0 ? "warn" : "good"}
+        />
+        <StatTile
+          label="Spending this month"
+          value={fmtAmount(data.expenditure.this_month)}
+          hint={`${fmtAmount(data.expenditure.this_year)} this year`}
+        />
+        <StatTile
+          label="Net in the window"
+          value={fmtAmount(net)}
+          hint={`giving less spending, over the ${rangeLabel}`}
+        />
         <StatTile
           label="Total liquidity"
           value={fmtAmount(data.funds.total_liquidity)}
           hint={`${data.funds.account_count} ${data.funds.account_count === 1 ? "account" : "accounts"}`}
         />
         <StatTile
-          label="Average gift"
-          value={fmtAmount(data.giving.givers.average)}
-          hint={`${data.giving.givers.gifts} gift${data.giving.givers.gifts === 1 ? "" : "s"} from ${data.giving.givers.givers} ${data.giving.givers.givers === 1 ? "giver" : "givers"}`}
-        />
-        <StatTile
-          label="Collections & anonymous"
-          value={fmtAmount(data.giving.givers.grouped_total)}
-          hint="no individual giver on record"
+          label="M-Pesa refunds"
+          value={data.pending_refunds.count > 0 ? fmtAmount(data.pending_refunds.amount) : "None owed"}
+          hint={
+            data.pending_refunds.count > 0
+              ? `${data.pending_refunds.count} awaiting settlement`
+              : "nothing awaiting settlement"
+          }
         />
         <StatTile
           label="Members"
           value={String(data.members.total)}
           hint={`${data.members.friends} friends · ${data.members.new_this_month} new this month`}
         />
+      </div>
+
+      {/* The window the officer picked, week by week. The two lines carry the
+          same money the tiles do — drawn so the shape is readable: a quiet
+          month and a busy one can hold the same total, and only the chart
+          tells them apart. */}
+      <div className="mt-4 rounded-2xl border border-sand-deep bg-white p-4 sm:p-5">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+          <TrendingUp className="h-4 w-4 text-ember" /> Giving in and spending out, week by week
+        </h3>
+        <p className="mt-1 text-[11px] text-moss">
+          The {rangeLabel} to {fmtDay(data.as_of)}, real receipts only.
+        </p>
+        <div className="mt-4">
+          <TrendLineChart
+            points={data.series.map((week) => ({ label: week.label, values: [week.income, week.expense] }))}
+            series={[
+              { label: "Giving in", color: INCOME_COLOR },
+              { label: "Spending out", color: EXPENSE_COLOR },
+            ]}
+            formatValue={fmtCompact}
+            height={200}
+            emptyLabel={`No money was recorded in or out over the ${rangeLabel}.`}
+          />
+        </div>
       </div>
 
       {/* The quarterly slides a treasurer opens with: one card per quarter,

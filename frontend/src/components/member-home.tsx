@@ -3,19 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, UserRoundCheck } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import {
-  dashboardTiles,
-  destinationOf,
-  REQUESTS_TILE,
-  type TileSpec,
-} from "@/config/navigation";
+import { UserRoundCheck } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
-import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
+import { DashboardAnalytics } from "@/components/dashboard-analytics";
+import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, type DepartmentRow } from "@/hooks/use-departments";
-import { DashboardQuarterlyGiving } from "@/components/dashboard-quarterly-giving";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { MemberWorkspace } from "@/components/member-workspace";
 
@@ -28,57 +21,28 @@ type ProfileChange = {
   proposed_at: string;
 };
 
-/** One quick tile, already resolved to a href/label/icon. */
-type Tile = {
-  href: string;
-  label: string;
-  desc: string;
-  icon: LucideIcon;
-  badge?: number;
-};
-
-function QuickTile({ tile, className = "" }: { tile: Tile; className?: string }) {
-  const Icon = tile.icon;
-  return (
-    <Link
-      href={tile.href}
-      className={`group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md ${className}`}
-    >
-      <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-mist-select text-bark transition group-hover:bg-gold">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="mt-2.5 flex items-center gap-1.5">
-        <h3 className="text-sm font-bold text-bark">{tile.label}</h3>
-        {tile.badge ? (
-          <span
-            title={`${tile.badge} request${tile.badge === 1 ? "" : "s"} awaiting review`}
-            className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
-          >
-            {tile.badge}
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-0.5 text-[11px] leading-snug text-moss">{tile.desc}</p>
-    </Link>
-  );
-}
-
 /**
  * The member dashboard, in role-tailored tiers.
  *
  * Every member opens on the same page and the page reshapes itself around who
  * they are, rather than sending officers to a second console:
  *
- * 1. the week's announcement, then anything waiting on the member personally
- *    (a proposed profile edit they must approve or decline),
- * 2. "Your places" — the everyday destinations, beside the week's
- *    announcements at the same width,
- * 3. "Your areas" — how the departments and ministries this member leads are
+ * 1. the week's announcement across the top, then anything waiting on the
+ *    member personally (a proposed profile edit they must approve or decline),
+ * 2. "Your areas" — how the departments and ministries this member leads are
  *    doing, which only a leader ever sees,
+ * 3. the congregation — its roll, its folds, and what the desks still owe
+ *    somebody an answer on, for the offices that shepherd it,
  * 4. the church's finances, for the officers who keep the books.
  *
- * The rail beside it is the same member workspace every page under it renders,
- * so tapping "Dashboard" from the rail no longer loses the rail.
+ * The everyday destinations used to sit here as a grid of tiles. They are gone:
+ * the rail beside the page already carries every one of them, in the same order
+ * and wearing the same names, so the grid was a second copy of the map rather
+ * than a shortcut through it. What is left is what only this page can say —
+ * the week, what is waiting on you, and how the church you serve is doing.
+ *
+ * The rail is that same member workspace every page under it renders, so
+ * tapping "Dashboard" from the rail does not lose the rail.
  */
 export function MemberHome() {
   const router = useRouter();
@@ -123,60 +87,13 @@ export function MemberHome() {
 
   const hasAny = (list: string[]) => list.some((r) => roles.includes(r));
 
-  // Leadership lands on the desks, not on the member-facing pages: a clerk or
-  // elder tapping Requests wants the desk that answers requests, and the desk
-  // carries the number still waiting so the tile says whether it needs them.
-  const isDesk = hasAny(REQUESTS_TILE.deskAudience);
-
-  // What leadership still owes an answer on, from the same hook the sidebar's
-  // badge and the Requests manager read — the three can never disagree.
-  const pendingRequests = usePendingRequestCounts(isDesk);
-
-  // ── Role-tailored quick tiles ───────────────────────────────────────────
-  // Built from the nav registry: every tile's label, description, icon and
-  // href come from one canonical entry, so a tile cannot rename a place the
-  // bars and footer call something else. The office entries are separated out
-  // so they can sit under their own heading instead of mingling with the
-  // everyday ones — a member who is not an officer simply has no second tier.
-  const visibleSpecs = dashboardTiles.filter(
-    (spec) => !spec.audience || spec.audience.some((r) => roles.includes(r)),
-  );
-
-  const toTile = (spec: TileSpec): Tile => {
-    const dest = destinationOf(spec.key);
-    return {
-      href: spec.tab ? `${dest.href}?tab=${spec.tab}` : dest.href,
-      label: spec.task ?? dest.label,
-      desc: spec.description ?? dest.description ?? "",
-      icon: dest.icon,
-    };
-  };
-
-  // The Requests tile keeps its two faces: the desk for the offices that
-  // answer requests, the forms for everyone else.
-  const requestsTile: Tile = isDesk
-    ? {
-        href: REQUESTS_TILE.deskHref,
-        label: REQUESTS_TILE.label,
-        desc: REQUESTS_TILE.deskDescription,
-        icon: ClipboardList,
-        badge: pendingRequests.total,
-      }
-    : {
-        href: REQUESTS_TILE.memberHref,
-        label: REQUESTS_TILE.label,
-        desc: REQUESTS_TILE.memberDescription,
-        icon: ClipboardList,
-      };
-
-  const placeTiles = visibleSpecs.filter((spec) => spec.key !== "administration").map(toTile);
-  // An officer's queue leads — that badge is the one thing on the page that
-  // says something is waiting on them. Everyone else meets the tile as the
-  // last entry, where "ask for something" belongs.
-  const orderedPlaceTiles = isDesk ? [requestsTile, ...placeTiles] : [...placeTiles, requestsTile];
+  // The offices that shepherd the congregation. This is the church's own
+  // office set — the elder, the clerk, the pastor and the administrator — and
+  // it matches the gate on the pulse endpoint, which refuses anyone else.
+  const isChurchOffice = hasAny(["admin", "elder", "clerk", "pastor"]);
 
   // The church's own figures, for the officers who keep the books. The
-  // analytics endpoint refuses anyone outside treasury, and the card hides
+  // analytics endpoint refuses anyone outside treasury, and the panel hides
   // itself if it ever gets a 403, so this gate is a courtesy, not the wall.
   const keepsTheBooks = hasAny(["treasurer", "admin"]);
 
@@ -241,37 +158,11 @@ export function MemberHome() {
         </p>
       </header>
 
-      {/* The week's announcements lead the page, with the everyday pages
-          beside them: the whole announcement card opens the Fellowship feed
-          and each one carries its own action — Support, Give input, or its
-          conference platform, and the next gathering stands in when nothing
-          is published. The tiles share its width in a second column, and on a
-          phone they drop underneath rather than being squeezed into a
-          sliver. Only the first few show on a wide screen — the rail already
-          carries every destination, and a short list is what keeps the two
-          panels level. */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DashboardAnnouncements />
-
-        <section aria-label="Your places">
-          {loading || !me ? (
-            <p className="text-xs text-moss">Loading…</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {orderedPlaceTiles.map((tile, index) => (
-                <QuickTile
-                  key={tile.href}
-                  tile={tile}
-                  // Beyond the first two rows the tile is a duplicate of a
-                  // rail row, so a wide screen leaves it out. A phone keeps
-                  // all of them: there the rail is not on screen.
-                  className={index >= 4 ? "lg:hidden" : ""}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+      {/* The week's announcements lead the page: the whole card opens the
+          Fellowship feed and each one carries its own action — Support, Give
+          input, or its conference platform — and the next gathering stands in
+          when nothing is published. */}
+      <DashboardAnnouncements />
 
       {loading || !me ? (
         <p className="text-center text-sm text-moss">Loading your dashboard…</p>
@@ -360,9 +251,14 @@ export function MemberHome() {
             </section>
           )}
 
+          {/* The congregation's own numbers, for the offices that shepherd it:
+              the roll and its folds, and what the desks still owe somebody an
+              answer on. Nobody else sees this card. */}
+          {isChurchOffice && <DashboardChurchPulse />}
+
           {/* The church's own figures — real receipts only, and only ever for
               the officers who keep the books. */}
-          {keepsTheBooks && <DashboardQuarterlyGiving />}
+          {keepsTheBooks && <DashboardAnalytics />}
         </>
       )}
     </MemberWorkspace>

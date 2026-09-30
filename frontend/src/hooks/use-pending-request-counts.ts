@@ -2,15 +2,22 @@
 
 import { useEffect, useState } from "react";
 
+import { isWaiting } from "@/lib/requests";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
- * Everything leadership owes someone an answer on, per desk:
+ * Everything leadership owes someone an answer on, per desk: a join request
+ * nobody has approved (email-verified or not yet verified), a prayer request
+ * still saying "new", a visitation or dedication not yet dealt with, a
+ * membership transfer still pending or under review, and every welfare
+ * submission — that desk has no status at all, because each one is an idea,
+ * a request for prayer or an offer of partnership that somebody still has to
+ * pick up.
  *
- * - Join requests awaiting review (email-verified or not yet verified).
- * - Prayer, visitation, dedication and welfare submissions (they have no
- *   review step yet, so any submission is an open request).
- * - Membership transfers still pending or under review.
+ * What "waiting" means is not decided here: it comes from the shared review
+ * vocabulary, the same rule the requests desk filters by and the backend
+ * counts by, so the badge and the desk cannot answer it differently.
  *
  * Removal requests were dropped, so they are not counted.
  *
@@ -75,20 +82,18 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
       ]);
       if (!alive) return;
 
-      const joinCount = (joins as { status?: string }[]).filter(
-        (j) => j.status === "pending" || j.status === "verification_pending"
-      ).length;
-      const transferCount = (transfers as { status?: string }[]).filter(
-        (t) => t.status === "pending" || t.status === "under_review"
-      ).length;
+      // Prayer, visitation and dedication requests carry a status too, so the
+      // badge counts the ones nobody has answered rather than every one ever
+      // made — a prayer already marked "prayed" is not still waiting on anybody.
+      const waiting = (rows: unknown[]) => (rows as { status?: string }[]).filter(isWaiting).length;
 
       const next = {
-        joins: joinCount,
-        prayer: prayer.length,
-        visitation: visitations.length,
-        dedication: dedications.length,
-        welfare: support.length,
-        transfers: transferCount,
+        joins: waiting(joins),
+        prayer: waiting(prayer),
+        visitation: waiting(visitations),
+        dedication: waiting(dedications),
+        welfare: waiting(support),
+        transfers: waiting(transfers),
         loading: false,
       };
       setCounts({ ...next, total: next.joins + next.prayer + next.visitation + next.dedication + next.welfare + next.transfers });
