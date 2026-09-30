@@ -22,7 +22,8 @@ import { useRailHere } from "@/hooks/use-rail-location";
  * of each of them (`SectionNav`, drawn by the shell), so the rail stays a
  * short, scannable list of where you can be and every page still shows its
  * siblings one tap away. A phone does not get a narrower column to read — the
- * same map opens as cards from the last tab, drawn by MobileMenu.
+ * same entries open as cards, a level at a time, drawn by MobileMenu: the last
+ * tab is the leaders' door, and a tab naming a section carries its pages.
  */
 export function NavRail() {
   const pathname = normalizePath(usePathname());

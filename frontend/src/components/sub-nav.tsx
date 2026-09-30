@@ -109,9 +109,10 @@ export function SubNav({
  *
  * These are the rows that used to hang under a rail item: the same list, on
  * the page rather than hidden behind a caret in the sidebar. On a phone the
- * section's pages are not drawn here at all: they are cards inside the
- * drill-in menu (`MobileMenu`), so a page opens clean instead of wearing a
- * deck of its own navigation above the content.
+ * section's pages are not drawn here at all: they are cards in the menu
+ * (`MobileMenu`) — behind the tab that names the section, so the section's own
+ * tab carries them — and a page opens clean instead of wearing a deck of its
+ * own navigation above the content.
  */
 export function SectionNav({
   items,
