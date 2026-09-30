@@ -14,7 +14,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "children-ministry",
     title: "Children Ministry",
-    givingPurpose: "Children",
+    givingPurpose: "Children Ministry",
     description: "Nurturing children into a loving, lifelong relationship with Jesus through Bible learning, worship, and fun fellowship.",
     department: "Children Ministry",
     sections: [
@@ -38,7 +38,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-youth",
     title: "Adventist Youth Ministries (AY)",
-    givingPurpose: "Youth",
+    givingPurpose: "Young Adults Ministry",
     description: "Helping young people grow in faith, friendship, leadership, and missionary service.",
     department: "Adventist Youth Ministries",
     sections: [
@@ -50,7 +50,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-men",
     title: "Adventist Men Ministries (AMM)",
-    givingPurpose: "Men",
+    givingPurpose: "Adventist Men Ministry",
     description: "Creating space for men to grow spiritually, build strong friendships, and serve the church and community.",
     department: "Adventist men ministries",
     sections: [
@@ -62,7 +62,7 @@ export const MINISTRIES: Ministry[] = [
   {
     slug: "adventist-women",
     title: "Adventist Women Ministries (AWM)",
-    givingPurpose: "Women",
+    givingPurpose: "Adventist Women Ministry",
     description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach.",
     department: "Adventist Women Ministries",
     sections: [
@@ -119,12 +119,13 @@ export function getMinistryGivingPurpose(departmentOrName?: string): string {
   if (!departmentOrName) return "Tithe";
   const lower = departmentOrName.toLowerCase().trim();
 
-  // Match against known keywords
-  if (lower.includes("youth") || lower.includes("ay") || lower.includes("ambassador")) return "Youth";
+  // Match against known keywords. The words returned are the treasury
+  // accounts' own labels, so a deep link preselects a real account.
+  if (lower.includes("youth") || lower.includes("ay") || lower.includes("ambassador")) return "Young Adults Ministry";
   if (lower.includes("possibility") || lower.includes("apm") || lower.includes("special need") || lower.includes("disabilit")) return "Possibility";
-  if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children";
-  if (lower.includes("men") || lower.includes("amm") || lower.includes("amo")) return "Men";
-  if (lower.includes("women") || lower.includes("awm") || lower.includes("dorcas")) return "Women";
+  if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children Ministry";
+  if (lower.includes("men") || lower.includes("amm") || lower.includes("amo")) return "Adventist Men Ministry";
+  if (lower.includes("women") || lower.includes("awm") || lower.includes("dorcas")) return "Adventist Women Ministry";
   if (lower.includes("personal") || lower.includes("witness") || lower.includes("evangelism") || lower.includes("muslim") || lower.includes("amr")) return "Personal";
   if (lower.includes("music") || lower.includes("choir") || lower.includes("ensemble") || lower.includes("sing")) return "Choir";
   if (lower.includes("chaplain")) return "Chaplaincy";
