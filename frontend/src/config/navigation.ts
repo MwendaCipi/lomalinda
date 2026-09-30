@@ -447,33 +447,29 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
 const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
 /** The church's offices owe the register and its programmes to the office. */
-const ELDERSHIP_ROLES = ["elder", "admin"];
-const CLERKSHIP_ROLES = ["clerk", "admin"];
+const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
 
 /**
- * The elders' office: the church's programmes and its people's requests —
- * meetings, what is announced, what is asked. The register is the clerk's;
- * the two desks are separate jobs and now separate rows, and assigning
- * leaders of the church's areas is the Leadership desk, which both offices
- * hold together.
+ * Eldership — one desk for the two offices that run the church's life.
+ *
+ * Elders and clerks saw the same items across two rows, so the rows are one:
+ * the register and its transfers, the church's own configuration, the
+ * meetings and what is announced, and what is asked. Assigning leaders of
+ * the church's areas remains the Leadership desk beside it.
  */
 export const eldershipItems: RailItem[] = [
-  // Board and business meetings are two rows of this submenu, not a desk
+  officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
+  // Board and business meetings are two rows of this strip, not a desk
   // behind another menu. The old "meetings" tab still opens the board list.
   officeTab("board", "Board Meetings", Armchair, {
     roles: ELDERSHIP_ROLES,
     aliasTabs: ["meetings"],
   }),
   officeTab("business", "Business Meetings", Briefcase, { roles: ELDERSHIP_ROLES }),
+  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: ELDERSHIP_ROLES }),
+  officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
-];
-
-/** The clerk's office: the church's register, its transfers and its settings. */
-export const clerkshipItems: RailItem[] = [
-  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES }),
-  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: CLERKSHIP_ROLES }),
-  officeTab("settings", "Church Settings", Settings, { roles: CLERKSHIP_ROLES }),
 ];
 
 /**
@@ -601,8 +597,7 @@ export const railEntries: RailEntry[] = [
   // clerk's work and the deacons' work are three different jobs, and the
   // treasurer's has always stood on its own. The Leadership desk between them
   // is the one both offices share: assigning the church's leaders.
-  { label: "Elders' Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
-  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
+  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
   { label: "Leadership", icon: Crown, items: leadershipItems, roles: LEADERSHIP_ROLES },
@@ -648,8 +643,7 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Materials": "my-church",
   "Giving": "my-church",
   "Requests": "my-church",
-  "Elders' Desk": "service",
-  "Clerk's Desk": "service",
+  "Eldership": "service",
   "Treasury": "service",
   "Deaconate": "service",
   "Leadership": "service",

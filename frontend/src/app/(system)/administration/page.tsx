@@ -216,12 +216,13 @@ function AdministrationContent() {
   // in; a single-role desk opens its items directly.
   const useSectionCards = isAdmin || userRoles.filter((r) => r !== "member").length > 1;
   // Which section's cards the phone overview is showing (null = the headings).
-  const [overviewSection, setOverviewSection] = useState<"elders" | "clerks" | "finance" | "deaconate" | null>(null);
+  const [overviewSection, setOverviewSection] = useState<"elders" | "finance" | "deaconate" | null>(null);
   // Four desks, each with its own work: the elders' programmes, the clerk's
   // register, the treasury's money and the deaconate's property. An officer
   // sees the desks they hold; an admin, who holds them all, drills in.
-  const showEldersItems = (isElder || isAdmin) && (!useSectionCards || overviewSection === "elders");
-  const showClerksItems = (isClerk || isAdmin) && (!useSectionCards || overviewSection === "clerks");
+  // Eldership is one desk: elders and clerks saw the same items across two
+  // rows, so the phone's section and the cards carry the merged set.
+  const showEldersItems = (isElder || isClerk || isAdmin) && (!useSectionCards || overviewSection === "elders");
   const showFinanceItems = isFinance && (!useSectionCards || overviewSection === "finance");
   const showDeaconateItems = isDeaconate && !isElderOnly && (!useSectionCards || overviewSection === "deaconate");
   // Every tab renders a full-height panel (table or cards) that scrolls
@@ -283,17 +284,9 @@ function AdministrationContent() {
                     {(isElder || isClerk || isAdmin) && (
                       <SectionHeadingCard
                         icon={<Armchair size={18} aria-hidden="true" />}
-                        label="Elders' Desk"
-                        description="Meetings, announcements and requests."
+                        label="Eldership"
+                        description="The register, transfers, settings, meetings, announcements and requests."
                         onClick={() => setOverviewSection("elders")}
-                      />
-                    )}
-                    {isClerk && (
-                      <SectionHeadingCard
-                        icon={<ClipboardList size={18} aria-hidden="true" />}
-                        label="Clerk's Desk"
-                        description="The register, membership transfers and the church's settings."
-                        onClick={() => setOverviewSection("clerks")}
                       />
                     )}
                     {(isElder || isClerk) && (
@@ -338,6 +331,8 @@ function AdministrationContent() {
                 <div className="grid gap-5 sm:grid-cols-2">
                   {showEldersItems && (
                     <>
+                      {/* One desk's cards in the strip's order — elders and
+                          clerks share every row of Eldership. */}
                       <div
                         onClick={() => {
                           setActiveTab("users");
@@ -348,7 +343,7 @@ function AdministrationContent() {
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Users size={20} /></span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold text-bark">User Management</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">View registered church members or add new member records.</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">The church register: every member, their roles and their details.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -371,36 +366,30 @@ function AdministrationContent() {
 
                       <div
                         onClick={() => {
-                          setActiveTab("meetings");
-                          router.replace("/administration?tab=meetings", { scroll: false });
+                          setActiveTab("board");
+                          router.replace("/administration?tab=board", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Armchair size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Board and business meeting schedules, agendas, files and minutes, on one desk.</span>
+                          <span className="block text-sm font-bold text-bark">Board Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">The board&apos;s schedules, agendas, files and minutes.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
-                    </>
-                  )}
 
-                  {/* The clerk's work: the register, the transfers and the
-                      church's own configuration. */}
-                  {showClerksItems && (
-                    <>
                       <div
                         onClick={() => {
-                          setActiveTab("users");
-                          router.replace("/administration?tab=users", { scroll: false });
+                          setActiveTab("business");
+                          router.replace("/administration?tab=business", { scroll: false });
                         }}
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Users size={20} /></span>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Briefcase size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">User Management</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">The church register: every member, their roles and their details.</span>
+                          <span className="block text-sm font-bold text-bark">Business Meetings</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">The congregation in session: agendas, files and minutes.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -619,12 +608,12 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Elders' Desk Church Clerk Approval Notice */}
+            {/* Eldership Church Clerk Approval Notice */}
             {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold">Elders&apos; Desk (Church Clerk Access):</span>
-                  <span>You have rights to access and prepare updates across Elders&apos; Desk. Actions require Elder approval to persist.</span>
+                  <span className="font-bold">Eldership (Church Clerk Access):</span>
+                  <span>You have rights to access and prepare updates across Eldership. Actions require Elder approval to persist.</span>
                 </div>
                 <span className="shrink-0 rounded-md bg-gold-sand px-2 py-0.5 text-[10px] font-bold text-gold-brown">Requires Elder Approval</span>
               </div>

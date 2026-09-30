@@ -537,12 +537,6 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             </p>
           </div>
         </div>
-        <button
-          onClick={fetchAll}
-          className="shrink-0 rounded-full border border-sand-mute px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand"
-        >
-          ↻ Refresh
-        </button>
       </div>
 
       {/* One search bar + two popover filters + metrics, all on one row. */}

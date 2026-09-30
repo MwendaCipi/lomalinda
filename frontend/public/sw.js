@@ -86,9 +86,14 @@
 
    v29 — the Treasury strip reads Ledger, Accounts, Expenditure, Drives,
    Budget, M-Pesa Refunds: a Budget desk of its own joins the row, where
-   the treasurer posts the year's plan and publishes it. Chrome changed,
-   so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v29";
+   the treasurer posts the year's plan and publishes it.
+
+   v30 — Elders' Desk and Clerk's Desk merge into one Eldership row: the
+   two offices saw the same items, and the rail carries the register, the
+   transfers, the settings, the meetings, the announcements and the
+   requests under one heading. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v30";
 const STATIC_ASSETS = [
   "/",
   "/about/",
