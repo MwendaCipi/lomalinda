@@ -98,9 +98,13 @@
 
    v32 — Moments leaves the Fellowship strip: the wall is the
    administrators' gallery now, reached from its own page, and posting is
-   theirs alone. Chrome changed, so installed apps must take the new
-   shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v32";
+   theirs alone.
+
+   v33 — the Fellowship strip reads Announcements, Calendar, Moments,
+   Testimonies, Ideas, Ideas & Suggestions shortens to Ideas, and every
+   top-bar button drops its icon: names only. Chrome changed, so
+   installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v33";
 const STATIC_ASSETS = [
   "/",
   "/about/",

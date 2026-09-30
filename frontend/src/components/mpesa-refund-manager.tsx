@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
+import { Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
@@ -195,8 +195,7 @@ export function MpesaRefundManager() {
           }}
           className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:bg-sand sm:self-auto"
         >
-          <RefreshCw className={`h-3.5 w-3.5 text-ember ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 

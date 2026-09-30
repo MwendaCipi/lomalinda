@@ -212,10 +212,17 @@ export const fellowshipLinks: SectionLink[] = [
     icon: Megaphone,
   },
   {
+    key: "calendar",
+    href: "/calendar",
+    label: "Church Calendar",
+    description: "Sabbaths, vespers, programmes and upcoming events.",
+    icon: Calendar,
+  },
+  {
     key: "moments",
     href: "/share/moments",
-    label: "Photos & Moments",
-    description: "Pictures and video from worship, fellowship and outreach.",
+    label: "Moments",
+    description: "The church's events, album by album — kept by the administrators.",
     icon: Sparkles,
   },
   {
@@ -226,16 +233,9 @@ export const fellowshipLinks: SectionLink[] = [
     icon: Sparkles,
   },
   {
-    key: "calendar",
-    href: "/calendar",
-    label: "Church Calendar",
-    description: "Sabbaths, vespers, programmes and upcoming events.",
-    icon: Calendar,
-  },
-  {
     key: "ideas",
     href: "/support/ideas",
-    label: "Ideas & Suggestions",
+    label: "Ideas",
     description: "Offer an idea that could help the church.",
     icon: Lightbulb,
   },

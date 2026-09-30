@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Rows3 } from "lucide-react";
 
 /**
  * Row density, remembered per device, shared by every desk table.
@@ -81,8 +80,7 @@ export function DensityToggle({
           : "border-sand-line bg-sand text-moss hover:border-ember hover:text-ember"
       } ${className}`}
     >
-      <Rows3 className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">Compact</span>
+      <span>Compact</span>
     </button>
   );
 }

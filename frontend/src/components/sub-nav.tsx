@@ -25,12 +25,10 @@ const tabClass = (active: boolean) =>
     active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
   }`;
 
-/** The inside of a strip tab — the mark, the name and any count. */
+/** The inside of a strip tab — the name and any count, no icon. */
 function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
-  const Icon = item.icon;
   return (
     <>
-      {Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : null}
       {item.label}
       {typeof item.count === "number" ? (
         <span className={`text-xs font-bold ${active ? "text-white/70" : "text-moss-faint"}`}>{item.count}</span>

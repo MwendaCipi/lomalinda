@@ -196,7 +196,8 @@ export const destinations = {
   },
   ideas: {
     href: "/support/ideas",
-    label: "Ideas & Suggestions",
+    label: "Ideas",
+    short: "Ideas",
     description: "Offer an idea that could help the church.",
     icon: Lightbulb,
     area: "fellowship",
@@ -227,7 +228,7 @@ export const destinations = {
     icon: HandHeart,
     area: "stewardship",
     // The whole Stewardship & Support section reads as "Giving" on the bars —
-    // except Ideas & Suggestions, which belongs to Fellowship.
+    // except Ideas, which belongs to Fellowship.
     match: ["/give", "/support/campaigns", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
   },
   fundDrives: {
@@ -562,9 +563,10 @@ export const railEntries: RailEntry[] = [
     icon: Megaphone,
     items: [
       page("announcements"),
+      page("calendar"),
+      page("moments"),
       page("testimonies"),
       page("ideas"),
-      page("calendar"),
     ],
   },
   { label: "Materials", icon: BookOpen, items: [page("materials")] },
