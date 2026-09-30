@@ -46,6 +46,15 @@ export function ChurchSettingsManager() {
   const [membershipApprovalMessage, setMembershipApprovalMessage] = useState(
     "Dear {name},\n\nYour request to join {church} has been approved. You can now sign in at {link} to take part in the life of the church.\n\nGod bless you."
   );
+  // The letters a leadership change causes: one welcoming the newly seated,
+  // one thanking the person whose seat the save replaced.
+  const [appointmentMessage, setAppointmentMessage] = useState(
+    "{greeting}, {name}.\n\nYou have been appointed to serve as {position} of {area} at {church}. May God bless you as you serve.\n\n{church}"
+  );
+  const [releaseThankYouMessage, setReleaseThankYouMessage] = useState(
+    "{greeting}, {name}.\n\nThank you for serving as {position} of {area} at {church}. Your service has been a blessing, and the church is grateful. {successor} now takes up the role.\n\n{church}"
+  );
+  const [appointmentPlaceholders, setAppointmentPlaceholders] = useState<{ token: string; description: string }[]>([]);
   // The line the dashboard greeting ends with. Short by design; the API caps it
   // Per-role rights as configured on the Church Roles Configuration box.
   const [roleRights, setRoleRights] = useState<RoleRightsPayload>({ rights: [], by_role: {} });
@@ -87,6 +96,15 @@ export function ChurchSettingsManager() {
           }
           if (Array.isArray(data.approval_placeholders)) {
             setApprovalPlaceholders(data.approval_placeholders);
+          }
+          if (Array.isArray(data.appointment_placeholders)) {
+            setAppointmentPlaceholders(data.appointment_placeholders);
+          }
+          if (data.default_appointment_message) {
+            setAppointmentMessage(data.default_appointment_message);
+          }
+          if (data.default_release_thank_you_message) {
+            setReleaseThankYouMessage(data.default_release_thank_you_message);
           }
           if (data.default_request_notification_message) {
             setRequestNotificationMessage(data.default_request_notification_message);
@@ -148,6 +166,8 @@ export function ChurchSettingsManager() {
         default_board_meeting_invitation_message: defaultBoardMeetingInvitationMessage,
         default_request_notification_message: requestNotificationMessage,
         default_membership_approval_message: membershipApprovalMessage,
+        default_appointment_message: appointmentMessage,
+        default_release_thank_you_message: releaseThankYouMessage,
         role_rights: roleRights.by_role,
         bank_name: bankName,
         bank_account_name: bankAccountName,
@@ -562,6 +582,45 @@ export function ChurchSettingsManager() {
               value={membershipApprovalMessage}
               onChange={(e) => setMembershipApprovalMessage(e.target.value)}
               placeholder="Sent when a join request is approved..."
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
+            />
+          </div>
+
+          <div className="mt-4 border-t border-sand-line pt-4">
+            <label className="block text-xs font-semibold text-bark">
+              Appointment Letter (to the newly seated leader or assistant)
+            </label>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-moss">
+              {appointmentPlaceholders.map((placeholder) => (
+                <li key={placeholder.token}>
+                  <code className="rounded border border-sand-line bg-white px-1 py-0.5 text-ember">
+                    {placeholder.token}
+                  </code>{" "}
+                  {placeholder.description}
+                </li>
+              ))}
+            </ul>
+            <textarea
+              rows={4}
+              value={appointmentMessage}
+              onChange={(e) => setAppointmentMessage(e.target.value)}
+              placeholder="Sent when someone is appointed to a leadership position..."
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-bark">
+              Thank-You Letter (to the leader or assistant replaced)
+            </label>
+            <p className="mt-1 text-[11px] text-moss">
+              Sent to the person whose seat the new appointment took, with {"{successor}"} naming who takes up the role.
+            </p>
+            <textarea
+              rows={4}
+              value={releaseThankYouMessage}
+              onChange={(e) => setReleaseThankYouMessage(e.target.value)}
+              placeholder="Sent when a leadership appointment replaces a holder..."
               className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
             />
           </div>

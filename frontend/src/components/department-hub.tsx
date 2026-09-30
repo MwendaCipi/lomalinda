@@ -428,68 +428,32 @@ type RoleDraft = {
   people: RolePerson[];
 };
 
-/** One position's seat box: the label, the holder with a release button —
-    or the open hint — and, past the cap, the dimmed wait. */
-function SeatBox({
+/** One position's read-only line: the label and whoever holds it now —
+    the seats themselves are changed only through the search above. */
+function SeatLine({
   title,
   role,
   seat,
   max,
-  onRelease,
-  custom = false,
-  onRemoveRole,
 }: {
   title: string;
   role: RoleDraft;
   seat: "leader" | "assistant";
   max: number;
-  onRelease: (role: RoleDraft, person: RolePerson) => void;
-  /** A custom role's box can be taken off the area again. */
-  custom?: boolean;
-  onRemoveRole?: () => void;
 }) {
   const holders = role.people.filter((p) => p.kind === seat);
-  const open = Math.max(0, max - holders.length);
   return (
-    <div className="rounded-xl border border-sand-line bg-sand-plate px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold text-bark">{title}</p>
-        {custom && onRemoveRole && (
-          <button
-            type="button"
-            onClick={onRemoveRole}
-            title="Remove this role"
-            className="shrink-0 rounded-lg border border-sand-line bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-      <div className="mt-1.5 space-y-1.5">
-        {holders.map((person) => (
-          <div key={person.id} className="flex items-center justify-between gap-2 rounded-lg border border-sand-line bg-white px-2.5 py-2">
-            <span className="min-w-0 truncate text-xs font-semibold text-bark" title={person.name}>{person.name}</span>
-            <button
-              type="button"
-              onClick={() => onRelease(role, person)}
-              title={`Release ${person.name}`}
-              className="shrink-0 rounded-full p-0.5 text-moss transition hover:bg-sand hover:text-red-600"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
-        {open > 0 && (
-          <div className="rounded-lg border border-dashed border-sand-line bg-white/60 px-2.5 py-2">
-            <p className="text-[11px] italic text-moss-faint">
-              Open — set from the search above
-            </p>
-          </div>
-        )}
-        {holders.length >= max && (
-          <p className="px-0.5 text-[11px] italic text-moss-faint">Full — release a holder to seat someone else</p>
-        )}
-      </div>
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
+      <p className="shrink-0 text-xs font-bold text-bark">{title}</p>
+      {holders.length > 0 ? (
+        <p className="min-w-0 truncate text-right text-xs font-semibold text-bark">
+          {holders.map((h) => h.name).join(", ")}
+        </p>
+      ) : (
+        <span className="text-[11px] italic text-moss-faint">
+          open{holders.length < max ? "" : ""} — set from the search above
+        </span>
+      )}
     </div>
   );
 }
@@ -570,14 +534,15 @@ function LeadershipEditModal({
     draft.find((r) => !r.is_custom && r.name.toLowerCase() === "assistant") ??
     draft.find((r) => r.is_custom) ??
     null;
+  // Eldership's offices — everything seeded that is not the generic Leader
+  // or Assistant row. Their assistants, where the church seats any, appear
+  // under the First and Second Assistant columns like every other area's.
   const elderRoles = draft.filter((r) => !r.is_custom && r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
-  const [creatingRole, setCreatingRole] = useState(false);
 
   /** The one search the modal runs, debounced. The state writes ride a
       microtask, which is what keeps the effect from cascading the render. */
@@ -654,83 +619,6 @@ function LeadershipEditModal({
     setResults([]);
   };
 
-  /** Create a role the department added itself — "Music Leader", a
-      "Sponsor" — which takes its assistant seats under the Assistants
-      search like the area's own. */
-  const createRole = async () => {
-    if (!newRoleName.trim() || creatingRole) return;
-    setCreatingRole(true);
-    try {
-      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRoleName.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.name || data.detail || "Could not add the role.");
-      setDraft((current) => [...current, { id: data.id, name: data.name, has_assistant: data.has_assistant, is_custom: true, people: [] }]);
-      setNewRoleName("");
-    } catch (error) {
-      showAlert("Could not add role", error instanceof Error ? error.message : "Try again.", "error");
-    } finally {
-      setCreatingRole(false);
-    }
-  };
-
-  /** Release one person now — a remove on a role row calls the API at
-      once, so a mis-tap never waits for a save. */
-  const releasePerson = async (role: RoleDraft, person: RolePerson) => {
-    const answer = await showAlert(
-      "Release this appointment?",
-      `${person.name} will no longer serve ${department.label} as ${person.kind === "leader" ? role.name : `assistant ${role.name}`}.`,
-      "warning",
-      { showCancelButton: true, confirmButtonText: "Release", cancelButtonText: "Keep", confirmButtonColor: brand.alert },
-    );
-    if (!answer.isConfirmed) return;
-    // Someone appointed in this sitting has no row on the server yet: taking
-    // them off the board is the draft's business, and Save writes the rest.
-    // (`role_id` on this endpoint means "remove this role entirely", so it is
-    // never the way to release one person.)
-    if (!person.assignmentId) {
-      setDraft((current) => current.map((r) => (r.id === role.id ? { ...r, people: r.people.filter((p) => p !== person) } : r)));
-      return;
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
-        method: "DELETE",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ assignment_id: person.assignmentId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Could not release the appointment.");
-      setDraft((current) => current.map((r) => (r.id === role.id ? { ...r, people: r.people.filter((p) => !(p.id === person.id && p.kind === person.kind)) } : r)));
-    } catch (error) {
-      showAlert("Could not release appointment", error instanceof Error ? error.message : "Try again.", "error");
-    }
-  };
-
-  const removeRole = async (role: RoleDraft) => {
-    const answer = await showAlert("Remove this role?", `"${role.name}" will be taken off ${department.label}` + (role.people.length ? `, and its ${role.people.length} appointment${role.people.length === 1 ? "" : "s"} released.` : "."), "warning", {
-      showCancelButton: true,
-      confirmButtonText: "Remove",
-      cancelButtonText: "Keep",
-      confirmButtonColor: brand.alert,
-    });
-    if (!answer.isConfirmed) return;
-    try {
-      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
-        method: "DELETE",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ role_id: role.id }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Could not remove the role.");
-      setDraft((current) => current.filter((r) => r.id !== role.id));
-    } catch (error) {
-      showAlert("Could not remove role", error instanceof Error ? error.message : "Try again.", "error");
-    }
-  };
-
   const save = async () => {
     const fresh = draft.flatMap((role) =>
       role.people
@@ -741,26 +629,6 @@ function LeadershipEditModal({
       showAlert("Nothing to save", "Every appointment here is already in place.", "info");
       return;
     }
-    const replaced = draft
-      .map((role) => {
-        const beforeHolders = department.roles.find((before) => before.id === role.id)?.holders ?? [];
-        const previousLeader = beforeHolders.find((h) => h.kind === "leader");
-        const stillLeading = role.people.some((p) => p.kind === "leader" && p.id === previousLeader?.id);
-        return previousLeader && !stillLeading ? previousLeader.name : null;
-      })
-      .filter((name): name is string => Boolean(name));
-    const summary = draft
-      .filter((role) => role.people.some((p) => fresh.some((f) => f.role_id === role.id && f.member_id === p.id)))
-      .map((role) => role.people.filter((p) => fresh.some((f) => f.role_id === role.id && f.member_id === p.id)).map((p) => `${p.kind === "leader" ? role.name : `Assistant ${role.name}`}: ${p.name}`).join("\n"))
-      .filter(Boolean)
-      .join("\n");
-    const answer = await showAlert(
-      "Update leadership?",
-      summary + (replaced.length ? `\n\nReplacing: ${[...new Set(replaced)].join(", ")}` : ""),
-      "question",
-      { showCancelButton: true, confirmButtonText: "Save", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
-    );
-    if (!answer.isConfirmed) return;
     setSaving(true);
     try {
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
@@ -794,7 +662,7 @@ function LeadershipEditModal({
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             <h3 className="text-lg font-bold text-bark">{department.label} — Leadership</h3>
-            <p className="text-[11px] text-moss">Search a member under the seat they fill. Contacts stay on their accounts.</p>
+            <p className="text-[11px] text-moss">Search a member, set them into a position, then save. Contacts stay on their accounts.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
@@ -842,7 +710,9 @@ function LeadershipEditModal({
                       Set {role.name}
                     </button>
                   ))}
-                  {assistantRole && (
+                  {/* Eldership seats no assistants — its three offices are
+                      the whole board, so no Set assistant there. */}
+                  {assistantRole && elderRoles.length === 0 && (
                     <button
                       type="button"
                       onClick={() => appoint(assistantRole, "assistant", member, clearSearch)}
@@ -861,66 +731,17 @@ function LeadershipEditModal({
           </div>
         </div>
 
-        {/* The positions, each card the modal's whole width: the Leader's
-            seat, Eldership's three offices, then the Assistant seats. */}
-        <div className="mt-4 space-y-3">
-          {leaderRole && (
-            <SeatBox
-              title="Leader"
-              role={leaderRole}
-              seat="leader"
-              max={1}
-              onRelease={releasePerson}
-            />
-          )}
+        {/* The seats as they stand, read-only: who holds each position now,
+            so the save's confirm names exactly what it replaces. */}
+        <div className="mt-4 space-y-2">
+          {leaderRole && <SeatLine title="Leader" role={leaderRole} seat="leader" max={1} />}
           {elderRoles.map((role) => (
-            <SeatBox key={role.id} title={role.name} role={role} seat="leader" max={1} onRelease={releasePerson} />
+            <SeatLine key={role.id} title={role.name} role={role} seat="leader" max={1} />
           ))}
-          {assistantRole && (
-            <SeatBox
-              title="Assistants (up to 2)"
-              role={assistantRole}
-              seat="assistant"
-              max={2}
-              onRelease={releasePerson}
-              custom={assistantRole.is_custom && assistantRole.name.toLowerCase() !== "assistant"}
-              onRemoveRole={() => removeRole(assistantRole)}
-            />
-          )}
-          {draft.length === 0 && (
-            <p className="rounded-xl border border-dashed border-sand-line p-3 text-xs text-moss">
-              No roles yet. Create one below.
-            </p>
+          {assistantRole && elderRoles.length === 0 && (
+            <SeatLine title="Assistants" role={assistantRole} seat="assistant" max={2} />
           )}
         </div>
-
-        {/* Create a role beyond the seeded ones — "Music Leader", a
-            "Sponsor" — which takes its assistant seats under the search
-            above, like the area's own. */}
-        <form
-          className="mt-4 border-t border-sand-line pt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            createRole();
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <input
-              value={newRoleName}
-              onChange={(e) => setNewRoleName(e.target.value)}
-              placeholder="New role, e.g. Music Leader"
-              className="min-w-0 flex-1 rounded-xl border border-sand-line px-3 py-2 text-xs focus:border-ember focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={creatingRole || !newRoleName.trim()}
-              className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
-            >
-              <Plus className="h-3.5 w-3.5" /> Create role
-            </button>
-          </div>
-          <p className="mt-2 text-[11px] text-moss">A custom role adds an assistant seat under the Assistants search.</p>
-        </form>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
           <button

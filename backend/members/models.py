@@ -1287,6 +1287,30 @@ class ChurchSettings(models.Model):
         ),
         blank=True
     )
+    # The letters a leadership change causes, edited in Church Settings like
+    # the receipts and invitations: everyone newly seated is welcomed into
+    # their position, and everyone whose seat the save replaced is thanked
+    # for their service. Placeholders per APPOINTMENT_PLACEHOLDERS in
+    # members/meetings.py.
+    default_appointment_message = models.TextField(
+        default=(
+            '{greeting}, {name}.\n\n'
+            'You have been appointed to serve as {position} of {area} at {church}. '
+            'May God bless you as you serve.\n\n'
+            '{church}'
+        ),
+        blank=True,
+    )
+    default_release_thank_you_message = models.TextField(
+        default=(
+            '{greeting}, {name}.\n\n'
+            'Thank you for serving as {position} of {area} at {church}. Your service '
+            'has been a blessing, and the church is grateful. '
+            '{successor} now takes up the role.\n\n'
+            '{church}'
+        ),
+        blank=True,
+    )
     # Per-role rights, as edited on the Church Roles Configuration screen:
     # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
     # defaults in members.roles.DEFAULT_ROLE_RIGHTS.

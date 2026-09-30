@@ -15,7 +15,7 @@ from .models import (
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest,
     WeeklyMeeting,
 )
-from .meetings import PLACEHOLDERS as MEETING_PLACEHOLDERS
+from .meetings import APPOINTMENT_PLACEHOLDERS, PLACEHOLDERS as MEETING_PLACEHOLDERS
 from .requests import APPROVAL_PLACEHOLDERS, REQUEST_PLACEHOLDERS
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, REQUIREMENTS_TEXT as PASSWORD_REQUIREMENTS, validate_church_password
 from .roles import ADMIN_ROLE, ROLE_CODES, parse_role_codes, unknown_audience_codes, unknown_role_codes
@@ -851,6 +851,12 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 
     def get_approval_placeholders(self, obj):
         return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in APPROVAL_PLACEHOLDERS]
+    # The tokens the leadership letters fill, listed beside their templates on
+    # the settings screen.
+    appointment_placeholders = serializers.SerializerMethodField()
+
+    def get_appointment_placeholders(self, obj):
+        return [{'token': f'{{{name}}}', 'description': help_text} for name, help_text in APPOINTMENT_PLACEHOLDERS]
 
     role_rights = serializers.SerializerMethodField()
 
@@ -897,8 +903,11 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_board_meeting_invitation_message',
             'default_request_notification_message',
             'default_membership_approval_message',
+            'default_appointment_message',
+            'default_release_thank_you_message',
             'request_placeholders',
             'approval_placeholders',
+            'appointment_placeholders',
             'privacy_policy',
             'terms_of_use',
             'invitation_placeholders',

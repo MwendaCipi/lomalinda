@@ -57,6 +57,34 @@ PLACEHOLDERS = (
 BOARD_KIND = 'board'
 BUSINESS_KIND = 'business'
 
+# The letters a leadership change causes (see send_appointment_emails in
+# members/views.py): everyone newly seated is welcomed into their position,
+# and everyone whose seat the save replaced is thanked for their service.
+# Both wordings live in Church Settings like the receipts and the meeting
+# invitations.
+DEFAULT_APPOINTMENT_MESSAGE = (
+    '{greeting}, {name}.\n\n'
+    'You have been appointed to serve as {position} of {area} at {church}. '
+    'May God bless you as you serve.\n\n'
+    '{church}'
+)
+DEFAULT_RELEASE_MESSAGE = (
+    '{greeting}, {name}.\n\n'
+    'Thank you for serving as {position} of {area} at {church}. Your service '
+    'has been a blessing, and the church is grateful. '
+    '{successor} now takes up the role.\n\n'
+    '{church}'
+)
+
+APPOINTMENT_PLACEHOLDERS = (
+    ('greeting', 'Good morning / Good afternoon / Good evening, in East Africa Time'),
+    ('name', "the recipient's first name"),
+    ('position', 'the position served, e.g. Leader or First Elder'),
+    ('area', 'the department or ministry'),
+    ('church', 'the church name from these settings'),
+    ('successor', 'the person taking up the role (the thank-you letter only)'),
+)
+
 
 def eat_greeting(now=None):
     """The time of day in church time, not the server's time zone."""

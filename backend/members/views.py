@@ -74,11 +74,16 @@ from .roles import (
 from .meetings import (
     BOARD_KIND,
     BUSINESS_KIND,
+    DEFAULT_APPOINTMENT_MESSAGE,
+    DEFAULT_RELEASE_MESSAGE,
     as_bool,
     board_audience,
     broadcast_invitation,
     create_agendas,
+    eat_greeting,
     parse_clock,
+    recipient_name,
+    render_message,
 )
 from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer
 
@@ -7349,6 +7354,53 @@ class DepartmentCreateView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+def send_appointment_emails(department, appointment_notes):
+    """Email everyone the leadership save seated and every seat it replaced.
+
+    ``appointment_notes`` is what the PUT built: ``[{'member': user,
+    'position': role name, 'kind': 'leader'|'assistant', 'replaced': user|None}]``.
+    Each appointee gets the welcome letter; each replaced holder the thank-you,
+    which names who takes up the role. Wordings are Church Settings templates
+    (default_appointment_message / default_release_thank_you_message), filled
+    with the same placeholder machinery the meeting invitations use. Failure
+    to send never fails the save — the letters are a courtesy, and the mail
+    backend logs what it could not deliver.
+    """
+    if not appointment_notes:
+        return
+    church = ChurchSettings.objects.first()
+    church_name = church.church_name if church else ''
+    appointment_template = (church.default_appointment_message if church else '') or DEFAULT_APPOINTMENT_MESSAGE
+    release_template = (church.default_release_thank_you_message if church else '') or DEFAULT_RELEASE_MESSAGE
+    for note in appointment_notes:
+        context = {
+            'greeting': eat_greeting(),
+            'name': recipient_name(note['member']),
+            'position': note['position'],
+            'area': department.name,
+            'church': church_name,
+            'successor': note['replaced'] and recipient_name(note['replaced']) or '',
+        }
+        try:
+            send_mail(
+                f"{note['position']} — {department.name}",
+                render_message(appointment_template, context),
+                settings.DEFAULT_FROM_EMAIL,
+                [note['member'].email],
+                fail_silently=True,
+            )
+            if note['replaced'] and note['replaced'].email:
+                send_mail(
+                    f"Thank you — {note['position']}, {department.name}",
+                    render_message(release_template, {**context, 'name': recipient_name(note['replaced'])}),
+                    settings.DEFAULT_FROM_EMAIL,
+                    [note['replaced'].email],
+                    fail_silently=True,
+                )
+        except Exception:
+            logger.exception("Could not send the leadership letters for %s", department.code)
+
+
 class DepartmentLeadershipView(APIView):
     """A department's leadership: read it, appoint and release, add roles.
 
@@ -7411,6 +7463,9 @@ class DepartmentLeadershipView(APIView):
         if not isinstance(submitted, list):
             return Response({'detail': 'Send the appointments as a list.'}, status=status.HTTP_400_BAD_REQUEST)
         roles = {r.id: r for r in DepartmentRole.objects.filter(department=target)}
+        # What the save did, for the letters: one note per person seated or
+        # replaced, collected as the assignments land.
+        appointment_notes = []
         unknown = [entry.get('role_id') for entry in submitted if entry.get('role_id') not in roles]
         if unknown:
             return Response({'detail': 'One of the roles does not belong to this department.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -7430,7 +7485,13 @@ class DepartmentLeadershipView(APIView):
                 # held the seat, the way an appointment lands in person. In a
                 # department with units the seat is the unit's — Kindergarten
                 # may have its leader while Pathfinders keeps its own.
+                replaced = DepartmentAssignment.objects.filter(role=role, kind='leader', unit=unit).exclude(member=member).select_related('member').first()
                 DepartmentAssignment.objects.filter(role=role, kind='leader', unit=unit).exclude(member=member).delete()
+                appointment_notes.append({'member': member, 'position': role.name, 'kind': kind, 'replaced': replaced.member if replaced else None})
+            else:
+                already = DepartmentAssignment.objects.filter(role=role, kind='assistant', member=member, unit=unit).exists()
+                if not already:
+                    appointment_notes.append({'member': member, 'position': f"Assistant {role.name}", 'kind': kind, 'replaced': None})
             assignment, _created = DepartmentAssignment.objects.get_or_create(
                 role=role, member=member, kind=kind, unit=unit,
                 defaults={'department': target},
@@ -7447,6 +7508,7 @@ class DepartmentLeadershipView(APIView):
             if updates:
                 assignment.save(update_fields=updates)
         sync_role_flags_from_assignments()
+        send_appointment_emails(target, appointment_notes)
         return Response({'detail': 'Leadership updated.', 'code': target.code, 'unit': unit})
 
     def delete(self, request, department):
