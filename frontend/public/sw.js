@@ -18,8 +18,12 @@
    only, and the Materials shelves carry the children's divisions directly.
 
    v13 — the door is gone: the Admin tab is ordinary navigation to the
-   console, whose overview cards carry the desks. No menu sheet remains. */
-const CACHE_NAME = "sda-loma-linda-meru-v13";
+   console, whose overview cards carry the desks. No menu sheet remains.
+
+   v14 — prayer and visitation are separate desks under Requests; the
+   combined page is a redirect. Chrome changed, so installed apps must take
+   the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v14";
 const STATIC_ASSETS = [
   "/",
   "/about/",

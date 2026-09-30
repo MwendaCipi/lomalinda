@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Prayer and visitation are one desk now — see /community/prayer-visitation.
+// Visitation has its own desk now — see /community/visitation.
 export default function SpiritualVisitationPage() {
-  redirect("/community/prayer-visitation");
+  redirect("/community/visitation");
 }

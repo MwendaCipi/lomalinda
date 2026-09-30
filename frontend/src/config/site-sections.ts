@@ -7,6 +7,7 @@ import {
   Calendar,
   FileText,
   Globe,
+  HandHelping,
   Handshake,
   Heart,
   Lightbulb,
@@ -135,15 +136,23 @@ export const materialSectionLinks: SectionLink[] = materialSections.map((section
 
 /**
  * Beside Requests & Care: the ways someone can ask the church for help or join
- * it. Prayer and visitation are one desk; partnership requests were retired.
+ * it. Prayer and visitation are separate desks now; partnership requests were
+ * retired.
  */
 export const requestsAndCareLinks: SectionLink[] = [
   {
     key: "prayer-visitation",
-    href: "/community/prayer-visitation",
-    label: "Prayer & Visitation Requests",
-    description: "Request prayer or a pastoral visit — one desk for both.",
+    href: "/community/prayer",
+    label: "Prayer Requests",
+    description: "Send a prayer request to the church's pastoral prayer team.",
     icon: Heart,
+  },
+  {
+    key: "visitation",
+    href: "/community/visitation",
+    label: "Visitation Requests",
+    description: "Ask for a pastoral, home or hospital visit.",
+    icon: HandHelping,
   },
   {
     key: "child-dedication",

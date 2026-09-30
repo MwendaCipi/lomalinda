@@ -134,12 +134,32 @@ export const destinations = {
     area: "fellowship",
     match: ["/spiritual"],
   },
+  /**
+   * Prayer — the first of the two request desks and the Requests row's way
+   * in. The strip on it names Visitation as the sibling, so the old combined
+   * "Prayer & Visitation" desk is now two pages that sit beside each other.
+   */
   prayerVisitation: {
-    href: "/community/prayer-visitation",
-    label: "Prayer & Visitation Requests",
+    href: "/community/prayer",
+    label: "Prayer Requests",
     short: "Prayer & Care",
-    description: "Request prayer or a pastoral visit — one desk for both.",
+    description: "Send a prayer request to the church's pastoral prayer team.",
     icon: Heart,
+    area: "fellowship",
+    match: ["/community"],
+  },
+  /**
+   * Visitation — the second of the two request desks. Its own page, its own
+   * form (with the map pin for where to come) and its own ledger; the strip
+   * on it names Prayer as the sibling. It sits inside the Requests row so the
+   * phone's tab still lands on Prayer first, with visitation one tap away.
+   */
+  visitation: {
+    href: "/community/visitation",
+    label: "Visitation Requests",
+    short: "Visitation",
+    description: "Ask for a pastoral, home or hospital visit — pin where to come.",
+    icon: HeartHandshake,
     area: "fellowship",
     match: ["/community"],
   },
@@ -284,7 +304,7 @@ export const destinations = {
    * answering are two jobs.
    */
   requests: {
-    href: "/community/prayer-visitation",
+    href: "/community/prayer",
     label: "Requests",
     description: "Request prayer or a pastoral visit, dedicate a child, or join the church.",
     icon: HeartHandshake,
@@ -545,7 +565,8 @@ export const railEntries: RailEntry[] = [
     label: "Requests",
     icon: HeartHandshake,
     items: [
-      page("requests"),
+      page("prayerVisitation"),
+      page("visitation"),
       page("childDedication"),
       page("membership"),
     ],
