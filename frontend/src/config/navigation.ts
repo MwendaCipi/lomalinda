@@ -603,14 +603,14 @@ export const railEntries: RailEntry[] = [
     icon: HeartHandshake,
     fromDepartments: "ministry",
     roles: STAFF_ROLES,
-    sectionKey: "ministry",
+    sectionKey: "service",
   },
   {
     label: "Departments",
     icon: Users,
     fromDepartments: "department",
     roles: STAFF_ROLES,
-    sectionKey: "ministry",
+    sectionKey: "departments",
   },
 ];
 
@@ -618,16 +618,16 @@ export const railEntries: RailEntry[] = [
  * How the rail groups its rows. A heading is a reading aid, not a click
  * target — every row under it is a place, exactly as it was flat. The
  * member's own page and the church's life read as one My church list, the
- * church's areas — ministries and departments alike — as one Ministry list
- * beside the desks' Leadership.
+ * church's service — its offices' desks and its ministries — as one Service
+ * list, and the departments as a Departments list of their own.
  */
-export type RailSection = "my-church" | "leadership" | "ministry";
+export type RailSection = "my-church" | "service" | "departments";
 
 /** The heading each section goes by, on the rail. */
 export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
   { key: "my-church", label: "My church" },
-  { key: "leadership", label: "Leadership" },
-  { key: "ministry", label: "Ministry" },
+  { key: "service", label: "Service" },
+  { key: "departments", label: "Departments" },
 ];
 
 /** Which heading a row is filed under; a row with none sits before the first. */
@@ -636,11 +636,11 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Materials": "my-church",
   "Giving": "my-church",
   "Requests": "my-church",
-  "Elders' Desk": "leadership",
-  "Clerk's Desk": "leadership",
-  "Treasury": "leadership",
-  "Deaconate": "leadership",
-  "Leadership": "leadership",
+  "Elders' Desk": "service",
+  "Clerk's Desk": "service",
+  "Treasury": "service",
+  "Deaconate": "service",
+  "Leadership": "service",
 };
 
 /**

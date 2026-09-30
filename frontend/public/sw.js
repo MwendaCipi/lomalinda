@@ -63,8 +63,12 @@
    v23 — the Elders' Desk submenu carries Board and Business Meetings as two
    rows (no Meetings middleman), and User Management's header reads one
    record row: tabs left, search right. Chrome changed, so installed apps
-   must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v23";
+   must take the new shell.
+
+   v24 — the rail's headings settle: the desks and the ministries read as
+   one Service list, with the departments a Departments list of their own.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v24";
 const STATIC_ASSETS = [
   "/",
   "/about/",
