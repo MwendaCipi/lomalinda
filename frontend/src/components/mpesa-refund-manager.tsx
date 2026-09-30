@@ -179,7 +179,8 @@ export function MpesaRefundManager() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-2xl font-bold text-bark">M-Pesa Refunds</h2>
             <p className="mt-1 text-sm text-moss">
               Refund completed M-Pesa contributions back to the member&apos;s phone and track each payout until Safaricom confirms it.

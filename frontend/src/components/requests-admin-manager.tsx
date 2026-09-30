@@ -556,7 +556,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-2xl font-semibold text-bark">Received Requests</h2>
             <p className="mt-0.5 text-sm text-moss">
               Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.

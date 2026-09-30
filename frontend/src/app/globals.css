@@ -476,6 +476,19 @@ body {
   min-height: 0;
 }
 
+/* The content card: the place's own strip at its top, the page under it, both
+   inside one surface. The strip lives in here rather than in a band above the
+   card, so the tabs read as the card's first row instead of chrome between the
+   bar and the page. Its height comes from the flex column above it, never from
+   100vh, so the panel inside keeps the sizing it always had. */
+.app-content {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* The panel under the bar — the page's own frame. It scrolls (`panel`) or
    clips and fills (`pinned`), so a page never carries a height incantation of
    its own. Its height comes from the flex column above it, never from 100vh:

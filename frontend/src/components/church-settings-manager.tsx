@@ -211,7 +211,8 @@ export function ChurchSettingsManager() {
       <div className="flex items-center justify-between border-b border-sand-line pb-4">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-2xl font-semibold text-bark">Church Settings & Configuration</h2>
             <p className="mt-1 text-xs text-moss">
               Configure custom homepage clarion call message, service links, and church details.

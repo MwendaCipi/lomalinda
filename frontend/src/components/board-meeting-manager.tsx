@@ -289,7 +289,8 @@ export function BoardMeetingManager() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-line bg-white p-6 shadow-sm">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the toggle and the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-xl font-extrabold text-bark flex items-center gap-2">
               <ShieldCheck size={18} aria-hidden="true" /> Church Board Meetings
             </h2>

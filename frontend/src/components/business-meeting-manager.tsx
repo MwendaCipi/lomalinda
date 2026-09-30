@@ -236,7 +236,8 @@ export function BusinessMeetingManager() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-line bg-white p-6 shadow-sm">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the toggle and the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-xl font-extrabold text-bark">Business Meetings</h2>
             <p className="mt-1 text-xs text-moss">
               Manage church business meeting schedules, agendas, supporting documents, and recorded minutes.

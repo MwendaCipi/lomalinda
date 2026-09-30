@@ -1451,20 +1451,13 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
-          <p className="mt-0.5 text-xs text-moss">
-            Every leadership area — the church's offices and each department — with its roles filled office by office. Tick rows to address several departments at once.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowAddArea(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Department
-        </button>
+      {/* The strip above the card names the place on a wide screen, so the
+          heading here is the phone's telling only. */}
+      <div className="shrink-0 md:hidden">
+        <h2 className="text-lg font-bold text-bark">Departments &amp; Ministries</h2>
+        <p className="mt-0.5 text-xs text-moss">
+          Every leadership area — the church's offices and each department — with its roles filled office by office. Tick rows to address several departments at once.
+        </p>
       </div>
 
       {/* One table, one row per department — the directory a desk scans, not
@@ -1558,21 +1551,31 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
           </tbody>
         </table>
         </div>
-        {/* The bottom row: what's ticked on the left, Communicate on the right. */}
+        {/* The bottom row: what's ticked on the left, Add Department and
+            Communicate on the right. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
           <p className="text-xs text-moss">
             {selectedCodes.size === 0
               ? "Tick departments to message several at once"
               : `${selectedCodes.size} department${selectedCodes.size === 1 ? "" : "s"} selected`}
           </p>
-          <button
-            type="button"
-            onClick={openMultiCommunicate}
-            disabled={selectedCodes.size === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Megaphone className="h-3.5 w-3.5" /> Communicate
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddArea(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand/60"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Department
+            </button>
+            <button
+              type="button"
+              onClick={openMultiCommunicate}
+              disabled={selectedCodes.size === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Megaphone className="h-3.5 w-3.5" /> Communicate
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1628,6 +1631,14 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
             </div>
           );
         })}
+        {/* Phones get the same Add Department action beneath the cards. */}
+        <button
+          type="button"
+          onClick={() => setShowAddArea(true)}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Department
+        </button>
       </div>
 
       {budgetDept && (

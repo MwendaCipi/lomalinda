@@ -455,7 +455,8 @@ export function TreasuryAccountsManager() {
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
           <span className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <h2 className="text-xl font-bold text-bark">Treasury Accounts</h2>
+            {/* Named by the strip above on a wide screen. */}
+            <h2 className="text-xl font-bold text-bark md:hidden">Treasury Accounts</h2>
           </span>
           <p className="text-xs text-moss">
             {view === "accounts"

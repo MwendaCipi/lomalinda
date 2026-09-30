@@ -175,7 +175,8 @@ export function ExpenditureManager() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
-          <div>
+          {/* Named by the strip above on a wide screen. */}
+          <div className="md:hidden">
             <h2 className="text-2xl font-bold text-bark">Church Expenditures</h2>
             <p className="mt-1 text-sm text-moss">
               Record church expenses, debit designated treasury accounts, and track disbursement logs.

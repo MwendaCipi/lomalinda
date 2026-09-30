@@ -363,7 +363,8 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               <div className="flex items-center gap-2">
                 <BackToOverviewArrow />
                 <Boxes className="h-4 w-4 shrink-0 text-ember" />
-                <h2 className="text-sm font-bold text-bark">Property Inventory</h2>
+                {/* Named by the strip above on a wide screen. */}
+                <h2 className="text-sm font-bold text-bark md:hidden">Property Inventory</h2>
                 <span className="text-[11px] text-moss">
                   {inventory.length} {inventory.length === 1 ? "item" : "items"} registered
                 </span>
@@ -524,7 +525,8 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {activeTab === "rota" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            {/* Named by the strip above on a wide screen. */}
+            <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deacon &amp; Deaconess Duty Rota</h2>
               <p className="text-xs text-moss">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
             </div>
@@ -579,7 +581,8 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <div>
+            {/* Named by the strip above on a wide screen. */}
+            <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deaconate Board Roster</h2>
               <p className="text-xs text-moss">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
             </div>
@@ -595,7 +598,8 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex items-center gap-1">
             <BackToOverviewArrow />
-            <div>
+            {/* Named by the strip above on a wide screen. */}
+            <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deaconate Ordinances &amp; Event Schedule</h2>
               <p className="text-xs text-moss">Communion services, foot washing setup, baptism preparations, and sanctuary maintenance.</p>
             </div>
