@@ -103,6 +103,9 @@ type UnifiedRow = {
 
 type KindFilter = "all" | RequestKind;
 
+/** The membership desk filters by its own statuses, not the shared buckets. */
+type TransferOnlyStatus = "under_review" | "completed" | "cancelled";
+
 /** Pill colour for a request status, shared by the table and the phone cards. */
 const statusPillClass = (status: string) =>
   status === "pending" || status === "verification_pending" || status === "under_review" || status === "new" || status === "received"
@@ -119,7 +122,7 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   visitation: { label: "Visitation", badge: "bg-sage/10 text-sage-bright" },
   dedication: { label: "Child dedications", badge: "bg-bark/10 text-bark" },
   welfare: { label: "Welfare & support", badge: "bg-gold-deep/10 text-gold-shadow" },
-  transfer: { label: "Membership transfers", badge: "bg-moss/10 text-moss-mid" },
+  transfer: { label: "Membership requests", badge: "bg-moss/10 text-moss-mid" },
 };
 
 const JOINING_MODE_LABELS: Record<string, string> = {
@@ -167,7 +170,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [activeTab, setActiveTab] = useState<KindFilter>(initialTab === "transfers" ? "transfer" : initialTab);
   // The review-state filter. Pending leads by default — the desk exists to
   // answer people — while the desks filter itself starts at all.
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter | TransferOnlyStatus>("pending");
   const [prayerRequests, setPrayerRequests] = useState<PrayerItem[]>([]);
   const [visitationRequests, setVisitationRequests] = useState<VisitationItem[]>([]);
   const [childDedications, setChildDedications] = useState<ChildDedicationItem[]>([]);
@@ -451,7 +454,13 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
-      if (statusFilter !== "all" && reviewBucket(row) !== statusFilter) return false;
+      if (statusFilter !== "all") {
+        if (activeTab === "transfer" && row.kind === "transfer") {
+          if (row.status !== statusFilter) return false;
+        } else if (reviewBucket(row) !== (statusFilter as StatusFilter)) {
+          return false;
+        }
+      }
       if (!query) return true;
       return (
         row.title.toLowerCase().includes(query) ||
@@ -491,19 +500,34 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
   const kindCount = (kind: KindFilter) => (kind === "all" ? rows.length : rows.filter((r) => r.kind === kind).length);
 
-  const statusCount = (filter: StatusFilter) =>
+  const statusCount = (filter: string) =>
     rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
       if (filter === "all") return true;
-      return reviewBucket(row) === filter;
+      // The membership desk reads its own statuses; everywhere else the
+      // shared review buckets answer.
+      if (activeTab === "transfer" && row.kind === "transfer") return row.status === filter;
+      return reviewBucket(row) === (filter as StatusFilter);
     }).length;
 
-  const statusFilterOptions: { value: StatusFilter; label: string }[] = [
-    { value: "pending", label: "Pending" },
-    { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Rejected" },
-    { value: "all", label: "All" },
-  ];
+  // On the membership desk the filter reads the desk's own statuses; the
+  // other desks keep the three review buckets.
+  const statusFilterOptions: { value: string; label: string }[] =
+    activeTab === "transfer"
+      ? [
+          { value: "pending", label: "Pending" },
+          { value: "under_review", label: "Under review" },
+          { value: "approved", label: "Approved" },
+          { value: "completed", label: "Completed" },
+          { value: "cancelled", label: "Cancelled" },
+          { value: "all", label: "All" },
+        ]
+      : [
+          { value: "pending", label: "Pending" },
+          { value: "approved", label: "Approved" },
+          { value: "rejected", label: "Rejected" },
+          { value: "all", label: "All" },
+        ];
 
   const activeStatusLabel = statusFilterOptions.find((option) => option.value === statusFilter)?.label || "Pending";
 
@@ -514,7 +538,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     { value: "visitation", label: "Visitation" },
     { value: "dedication", label: "Child dedications" },
     { value: "welfare", label: "Welfare & support" },
-    { value: "transfer", label: "Membership transfers" },
+    { value: "transfer", label: "Membership requests" },
   ];
 
   const activeFilterLabel = activeTab === "all" ? "All requests" : KIND_META[activeTab].label;
@@ -538,26 +562,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       </div>
 
-      {/* One search bar + two popover filters + metrics, all on one row. */}
+      {/* The two popover filters on the left, the search beside them — the
+          office narrows first, then looks. */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 flex-1 sm:max-w-sm">
-          <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-          </svg>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, contact, details..."
-            className="w-full rounded-full border border-sand-mute bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-ember"
-          />
-        </div>
-
         {/* Status filter: pending by default — the desk exists to answer. */}
         <div className="relative" ref={statusRef}>
           <button
@@ -566,7 +573,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             aria-expanded={statusOpen}
             className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember"
           >
-            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" ? "bg-emerald-600" : statusFilter === "rejected" ? "bg-rose-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
+            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" || statusFilter === "completed" ? "bg-emerald-600" : statusFilter === "rejected" || statusFilter === "cancelled" ? "bg-rose-500" : statusFilter === "under_review" ? "bg-blue-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
             {activeStatusLabel}
             <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{statusCount(statusFilter)}</span>
             <svg className={`h-3 w-3 text-moss transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -592,7 +599,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                     role="menuitemradio"
                     aria-checked={selected}
                     onClick={() => {
-                      setStatusFilter(option.value);
+                      setStatusFilter(option.value as StatusFilter | TransferOnlyStatus);
                       setStatusOpen(false);
                     }}
                     className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
@@ -649,6 +656,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                     aria-checked={selected}
                     onClick={() => {
                       setActiveTab(option.value);
+                      // Each desk opens on its default answer — the membership
+                      // desk's own statuses would leave a stale bucket active.
+                      setStatusFilter("pending");
                       setFilterOpen(false);
                     }}
                     className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
@@ -665,6 +675,25 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               })}
             </div>
           )}
+        </div>
+
+        {/* The search sits beside the filters — narrowed first, then found. */}
+        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+          <svg
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, contact, details..."
+            className="w-full rounded-full border border-sand-mute bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-ember"
+          />
         </div>
       </div>
 

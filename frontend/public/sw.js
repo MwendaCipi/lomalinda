@@ -122,9 +122,24 @@
    Administration badge.
 
    v38 — the rail reads Dashboard under a Dashboard heading of its own
-   again, before My church. Chrome changed, so installed apps must take the
-   new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v38";
+   again, before My church.
+
+   v39 — a department desk drops its header bar: the back arrow, the name
+   repeated, and the “· 0 members · 0 events” count that read the same
+   whatever the desk held.
+
+   v40 — the transfer modal greets nobody: it just asks the two things the
+   office cannot know. The membership row reads Transfer.
+
+   v41 — a role card takes the whole width of the dashboard, whether the
+   member serves one area or several.
+
+   v42 — the roster's toggles read All, Members, S. School, Friends:
+   active and inactive are found by search and switched in Actions. The
+   clerkship's transfers desk is Membership Requests, and its filter reads
+   the desk's own statuses, sitting left of the search. Chrome changed, so
+   installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v42";
 const STATIC_ASSETS = [
   "/",
   "/about/",

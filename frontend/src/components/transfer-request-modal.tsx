@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 
@@ -26,30 +26,8 @@ export type TransferRequestModalProps = {
 export function TransferRequestModal({ open, onClose, onSubmitted }: TransferRequestModalProps) {
   const [destination, setDestination] = useState("");
   const [reason, setReason] = useState("");
-  const [memberName, setMemberName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-
-  // Opening wipes the last attempt and reads the member's own identity, so the
-  // form can greet them by name and the request can carry their contacts.
-  // (The reset itself is the parent's `key` — every open is a fresh mount —
-  // so this effect only fetches.)
-  useEffect(() => {
-    if (!open) return;
-    const token = localStorage.getItem("access_token");
-    if (!token) return;
-    let alive = true;
-    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((me) => {
-        if (!alive || !me) return;
-        setMemberName(me.name || me.username || "");
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [open]);
 
   if (!open) return null;
 
@@ -118,13 +96,6 @@ export function TransferRequestModal({ open, onClose, onSubmitted }: TransferReq
         <form onSubmit={submit} className="mt-5 space-y-4">
           {message && (
             <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{message}</p>
-          )}
-
-          {memberName && (
-            <p className="rounded-xl bg-sand-linen p-3 text-xs text-moss">
-              Requesting as <strong className="text-bark">{memberName}</strong> — your name, email and phone
-              come from your account, so the office knows who is asking.
-            </p>
           )}
 
           <div>

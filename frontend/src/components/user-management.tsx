@@ -103,16 +103,16 @@ type InvitationFilter = "confirmed" | "pending";
  * one nobody has approved yet. Both are inactive and only one of them is the
  * office's to act on, so they are told apart here rather than merged.
  */
-type StatusFilter = "all" | "active" | "inactive" | "awaiting";
+/** The account-type toggles over the confirmed roster. Active and inactive
+ *  are not toggles of their own: the Actions menu switches an account on or
+ *  off, and the search box finds either by name. */
+type TypeFilter = "all" | "member" | "sabbath_school" | "friend";
 
-const STATUS_TABS: { key: StatusFilter; label: string; help: string }[] = [
+const TYPE_TABS: { key: TypeFilter | "awaiting"; label: string; help: string }[] = [
   { key: "all", label: "All", help: "Every confirmed record" },
-  { key: "active", label: "Active", help: "These accounts can sign in" },
-  {
-    key: "inactive",
-    label: "Inactive",
-    help: "An officer switched these accounts off. The record, roles and giving history are intact, and Actions can switch them back on.",
-  },
+  { key: "member", label: "Members", help: "On the church roll" },
+  { key: "sabbath_school", label: "S. School", help: "Attends Sabbath School; not yet a baptised member" },
+  { key: "friend", label: "Friends", help: "A friend of the church who is not a member" },
   {
     key: "awaiting",
     label: "Invites (pending)",
@@ -120,10 +120,10 @@ const STATUS_TABS: { key: StatusFilter; label: string; help: string }[] = [
   },
 ];
 
-/** Which of the three account states a roster row is in. */
-function statusOf(member: MemberUser): Exclude<StatusFilter, "all"> {
-  if (member.is_active !== false) return "active";
-  return member.deactivated_at ? "inactive" : "awaiting";
+/** An account nobody has approved yet: inactive, but no officer switched it
+ *  off. These sit under Invites (pending), not on the roster. */
+function isAwaiting(member: MemberUser): boolean {
+  return member.is_active === false && !member.deactivated_at;
 }
 
 /** One served-in stretch of a role, from the member's role history. */
@@ -1220,7 +1220,7 @@ export function UserManagement() {
   // roster, Invites (pending) reads the invitation, transfer and awaiting
   // lists. The filter here is which list is on show.
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   // The roster reads comfortable rows, always — the Compact toggle left this
   // desk so the strip and search can own the header.
   const cellPad = densityCellPad(false);
@@ -1868,8 +1868,9 @@ export function UserManagement() {
   // among the congregation.)
   const visibleMembers = members.filter((member) => !member.is_superuser);
 
-  const matchesStatusFilter = (member: MemberUser) =>
-    statusFilter === "all" || statusOf(member) === statusFilter;
+  const matchesTypeFilter = (member: MemberUser) =>
+    typeFilter === "all" ||
+    accountTypeOf(member.account_type, member.is_disfellowshipped) === typeFilter;
 
   const matchesSearchQuery = (m: MemberUser) => {
     const query = search.toLowerCase();
@@ -1915,20 +1916,13 @@ export function UserManagement() {
   // looks busy and then opens on an empty list. Awaiting accounts are not
   // roster rows — they sit under Invites (pending) with the invitations and
   // transfer requests.
-  const rosterScoped = visibleMembers.filter((m) => statusOf(m) !== "awaiting" && matchesSearchQuery(m));
+  const rosterScoped = visibleMembers.filter((m) => !isAwaiting(m) && matchesSearchQuery(m));
 
-  const statusCounts = rosterScoped.reduce(
-    (counts, member) => {
-      counts[statusOf(member)] += 1;
-      return counts;
-    },
-    { active: 0, inactive: 0, awaiting: 0 },
-  );
   // The Invites tab counts every row the invite list carries: pending
   // invitations, transfer requests and accounts awaiting approval.
-  statusCounts.awaiting = pendingRows.length;
+  const awaitingCount = pendingRows.length;
 
-  const filteredMembers = rosterScoped.filter(matchesStatusFilter);
+  const filteredMembers = rosterScoped.filter(matchesTypeFilter);
 
   // ── Transfer handler ─────────────────────────────────────────────────────
   const handleTransferSubmit = async (e: React.FormEvent) => {
@@ -2142,27 +2136,29 @@ export function UserManagement() {
           {/* Row density left this desk: the roster reads comfortable rows. */}
         </div>
         {/* The record row: the tab strip on the left, the search beside it
-            on the right — All / Active / Inactive over the confirmed roster,
-            Invites (pending) over the invitation, transfer and awaiting
-            lists — with each tab counting what the search leaves. */}
+            on the right — All / Members / S. School / Friends over the
+            confirmed roster (active and inactive are found by search, and
+            switched in Actions), Invites (pending) over the invitation,
+            transfer and awaiting lists — with each tab counting what the
+            search leaves. */}
         <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <SubNav
             className="w-full sm:w-auto"
             label="Record filter"
-            value={invitationFilter === "pending" ? "awaiting" : statusFilter}
+            value={invitationFilter === "pending" ? "awaiting" : typeFilter}
             onChange={(key) => {
               if (key === "awaiting") {
                 setInvitationFilter("pending");
                 return;
               }
               setInvitationFilter("confirmed");
-              setStatusFilter(key as StatusFilter);
+              setTypeFilter(key as TypeFilter);
             }}
-            items={STATUS_TABS.map((tab) => ({
+            items={TYPE_TABS.map((tab) => ({
               key: tab.key,
               label: tab.label,
               help: tab.help,
-              count: tab.key === "awaiting" ? statusCounts.awaiting : tab.key === "all" ? rosterScoped.length + statusCounts.awaiting : statusCounts[tab.key as Exclude<StatusFilter, "all">],
+              count: tab.key === "awaiting" ? awaitingCount : tab.key === "all" ? rosterScoped.length : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === tab.key).length,
             }))}
           />
           <input

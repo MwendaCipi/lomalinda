@@ -187,7 +187,7 @@ export const destinations = {
   },
   membership: {
     href: "/enroll",
-    label: "Membership",
+    label: "Transfer",
     description: "Join through baptism or transfer, or request a transfer out.",
     icon: Users,
     area: "fellowship",
@@ -468,7 +468,7 @@ export const clerkshipItems: RailItem[] = [
     aliasTabs: ["meetings"],
   }),
   officeTab("business", "Business Meetings", Briefcase, { roles: CLERKSHIP_ROLES }),
-  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: CLERKSHIP_ROLES }),
+  officeTab("transfers", "Membership Requests", ClipboardList, { roles: CLERKSHIP_ROLES }),
 ];
 
 /**

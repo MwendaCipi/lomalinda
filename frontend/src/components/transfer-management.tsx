@@ -242,7 +242,7 @@ export function TransferManagement() {
         {/* Named by the strip above on a wide screen. */}
         <div className="md:hidden">
           <h2 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
-            Membership Transfers
+            Membership Requests
           </h2>
           <p className="mt-1 text-sm text-moss">
             Manage incoming &amp; outgoing membership transfer requests or add a manual transfer.
@@ -264,7 +264,7 @@ export function TransferManagement() {
       {/* Loading state */}
       {loading && (
         <div className="py-12 text-center text-sm font-semibold text-moss">
-          Loading membership transfers...
+          Loading membership requests...
         </div>
       )}
 
@@ -279,7 +279,7 @@ export function TransferManagement() {
       {!loading && !error && transfers.length === 0 && (
         <div className="rounded-3xl border border-dashed border-sand-line bg-sand-card p-12 text-center">
           <ClipboardList size={36} className="text-moss-faint" aria-hidden="true" />
-          <h3 className="mt-3 text-base font-bold text-bark">No membership transfer records</h3>
+          <h3 className="mt-3 text-base font-bold text-bark">No membership requests yet</h3>
           <p className="mt-1 text-xs text-moss">
             Click <span className="font-semibold text-bark">&quot;+ Add Membership Transfer&quot;</span> to manually add a member transfer.
           </p>

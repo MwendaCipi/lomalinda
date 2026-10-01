@@ -17,7 +17,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { brand } from "@/lib/brand";
 import {
   Accessibility,
-  ArrowLeft,
   Baby,
   CalendarDays,
   Church,
@@ -1111,16 +1110,13 @@ function WeeklyMeetingsPanel() {
 
 function DepartmentDetail({
   department,
-  onBack,
   onChanged,
   initialTab = "members",
 }: {
   department: DepartmentRow;
-  onBack: () => void;
   onChanged: () => void;
   initialTab?: "members" | "calendar";
 }) {
-  const style = areaStyle(department.code);
   const units = department.units ?? [];
   // Personal Ministries runs the church's weekly rhythm, so the church's own
   // week is kept on its page — see WeeklyMeetingsPanel.
@@ -1332,28 +1328,6 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-      {/* Top bar — flat, not a card: the desk's name on the left and the
-          count inline beside it. */}
-      <div className="shrink-0 border-b border-sand-line pb-3">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to all departments"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-bark transition hover:bg-sand hover:text-ember"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${style.chip}`} aria-hidden="true">
-            {style.icon}
-          </span>
-          <h2 className={`text-lg font-bold ${style.accent}`}>{department.label}</h2>
-          <p className="min-w-0 truncate text-xs text-moss">
-            · {unit ? `${unit} · ` : ""}{roll.length} member{roll.length === 1 ? "" : "s"} · {events.length} event{events.length === 1 ? "" : "s"}
-          </p>
-        </div>
-      </div>
-
         {/* A department that runs as units reads one at a time — the roll,
             the calendar and the leadership all follow the toggle, so
             Kindergarten and Pathfinders are two desks under one roof. */}
@@ -1627,7 +1601,6 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
     return (
       <DepartmentDetail
         department={selected}
-        onBack={() => setSelected(null)}
         onChanged={loadDirectory}
         initialTab={detailTab}
       />

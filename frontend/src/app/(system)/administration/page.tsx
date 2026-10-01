@@ -397,8 +397,8 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><ClipboardList size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Membership Transfers</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Process incoming & outgoing church membership transfer requests.</span>
+                          <span className="block text-sm font-bold text-bark">Membership Requests</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Process incoming & outgoing church membership requests.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>

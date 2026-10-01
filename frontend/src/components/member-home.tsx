@@ -327,14 +327,10 @@ export function MemberHome() {
               <p className="mt-1 text-[11px] text-moss">
                 How the departments and ministries you serve are doing.
               </p>
-              {/* One role takes the whole width rather than a fraction of a
-                  row with a gap beside it — a lone card looks like a mistake
-                  in a grid. */}
-              <div
-                className={`mt-4 grid gap-3 ${
-                  myAreas.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"
-                }`}
-              >
+              {/* Every card takes the whole width, whether the member serves
+                  one area or several — a fraction of a row reads cramped
+                  beside the full-width sections around it. */}
+              <div className="mt-4 grid grid-cols-1 gap-3">
                 {myAreas.map((area) => (
                   <Link
                     key={area.code}
