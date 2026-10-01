@@ -327,10 +327,11 @@ export function MemberHome() {
               <p className="mt-1 text-[11px] text-moss">
                 How the departments and ministries you serve are doing.
               </p>
-              {/* Every card takes the whole width, whether the member serves
-                  one area or several — a fraction of a row reads cramped
-                  beside the full-width sections around it. */}
-              <div className="mt-4 grid grid-cols-1 gap-3">
+              {/* The cards share the section's whole width: one row, an equal
+                  share each, however many areas the member serves — the row is
+                  always filled, never a card left on a line of its own. Phones
+                  stack them. */}
+              <div className="mt-4 grid gap-3 sm:grid-flow-col sm:grid-rows-1 sm:auto-cols-fr">
                 {myAreas.map((area) => (
                   <Link
                     key={area.code}

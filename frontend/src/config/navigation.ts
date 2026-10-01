@@ -223,13 +223,15 @@ export const destinations = {
   },
   give: {
     href: "/give",
-    label: "Giving",
+    label: "Money Giving",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
     area: "stewardship",
-    // The whole Stewardship & Support section reads as "Giving" on the bars —
-    // except Ideas, which belongs to Fellowship.
-    match: ["/give", "/support/campaigns", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
+    // The section reads as "Money Giving" on the bars — except Ideas, which
+    // belongs to Fellowship. Campaigns is deliberately absent: a fund drive
+    // is Fund Drives' page, and claiming it here would keep the highlight
+    // away from its own row.
+    match: ["/give", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
   },
   fundDrives: {
     href: "/support/campaigns",
@@ -596,7 +598,7 @@ export const railEntries: RailEntry[] = [
   },
   { label: "Materials", icon: BookOpen, items: [page("materials")] },
   {
-    label: "Giving",
+    label: "Money Giving",
     icon: HandHeart,
     items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
@@ -691,7 +693,7 @@ export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
   "Materials": "my-church",
-  "Giving": "my-church",
+  "Money Giving": "my-church",
   "Requests": "my-church",
   "Eldership": "ministry",
   "Clerkship": "ministry",
@@ -1011,7 +1013,7 @@ export const footerColumns: { heading: string; links: FooterLink[] }[] = [
     ],
   },
   {
-    heading: "Giving",
+    heading: "Money Giving",
     links: [{ key: "give" }, { key: "fundDrives" }, { key: "inKind" }],
   },
   {

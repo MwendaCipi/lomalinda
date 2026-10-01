@@ -156,7 +156,9 @@
    seated by the member's sex, and neither taking an assistant. The
    report composer's figures follow the period: moving the dates
    re-counts the ledger, and the statement downloads beside Cancel.
-   Chrome changed, so installed apps must take the new shell. */
+   The dashboard's Your roles cards share the section's width — one
+   equal row, however many areas a member serves. Chrome changed, so
+   installed apps must take the new shell. */
 const CACHE_NAME = "sda-loma-linda-meru-v46";
 const STATIC_ASSETS = [
   "/",
