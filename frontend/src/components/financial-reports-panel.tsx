@@ -182,7 +182,96 @@ export function FinancialReportsPanel() {
             : "No published financial statements have been posted yet."}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <>
+        <div className="hidden overflow-x-auto rounded-2xl border border-sand-line bg-white shadow-sm md:block">
+          {/* One list, two shapes: a desk scans a register — one row per
+              statement, the figures as columns — while a phone reads a card
+              per statement. The desk's actions ride the row's end; the
+              congregation reads figures only. */}
+          <table className="w-full text-left text-xs">
+            <thead className="text-[11px] font-bold uppercase tracking-wider text-ember">
+              <tr className="border-b border-sand-line">
+                <th className="px-4 py-3 font-bold">Period</th>
+                <th className="px-4 py-3 font-bold">Statement</th>
+                <th className="px-4 py-3 text-right font-bold">Trust Fund</th>
+                <th className="px-4 py-3 text-right font-bold">Offerings</th>
+                <th className="px-4 py-3 text-right font-bold">Expenditure</th>
+                <th className="px-4 py-3 text-right font-bold">Total in hand</th>
+                {canManage && <th className="px-4 py-3 text-right font-bold">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand-soft">
+              {reports.map((report) => (
+                <tr key={report.id}>
+                  <td className="px-4 py-3">
+                    <span className="font-semibold capitalize text-ember">{report.period_type}</span>
+                    <span className="mt-0.5 block whitespace-nowrap text-[11px] text-moss">
+                      {formatDay(report.period_start)} – {formatDay(report.period_end)}
+                    </span>
+                  </td>
+                  <td className="max-w-[14rem] px-4 py-3">
+                    <span className="font-semibold text-bark">{report.title}</span>
+                    {canManage && !report.published_to_members && (
+                      <span className="ml-2 rounded-full border border-sand-mute px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-moss">
+                        Draft
+                      </span>
+                    )}
+                    {report.notes && (
+                      <span className="mt-0.5 block truncate text-[11px] text-moss" title={report.notes}>
+                        {report.notes}
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-moss">{money(report.trust_fund)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-moss">{money(report.local_church_offerings)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-moss">{money(report.expenditure)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-bark">{money(report.total)}</td>
+                  {canManage && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => downloadPdf(report)}
+                          title="Download PDF"
+                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-ember transition hover:border-ember hover:text-bark"
+                        >
+                          <Download className="h-3 w-3" /> PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPublished(report, !report.published_to_members)}
+                          title={report.published_to_members ? "Unpublish" : "Publish"}
+                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-linen"
+                        >
+                          {report.published_to_members ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          {report.published_to_members ? "Unpublish" : "Publish"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openComposer(report)}
+                          title="Edit"
+                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-linen"
+                        >
+                          <Pencil className="h-3 w-3" /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(report)}
+                          title="Remove"
+                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                        >
+                          <Trash2 className="h-3 w-3" /> Remove
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="grid gap-4 md:hidden">
           {reports.map((report) => (
             <article key={report.id} className="flex flex-col rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
@@ -215,8 +304,7 @@ export function FinancialReportsPanel() {
               {/* The report's figures, in the field's own language: trust
                   fund and local offerings in, expenditure out, and the total
                   in hand — the local offerings less what was spent, with the
-                  trust fund held apart. On a wide screen three columns with
-                  the total beside them; on a phone each figure takes its own
+                  trust fund held apart. On a phone each figure takes its own
                   row (label left, amount right) — money columns on a 390px
                   card wrap every amount onto two lines. */}
               <dl className="mt-4 grid gap-2 border-t border-sand-line pt-4 text-sm sm:grid-cols-4 sm:gap-3">
@@ -233,7 +321,7 @@ export function FinancialReportsPanel() {
                   <dd className="font-semibold text-bark sm:mt-1">{money(report.expenditure)}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-ember">Total</dt>
+                  <dt className="text-[11px] font-bold uppercase tracking-wider text-ember">Total in hand</dt>
                   <dd className="font-bold text-bark sm:mt-1">{money(report.total)}</dd>
                 </div>
               </dl>
@@ -287,6 +375,7 @@ export function FinancialReportsPanel() {
             </article>
           ))}
         </div>
+        </>
       )}
 
       {composerOpen && (

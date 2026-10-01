@@ -59,7 +59,7 @@ export default function ReportsPage() {
                 <dd className="mt-1 font-semibold">KES {Number(report.expenditure).toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="font-bold text-ember">Total</dt>
+                <dt className="font-bold text-ember">Total in hand</dt>
                 <dd className="mt-1 font-bold">KES {Number(report.total).toLocaleString()}</dd>
               </div>
             </dl>

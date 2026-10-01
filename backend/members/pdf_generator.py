@@ -1,4 +1,5 @@
 import io
+import re
 from decimal import Decimal
 from datetime import datetime
 from django.utils import timezone
@@ -1280,13 +1281,19 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     story = []
     st = get_pdf_styles()
 
+    # The letterhead above already names the denomination in full, so the
+    # name line drops the SDA acronym rather than saying it twice.
+    title_name = re.sub(r"\bS\.?\s?D\.?\s?A\.?\b", "", church_name, flags=re.IGNORECASE)
+    title_name = re.sub(r",\s*,", ",", title_name)
+    title_name = re.sub(r"\s{2,}", " ", title_name).strip(" ,")
+
     period = (
         f"{report.period_start.strftime('%d %b %Y')} – "
         f"{report.period_end.strftime('%d %b %Y')}"
     )
 
     story.append(Paragraph("SEVENTH-DAY ADVENTIST CHURCH", st["subtitle"]))
-    story.append(Paragraph(church_name.upper(), st["title"]))
+    story.append(Paragraph(title_name.upper(), st["title"]))
     story.append(Paragraph("CHURCH FINANCIAL REPORT", st["subtitle"]))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=10))
 
