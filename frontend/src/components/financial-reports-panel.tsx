@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Download, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Eye, EyeOff, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
@@ -37,6 +37,44 @@ export function FinancialReportsPanel() {
   const canManage = Boolean(
     me && (me.is_staff || me.is_superuser || me.roles.includes("treasurer") || me.roles.includes("admin"))
   );
+
+  /** The Actions popover: which statement's menu is open, and where to draw
+   *  it. The register scrolls horizontally, so a plain absolute menu would
+   *  be clipped by the table's edge — the menu is positioned against the
+   *  page, above or below its button as the room allows. */
+  const [openMenu, setOpenMenu] = useState<{ report: Report; x: number; y: number; below: boolean } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const toggleMenu = (report: Report, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (openMenu?.report.id === report.id) {
+      setOpenMenu(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setOpenMenu({
+      report,
+      x: rect.right,
+      y: rect.bottom,
+      below: rect.bottom + 190 <= window.innerHeight,
+    });
+  };
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const close = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpenMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenu(null);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openMenu]);
 
   /** The list, as the API sees it for this viewer — published to everyone,
    *  the full register to the desk. */
@@ -228,41 +266,17 @@ export function FinancialReportsPanel() {
                   <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-bark">{money(report.total)}</td>
                   {canManage && (
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => downloadPdf(report)}
-                          title="Download PDF"
-                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-ember transition hover:border-ember hover:text-bark"
-                        >
-                          <Download className="h-3 w-3" /> PDF
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPublished(report, !report.published_to_members)}
-                          title={report.published_to_members ? "Unpublish" : "Publish"}
-                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-linen"
-                        >
-                          {report.published_to_members ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                          {report.published_to_members ? "Unpublish" : "Publish"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openComposer(report)}
-                          title="Edit"
-                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-linen"
-                        >
-                          <Pencil className="h-3 w-3" /> Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => remove(report)}
-                          title="Remove"
-                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                        >
-                          <Trash2 className="h-3 w-3" /> Remove
-                        </button>
-                      </div>
+                      {/* The row's actions live in one menu — nothing shows
+                          until it is asked for. */}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleMenu(report, e)}
+                        aria-expanded={openMenu?.report.id === report.id}
+                        aria-label={`Actions for ${report.title}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-linen"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" /> Actions
+                      </button>
                     </td>
                   )}
                 </tr>
@@ -387,6 +401,50 @@ export function FinancialReportsPanel() {
             void load();
           }}
         />
+      )}
+
+      {/* The Actions menu, drawn against the page so the register's own
+          scrolling never clips it. */}
+      {openMenu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 w-44 rounded-xl border border-sand-line bg-white py-1 shadow-lg"
+          style={{
+            top: openMenu.below ? openMenu.y + 4 : undefined,
+            bottom: openMenu.below ? undefined : window.innerHeight - openMenu.y + 4,
+            left: Math.max(8, openMenu.x - 176),
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => { setOpenMenu(null); void downloadPdf(openMenu.report); }}
+            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+          >
+            <Download size={12} aria-hidden="true" /> Download PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => { setOpenMenu(null); void setPublished(openMenu.report, !openMenu.report.published_to_members); }}
+            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+          >
+            {openMenu.report.published_to_members ? <EyeOff size={12} aria-hidden="true" /> : <Eye size={12} aria-hidden="true" />}
+            {openMenu.report.published_to_members ? "Unpublish" : "Publish"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setOpenMenu(null); openComposer(openMenu.report); }}
+            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+          >
+            <Pencil size={12} aria-hidden="true" /> Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => { setOpenMenu(null); void remove(openMenu.report); }}
+            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-alert hover:bg-alert-wash"
+          >
+            <Trash2 size={12} aria-hidden="true" /> Remove
+          </button>
+        </div>
       )}
     </div>
   );
