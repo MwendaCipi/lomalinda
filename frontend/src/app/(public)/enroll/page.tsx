@@ -177,6 +177,7 @@ export default function EnrollPage() {
       </div>
 
       <TransferRequestModal
+        key={showTransferModal ? "transfer-open" : "transfer-closed"}
         open={showTransferModal}
         onClose={() => setShowTransferModal(false)}
         onSubmitted={fetchTransfers}

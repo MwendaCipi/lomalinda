@@ -32,11 +32,10 @@ export function TransferRequestModal({ open, onClose, onSubmitted }: TransferReq
 
   // Opening wipes the last attempt and reads the member's own identity, so the
   // form can greet them by name and the request can carry their contacts.
+  // (The reset itself is the parent's `key` — every open is a fresh mount —
+  // so this effect only fetches.)
   useEffect(() => {
     if (!open) return;
-    setMessage("");
-    setDestination("");
-    setReason("");
     const token = localStorage.getItem("access_token");
     if (!token) return;
     let alive = true;
