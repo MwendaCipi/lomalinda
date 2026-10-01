@@ -25,13 +25,17 @@ import {
   Heart,
   HeartPulse,
   Landmark,
+  Mail,
   MicVocal,
+  MoreVertical,
   Music,
   PenLine,
   Plus,
   Pencil,
   Search,
   Sun,
+  UserCog,
+  UserMinus,
   UserPlus,
   Users,
   Volume2,
@@ -122,6 +126,9 @@ type Holder = {
   username: string;
   email: string;
   phone_number: string;
+  /** The holder's sex where the roster records it — the age-based desks'
+      roll reads a sex column, and the board leads that table. */
+  gender?: string;
   photo_url?: string;
   /** The holder's full role set, sent along so the picker edits in place. */
   roles?: string[];
@@ -180,12 +187,22 @@ type RollMember = {
  * members follow, so opening a department reads its leadership at the top of
  * the table rather than in a card to scroll past.
  */
+/** The desks the church files by age read who they are filed by: their
+    roll carries a sex column beside the name. */
+const SHOW_SEX = new Set(["aym", "ambassadors", "children"]);
+
 type RollRow = {
   key: string;
+  /** The user the row is — the board holder's or the roll entry's id, so
+      the row's Actions can act on the person whatever their tie. */
+  id: number;
   name: string;
   username: string;
   email: string;
   phone_number: string;
+  /** The member's sex, where the roster records it — the age-based desks'
+      roll reads it in a column of its own. */
+  sex?: string;
   /** The office held on the department's board, when the row is one of them. */
   office: string | null;
   /** Where a unioned roll row came through ("Choir", a group's name) — the
@@ -248,24 +265,37 @@ function AddMemberModal({
   rollIds,
   onClose,
   onAdd,
+  onBatchAdd,
   /** When set, the picker fills this instead — one modal serves both the
       roll's Add member and a singing group's add-singer. */
   title,
   takenLabel = "On this roll",
   excludeIds,
+  /** Batch mode: picked names gather in a list and one button adds them
+      all — a desk builds its roll a Sabbath class at a time, not a name at
+      a time. The single-add surfaces (singers, choir) stay as they were. */
+  batch = false,
 }: {
   departmentLabel: string;
   rollIds: Set<number>;
   onClose: () => void;
   onAdd: (member: { id: number; name: string }) => void;
+  /** Sends every picked name at once; resolves false when the send was
+      refused, so the modal keeps the picks for a retry. */
+  onBatchAdd?: (members: { id: number; name: string }[]) => Promise<boolean | void>;
   title?: string;
   takenLabel?: string;
   excludeIds?: Set<number>;
+  batch?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
+  // The batch list: picked names wait here until Add members sends them all.
+  const [picked, setPicked] = useState<{ id: number; name: string }[]>([]);
+  const [sending, setSending] = useState(false);
   const inGroup = excludeIds ?? new Set<number>();
+  const pickedIds = new Set(picked.map((p) => p.id));
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -331,13 +361,21 @@ function AddMemberModal({
             <p className="py-4 text-center text-xs text-moss">No members match that search.</p>
           )}
           {results.map((member) => {
-            const onRoll = rollIds.has(member.id) || inGroup.has(member.id);
+            const onRoll = rollIds.has(member.id) || inGroup.has(member.id) || pickedIds.has(member.id);
             return (
               <button
                 key={member.id}
                 type="button"
                 disabled={onRoll}
-                onClick={() => onAdd(member)}
+                onClick={() => {
+                  if (batch) {
+                    setPicked((current) => [...current, { id: member.id, name: member.name }]);
+                    setQuery("");
+                    setResults([]);
+                  } else {
+                    onAdd(member);
+                  }
+                }}
                 className={`flex w-full items-center justify-between gap-2 py-2.5 text-left text-xs transition ${
                   onRoll ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
                 }`}
@@ -347,12 +385,53 @@ function AddMemberModal({
                   <span className="block truncate text-[11px] text-moss-faint">@{member.username}</span>
                 </span>
                 <span className="shrink-0 text-[11px] font-semibold text-ember">
-                  {onRoll ? takenLabel : "Add"}
+                  {onRoll ? takenLabel : batch ? "Pick" : "Add"}
                 </span>
               </button>
             );
           })}
         </div>
+        {batch && (
+          <div className="mt-4 border-t border-sand-line pt-3">
+            {picked.length === 0 ? (
+              <p className="text-center text-[11px] text-moss">Search and pick everyone to add, then send them to the roll together.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {picked.map((member) => (
+                  <li key={member.id} className="flex items-center justify-between gap-2 rounded-xl bg-sand px-3 py-2">
+                    <span className="min-w-0 truncate text-xs font-semibold text-bark">{member.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPicked((current) => current.filter((p) => p.id !== member.id))}
+                      aria-label={`Remove ${member.name} from the list`}
+                      className="shrink-0 text-[11px] font-semibold text-moss transition hover:text-ember"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              disabled={picked.length === 0 || sending}
+              onClick={async () => {
+                setSending(true);
+                try {
+                  // Only a successful send empties the list — a refused
+                  // batch keeps the picks so the desk can retry as-is.
+                  const added = await onBatchAdd?.(picked);
+                  if (added !== false) setPicked([]);
+                } finally {
+                  setSending(false);
+                }
+              }}
+              className="mt-3 w-full rounded-xl bg-ember px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+            >
+              {sending ? "Adding…" : `Add ${picked.length > 0 ? picked.length : ""} member${picked.length === 1 ? "" : "s"}`.trim()}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1574,6 +1653,195 @@ function LeadershipEditModal({
     </div>
   );
 }
+
+/**
+ * Assign a roll member to a role — one person, one seat, one save.
+ *
+ * The roll's Actions popover opens this: the desk picks the position — the
+ * area's own roles, or a custom one it names on the spot (created here by
+ * the same POST the leadership modal uses) — and the save seats the member
+ * through the leadership endpoint, so the derived flags, audiences and the
+ * appointment letters all follow the one path every other seat takes.
+ */
+function AssignRoleModal({
+  department,
+  member,
+  unit,
+  onClose,
+  onSaved,
+}: {
+  department: DepartmentRow;
+  member: { id: number; name: string };
+  /** The unit the roll was reading, for a department that runs as units. */
+  unit: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [roles, setRoles] = useState<DepartmentRoleRow[]>(department.roles);
+  const [roleId, setRoleId] = useState<number | "custom">(
+    department.roles.find((r) => !r.is_custom)?.id ?? (department.roles[0]?.id as number | undefined) ?? "custom"
+  );
+  const [customName, setCustomName] = useState("");
+  const [hasAssistant, setHasAssistant] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const chosen = roles.find((r) => r.id === roleId) ?? null;
+  const seated = chosen?.holders.filter((h) => h.kind === "leader") ?? [];
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      let targetId = roleId;
+      if (targetId === "custom") {
+        const name = customName.trim();
+        if (name.length < 2) {
+          showAlert("Name the role", "Give the custom role a name of at least two characters.", "warning");
+          setSaving(false);
+          return;
+        }
+        const created = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ name, has_assistant: hasAssistant }),
+        });
+        const createdData = await created.json().catch(() => ({}));
+        if (!created.ok) throw new Error(createdData.name?.[0] || createdData.detail || "Could not create the role.");
+        targetId = createdData.id;
+      }
+      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignments: [{ role_id: targetId, member_id: member.id, kind: "leader" }],
+          unit: unit ?? "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not assign the role.");
+      showAlert(
+        "Role assigned",
+        `${member.name} now holds ${chosen ? chosen.name : customName.trim()} in ${department.label}.`,
+        "success",
+        { toast: true, timer: 4000, showConfirmButton: false },
+      );
+      invalidateDepartments();
+      onSaved();
+    } catch (error) {
+      showAlert("Could not assign", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Assign a role to ${member.name}`}
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-bark">Assign role</h3>
+            <p className="text-[11px] text-moss">{member.name} — {department.label}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {roles.map((role) => (
+            <button
+              key={role.id}
+              type="button"
+              onClick={() => setRoleId(role.id)}
+              aria-pressed={roleId === role.id}
+              className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-xs transition ${
+                roleId === role.id
+                  ? "border-ember bg-sand"
+                  : "border-sand-line bg-white hover:border-ember"
+              }`}
+            >
+              <span className="min-w-0">
+                <span className="block font-semibold text-bark">{role.name}</span>
+                {role.holders.length > 0 && (
+                  <span className="block truncate text-[11px] text-moss">
+                    {role.holders.map((h) => h.name).join(", ")}
+                  </span>
+                )}
+              </span>
+              {roleId === role.id && <span className="shrink-0 text-[11px] font-bold text-ember">Selected</span>}
+            </button>
+          ))}
+
+          {/* A role the desk names on the spot — created by the same POST
+              the leadership modal uses, then seated here. */}
+          <button
+            type="button"
+            onClick={() => setRoleId("custom")}
+            aria-pressed={roleId === "custom"}
+            className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-xs transition ${
+              roleId === "custom"
+                ? "border-ember bg-sand"
+                : "border-sand-line bg-white hover:border-ember"
+            }`}
+          >
+            <span className="font-semibold text-bark">A role of its own…</span>
+            <Plus className={`h-3.5 w-3.5 shrink-0 ${roleId === "custom" ? "text-ember" : "text-moss"}`} />
+          </button>
+          {roleId === "custom" && (
+            <div className="space-y-2 rounded-xl border border-sand-line bg-sand px-3 py-3">
+              <input
+                type="text"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g. Pianist, Sponsor, Pathfinders Captain"
+                maxLength={80}
+                className="w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+              />
+              <label className="flex items-center gap-2 text-[11px] text-moss">
+                <input
+                  type="checkbox"
+                  checked={hasAssistant}
+                  onChange={(e) => setHasAssistant(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-sand-mute text-ember focus:ring-ember"
+                />
+                This role may take assistants beside its holder
+              </label>
+            </div>
+          )}
+
+          {/* A leader seat replaces its holder — the same rule the
+              leadership modal asks about before staging. */}
+          {chosen && seated.length > 0 && !seated.some((h) => h.id === member.id) && (
+            <p className="rounded-xl border border-gold-soft bg-sand-cream px-3 py-2 text-[11px] text-bark">
+              {chosen.name} is {seated.map((h) => h.name).join(", ")} — saving gives it to {member.name}.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+          >
+            {saving ? "Assigning…" : "Assign role"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 /** One weekly meeting as the desk edits it. */
 type MeetingDraft = {
   id: number | null;
@@ -2227,11 +2495,16 @@ function DepartmentDetail({
   const [eventSearch, setEventSearch] = useState("");
   const rowPad = densityCellPad();
 
+  const [canManageRoll, setCanManageRoll] = useState(false);
+
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
     fetch(`${API_URL}/api/members/departments/${department.code}/members/${unitQuery(unit)}`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { members: [] }))
-      .then((data) => setRoll(data.members || []))
+      .then((data) => {
+        setRoll(data.members || []);
+        setCanManageRoll(Boolean(data.can_manage));
+      })
       .catch(() => setRoll([]))
       .finally(() => setLoadingRoll(false));
   }, [department.code, unit]);
@@ -2288,12 +2561,40 @@ function DepartmentDetail({
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      showAlert("Added to roll", `${member.name} now serves in ${department.label}.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      showAlert("Added to roll", `${member.name} now belongs to ${department.label}.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       setShowAddMember(false);
       loadRoll();
       onChanged();
     } else {
       showAlert("Could not add", data.detail || "The member could not be added to the roll.", "error");
+    }
+  };
+
+  // The batch add: one request carries every picked name, so a roll of a
+  // Sabbath class costs one modal and one button, not one per person.
+  const addMembers = async (members: { id: number; name: string }[]) => {
+    if (members.length === 0) return;
+    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ member_ids: members.map((m) => m.id), unit: unit ?? "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const names = members.map((m) => m.name);
+      const detail =
+        names.length === 1
+          ? `${names[0]} now belongs to ${department.label}.`
+          : names.length <= 3
+          ? `${names.join(", ")} now belong to ${department.label}.`
+          : `${names.length} members now belong to ${department.label}.`;
+      showAlert("Added to roll", detail, "success", { toast: true, timer: 5000, showConfirmButton: false });
+      setShowAddMember(false);
+      loadRoll();
+      onChanged();
+    } else {
+      showAlert("Could not add", data.detail || "The members could not be added to the roll.", "error");
+      return false;
     }
   };
 
@@ -2357,6 +2658,27 @@ function DepartmentDetail({
 
   const rollIds = new Set(roll.map((m) => m.id));
 
+  // The roll's per-row Actions popover — one open at a time, found by a
+  // marker on its own wrapper (a ref would only attach to whichever row
+  // mounted last; see the treasury desk's handler for the fuller note).
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-action-menu]")) return;
+      setOpenMenuKey(null);
+    }
+    if (openMenuKey) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuKey]);
+
+  // Assign Role: the desk seats a member into one of the area's roles —
+  // its own seeded ones or a custom one it creates on the spot.
+  const [assignFor, setAssignFor] = useState<RollRow | null>(null);
+
+  /** Quiet contact lines for the popover: only what the account carries. */
+  const contactOf = (row: RollRow) => [row.email, row.phone_number].filter(Boolean);
+
   /**
    * The table's rows: the department's board first — its leader, then each
    * assistant, each wearing the office they hold — and the roll's own members
@@ -2384,10 +2706,12 @@ function DepartmentDetail({
       seen.add(key);
       rows.push({
         key,
+        id: holder.id,
         name: holder.name,
         username: holder.username,
         email: holder.email,
         phone_number: holder.phone_number,
+        sex: holder.gender || roll.find((m) => keyOf(m) === key)?.gender || "",
         office,
         via: null,
         member: roll.find((m) => keyOf(m) === key) ?? null,
@@ -2399,10 +2723,12 @@ function DepartmentDetail({
       seen.add(key);
       rows.push({
         key,
+        id: member.id,
         name: member.name,
         username: member.username,
         email: member.email,
         phone_number: member.phone_number,
+        sex: member.gender,
         office: null,
         via: member.via ?? null,
         member,
@@ -2489,13 +2815,17 @@ function DepartmentDetail({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
             <h3 className="text-sm font-bold text-bark">Department roll</h3>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowAddMember(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Add member
-              </button>
+              {/* Only the hands the roll's endpoint would accept: the office
+                  and the area's own leadership. A member reads the roll. */}
+              {canManageRoll && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddMember(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Add member
+                </button>
+              )}
             </div>
           </div>
           <div className="border-b border-sand-line px-4 py-2.5">
@@ -2521,6 +2851,12 @@ function DepartmentDetail({
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                   <tr className="border-b border-sand-line">
                     <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                    {/* The desks the church files by age read who they are
+                        filed by: Young Adults, Ambassadors and Children's
+                        roll carries a sex column. */}
+                    {SHOW_SEX.has(department.code) && (
+                      <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Sex</th>
+                    )}
                     <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
                     <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>
                   </tr>
@@ -2548,25 +2884,75 @@ function DepartmentDetail({
                           )}
                         </div>
                       </td>
+                      {SHOW_SEX.has(department.code) && (
+                        <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
+                          <span className="text-moss">{row.sex ? (row.sex.toLowerCase() === "female" ? "Female" : "Male") : "—"}</span>
+                        </td>
+                      )}
                       <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
                         <span className="truncate text-moss">{row.phone_number || row.email || `@${row.username}`}</span>
                       </td>
                       <td className={`px-4 ${rowPad} text-right align-middle`}>
-                        {row.member ? (
+                        <div className="relative inline-block" data-action-menu>
                           <button
                             type="button"
-                            onClick={() => row.member && removeMember(row.member)}
-                            className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                            onClick={() => setOpenMenuKey(openMenuKey === row.key ? null : row.key)}
+                            aria-expanded={openMenuKey === row.key}
+                            aria-label={`Actions for ${row.name}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
                           >
-                            Remove
+                            Actions
+                            <MoreVertical className="h-3 w-3 text-moss" />
                           </button>
-                        ) : row.via ? (
-                          /* Through the choir or a singing group — the roll
-                             here has no row to take off. */
-                          <span className="text-[11px] italic text-moss-faint">In {row.via}</span>
-                        ) : (
-                          <span className="text-[11px] italic text-moss-faint">Appointed</span>
-                        )}
+                          {openMenuKey === row.key && (
+                            <div className="absolute right-0 top-full z-40 mt-1.5 w-48 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenuKey(null);
+                                  setAssignFor(row);
+                                }}
+                                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                              >
+                                <UserCog className="h-4 w-4 text-ember" /> Assign role
+                              </button>
+                              {contactOf(row).length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuKey(null);
+                                    const [email, phone] = contactOf(row);
+                                    window.open(
+                                      email
+                                        ? `mailto:${email}?subject=${encodeURIComponent(`${department.label} — a word from your department`)}`
+                                        : `tel:${(phone ?? "").replace(/\s+/g, "")}`,
+                                      "_self",
+                                    );
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                                >
+                                  <Mail className="h-4 w-4 text-sage-strong" /> Contact member
+                                </button>
+                              )}
+                              {row.member ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuKey(null);
+                                    removeMember(row.member!);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                                >
+                                  <UserMinus className="h-4 w-4" /> Remove
+                                </button>
+                              ) : (
+                                <p className="px-3 py-2 text-[11px] italic text-moss-faint">
+                                  {row.via ? `On the roll through ${row.via}` : "Appointed — no roll entry"}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2580,13 +2966,15 @@ function DepartmentDetail({
               {visibleRoll.length} {visibleRoll.length === 1 ? "person" : "people"}
               {rollQuery ? ` of ${rollRows.length}` : ""} shown · {roll.length} on the roll
             </p>
-            <button
-              type="button"
-              onClick={() => setShowAddMember(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-            >
-              <UserPlus className="h-3.5 w-3.5" /> Add Member
-            </button>
+            {canManageRoll && (
+              <button
+                type="button"
+                onClick={() => setShowAddMember(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Add Member
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2673,8 +3061,23 @@ function DepartmentDetail({
         <AddMemberModal
           departmentLabel={department.label}
           rollIds={rollIds}
+          batch
           onClose={() => setShowAddMember(false)}
           onAdd={addMember}
+          onBatchAdd={addMembers}
+        />
+      )}
+      {assignFor && (
+        <AssignRoleModal
+          department={department}
+          member={{ id: assignFor.id, name: assignFor.name }}
+          unit={unit}
+          onClose={() => setAssignFor(null)}
+          onSaved={() => {
+            setAssignFor(null);
+            loadUnitBoard();
+            onChanged();
+          }}
         />
       )}
       {showJoin && (

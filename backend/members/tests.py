@@ -8443,3 +8443,140 @@ class DepartmentFundTests(APITestCase):
             }, format='json').status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+
+class DepartmentVisibilityTests(APITestCase):
+    """The church's areas are the member's own map.
+
+    A member belongs to one age- and gender-based group — the profile's
+    ``ministry`` naming the gender-based one (AMM, AWM, Young Adults,
+    Ambassadors) and ``department`` the age-based one — and sees that group
+    plus any area they serve or hold a place on. The offices see every area;
+    the roll's Add member is the desk's and the office's hands only.
+    """
+
+    def setUp(self):
+        self.plain = User.objects.create_user('vis.plain', 'vis.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member', ministry='adventist_men')
+        self.woman = User.objects.create_user('vis.woman', 'vis.woman@example.com', 'StrongPass#2026', first_name='Wanjiro', last_name='Woman')
+        MemberProfile.objects.create(user=self.woman, role='member', roles='member', ministry='adventist_women')
+        self.elder = User.objects.create_user('vis.elder', 'vis.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.leader = User.objects.create_user('vis.leader', 'vis.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member', ministry='adventist_women')
+        self.awm = Department.objects.get(code='awm')
+        self.awm_leader_role = DepartmentRole.objects.get(department=self.awm, name='Leader')
+        DepartmentAssignment.objects.create(department=self.awm, role=self.awm_leader_role, member=self.leader, kind='leader')
+
+    def test_a_member_sees_their_own_group_and_no_other(self):
+        """One gender-based group per member: the directory shows AMM to a
+        man filed there, and neither AWM nor the rest of the church."""
+        self.client.force_authenticate(self.plain)
+        codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertIn('amm', codes)
+        self.assertNotIn('awm', codes)
+        self.assertNotIn('aym', codes)
+
+        # The rail reads the same answer from /me.
+        me_codes = {row['code'] for row in self.client.get('/api/members/me/').data['my_departments']}
+        self.assertEqual(me_codes, {'amm'})
+
+    def test_a_leader_sees_their_group_and_the_area_they_lead(self):
+        """A woman filed with AWM who leads AWM sees that area once; the
+        leadership tie adds nothing the belonging has not already named."""
+        self.client.force_authenticate(self.leader)
+        codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertEqual(codes, {'awm'})
+
+    def test_the_office_sees_every_area(self):
+        self.client.force_authenticate(self.elder)
+        codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertIn('amm', codes)
+        self.assertIn('awm', codes)
+        self.assertIn('aym', codes)
+
+    def test_a_roll_place_adds_the_area_to_the_members_map(self):
+        """Serving outside the member's own group — a place on another
+        area's roll — puts that area on the map beside the member's own."""
+        DepartmentMembership.objects.create(member=self.plain, department='music')
+        self.client.force_authenticate(self.plain)
+        codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertEqual(codes, {'amm', 'music'})
+
+    def test_only_the_desk_and_office_see_add_member(self):
+        """The roll's write flag — the thing the Add member button reads —
+        is the desk's and the office's hands only; a member of the area
+        reads the roll without it."""
+        self.client.force_authenticate(self.plain)
+        self.assertFalse(self.client.get('/api/members/departments/amm/members/').data['can_manage'])
+        self.client.force_authenticate(self.leader)
+        self.assertTrue(self.client.get('/api/members/departments/awm/members/').data['can_manage'])
+        self.client.force_authenticate(self.elder)
+        self.assertTrue(self.client.get('/api/members/departments/awm/members/').data['can_manage'])
+
+    def test_the_roll_adds_a_list_of_members_in_one_go(self):
+        """A desk builds its roll a Sabbath class at a time: one request
+        carries every name, the already-enrolled are counted rather than
+        failing, and one unknown id refuses the batch whole."""
+        self.client.force_authenticate(self.elder)
+        response = self.client.post('/api/members/departments/awm/members/', {
+            'member_ids': [self.woman.id, self.leader.id],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['added'], 2)
+        roll_ids = {
+            row['id'] for row in self.client.get('/api/members/departments/awm/members/').data['members']
+        }
+        self.assertLessEqual({self.woman.id, self.leader.id}, roll_ids)
+
+        # The same list again: nobody new, nobody failed — counted.
+        again = self.client.post('/api/members/departments/awm/members/', {
+            'member_ids': [self.woman.id, self.leader.id],
+        }, format='json')
+        self.assertEqual(again.status_code, status.HTTP_200_OK)
+        self.assertEqual(again.data['added'], 0)
+        self.assertEqual(again.data['already'], 2)
+
+        # One unknown id refuses the batch whole — nothing is written.
+        unknown_id = User.objects.order_by('-id').first().id + 1000
+        refused = self.client.post('/api/members/departments/awm/members/', {
+            'member_ids': [self.plain.id, unknown_id],
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(
+            DepartmentMembership.objects.filter(member=self.plain, department='awm').exists()
+        )
+
+        # The write stays the desk's and the office's hands only.
+        self.client.force_authenticate(self.woman)
+        self.assertEqual(
+            self.client.post('/api/members/departments/awm/members/', {
+                'member_ids': [self.woman.id],
+            }, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_amm_and_awm_carry_a_young_couples_unit(self):
+        """The men's and women's groups each keep a Young Couples fellowship
+        inside them: the directory names the unit, the roll reads one at a
+        time, and a couple seated under the unit answers to it and to the
+        group as a whole."""
+        for code in ('amm', 'awm'):
+            department = Department.objects.get(code=code)
+            self.assertIn('Young Couples', department.unit_names, f"{code} should carry the Young Couples unit")
+
+        self.client.force_authenticate(self.elder)
+        directory = self.client.get('/api/members/departments/').data['departments']
+        awm_row = next(d for d in directory if d['code'] == 'awm')
+        self.assertIn('Young Couples', awm_row['units'])
+
+        # A couple seated in the unit rides the unit toggle: the unit read
+        # names them, and the whole-group read carries them too.
+        DepartmentMembership.objects.create(
+            member=self.plain, department='awm', unit='Young Couples',
+        )
+        unit_read = self.client.get('/api/members/departments/awm/members/?unit=Young%20Couples').data
+        self.assertIn(self.plain.id, {row['id'] for row in unit_read['members']})
+        self.assertEqual(unit_read['unit'], 'Young Couples')
+        all_read = self.client.get('/api/members/departments/awm/members/').data
+        self.assertIn(self.plain.id, {row['id'] for row in all_read['members']})

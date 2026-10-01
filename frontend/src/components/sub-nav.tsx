@@ -19,8 +19,12 @@ export type SubNavItem = {
 /** One page of a section, as the section's own strip names it. */
 export type SectionNavItem = SubNavItem & { href: string };
 
-/** The segmented strip. Independent buttons: no pill around them. */
-const stripClass = "h-12 w-full items-center gap-1.5 overflow-x-auto sm:w-auto sm:shrink-0";
+/** The segmented strip. Independent buttons: no pill around them. On a phone
+ *  the strip wraps into rows rather than scrolling sideways — a chip pushed
+ *  off-screen is a page the member does not know exists, so every view stays
+ *  in sight, and the desk-sized widths keep the one-row scroll. */
+const stripClass =
+  "min-h-12 w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
 const tabClass = (active: boolean) =>
   `flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition sm:flex-none ${
@@ -55,6 +59,9 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
  * control switches *within* the page you already opened, so it rides above
  * the content it swaps. (The section's *pages* are a different thing: those
  * are navigation, and they are the strip the shell draws above this page.)
+ *
+ * On a phone the chips wrap into rows instead of scrolling away, so nothing
+ * a page offers is hiding past the edge.
  *
  * `sticky` pins the strip — and anything passed as `trailing` — to the top of
  * the scrolling page under a hairline, for a page whose own table scrolls
@@ -115,9 +122,9 @@ export function SubNav({
  * A section's pages, as a strip at the top of each of them — every width.
  *
  * These are the rows that used to hang under a rail item: the same list, on
- * the page rather than hidden behind a caret in the sidebar. A phone shows the
- * same strip: its tab bar is plain navigation, so the page's siblings ride
- * above the content exactly as they do on a desktop, and a page opens clean.
+ * the page rather than hidden behind a caret in the sidebar. A phone shows
+ * the same strip wrapped into rows — nothing rides out of sight — and a page
+ * opens clean.
  */
 export function SectionNav({
   items,

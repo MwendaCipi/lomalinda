@@ -7358,19 +7358,35 @@ def role_labels_with_assistants(profile, codes):
     )
 
 
-def user_departments(user):
-    """The departments an account belongs to, for the feed's addressed tab.
+def member_area_codes(user):
+    """The areas of the church this account may see, as department codes.
 
-    A department counts when the account sits on its roll (the membership
-    list the department hub curates) or serves among its leaders and
-    assistants — the same two relationships department_audience_user_ids()
-    resolves when a ``dept_*`` post decides who receives it, so what a
-    member sees under "My departments" is exactly what was addressed to
-    them. The inactive are skipped — the audience resolver requires active
-    accounts.
+    The age- and gender-based groups — AMM, AWM, Young Adults, the rest —
+    are the church's own way of filing its people: each member belongs to
+    exactly one, the profile's ``ministry`` naming the gender-based group
+    and ``department`` the age-based one. A member sees that one group (or
+    both, when the office has filed them in two), the offices see every
+    area, and anyone serving as a department's leader or assistant — or
+    carrying a place on its roll — sees that area beside their own, because
+    they work there.
     """
     if not getattr(user, 'is_active', False):
         return []
+    if department_office_profile(user):
+        return list(Department.objects.filter(is_active=True).values_list('code', flat=True))
+    profile = getattr(user, 'member_profile', None)
+    # The profile names the ties in its own vocabulary — ``ministry`` speaks
+    # of Adventist Men, ``department`` of age buckets — so both are translated
+    # into the department codes the rest of the system files areas by.
+    profile_ties = {
+        {'adventist_men': 'amm', 'adventist_women': 'awm', 'young_adults': 'aym', 'ambassadors': 'ambassadors'}.get(
+            getattr(profile, 'ministry', '') or ''
+        ),
+        {'children': 'children', 'young_adults': 'aym'}.get(
+            getattr(profile, 'department', '') or ''
+        ),
+    } - {None}
+    ties = set(profile_ties)
     roll_codes = set(DepartmentMembership.objects.filter(
         member=user, member__is_active=True,
     ).values_list('department', flat=True))
@@ -7379,9 +7395,24 @@ def user_departments(user):
             member=user, department__is_active=True,
         ).values_list('department__code', flat=True)
     )
+    return list(ties | roll_codes | assigned_codes)
+
+
+def user_departments(user):
+    """The departments an account belongs to, for the feed's addressed tab.
+
+    A department counts when the account sits on its roll (the membership
+    list the department hub curates), serves among its leaders and
+    assistants, or is the age- and gender-based group the member's profile
+    names — the same set ``member_area_codes`` answers, so what a member
+    sees under "My departments" is exactly the areas they can open on the
+    rail and exactly what was addressed to them. The inactive are skipped —
+    the audience resolver requires active accounts.
+    """
+    codes = member_area_codes(user)
     return [
         {'code': row.code, 'label': row.name, 'audience_code': f'dept_{row.code}'}
-        for row in Department.objects.filter(code__in=roll_codes | assigned_codes, is_active=True)
+        for row in Department.objects.filter(code__in=codes, is_active=True)
     ]
 
 
@@ -7437,6 +7468,9 @@ def department_holders(department, unit=None):
             'username': user.get_username(),
             'email': user.email or '',
             'phone_number': (profile.phone_number if profile else '') or '',
+            # The roll's age-based desks read a sex column; the board leads
+            # the table, so the office carries its holder's too.
+            'gender': (profile.gender if profile else '') or '',
             'photo_url': getattr(profile, 'photo_url', '') or '',
             'roles': list(profile.get_roles()) if profile else ['member'],
             'assistant_roles': list(profile.get_assistant_roles()) if profile else [],
@@ -7457,11 +7491,18 @@ def department_holders(department, unit=None):
 
 
 class DepartmentDirectoryView(APIView):
-    """One row per department: leadership, roles, roll size, calendar count."""
+    """One row per department: leadership, roles, roll size, calendar count.
+
+    The read is the member's own map of the church: a member sees the areas
+    they belong to — their age- and gender-based group first, any area they
+    serve or hold a place on beside it — while the church's offices see
+    every area. The desks keep their own paths to the areas they serve.
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        visible_codes = set(member_area_codes(request.user))
         counts = {
             row['department']: row['total']
             for row in DepartmentMembership.objects.values('department').annotate(total=Count('id'))
@@ -7471,7 +7512,7 @@ class DepartmentDirectoryView(APIView):
             for row in DepartmentEvent.objects.values('department').annotate(total=Count('id'))
         }
         departments = []
-        for department in Department.objects.filter(is_active=True):
+        for department in Department.objects.filter(is_active=True, code__in=visible_codes):
             leader, assistants = department_holders(department.code)
             departments.append({
                 'code': department.code,
@@ -8064,6 +8105,39 @@ class DepartmentMembersView(APIView):
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can add members.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # A list adds them all in one go — a desk builds its roll a Sabbath
+        # class at a time, not a name at a time. Everyone named must be an
+        # active account before anything is written, so a typo refuses the
+        # batch whole; the already-enrolled are counted rather than failing.
+        if isinstance(request.data.get('member_ids'), list):
+            target = Department.objects.filter(code=department, is_active=True).first()
+            unit = str(request.data.get('unit') or '').strip()
+            if unit and unit not in target.unit_names:
+                return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
+            unique_ids = list(dict.fromkeys(pk for pk in request.data['member_ids'] if pk is not None))
+            people = User.objects.filter(pk__in=unique_ids, is_active=True)
+            if len(people) != len(unique_ids):
+                return Response({'detail': 'One of the people named is not an active account.'}, status=status.HTTP_400_BAD_REQUEST)
+            by_id = {row.pk: row for row in people}
+            added, already = 0, 0
+            for pk in unique_ids:
+                membership, created = DepartmentMembership.objects.get_or_create(
+                    member=by_id[pk], department=department,
+                    defaults={'added_by': request.user, 'unit': unit},
+                )
+                if created:
+                    added += 1
+                elif membership.unit != unit:
+                    membership.unit = unit
+                    membership.save(update_fields=['unit'])
+                else:
+                    already += 1
+            return Response({
+                'detail': f"{added} of {len(unique_ids)} added to the roll.",
+                'added': added, 'already': already,
+            }, status=status.HTTP_201_CREATED if added else status.HTTP_200_OK)
+
         try:
             target_user = User.objects.get(pk=request.data.get('member_id'))
         except (User.DoesNotExist, TypeError, ValueError):

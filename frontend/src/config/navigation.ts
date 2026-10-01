@@ -123,6 +123,7 @@ export const destinations = {
   announcements: {
     href: "/announcements",
     label: "Announcements",
+    short: "News",
     description: "Notices and updates shared with the church family.",
     icon: Megaphone,
     area: "fellowship",
@@ -144,6 +145,7 @@ export const destinations = {
   testimonies: {
     href: "/spiritual/testimonies",
     label: "Testimonies",
+    short: "Stories",
     description: "Read and share how God is at work among us.",
     icon: Sparkles,
     area: "fellowship",
@@ -157,7 +159,7 @@ export const destinations = {
   prayerVisitation: {
     href: "/community/prayer",
     label: "Prayer Requests",
-    short: "Prayer & Care",
+    short: "Prayer",
     description: "Send a prayer request to the church's pastoral prayer team.",
     icon: Heart,
     area: "fellowship",
@@ -181,6 +183,7 @@ export const destinations = {
   childDedication: {
     href: "/community/child-dedication",
     label: "Child Dedication",
+    short: "Dedication",
     description: "Begin a conversation about dedicating your child during worship.",
     icon: ClipboardList,
     area: "fellowship",
@@ -237,6 +240,7 @@ export const destinations = {
   fundDrives: {
     href: "/support/campaigns",
     label: "Fund Drives",
+    short: "Drives",
     description: "Active fund drives and how far along they are.",
     icon: Target,
     area: "stewardship",
@@ -245,6 +249,7 @@ export const destinations = {
   inKind: {
     href: "/support/in-kind",
     label: "In-Kind Giving",
+    short: "In-Kind",
     description: "Offer goods, equipment, services or time instead of money.",
     icon: Gift,
     area: "stewardship",
@@ -253,6 +258,7 @@ export const destinations = {
   budget: {
     href: "/support/budget",
     label: "Church Budget",
+    short: "Budget",
     description: "Published annual budgets and how departments plan to use them.",
     icon: BarChart3,
     area: "stewardship",
@@ -261,7 +267,7 @@ export const destinations = {
   financial: {
     href: "/support/financial",
     label: "Live Balances",
-    short: "Live Balances",
+    short: "Balances",
     description: "What the church's treasury accounts hold right now.",
     icon: Activity,
     area: "stewardship",
@@ -480,15 +486,16 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * elders' strip. An administrator holds the desk too.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES }),
+  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES, short: "Users" }),
   // Board and business meetings are two rows of this strip, not a desk
   // behind another menu. The old "meetings" tab still opens the board list.
   officeTab("board", "Board Meetings", Armchair, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["meetings"],
+    short: "Board",
   }),
-  officeTab("business", "Business Meetings", Briefcase, { roles: CLERKSHIP_ROLES }),
-  officeTab("transfers", "Membership Requests", ClipboardList, { roles: CLERKSHIP_ROLES }),
+  officeTab("business", "Business Meetings", Briefcase, { roles: CLERKSHIP_ROLES, short: "Business" }),
+  officeTab("transfers", "Membership Requests", ClipboardList, { roles: CLERKSHIP_ROLES, short: "Transfers" }),
 ];
 
 /**
@@ -508,8 +515,8 @@ export const eldershipItems: RailRow[] = [
     // The one-worder rides a phone; the desk's full name rides everywhere else.
     short: "Leadership",
   }),
-  officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES }),
-  officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
+  officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES, short: "Settings" }),
+  officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES, short: "News" }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
 ];
 
@@ -517,8 +524,8 @@ export const eldershipItems: RailRow[] = [
 export const deaconateItems: RailRow[] = [
   officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
-  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES }),
-  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES }),
+  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES, short: "Team" }),
+  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES, short: "Calendar" }),
 ];
 
 /** Which heading a department is filed under. */
@@ -556,11 +563,12 @@ export const treasuryItems: RailRow[] = [
   {
     href: "/administration/reconciliation",
     label: "Contributions Ledger",
+    short: "Ledger",
     icon: Scale,
     match: ["/administration/reconciliation"],
     roles: ["treasurer", "admin"],
   },
-  officeTab("accounts", "Church Accounts", Landmark, { roles: ["treasurer", "admin"] }),
+  officeTab("accounts", "Church Accounts", Landmark, { roles: ["treasurer", "admin"], short: "Accounts" }),
   // Expenditure is no longer a page of this strip: it is one of the accounts
   // desk's own views (Church Accounts / Income / Expenditure), where recording
   // spending sits beside the accounts it debits. An old `?tab=expenditures`
@@ -568,14 +576,15 @@ export const treasuryItems: RailRow[] = [
   {
     href: "/administration/fund-drives",
     label: "Fund Drives",
-    // No `short` here: the row reads Fund Drives at every width, on the rail
-    // and on the strip alike.
+    // The rail row reads Fund Drives at every width; the phone's strip chip
+    // shortens to Drives, as the member's Money Giving strip does.
+    short: "Drives",
     icon: Target,
     match: ["/administration/fund-drives"],
     roles: ["treasurer", "admin"],
   },
-  officeTab("budget", "Church Budget", BarChart3, { roles: ["treasurer", "admin"] }),
-  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
+  officeTab("budget", "Church Budget", BarChart3, { roles: ["treasurer", "admin"], short: "Budget" }),
+  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"], short: "Refunds" }),
 ];
 
 /**
@@ -763,9 +772,10 @@ export function canSee(
 /** The rail's wording for an area — the short forms, so a 256px rail never
  *  has to ellipsis "Adventist Possibility Ministries (APM)" into mush. The
  *  full names stay everywhere else (the directory, the desks, the titles). */
-/** The areas the rail carries in a row of their own rather than under the
- *  Ministries heading. */
-const RAIL_AREA_CODES_MOVED = new Set(["music"]);
+/** The areas the Ministries heading never generates a row for: Music keeps
+ *  a row of its own, and the choir stands inside the Music desk now. */
+const RAIL_AREA_CODES_MOVED = new Set(["music", "choir"]);
+
 
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "AMM",
@@ -814,15 +824,25 @@ export function railFor(
     // filled yet contributes nothing, so the heading vanishes with it.
     if (entry.fromDepartments) {
       const group = entry.fromDepartments;
+      // A member reads their own areas — the age- and gender-based group
+      // their profile names, and any area they serve or hold a place on.
+      // `myCodes` is that set, all of it for the church's offices (the /me
+      // payload answers the same question the directory does, so the rail
+      // never shows a row the member cannot open). The ministries stay the
+      // church's open doors, and a member with nothing yet keeps the
+      // invitation. Belonging is a different thing from seeing; the ask to
+      // join lives inside the area's own page, not on the rail.
       const visible = departments
         .filter((department) => department.group === group)
-        // The music areas have a row of their own, so the heading stops
-        // generating them.
-        .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code));
-      // Every area of the group is everyone's to read: a member sees the
-      // whole list exactly as the office does. Belonging is a different
-      // thing from seeing — the ask to join lives inside the area's own
-      // page, not on the rail.
+        // Music and choir stand outside the heading — music has a row of
+        // its own, and the choir lives in the Music desk.
+        .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
+        .filter(
+          (department) =>
+            group === "ministry" ||
+            myCodes.length === 0 ||
+            myCodes.includes(department.code),
+        );
       return visible.map((department) => ({
         label: RAIL_AREA_LABELS[department.code] ?? department.label,
         icon: DEPARTMENT_ICONS[department.code] ?? Users,

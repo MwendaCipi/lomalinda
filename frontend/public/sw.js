@@ -167,8 +167,23 @@
    giving row is Giving again — the strips keep Money Giving — and a
    fund drive's progress and breakdown cards stand level on a PC.
    The treasury's rows read in full: Fund Drives and Church Budget.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v46";
+
+   v47 — the church's areas are the member's own map: a member sees their
+   age- and gender-based group (AMM, AWM, Young Adults, the rest) and any
+   area they serve or hold a place on, while the offices see every row on
+   the rail and in Your areas, which now shows for members too. The roll's
+   Add member is the desk's and the office's hands only, gathers every
+   picked name into one send, and the answer now reads "now belongs to".
+   Each roll row gathers its deeds behind Actions — assign a role (the
+   desk's own or one it names), reach the member, take them off — and
+   Young Adults, Ambassadors and Children read a sex column, and AMM and
+   AWM keep a Young Couples fellowship inside each — the desk's own toggle.
+   The choir no longer stands alone on the rail — it keeps its place in
+   the Music desk. On a phone a section's chips wrap into rows rather
+   than slip past the strip's edge, reading their short names, so no
+   page hides off-screen. Chrome changed, so installed apps must take
+   the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v47";
 const STATIC_ASSETS = [
   "/",
   "/about/",
