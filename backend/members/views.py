@@ -4631,6 +4631,39 @@ class ChurchFinancialReportSuggestionsView(APIView):
         })
 
 
+class ChurchFinancialReportPdfView(APIView):
+    """A statement as a page, printed for the desk's own use.
+
+    The paper copy is the treasurer's instrument — for the noticeboard, the
+    records file, a hand-out — so the desk alone may draw one, exactly as the
+    desk alone may write the figures the page carries.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            return Response(
+                {'error': 'Only church treasurers or administrators can print a financial report.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            report = ChurchFinancialReport.objects.get(pk=pk)
+        except ChurchFinancialReport.DoesNotExist:
+            return Response({'error': 'Financial report not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        church_setting = ChurchSettings.objects.first()
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+
+        pdf_bytes = generate_financial_report_pdf(church_name=church_name, report=report)
+
+        safe_title = ''.join(ch if ch.isalnum() else '_' for ch in report.title).strip('_')[:60] or 'Report'
+        filename = f"Financial_Report_{safe_title}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
 class ChurchBudgetsView(generics.ListCreateAPIView):
     """The church's yearly budgets — read by anyone, written by the treasurer.
 
@@ -6382,6 +6415,7 @@ from .pdf_generator import (
     generate_reconciliation_pdf,
     generate_member_giving_statement_pdf,
     generate_business_meeting_pdf,
+    generate_financial_report_pdf,
     generate_contribution_thermal_receipt_pdf,
     generate_in_kind_thermal_receipt_pdf,
 )
@@ -7359,6 +7393,7 @@ DEPARTMENT_LEAD_ROLE = {
     'ambassadors': 'ambassadors_leader',
     'apm': 'apm_leader',
     'chaplaincy': 'chaplaincy',
+    'health': 'health_leader',
 }
 
 
@@ -7818,6 +7853,31 @@ class DepartmentLeadershipView(APIView):
         members = User.objects.filter(id__in=member_ids, is_active=True)
         if len(members) != len(member_ids):
             return Response({'detail': 'One of the people chosen is not an active account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The seats the church fills by sex: the deaconate's two offices —
+        # the Head Deacon is a man's, the Head Deaconess a woman's. The
+        # member's own profile answers where it says; a blank gender cannot
+        # prove the rule either way, so it is left to the desk to know their
+        # people. Neither seat takes an assistant, and a role that does not
+        # take one refuses the flag — all of it checked before anything is
+        # seated, so one refused entry refuses the batch.
+        seat_sex_by_office = {'head deacon': 'male', 'head deaconess': 'female'}
+        for entry in submitted:
+            role = roles[entry.get('role_id')]
+            kind = entry.get('kind') or 'leader'
+            if kind not in ('leader', 'assistant'):
+                return Response({'detail': 'An appointment is a leader or an assistant.'}, status=status.HTTP_400_BAD_REQUEST)
+            if kind == 'assistant' and not role.has_assistant:
+                return Response({'detail': f"{role.name} does not take an assistant."}, status=status.HTTP_400_BAD_REQUEST)
+            seat_sex = seat_sex_by_office.get(role.name.strip().lower())
+            if seat_sex:
+                member = members.get(pk=entry.get('member_id'))
+                gender = str(getattr(getattr(member, 'member_profile', None), 'gender', '') or '').strip().lower()
+                if gender and gender != seat_sex:
+                    return Response(
+                        {'detail': f"The {role.name} is a {'man' if seat_sex == 'male' else 'woman'}'s office."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         for entry in submitted:
             role = roles[entry.get('role_id')]

@@ -4807,13 +4807,16 @@ class RoleRegisterAndAssistantTests(APITestCase):
         self.assertIn('can only be an assistant on a role', response.data['detail'])
 
     def test_the_role_register_is_serialized_on_the_roster(self):
+        # The deaconate's offices no longer take an assistant: granting the
+        # flag is refused the way an elder role's is.
         self._set(self.first, ['head_deacon'])
-        self._set(self.second, ['head_deacon'], assistants=['head_deacon'])
+        refused = self._set(self.second, ['head_deacon'], assistants=['head_deacon'])
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('does not take an assistant', refused.data['detail'])
 
-        response = self.client.get(f'/api/members/users/{self.second.id}/')
+        response = self.client.get(f'/api/members/users/{self.first.id}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['roles'], ['head_deacon'])
-        self.assertEqual(response.data['assistant_roles'], ['head_deacon'])
 
     def test_the_clerk_takes_an_assistant(self):
         """The clerk is a shared office, so a second person may assist."""
@@ -7573,6 +7576,33 @@ class FinancialReportPostingTests(APITestCase):
         self.assertEqual(removed.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(ChurchFinancialReport.objects.filter(pk=report_id).exists())
 
+    def test_only_the_desk_prints_a_report(self):
+        self.client.force_authenticate(self.treasurer)
+        report_id = self._post().data['id']
+        # The treasurer draws the paper copy, published or draft.
+        response = self.client.get(f'/api/members/reports/{report_id}/pdf/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+        self.assertIn('inline', response['Content-Disposition'])
+        draft_id = self._post(published_to_members=False).data['id']
+        self.assertEqual(
+            self.client.get(f'/api/members/reports/{draft_id}/pdf/').status_code,
+            status.HTTP_200_OK,
+        )
+        # A member is refused, and a stranger is never even asked who they are
+        # twice — the paper copy simply is not theirs.
+        self.client.force_authenticate(self.member)
+        self.assertEqual(
+            self.client.get(f'/api/members/reports/{report_id}/pdf/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.client.force_authenticate(None)
+        self.assertEqual(
+            self.client.get(f'/api/members/reports/{report_id}/pdf/').status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
     def test_a_plain_member_cannot_post_or_change_a_report(self):
         self.client.force_authenticate(self.member)
         self.assertEqual(self._post().status_code, status.HTTP_403_FORBIDDEN)
@@ -7738,8 +7768,8 @@ class DepartmentGroupAndUnitTests(APITestCase):
 
     def test_the_desk_adds_a_ministry_and_names_its_units(self):
         created = self.client.post('/api/members/departments/create/', {
-            'name': 'Health Ministries',
-            'description': 'Health talks and the temperance programme.',
+            'name': 'Wellness Ministries',
+            'description': 'Wellness talks and the temperance programme.',
             'group': 'ministry',
             'units': ['Cooking Class', 'Temperance'],
         }, format='json')
@@ -8030,3 +8060,92 @@ class DepartmentRequestDeskTests(APITestCase):
         }, format='json')
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(DepartmentJoinRequest.objects.filter(member=self.member, status='pending').count(), 1)
+
+
+class DeaconateSeatTests(APITestCase):
+    """The deaconate seats its two offices, and each by the member's sex.
+
+    The reshape gave every area a generic Leader and Assistant; the
+    deaconate's own shape is Head Deacon (a man's office) and Head
+    Deaconess (a woman's), neither taking an assistant.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('dea.elder', 'dea.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.client.force_authenticate(self.elder)
+
+        self.deaconate = Department.objects.get(code='deaconate')
+        self.man = User.objects.create_user('dea.man', 'dea.man@example.com', 'StrongPass#2026', first_name='Daniel', last_name='Deacon')
+        MemberProfile.objects.create(user=self.man, role='member', roles='member', gender='male')
+        self.woman = User.objects.create_user('dea.woman', 'dea.woman@example.com', 'StrongPass#2026', first_name='Debby', last_name='Deaconess')
+        MemberProfile.objects.create(user=self.woman, role='member', roles='member', gender='female')
+        self.unknown = User.objects.create_user('dea.unknown', 'dea.unknown@example.com', 'StrongPass#2026', first_name='Aubrey', last_name='Aster')
+        MemberProfile.objects.create(user=self.unknown, role='member', roles='member', gender='')
+
+    def _role(self, name):
+        return DepartmentRole.objects.get(department=self.deaconate, name=name)
+
+    def _board(self):
+        board = {row['name']: row for row in self.client.get(
+            f'/api/members/departments/deaconate/leadership/'
+        ).data['roles']}
+        return board
+
+    def test_the_seats_are_head_deacon_and_head_deaconess(self):
+        board = self._board()
+        self.assertIn('Head Deacon', board)
+        self.assertIn('Head Deaconess', board)
+        self.assertNotIn('Leader', board)
+        self.assertNotIn('Assistant', board)
+        self.assertFalse(board['Head Deacon']['has_assistant'])
+        self.assertFalse(board['Head Deaconess']['has_assistant'])
+
+    def test_a_man_seats_the_head_deacon(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [{'role_id': self._role('Head Deacon').id, 'member_id': self.man.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            role=self._role('Head Deacon'), member=self.man, kind='leader').exists())
+        # The appointment reaches the church-wide flag the desk reads.
+        self.assertIn('head_deacon', MemberProfile.objects.get(user=self.man).get_roles())
+
+    def test_a_woman_cannot_seat_the_head_deacon(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [{'role_id': self._role('Head Deacon').id, 'member_id': self.woman.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(DepartmentAssignment.objects.filter(role=self._role('Head Deacon')).exists())
+
+    def test_a_woman_seats_the_head_deaconess(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [{'role_id': self._role('Head Deaconess').id, 'member_id': self.woman.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('head_deaconess', MemberProfile.objects.get(user=self.woman).get_roles())
+
+    def test_a_man_cannot_seat_the_head_deaconess(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [{'role_id': self._role('Head Deaconess').id, 'member_id': self.man.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_blank_gender_leaves_the_seat_to_the_desk(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [{'role_id': self._role('Head Deacon').id, 'member_id': self.unknown.id, 'kind': 'leader'}],
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+
+    def test_the_offices_take_no_assistants(self):
+        response = self.client.put('/api/members/departments/deaconate/leadership/', {
+            'assignments': [
+                {'role_id': self._role('Head Deacon').id, 'member_id': self.man.id, 'kind': 'leader'},
+                {'role_id': self._role('Head Deacon').id, 'member_id': self.unknown.id, 'kind': 'assistant'},
+            ],
+        }, format='json')
+        # The refused assistant entry refuses the batch — nothing is seated.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('does not take an assistant', response.data['detail'])
+        self.assertFalse(DepartmentAssignment.objects.filter(
+            role=self._role('Head Deacon')).exists())

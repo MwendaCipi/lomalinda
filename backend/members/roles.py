@@ -13,9 +13,9 @@ Two rules come from how the church is actually organised:
 
 * Roles are **shared** — a department may carry several holders at once, so
   there is no one-leader constraint. What stays is the assistant distinction:
-  a holder may be marked as an assistant on any role that takes one (elder
-  roles take none), and a member can never be both a role's plain holder and
-  its assistant at the same time.
+  a holder may be marked as an assistant on any role that takes one (the
+  elder roles and the deaconate's two offices take none), and a member can
+  never be both a role's plain holder and its assistant at the same time.
 """
 
 ADMIN_ROLE = 'admin'
@@ -33,8 +33,8 @@ ROLE_DEFINITIONS = (
     # The congregation's shepherd: a full Church Leaders office. Co-pastors
     # each hold the role — like the elder roles, it takes no assistant.
     ('pastor', 'Church Pastor', 'Church Leaders', False, False),
-    ('head_deacon', 'Head Deacon', 'Church Leaders', False, True),
-    ('head_deaconess', 'Head Deaconess', 'Church Leaders', False, True),
+    ('head_deacon', 'Head Deacon', 'Church Leaders', False, False),
+    ('head_deaconess', 'Head Deaconess', 'Church Leaders', False, False),
     ('treasurer', 'Treasurer', 'Treasury', False, True),
     ('pm_leader', 'PM Leader', None, False, True),
     ('apm_leader', 'APM Leader', 'Adventist Possibility Ministries', False, True),

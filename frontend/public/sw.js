@@ -145,8 +145,17 @@
    v44 — the rail reads Ministry, and a member sees their own areas there
    (music, the deaconate and APM under Ministries even before joining),
    with request-to-join and contact-department buttons when they belong
-   to none. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v44";
+   to none.
+
+   v45 — Health joins the Ministries heading as the church's health
+   ministry: a Health row on the rail, its desk, leader role and join
+   and contact flows.
+
+   v46 — the deaconate seats its two offices, Head Deacon and Head
+   Deaconess, instead of a generic Leader and Assistant — each office
+   seated by the member's sex, and neither taking an assistant. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v46";
 const STATIC_ASSETS = [
   "/",
   "/about/",

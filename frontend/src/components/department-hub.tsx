@@ -23,6 +23,7 @@ import {
   Clock,
   Handshake,
   Heart,
+  HeartPulse,
   Landmark,
   MicVocal,
   PenLine,
@@ -60,6 +61,7 @@ const DEPARTMENT_STYLES: Record<string, { icon: React.ReactNode; accent: string;
   eldership: { icon: <Landmark className="h-4 w-4" />, accent: "text-violet-800", chip: "bg-violet-50 text-violet-800" },
   clerkship: { icon: <PenLine className="h-4 w-4" />, accent: "text-cyan-800", chip: "bg-cyan-50 text-cyan-800" },
   deaconate: { icon: <Handshake className="h-4 w-4" />, accent: "text-emerald-800", chip: "bg-emerald-50 text-emerald-800" },
+  health: { icon: <HeartPulse className="h-4 w-4" />, accent: "text-green-800", chip: "bg-green-50 text-green-800" },
 };
 
 /** A row's style, with a shared neutral look for areas the desk added. */
@@ -75,11 +77,20 @@ const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
   awm: "AWM",
   aym: "AYM",
   apm: "APM",
+  health: "Health",
 };
 
 function shortDeptLabel(department: { code: string; label: string }) {
   return DEPARTMENT_SHORT_LABELS[department.code] ?? department.label;
 }
+
+/** The seats the church fills by sex: the deaconate's two offices. The
+    leadership desk checks the member's recorded sex before staging an
+    appointment; the server refuses the seat at save all the same. */
+const SEAT_SEX_BY_OFFICE: Record<string, "male" | "female"> = {
+  "head deacon": "male",
+  "head deaconess": "female",
+};
 
 /**
  * The one action a directory row keeps: opening the leadership editor.
@@ -987,7 +998,12 @@ type RolePerson = {
   kind: "leader" | "assistant";
   /** The appointment's own id, so releasing one names the row and not the role. */
   assignmentId?: number;
+  /** The member's sex as the roster records it, where the office asks. */
+  gender?: string;
 };
+
+/** One candidate the leadership search returns. */
+type SearchResult = { id: number; name: string; username: string; gender?: string };
 
 type RoleDraft = {
   id: number;
@@ -1072,13 +1088,14 @@ function LeadershipEditModal({
     draft.find((r) => !r.is_custom && r.name.toLowerCase() === "assistant") ??
     draft.find((r) => r.is_custom) ??
     null;
-  // Eldership's offices — everything seeded that is not the generic Leader
-  // or Assistant row. Their assistants, where the church seats any, appear
-  // under the First and Second Assistant columns like every other area's.
-  const elderRoles = draft.filter((r) => !r.is_custom && r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
+  // The area's named offices — everything seeded that is not the generic
+  // Leader or Assistant row: Eldership's three elders, the deaconate's Head
+  // Deacon and Head Deaconess. Their seats are set by name, and (on the
+  // deaconate) by the member's sex, the way the church reads the office.
+  const officeRoles = draft.filter((r) => !r.is_custom && r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1109,10 +1126,11 @@ function LeadershipEditModal({
                 `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
               )
               .slice(0, 8)
-              .map((u: { id: number; first_name?: string; last_name?: string; username: string }) => ({
+              .map((u: { id: number; first_name?: string; last_name?: string; username: string; gender?: string }) => ({
                 id: u.id,
                 name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
                 username: u.username,
+                gender: u.gender,
               }))
           );
         })
@@ -1146,7 +1164,7 @@ function LeadershipEditModal({
   /** Stage one appointment. A leader seat already filled asks first — the
       staged line will replace that holder at save; assistants are uncapped,
       so every press adds another staged line. */
-  const appoint = (role: RoleDraft, seat: "leader" | "assistant", member: { id: number; name: string; username: string }, clearQuery: () => void) => {
+  const appoint = (role: RoleDraft, seat: "leader" | "assistant", member: SearchResult, clearQuery: () => void) => {
     const go = () => {
       setDraft((current) => current.map((r) => {
         if (r.id !== role.id) return r;
@@ -1158,6 +1176,19 @@ function LeadershipEditModal({
       }));
       clearQuery();
     };
+    // The deaconate seats its two offices by sex, as the church reads them:
+    // the Head Deacon is a man's, the Head Deaconess a woman's. Where the
+    // member's profile records a sex, the seat refuses the wrong one before
+    // staging; a profile that does not say leaves the desk to know.
+    const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
+    if (seat === "leader" && seatSex && member.gender && member.gender.toLowerCase() !== seatSex) {
+      showAlert(
+        "Not this office's to hold",
+        `The ${role.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
+        "warning"
+      );
+      return;
+    }
     if (seat === "leader") {
       const before = department.roles.find((r) => r.id === role.id);
       const holder = role.people.find((p) => p.kind === "leader") ?? before?.holders.find((h) => h.kind === "leader");
@@ -1262,19 +1293,33 @@ function LeadershipEditModal({
                       Set leader
                     </button>
                   )}
-                  {elderRoles.map((role) => (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => appoint(role, "leader", member, clearSearch)}
-                      className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
-                    >
-                      Set {role.name}
-                    </button>
-                  ))}
+                  {officeRoles.map((role) => {
+                    // A seat the church fills by sex rests inert under a
+                    // candidate the office is not for — the profile that
+                    // says nothing leaves the button open for the desk to
+                    // judge.
+                    const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
+                    const offSex = Boolean(seatSex && member.gender && member.gender.toLowerCase() !== seatSex);
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        disabled={offSex}
+                        title={offSex ? `The ${role.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.` : undefined}
+                        onClick={() => appoint(role, "leader", member, clearSearch)}
+                        className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
+                          offSex
+                            ? "cursor-not-allowed border border-sand-line bg-sand text-moss-faint"
+                            : "bg-ember text-white hover:bg-ember-deep"
+                        }`}
+                      >
+                        Set {role.name}
+                      </button>
+                    );
+                  })}
                   {/* Eldership seats no assistants — its three offices are
                       the whole board, so no Set assistant there. */}
-                  {assistantRole && elderRoles.length === 0 && (
+                  {assistantRole && officeRoles.length === 0 && (
                     <button
                       type="button"
                       onClick={() => appoint(assistantRole, "assistant", member, clearSearch)}

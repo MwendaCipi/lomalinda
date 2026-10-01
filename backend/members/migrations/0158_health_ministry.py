@@ -25,7 +25,7 @@ def seed_health(apps, schema_editor):
         defaults={
             "name": "Health Ministries",
             "group": "ministry",
-            "sort_order": 19,
+            "sort_order": 20,
             "description": "The church's health ministry: wholeness of body, mind and spirit — health emphases, screenings, cooking schools and the visitation of the sick.",
             "created_at": timezone.now(),
         },

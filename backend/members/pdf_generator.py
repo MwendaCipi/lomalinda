@@ -1252,3 +1252,124 @@ def generate_in_kind_thermal_receipt_pdf(
     c.save()
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generate_financial_report_pdf(church_name, report) -> bytes:
+    """The printed twin of the reports screen: one A4 sheet a treasurer can
+    pin to the noticeboard or hand out.
+
+    The figures speak the field's own language — trust fund and local
+    offerings in, expenditure out, and the total in hand they leave — and
+    the sentence under the table says how the total is read, so the paper
+    teaches the same arithmetic the app does.
+    """
+
+    def _escape(text):
+        return str(text or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=2.0 * cm,
+        bottomMargin=2.5 * cm,
+    )
+
+    story = []
+    st = get_pdf_styles()
+
+    period = (
+        f"{report.period_start.strftime('%d %b %Y')} – "
+        f"{report.period_end.strftime('%d %b %Y')}"
+    )
+
+    story.append(Paragraph("SEVENTH-DAY ADVENTIST CHURCH", st["subtitle"]))
+    story.append(Paragraph(church_name.upper(), st["title"]))
+    story.append(Paragraph("CHURCH FINANCIAL REPORT", st["subtitle"]))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=10))
+
+    # The statement's particulars, in the same boxed strip the meeting packet
+    # uses.
+    meta_data = [[
+        Paragraph(
+            f"<b>Statement:</b> {_escape(report.title)}<br/>"
+            f"<b>Period type:</b> {report.get_period_type_display()}",
+            st["cell"],
+        ),
+        Paragraph(
+            f"<b>Period:</b> {period}<br/>"
+            f"<b>Prepared:</b> {report.created_at.strftime('%d %b %Y')}",
+            st["cell"],
+        ),
+    ]]
+    meta_table = Table(meta_data, colWidths=[9.0 * cm, 9.0 * cm])
+    meta_table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f4ee")),
+            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#dfdbd1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ])
+    )
+    story.append(meta_table)
+    story.append(Spacer(1, 15))
+
+    # The figures, in and out, and the total they leave in hand.
+    story.append(Paragraph("Figures for the period", st["h2"]))
+    fig_rows = [
+        ("Trust Fund", format_money(report.total_tithes), False),
+        ("Local Church Offerings", format_money(report.total_offerings), False),
+        ("Expenditure", format_money(report.total_expenses), False),
+        ("Total (in hand)", format_money(report.total), True),
+    ]
+    fig_data = [[Paragraph("Figure", st["header"]), Paragraph("KES", st["header_right"])]]
+    for label, amount, is_total in fig_rows:
+        fig_data.append([
+            Paragraph(label, st["cell_bold"] if is_total else st["cell"]),
+            Paragraph(amount, st["cell_right_bold"] if is_total else st["cell_right"]),
+        ])
+    fig_table = Table(fig_data, colWidths=[12.0 * cm, 6.0 * cm])
+    fig_style = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#26352f")),
+        # The total line closes the table, shaded and ruled off, so the eye
+        # lands there.
+        ("BACKGROUND", (0, len(fig_data) - 1), (-1, len(fig_data) - 1), colors.HexColor("#f7f4ee")),
+        ("LINEABOVE", (0, len(fig_data) - 1), (-1, len(fig_data) - 1), 1, colors.HexColor("#26352f")),
+    ]
+    fig_table.setStyle(TableStyle(fig_style))
+    story.append(fig_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(
+        "<i>The total in hand is the local church offerings less what was "
+        "spent; the trust fund is held apart from it.</i>",
+        st["cell"],
+    ))
+    story.append(Spacer(1, 15))
+
+    # Whatever the treasurer wanted the congregation to understand.
+    story.append(Paragraph("Notes &amp; Details", st["h2"]))
+    if report.notes:
+        notes_p = Paragraph(_escape(report.notes).replace("\n", "<br/>"), st["cell"])
+        notes_table = Table([[notes_p]], colWidths=[18.0 * cm])
+        notes_table.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f4ee")),
+                ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#dfdbd1")),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ])
+        )
+        story.append(notes_table)
+    else:
+        story.append(Paragraph("<i>No notes accompany this statement.</i>", st["cell"]))
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()

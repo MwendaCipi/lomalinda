@@ -15,6 +15,7 @@ import {
   Gift,
   HandHeart,
   Heart,
+  HeartPulse,
   HeartHandshake,
   Landmark,
   LayoutDashboard,
@@ -535,6 +536,7 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   choir: Music,
   music: Gift,
   personal_ministries: Megaphone,
+  health: HeartPulse,
 };
 
 /**
@@ -763,6 +765,7 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   chaplaincy: "Chaplaincy",
   children: "Children",
   personal_ministries: "PM",
+  health: "Health",
 };
 
 /**

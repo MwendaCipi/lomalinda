@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
@@ -116,6 +116,41 @@ export function FinancialReportsPanel() {
     setReports((rows) => rows.filter((row) => row.id !== report.id));
   };
 
+  /** The statement as a page: fetched with the viewer's own credentials, so
+   *  a draft hands out its PDF only to the desk that owns it — a plain link
+   *  would carry no token and could never tell the desk from a stranger. */
+  const downloadPdf = async (report: Report) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    try {
+      const res = await fetch(`${API_URL}/api/members/reports/${report.id}/pdf/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        await showAlert(
+          "Could not prepare the PDF",
+          "The church's server could not produce the statement. Please try again.",
+          "error"
+        );
+        return;
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `Financial_Report_${report.title.replace(/[^\w-]+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      await showAlert(
+        "Could not prepare the PDF",
+        "The church's server could not be reached. Please try again.",
+        "error"
+      );
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -160,6 +195,18 @@ export function FinancialReportsPanel() {
                   <span className="rounded-full border border-sand-mute px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-moss">
                     Draft
                   </span>
+                )}
+                {/* The paper copy is the desk's instrument — for the
+                    noticeboard or the records file — so only the desk sees
+                    the way to it. The server enforces this too. */}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => downloadPdf(report)}
+                    className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-ember transition hover:text-bark"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download PDF
+                  </button>
                 )}
               </div>
 
