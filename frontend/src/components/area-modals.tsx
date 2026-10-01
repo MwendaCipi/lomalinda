@@ -24,6 +24,8 @@ export type AreaJoinModalProps = {
   open: boolean;
   /** The heading — "Ministries" or "Departments" — the ask is made under. */
   area: string | null;
+  /** An area opened for: the picker arrives on it instead of a blank choice. */
+  initialCode?: string | null;
   onClose: () => void;
 };
 
@@ -31,9 +33,10 @@ export type AreaJoinModalProps = {
  * Ask to join an area of the church. The request lands with the department's
  * leader, its assistants and the elders' desk; the answer comes back to the
  * member's own rail. One modal serves both headings — the member picks the
- * area from a list of what the church actually runs.
+ * area from a list of what the church actually runs — and an area's own page
+ * opens it with that area already chosen.
  */
-export function AreaJoinModal({ open, area, onClose }: AreaJoinModalProps) {
+export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModalProps) {
   const [areas, setAreas] = useState<{ code: string; label: string }[]>([]);
   const [chosen, setChosen] = useState("");
   const [note, setNote] = useState("");
@@ -52,6 +55,7 @@ export function AreaJoinModal({ open, area, onClose }: AreaJoinModalProps) {
     setAskKind("join");
     setGroupName("");
     setGroupDescription("");
+    setChosen(initialCode ?? "");
     const t = token();
     if (!t) return;
     let alive = true;
@@ -67,7 +71,8 @@ export function AreaJoinModal({ open, area, onClose }: AreaJoinModalProps) {
     return () => {
       alive = false;
     };
-  }, [open, area]);
+    // Reopening with another area pre-chosen must reset the form to it.
+  }, [open, area, initialCode]);
 
   if (!open) return null;
 

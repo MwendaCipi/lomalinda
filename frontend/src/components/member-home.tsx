@@ -9,7 +9,7 @@ import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigatio
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
-import { useDepartments, type DepartmentRow } from "@/hooks/use-departments";
+import { useDepartments, useMyDepartments, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
@@ -177,23 +177,34 @@ export function MemberHome() {
     };
   });
 
-  // ── The roles this member holds ─────────────────────────────────────────
-  // A leadership row in the church's own table is what makes someone answer
-  // for an area, so "my roles" is read from that table rather than guessed
-  // from role flags: a member who serves nowhere gets no metrics at all. The
-  // chip names the office itself — "Treasurer", not the generic kind — and a
-  // member holding two offices in one area (rare, but the table allows it)
-  // gets one card naming both.
+  // ── The areas this member belongs to ────────────────────────────────────
+  // Two sources, one list: the leadership table names the offices a member
+  // holds ("Treasurer", not the generic kind), and the roll names the areas
+  // they simply belong to — a department or ministry they are part of
+  // without leading. Either tie puts the area on the card; the badge says
+  // which way the member holds it.
   const myUsername = me?.username ?? "";
+  const myMembershipCodes = useMyDepartments();
   const myAreas: (DepartmentRow & { as: string })[] = myUsername
     ? departments.flatMap((department) => {
         const offices = department.holders
           .filter((holder) => holder.username === myUsername)
           .map((holder) => (holder.role || (holder.kind === "assistant" ? "Assistant" : "Leader")));
-        if (offices.length === 0) return [];
-        return [{ ...department, as: offices.join(" · ") }];
+        const belongs = myMembershipCodes.includes(department.code);
+        if (offices.length === 0 && !belongs) return [];
+        return [{ ...department, as: offices.length > 0 ? offices.join(" · ") : "Member" }];
       })
     : [];
+
+  // The cards wrap in balanced rows — three to a row, except four, which
+  // splits two and two rather than three and a loner. Five reads three and
+  // two, six three and three.
+  const areaRowSizes: number[] =
+    myAreas.length === 4
+      ? [2, 2]
+      : Array.from({ length: Math.ceil(myAreas.length / 3) }, (_, i) => Math.min(3, myAreas.length - i * 3));
+  let areaCursor = 0;
+  const areaChunks = areaRowSizes.map((size) => myAreas.slice(areaCursor, (areaCursor += size)));
 
   const firstName = me?.name?.split(" ")[0] ?? "";
   const greeting = firstName ? `Welcome back, ${firstName}` : "Welcome back";
@@ -313,50 +324,51 @@ export function MemberHome() {
             </section>
           )}
 
-          {/* The roles this member holds. A member serving nowhere gets
-              no metrics at all — this section exists for leaders, and it is
-              the church's own leadership table that decides who that is.
-              The card names the office itself ("Treasurer", not the generic
-              leader/assistant pair), because a title the church keeps is
-              worth reading. */}
+          {/* The areas this member belongs to — departments and ministries
+              alike, whether they hold an office there or only a place on the
+              roll. The badge names the tie: the office itself where one is
+              held, "Member" where the tie is belonging. A member serving
+              nowhere sees nothing here; the rail carries the invitation. */}
           {myAreas.length > 0 && (
-            <section aria-labelledby="your-roles">
-              <h2 id="your-roles" className="text-base font-bold text-bark">
-                Your roles
+            <section aria-labelledby="your-areas">
+              <h2 id="your-areas" className="text-base font-bold text-bark">
+                Your areas
               </h2>
               <p className="mt-1 text-[11px] text-moss">
-                How the departments and ministries you serve are doing.
+                The departments and ministries you belong to, and how they are doing.
               </p>
-              {/* The cards share the section's whole width: one row, an equal
-                  share each, however many areas the member serves — the row is
-                  always filled, never a card left on a line of its own. Phones
-                  stack them. */}
-              <div className="mt-4 grid gap-3 sm:grid-flow-col sm:grid-rows-1 sm:auto-cols-fr">
-                {myAreas.map((area) => (
-                  <Link
-                    key={area.code}
-                    href={`/administration?tab=leaders&dept=${area.code}`}
-                    className="group rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-bold text-bark">{area.label}</h3>
-                      <span className="shrink-0 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-bark">
-                        {area.as}
-                      </span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-lg font-semibold leading-tight text-bark">{area.memberCount}</p>
-                        <p className="text-[11px] leading-tight text-moss">on the roll</p>
+              {areaChunks.map((chunk, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className="mt-4 grid grid-cols-1 gap-3 sm:[grid-template-columns:repeat(var(--cols),minmax(0,1fr))]"
+                  style={{ "--cols": chunk.length } as React.CSSProperties}
+                >
+                  {chunk.map((area) => (
+                    <Link
+                      key={area.code}
+                      href={`/administration?tab=leaders&dept=${area.code}`}
+                      className="group rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-bold text-bark">{area.label}</h3>
+                        <span className="shrink-0 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-bark">
+                          {area.as}
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-lg font-semibold leading-tight text-bark">{area.eventCount}</p>
-                        <p className="text-[11px] leading-tight text-moss">on the calendar</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-lg font-semibold leading-tight text-bark">{area.memberCount}</p>
+                          <p className="text-[11px] leading-tight text-moss">on the roll</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold leading-tight text-bark">{area.eventCount}</p>
+                          <p className="text-[11px] leading-tight text-moss">on the calendar</p>
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                    </Link>
+                  ))}
+                </div>
+              ))}
             </section>
           )}
 

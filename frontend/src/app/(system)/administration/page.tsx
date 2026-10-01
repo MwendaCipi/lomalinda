@@ -155,13 +155,18 @@ function AdministrationContent() {
         // open their desk here, read-mostly. The API still enforces every
         // write, so what they can change is decided server-side.
         const inArea = (data?.my_departments ?? []).some((row: { code?: string }) => row.code);
+        // Opening one area's page is everyone's door: the rail's area rows
+        // land here read-mostly, whatever the viewer belongs to. The desks'
+        // writes stay guarded server-side.
+        const opensAnArea = Boolean(searchDept);
         const isOfficial =
           data &&
           (userRoles.some((r) => officialRoles.includes(r as StaffRole)) ||
             data.is_staff ||
             data.is_superuser ||
             rawRole === "admin" ||
-            inArea);
+            inArea ||
+            opensAnArea);
 
         if (isOfficial) {
           setProfile(data);

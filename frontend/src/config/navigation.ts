@@ -642,7 +642,8 @@ export const railEntries: RailEntry[] = [
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.
   // The choir keeps its own desk under the Ministries heading, next to the
-  // other ministries, where its area code is no longer held out.
+  // other ministries, where its area code is no longer held out. Every member
+  // reads the desk — what it does is the office's to change.
   {
     label: "Music",
     icon: Music,
@@ -654,10 +655,8 @@ export const railEntries: RailEntry[] = [
         match: ["/administration"],
         tab: "leaders",
         dept: "music",
-        roles: STAFF_ROLES,
       },
     ],
-    roles: STAFF_ROLES,
     sectionKey: "ministry",
   },
   // The church's own areas, each one its own row under its own heading.
@@ -784,7 +783,6 @@ const RAIL_AREA_LABELS: Record<string, string> = {
  * the music ministry, the deaconate and the Possibility Ministries desk are
  * the church's open doors — a member with no other area still sees these.
  */
-export const RAIL_MEMBER_SPECIAL_CODES = ["music", "deaconate", "apm"];
 
 /** What a caller tells the rail about the signed-in member. */
 export type RailMember = {
@@ -804,28 +802,28 @@ export function railFor(
   return railEntries.flatMap((entry): RailEntry[] => {
     // The static config never carries a join entry — those are minted below.
     if ("memberJoin" in entry) return [];
-    if (!canSee(entry, roles)) return [];
+    // A heading of the church's own areas is everyone's to read: the
+    // expansion below decides which rows a viewer gets (the office reads
+    // every row, a member reads their own plus the open doors, and a member
+    // with nothing gets the invitation), so the heading's `roles` — written
+    // for the office — never walls a member out of their own area.
+    if (!entry.fromDepartments && !canSee(entry, roles)) return [];
     // A heading of the church's own areas: it expands into one row per
     // ministry (or department), each row opening that area's desk directly
     // and keeping the heading its group names. A group the desk has not
     // filled yet contributes nothing, so the heading vanishes with it.
     if (entry.fromDepartments) {
       const group = entry.fromDepartments;
-      const isMinistriesHeading = group === "ministry";
       const visible = departments
         .filter((department) => department.group === group)
         // The music areas have a row of their own, so the heading stops
         // generating them.
-        .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
-        // A plain member sees the areas they belong to — plus, under
-        // Ministries, the church's open doors (music, deaconate, APM).
-        // The office sees every row.
-        .filter((department) =>
-          isStaff ||
-          myCodes.includes(department.code) ||
-          (isMinistriesHeading && RAIL_MEMBER_SPECIAL_CODES.includes(department.code)),
-        );
-      const rows = visible.map((department) => ({
+        .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code));
+      // Every area of the group is everyone's to read: a member sees the
+      // whole list exactly as the office does. Belonging is a different
+      // thing from seeing — the ask to join lives inside the area's own
+      // page, not on the rail.
+      return visible.map((department) => ({
         label: RAIL_AREA_LABELS[department.code] ?? department.label,
         icon: DEPARTMENT_ICONS[department.code] ?? Users,
         href: `/administration?tab=leaders&dept=${department.code}`,
@@ -835,19 +833,6 @@ export function railFor(
         roles: memberRowRoles,
         sectionKey: entry.sectionKey,
       }));
-      // A member who belongs to no area under a heading gets an invitation
-      // instead of an empty list: the row is inert (the rail renders the
-      // join affordance itself), carried so the heading never disappears.
-      if (rows.length === 0 && !isStaff) {
-        return [{
-          label: entry.label,
-          icon: entry.icon,
-          href: undefined,
-          sectionKey: entry.sectionKey,
-          memberJoin: true,
-        } as RailEntry];
-      }
-      return rows;
     }
     if (!entry.href && entry.items) {
       const items = entry.items.filter((item) => canSee(item, roles));

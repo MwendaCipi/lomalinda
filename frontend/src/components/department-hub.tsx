@@ -43,7 +43,9 @@ import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
+import { useHeaderData } from "@/hooks/use-header-data";
 import { densityCellPad } from "@/lib/table-density";
+import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 
@@ -2206,6 +2208,19 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showLeadership, setShowLeadership] = useState(false);
+  // A member reading the area who is not on its roll can ask to join from
+  // right here — the request goes to the desk, not to the street.
+  const [showJoin, setShowJoin] = useState(false);
+  // Who is reading: on the roll, or holding an office at the desk. A viewer
+  // who is neither is a member looking in — the desk reads, and the ask to
+  // join rides the strip.
+  const { me } = useHeaderData();
+  const myUsername = me?.username ?? "";
+  const onRoll = Boolean(myUsername) && roll.some((m) => m.username === myUsername);
+  const holdsOffice = Boolean(
+    myUsername &&
+      (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
+  );
   const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
@@ -2436,6 +2451,17 @@ function DepartmentDetail({
       <SubNav
         sticky
         label="Department views"
+        trailing={
+          !onRoll && !holdsOffice ? (
+            <button
+              type="button"
+              onClick={() => setShowJoin(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember"
+            >
+              <UserPlus className="h-3.5 w-3.5" /> Request to join
+            </button>
+          ) : null
+        }
         items={[
           { key: "members", label: "Members", icon: Users },
           // Music sings in more than one voice: the choir's own roll and the
@@ -2649,6 +2675,17 @@ function DepartmentDetail({
           rollIds={rollIds}
           onClose={() => setShowAddMember(false)}
           onAdd={addMember}
+        />
+      )}
+      {showJoin && (
+        <AreaJoinModal
+          open
+          area={department.group === "ministry" ? "Ministries" : "Departments"}
+          initialCode={department.code}
+          onClose={() => {
+            setShowJoin(false);
+            loadRoll();
+          }}
         />
       )}
       {showLeadership && (
