@@ -41,7 +41,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
 from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
@@ -8044,7 +8044,14 @@ class DepartmentMembersView(APIView):
                 members.append(row_for(user, via=via))
 
         members.sort(key=lambda m: m['name'].lower())
-        return Response({'members': members, 'unit': unit, 'units': target.unit_names})
+        # The same flag the writes are guarded by, so a desk's Add button
+        # renders only for the hands that can use it.
+        return Response({
+            'members': members,
+            'unit': unit,
+            'units': target.unit_names,
+            'can_manage': can_manage_department(request.user, department),
+        })
 
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
@@ -8607,4 +8614,242 @@ class DepartmentJoinRequestReviewView(APIView):
             message=message,
             link=f'{settings.FRONTEND_URL}/member',
         )
+        return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
+
+
+def department_account(user, code):
+    """The department's fund, for the desk that may read it — or None.
+
+    A department's money is any treasury account pointed at the department
+    (``TreasuryAccount.department``). Reading is for the department's own
+    leadership — the same ``can_manage_department`` gate the rest of the
+    desk answers to — and for the treasurer's office, which keeps every
+    fund the church holds. ``None`` means there is nothing to show: the
+    department has no fund yet, and the desk says so.
+    """
+    if not can_manage_department(user, code) and not is_treasurer_or_admin(user):
+        return None
+    return TreasuryAccount.objects.filter(
+        department__code=code, department__is_active=True,
+    ).order_by('id').first()
+
+
+class DepartmentAccountView(APIView):
+    """A department's own fund: what it holds, and what built it.
+
+    GET answers the balance, the movements on the fund (the ledger lines the
+    treasury already writes — contributions credited, withdrawals debited)
+    and the withdrawal asks the desk has raised. The leader raises a
+    withdrawal with POST; the treasurer answers at
+    DepartmentWithdrawalReviewView.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        account = department_account(request.user, department)
+        if account is None:
+            return Response({
+                'account': None,
+                'can_request_withdrawal': False,
+                'movements': [],
+                'withdrawals': [],
+            })
+
+        movements = [
+            {
+                'id': movement.id,
+                'transaction_type': movement.transaction_type,
+                'transaction_type_display': movement.get_transaction_type_display(),
+                'amount': str(movement.amount),
+                'description': movement.description,
+                'reference': movement.reference,
+                'created_at': movement.created_at,
+            }
+            for movement in account.transactions.all().order_by('-created_at')[:100]
+        ]
+
+        is_treasurer = is_treasurer_or_admin(request.user)
+        withdrawals = [] if is_treasurer else [
+            {
+                'id': row.id,
+                'amount': str(row.amount),
+                'reason': row.reason,
+                'status': row.status,
+                'reply': row.reply,
+                'requested_by': giver_display_name('', member=row.requested_by),
+                'created_at': row.created_at,
+                'decided_at': row.decided_at,
+            }
+            for row in DepartmentWithdrawalRequest.objects.filter(
+                department=target,
+            ).select_related('requested_by', 'decided_by').order_by('-created_at')[:50]
+        ]
+
+        return Response({
+            'account': TreasuryAccountSerializer(account).data,
+            'can_request_withdrawal': can_manage_department(request.user, department) and not is_treasurer,
+            'movements': movements,
+            'withdrawals': withdrawals,
+        })
+
+    def post(self, request, department):
+        """The leader asks the treasurer to pay something out of the fund."""
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': "Only this department's leadership can request a withdrawal."}, status=status.HTTP_403_FORBIDDEN)
+        account = TreasuryAccount.objects.filter(
+            department__code=department, department__is_active=True,
+        ).order_by('id').first()
+        if account is None:
+            return Response({'detail': 'This department has no account to withdraw from yet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(request.data.get('amount')))
+            if amount <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return Response({'detail': 'Say how much the withdrawal is for.'}, status=status.HTTP_400_BAD_REQUEST)
+        reason = str(request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'reason': 'Tell the treasurer what the money is for.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        row = DepartmentWithdrawalRequest.objects.create(
+            department=target, account=account, amount=amount,
+            reason=reason[:255], requested_by=request.user,
+        )
+
+        # The ask lands with the treasurer's office — the people who move the
+        # church's money — as a bell and a mail.
+        audience = User.objects.filter(
+            Q(member_profile__role='treasurer') | Q(member_profile__role='admin'),
+            is_active=True,
+        ).distinct()
+        desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+        subject = f'Withdrawal request from {target.name}'
+        body = (
+            f"{giver_display_name('', member=request.user)} asks for KES {amount:,.2f} "
+            f"from the {account.description or account.name} account — {reason}. "
+            f"Answer it at the treasury's accounts desk: {desk_link}"
+        )
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
+            for person in audience
+        ])
+        try:
+            send_mail(
+                subject, body, settings.DEFAULT_FROM_EMAIL,
+                [u.email for u in audience if u.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+        return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent to the treasurer.'}, status=status.HTTP_201_CREATED)
+
+
+class DepartmentWithdrawalReviewView(APIView):
+    """The treasurer's answer to a department's withdrawal ask.
+
+    GET lists the pending asks across every department — the desk works a
+    queue, not one fund at a time. POST answers one: approving debits the
+    fund and writes the outflow the ledger already speaks, declining sends
+    the reason back to the department's desk. Only the treasurer's office
+    may answer, and only a pending ask may be answered at all.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            return Response({'detail': 'Only church treasurers or administrators can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+        rows = DepartmentWithdrawalRequest.objects.filter(status='pending').select_related(
+            'department', 'account', 'requested_by',
+        ).order_by('created_at')
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'department': row.department.name,
+                    'department_code': row.department.code,
+                    'account_name': row.account.description or row.account.name,
+                    'account_balance': str(row.account.balance),
+                    'amount': str(row.amount),
+                    'reason': row.reason,
+                    'requested_by': giver_display_name('', member=row.requested_by),
+                    'created_at': row.created_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def post(self, request):
+        if not is_treasurer_or_admin(request.user):
+            return Response({'detail': 'Only church treasurers or administrators can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+        row = DepartmentWithdrawalRequest.objects.select_related('department', 'account').filter(
+            pk=request.data.get('id'), status='pending',
+        ).first()
+        if row is None:
+            return Response({'detail': 'That request is not waiting any more.'}, status=status.HTTP_404_NOT_FOUND)
+
+        approve = bool(request.data.get('approve'))
+        reply = str(request.data.get('reply') or '').strip()[:255]
+        if not approve:
+            row.status = 'declined'
+            row.decided_by = request.user
+            row.decided_at = timezone.now()
+            row.reply = reply or 'The treasurer could not approve this withdrawal.'
+            row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+        else:
+            if row.amount > row.account.balance:
+                return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                row.account.balance -= row.amount
+                row.account.save()
+                TreasuryAccountTransaction.objects.create(
+                    account=row.account,
+                    transaction_type='debit',
+                    amount=row.amount,
+                    description=f"Withdrawal for {row.department.name}: {row.reason}"[:255],
+                    reference=f'WD-{row.id}',
+                    created_by=request.user,
+                )
+                row.status = 'approved'
+                row.decided_by = request.user
+                row.decided_at = timezone.now()
+                row.reply = reply
+                row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+
+        # The answer goes back to the desk that asked, and to the leader who
+        # raised it by name.
+        audience_ids = {row.requested_by_id}
+        audience_ids.update(DepartmentAssignment.objects.filter(
+            department=row.department, member__is_active=True,
+        ).values_list('member_id', flat=True))
+        audience = User.objects.filter(id__in=audience_ids, is_active=True).exclude(pk=request.user.id)
+        verb = 'approved' if approve else 'declined'
+        title = f'{row.department.name} withdrawal {verb}'
+        message = row.reply or (
+            f'KES {row.amount:,.2f} has been released from the '
+            f'{row.account.description or row.account.name} account.'
+            if approve else
+            'The treasurer could not approve this withdrawal.'
+        )
+        desk_link = f'{settings.FRONTEND_URL}/administration?tab=leaders&dept={row.department.code}'
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title=title, message=message, link=desk_link)
+            for person in audience
+        ])
+        try:
+            send_mail(
+                title, message, settings.DEFAULT_FROM_EMAIL,
+                [u.email for u in audience if u.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
         return Response({'id': row.id, 'status': row.status, 'reply': row.reply})

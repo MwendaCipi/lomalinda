@@ -86,7 +86,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     .map((item) => ({
       key: item.href as string,
       href: item.href as string,
-      label: item.short ?? item.label,
+      label: item.label,
+      short: item.short,
       icon: item.icon,
       help: item.label,
     }));

@@ -224,6 +224,7 @@ export const destinations = {
   give: {
     href: "/give",
     label: "Money Giving",
+    short: "Giving",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
     area: "stewardship",
@@ -502,7 +503,11 @@ export const eldershipItems: RailRow[] = [
   // Assigning the church's leaders rides the Eldership strip: appointing a
   // leader is work the offices do together, so it is a page of their desk
   // rather than a row of its own.
-  officeTab("leaders", "Leadership", Crown, { roles: ELDERSHIP_ROLES }),
+  officeTab("leaders", "Church Leadership", Crown, {
+    roles: ELDERSHIP_ROLES,
+    // The one-worder rides a phone; the desk's full name rides everywhere else.
+    short: "Leadership",
+  }),
   officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),

@@ -13,7 +13,7 @@
  * server-side, so permissions and audiences follow without a second save.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { brand } from "@/lib/brand";
 import {
   Accessibility,
@@ -26,6 +26,7 @@ import {
   HeartPulse,
   Landmark,
   MicVocal,
+  Music,
   PenLine,
   Plus,
   Pencil,
@@ -34,10 +35,12 @@ import {
   UserPlus,
   Users,
   Volume2,
+  Wallet,
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
+import { dayFirst, dayFirstTime } from "@/lib/dates";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
 import { densityCellPad } from "@/lib/table-density";
@@ -989,6 +992,190 @@ function SingingGroupsPanel({
   );
 }
 
+/** One singer on the choir's own roll, as the department members read carries. */
+type ChoirMember = {
+  membership_id: number | null;
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+  phone_number: string;
+};
+
+/**
+ * The church choir's own roll, opened from the music desk.
+ *
+ * The choir files its singers under its own department — the music roll
+ * unions them in with a "via Choir" chip — so this view is the desk's way of
+ * working that list directly: search it, and add or remove the singers on
+ * it. Adding follows the server's own guard (officers and the choir's own
+ * leadership), and the button rides the flag the read carries.
+ */
+function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; onChanged: () => void }) {
+  const [members, setMembers] = useState<ChoirMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [canManage, setCanManage] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [search, setSearch] = useState("");
+  const rowPad = densityCellPad();
+
+  const loadChoir = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/members/departments/choir/members/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { members: [], can_manage: false }))
+      .then((data) => {
+        setMembers(data.members || []);
+        setCanManage(Boolean(data.can_manage));
+      })
+      .catch(() => setMembers([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    // The fetch starts a microtask late, keeping the effect from writing
+    // state synchronously and cascading the render.
+    let alive = true;
+    void Promise.resolve().then(() => {
+      if (alive) loadChoir();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadChoir]);
+
+  const addSinger = async (member: { id: number; name: string }) => {
+    const res = await fetch(`${API_URL}/api/members/departments/choir/members/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: member.id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showAlert("Singer added", `${member.name} now sings with the choir.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      setShowAdd(false);
+      loadChoir();
+      onChanged();
+    } else {
+      showAlert("Could not add", data.detail || "The member could not be added to the choir.", "error");
+    }
+  };
+
+  const removeSinger = async (singer: ChoirMember) => {
+    const result = await showAlert(
+      "Remove from choir",
+      `Take ${singer.name} off the choir's roll? Their membership in the church is not affected.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
+    );
+    if (!result.isConfirmed) return;
+    const res = await fetch(`${API_URL}/api/members/departments/choir/members/${singer.id}/`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      showAlert("Removed", `${singer.name} is off the choir's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      loadChoir();
+      onChanged();
+    } else {
+      showAlert("Could not remove", "The member could not be removed from the choir.", "error");
+    }
+  };
+
+  const choirQuery = search.trim().toLowerCase();
+  const visibleChoir = choirQuery
+    ? members.filter((m) => `${m.name} ${m.username} ${m.phone_number} ${m.email}`.toLowerCase().includes(choirQuery))
+    : members;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
+        <h3 className="text-sm font-bold text-bark">Church Choir</h3>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+          >
+            <UserPlus className="h-3.5 w-3.5" /> Add singer
+          </button>
+        )}
+      </div>
+      <div className="border-b border-sand-line px-4 py-2.5">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search the choir by name, phone or email…"
+          className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
+        {loading ? (
+          <p className="py-8 text-center text-xs text-moss">Loading the choir…</p>
+        ) : visibleChoir.length === 0 ? (
+          <p className="py-8 text-center text-xs text-moss">
+            {members.length === 0
+              ? canManage
+                ? "Nobody is on the choir's roll yet. Use “Add singer” to build it."
+                : "Nobody is on the choir's roll yet."
+              : "No choir member matches that search."}
+          </p>
+        ) : (
+          <table className="w-full text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
+              <tr className="border-b border-sand-line">
+                <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
+                {canManage && <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand-soft">
+              {visibleChoir.map((singer) => (
+                <tr key={singer.id}>
+                  <td className={`px-4 ${rowPad} align-middle`}>
+                    <p className="truncate font-semibold text-bark">{singer.name}</p>
+                  </td>
+                  <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
+                    <span className="truncate text-moss">{singer.phone_number || singer.email || `@${singer.username}`}</span>
+                  </td>
+                  {canManage && (
+                    <td className={`px-4 ${rowPad} text-right align-middle`}>
+                      <button
+                        type="button"
+                        onClick={() => removeSinger(singer)}
+                        className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
+        <p className="text-xs text-moss">
+          {visibleChoir.length} {visibleChoir.length === 1 ? "singer" : "singers"}
+          {choirQuery ? ` of ${members.length}` : ""} on the choir&apos;s roll
+        </p>
+      </div>
+      {showAdd && (
+        <AddMemberModal
+          departmentLabel={departmentLabel}
+          title="Add singers to the choir"
+          rollIds={new Set<number>()}
+          excludeIds={new Set(members.map((m) => m.id))}
+          takenLabel="Already in the choir"
+          onClose={() => setShowAdd(false)}
+          onAdd={addSinger}
+        />
+      )}
+    </div>
+  );
+}
+
 /** One appointment staged in the leadership modal: the person the save will
     seat under a position — the Leader's, or one of the two Assistants'. */
 type RolePerson = {
@@ -1723,6 +1910,274 @@ function WeeklyMeetingsPanel() {
   );
 }
 
+
+/** One ledger line on a department fund: money in, or money the treasurer
+ *  paid out. */
+type FundMovement = {
+  id: number;
+  transaction_type: string;
+  transaction_type_display: string;
+  amount: string;
+  description: string;
+  reference: string;
+  created_at: string;
+};
+
+/** A withdrawal ask the desk has raised, and the treasurer's answer. */
+type FundWithdrawal = {
+  id: number;
+  amount: string;
+  reason: string;
+  status: "pending" | "approved" | "declined";
+  reply: string;
+  requested_by: string;
+  created_at: string;
+  decided_at?: string | null;
+};
+
+/**
+ * The department's own fund — the Accounts view of its desk.
+ *
+ * Contributions credited to the department's giving account show here with
+ * the balance they built, read straight off the treasury's ledger. What the
+ * desk may not do is move the money: the leader requests a withdrawal, the
+ * request goes to the treasurer, and the answer comes back to this view.
+ */
+function DepartmentAccountsPanel({ department, onChanged }: { department: DepartmentRow; onChanged: () => void }) {
+  const [account, setAccount] = useState<{ name: string; description: string; balance: string | number } | null>(null);
+  const [movements, setMovements] = useState<FundMovement[]>([]);
+  const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
+  const [canRequest, setCanRequest] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const rowPad = densityCellPad();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/members/departments/${department.code}/account/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        setAccount(data?.account ?? null);
+        setMovements(Array.isArray(data?.movements) ? data.movements : []);
+        setWithdrawals(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
+        setCanRequest(Boolean(data?.can_request_withdrawal));
+      })
+      .catch(() => {
+        setAccount(null);
+        setMovements([]);
+        setWithdrawals([]);
+        setCanRequest(false);
+      })
+      .finally(() => setLoading(false));
+  }, [department.code]);
+
+  useEffect(() => {
+    // The state writes ride a microtask, which is what keeps the effect
+    // from cascading the render.
+    let alive = true;
+    void Promise.resolve().then(() => {
+      if (alive) load();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [load]);
+
+  const requestWithdrawal = async (event: FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${department.code}/account/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.reason || "Could not send the request.");
+      setShowWithdrawModal(false);
+      setAmount("");
+      setReason("");
+      showAlert("Request sent", data.detail || "The treasurer has your withdrawal request.", "success");
+      load();
+      onChanged();
+    } catch (error) {
+      showAlert("Could not send the request", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const balance = Number(account?.balance ?? 0);
+
+  return (
+    <div className="space-y-4">
+      {loading ? (
+        <p className="py-8 text-center text-xs text-moss">Loading the fund…</p>
+      ) : !account ? (
+        <div className="rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+          <p className="text-sm font-semibold text-bark">No account yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+            The treasurer has not opened a giving account for {department.label}. Gifts cannot name it until one exists.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* The fund itself: what it holds, and the one ask the desk may
+              make of it. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-moss">
+                {account.description || account.name} — balance
+              </p>
+              <p className="mt-0.5 text-2xl font-bold text-bark">
+                KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            {canRequest && (
+              <button
+                type="button"
+                onClick={() => setShowWithdrawModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <Wallet className="h-4 w-4" />
+                Request withdrawal
+              </button>
+            )}
+          </div>
+
+          {withdrawals.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">Withdrawal requests</h3>
+              {withdrawals.map((row) => (
+                <div key={row.id} className="rounded-xl border border-sand-line bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-bark">
+                      KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} — {row.reason}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        row.status === "approved"
+                          ? "bg-green-50 text-green-800"
+                          : row.status === "declined"
+                            ? "bg-red-50 text-red-800"
+                            : "bg-mist-select text-bark"
+                      }`}
+                    >
+                      {row.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-moss-faint">
+                    Asked by {row.requested_by} · {dayFirst(row.created_at)}
+                  </p>
+                  {row.reply && row.status !== "pending" && (
+                    <p className="mt-1.5 rounded-lg bg-sand px-2.5 py-1.5 text-[11px] text-moss">{row.reply}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* The ledger lines, exactly as the treasury's log reads them. */}
+          <div className="rounded-2xl border border-sand-line bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">Contributions &amp; movements</h3>
+              <span className="text-[11px] text-moss-faint">{movements.length} line{movements.length === 1 ? "" : "s"}</span>
+            </div>
+            {movements.length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-moss">Nothing has moved in this fund yet.</p>
+            ) : (
+              <div className="divide-y divide-sand-soft">
+                {movements.map((movement) => (
+                  <div key={movement.id} className={`flex flex-wrap items-center justify-between gap-2 px-4 ${rowPad}`}>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-bark">{movement.description}</p>
+                      <p className="text-[11px] text-moss-faint">
+                        {movement.reference || movement.transaction_type_display} · {dayFirstTime(movement.created_at)}
+                      </p>
+                    </div>
+                    <p
+                      className={`shrink-0 text-xs font-bold ${
+                        movement.transaction_type === "debit" || movement.transaction_type === "transfer_out"
+                          ? "text-ember"
+                          : "text-moss-dark"
+                      }`}
+                    >
+                      {movement.transaction_type === "debit" || movement.transaction_type === "transfer_out" ? "−" : "+"}KES{" "}
+                      {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-label="Request a withdrawal" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line">
+            <div className="flex items-start justify-between border-b border-sand-line pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-bark">Request a withdrawal</h3>
+                <p className="mt-0.5 text-xs text-moss">The treasurer answers it at the accounts desk.</p>
+              </div>
+              <button type="button" onClick={() => setShowWithdrawModal(false)} aria-label="Close" className="rounded-lg p-1 text-moss hover:bg-sand hover:text-bark">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={requestWithdrawal} className="mt-4 space-y-4">
+              <label className="block text-sm font-medium text-bark">
+                Amount (KES)
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                />
+              </label>
+              <label className="block text-sm font-medium text-bark">
+                What is it for?
+                <textarea
+                  required
+                  rows={3}
+                  maxLength={255}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="What the money will pay for."
+                  className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                />
+              </label>
+              <div className="flex justify-end gap-2 border-t border-sand-line pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowWithdrawModal(false)}
+                  className="rounded-xl border border-sand-mute px-4 py-2 text-sm font-semibold text-bark transition hover:bg-sand-linen"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-bark px-4 py-2 text-sm font-bold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                >
+                  {submitting ? "Sending…" : "Send request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DepartmentDetail({
   department,
   onChanged,
@@ -1751,7 +2206,7 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showLeadership, setShowLeadership] = useState(false);
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -1983,15 +2438,20 @@ function DepartmentDetail({
         label="Department views"
         items={[
           { key: "members", label: "Members", icon: Users },
-          // Music sings in more than one voice: the groups registered under
-          // it get their own view beside the roll.
+          // Music sings in more than one voice: the choir's own roll and the
+          // groups registered under it each get a view beside the roll.
+          ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
           ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
           { key: "calendar", label: "Calendar", icon: CalendarDays },
+          // Every desk reads its own fund when the treasurer has opened one:
+          // the contributions that built it, and the withdrawal the desk's
+          // leadership may ask of it.
+          { key: "accounts", label: "Accounts", icon: Wallet },
           // Only the ministry that keeps the church's week carries its panel.
           ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
         ]}
         value={subTab}
-        onChange={(key) => setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups")}
+        onChange={(key) => setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts")}
         className="-mx-2 md:-mx-4 lg:-mx-6"
       />
 
@@ -2106,6 +2566,7 @@ function DepartmentDetail({
       )}
 
       {/* Calendar tab */}
+      {subTab === "accounts" && <DepartmentAccountsPanel department={department} onChanged={onChanged} />}
       {subTab === "calendar" && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
@@ -2162,6 +2623,9 @@ function DepartmentDetail({
 
       {/* Singing groups — the music register: groups registered under the
           department, each with the singers who make it up. */}
+      {subTab === "choir" && isMusic && (
+        <ChoirPanel departmentLabel={department.label} onChanged={onChanged} />
+      )}
       {subTab === "singing_groups" && isMusic && (
         <SingingGroupsPanel
           departmentCode={department.code}

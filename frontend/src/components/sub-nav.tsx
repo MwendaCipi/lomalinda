@@ -7,6 +7,8 @@ import type { LucideIcon } from "lucide-react";
 export type SubNavItem = {
   key: string;
   label: string;
+  /** A one-worder for a phone's width, where the full name will not fit. */
+  short?: string;
   icon?: LucideIcon;
   /** A count shown beside the label — how much the view holds. */
   count?: number;
@@ -25,11 +27,20 @@ const tabClass = (active: boolean) =>
     active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
   }`;
 
-/** The inside of a strip tab — the name and any count, no icon. */
+/** The inside of a strip tab — the name and any count, no icon. A tab with a
+    `short` says the one-worder on a phone and the full name everywhere else,
+    so a strip can carry "Fund Drives" on a desk and "Drives" in a hand. */
 function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
   return (
     <>
-      {item.label}
+      {item.short ? (
+        <>
+          <span className="sm:hidden">{item.short}</span>
+          <span className="hidden sm:inline">{item.label}</span>
+        </>
+      ) : (
+        item.label
+      )}
       {typeof item.count === "number" ? (
         <span className={`text-xs font-bold ${active ? "text-white/70" : "text-moss-faint"}`}>{item.count}</span>
       ) : null}

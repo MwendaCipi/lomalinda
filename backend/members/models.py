@@ -1805,6 +1805,14 @@ class TreasuryAccount(models.Model):
     )
     account_number = models.CharField(max_length=80, blank=True, default='')
     account_type = models.CharField(max_length=30, choices=ACCOUNT_TYPE_CHOICES, default='bank')
+    # A department's own fund, when one exists: gifts posted to this account
+    # are the department's money, read at its desk, and withdrawals from it
+    # are requested by the department's leadership for the treasurer to pay.
+    # Null is the church's own money, which no department desk reads.
+    department = models.ForeignKey(
+        'Department', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='treasury_accounts',
+    )
     balance = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1849,6 +1857,37 @@ class TreasuryAccountTransaction(models.Model):
 
     def __str__(self):
         return f"{self.get_transaction_type_display()}: KES {self.amount} - {self.account.name}"
+
+
+class DepartmentWithdrawalRequest(models.Model):
+    """A department asks its treasurer to pay money out of its own fund.
+
+    The department's leadership sees its balance and the contributions that
+    built it on the desk's accounts view; what they may not do is move the
+    money — that is the treasurer's alone. So a leader raises a request with
+    the amount and what it is for, and the treasurer answers it: approving
+    debits the fund (the movement lands in the ledger like any other outflow)
+    and declining sends the reason back to the desk.
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('approved', 'Approved'), ('declined', 'Declined')]
+
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='withdrawal_requests')
+    account = models.ForeignKey(TreasuryAccount, on_delete=models.PROTECT, related_name='withdrawal_requests')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_withdrawals_requested')
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='department_withdrawals_decided')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    reply = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.department.name} withdrawal of KES {self.amount} ({self.status})"
 
 
 class Expenditure(models.Model):

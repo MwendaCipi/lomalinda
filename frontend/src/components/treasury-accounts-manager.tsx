@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
-import { dayFirstTime } from "@/lib/dates";
+import { dayFirst, dayFirstTime } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
 import { ExpenditureManager } from "./expenditure-manager";
@@ -28,6 +28,178 @@ type TreasuryAccount = {
   created_at: string;
 };
 
+/** The desk's own bearer header, read the way the component below reads it. */
+const fundAuthHeaders = (): Record<string, string> => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  return token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+};
+
+/** One department's ask for its treasurer: pay this out of our fund. */
+type WithdrawalRequestRow = {
+  id: number;
+  department: string;
+  department_code: string;
+  account_name: string;
+  account_balance: string;
+  amount: string;
+  reason: string;
+  requested_by: string;
+  created_at: string;
+};
+
+/**
+ * The departments' withdrawal queue — the treasurer's side of the fund
+ * arrangement. A department's leadership sees its money on its own desk but
+ * cannot move it; the asks land here, and answering one approves the debit
+ * (the ledger line writes itself) or declines it with a word back.
+ */
+function WithdrawalRequestsPanel() {
+  const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [answering, setAnswering] = useState<number | null>(null);
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rowPad = densityCellPad();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
+      .then((res) => (res.ok ? res.json() : { requests: [] }))
+      .then((data) => setRows(Array.isArray(data?.requests) ? data.requests : []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    // The state writes ride a microtask, which is what keeps the effect
+    // from cascading the render.
+    let alive = true;
+    void Promise.resolve().then(() => {
+      if (alive) load();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [load]);
+
+  const answer = async (id: number, approve: boolean) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/review/`, {
+        method: "POST",
+        headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ id, approve, reply: reply.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not save the answer.");
+      setAnswering(null);
+      setReply("");
+      showAlert(
+        approve ? "Withdrawal approved" : "Withdrawal declined",
+        approve ? "The fund is debited and the desk has been told." : "The desk has your reply.",
+        "success"
+      );
+      load();
+    } catch (error) {
+      showAlert("Could not save the answer", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="py-10 text-center text-xs text-moss">Loading the requests…</p>;
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="m-5 rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-bark">Nothing waiting</p>
+        <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+          When a department&apos;s leadership asks for money from its fund, the ask lands here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-5">
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-bark">
+                  {row.department} — KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </p>
+                <p className="mt-0.5 text-xs text-moss">{row.reason}</p>
+                <p className="mt-1 text-[11px] text-moss-faint">
+                  {row.account_name} holds KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} · asked by{" "}
+                  {row.requested_by} · {dayFirst(row.created_at)}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => answer(row.id, true)}
+                  disabled={busy}
+                  className="rounded-xl bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnswering(answering === row.id ? null : row.id)}
+                  className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+            {answering === row.id && (
+              <div className="mt-3 border-t border-sand-line pt-3">
+                <label className="block text-xs font-semibold text-bark">
+                  Why are you declining?
+                  <textarea
+                    rows={2}
+                    maxLength={255}
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    placeholder="The desk reads this with your answer."
+                    className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAnswering(null);
+                      setReply("");
+                    }}
+                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => answer(row.id, false)}
+                    disabled={busy}
+                    className="rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  >
+                    Decline request
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type AccountTransaction = {
   id: number;
   account: number;
@@ -41,14 +213,14 @@ type AccountTransaction = {
   created_at: string;
 };
 
-export function TreasuryAccountsManager({ initialView }: { initialView?: "accounts" | "income" | "expenditure" } = {}) {
+export function TreasuryAccountsManager({ initialView }: { initialView?: "accounts" | "income" | "expenditure" | "withdrawals" } = {}) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   // Three views over one desk: the accounts themselves, the movement log
   // behind them, and the spending that leaves them. Church Accounts opens
   // first — it is what the desk visits for.
   const router = useRouter();
-  const [view, setView] = useState<"accounts" | "income" | "expenditure">(initialView ?? "accounts");
+  const [view, setView] = useState<"accounts" | "income" | "expenditure" | "withdrawals">(initialView ?? "accounts");
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
   const rowPad = densityCellPad();
@@ -477,6 +649,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
                 { key: "accounts", label: "Church Accounts" },
                 { key: "income", label: "Income" },
                 { key: "expenditure", label: "Expenditure" },
+                { key: "withdrawals", label: "Requests" },
               ] as const).map((tab) => (
                 <button
                   key={tab.key}
@@ -495,7 +668,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
 
           {/* Search and the date window ride beside the toggles. The
               expenditure view owns its own filter bar, so they step aside. */}
-          {view !== "expenditure" && (
+          {view !== "expenditure" && view !== "withdrawals" && (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
               <input
                 type="text"
@@ -539,9 +712,12 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       )}
 
       {/* ── The chosen view lives here; the accounts and income tables stay
-          mounted, while Expenditure hands the space to its own desk. ── */}
+          mounted, while Expenditure and the departments' withdrawal queue
+          hand the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === "expenditure" ? (
+        {view === "withdrawals" ? (
+          <WithdrawalRequestsPanel />
+        ) : view === "expenditure" ? (
           <ExpenditureManager embedded />
         ) : (
           <>

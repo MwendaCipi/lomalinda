@@ -6486,6 +6486,20 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(any(row['id'] == self.plain.id for row in res.data['members']))
 
+    def test_choir_roll_carries_the_manage_flag(self):
+        """The music desk reads the choir's own roll with the same flag its
+        writes are guarded by, so an Add button renders only for the hands
+        that can use it — and a plain member gets no button at all."""
+        self._auth(self.elder)
+        res = self.client.get('/api/members/departments/choir/members/')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data['can_manage'])
+        self._auth(self.plain)
+        res = self.client.get('/api/members/departments/choir/members/')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.data['can_manage'])
+        self.assertEqual(res.data['members'], [])
+
     def test_events_add_list_delete(self):
         self._auth(self.leader)
         res = self.client.post('/api/members/departments/amm/events/', {
