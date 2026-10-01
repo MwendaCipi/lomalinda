@@ -68,16 +68,25 @@ def seed_deaconate(apps, schema_editor):
     # An office held as an assistant releases the assistant flag: neither
     # office takes one. Flags held outright — whether seated here or granted
     # in User Management — pass through untouched.
+    # Historical models carry no helper methods, so the flags are read and
+    # written as the stored columns, mirroring get_assistant_roles() and
+    # set_roles() exactly — the way 0148 did its reshaping.
     for profile in MemberProfile.objects.all():
-        current_assistants = set(profile.get_assistant_roles())
-        released = current_assistants & MANAGED_OFFICE_CODES
+        held = [c.strip() for c in (profile.roles or '').split(',') if c.strip()]
+        legacy = (profile.role or '').strip()
+        if legacy and legacy not in held:
+            held.append(legacy)
+        if not held:
+            held = ['member']
+        stored = [c.strip() for c in (profile.assistant_roles or '').split(',') if c.strip()]
+        current = [c for c in stored if c in held]
+        released = [c for c in current if c in MANAGED_OFFICE_CODES]
         if not released:
             continue
-        profile.set_roles(
-            list(profile.get_roles()),
-            assistants=sorted(current_assistants - released),
-            save=True,
+        profile.assistant_roles = ', '.join(
+            c for c in current if c not in MANAGED_OFFICE_CODES
         )
+        profile.save(update_fields=['assistant_roles'])
 
 
 def restore_rows(apps, schema_editor):

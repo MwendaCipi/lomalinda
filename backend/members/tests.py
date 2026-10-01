@@ -8137,6 +8137,7 @@ class DeaconateSeatTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, 200)
 
+
     def test_the_offices_take_no_assistants(self):
         response = self.client.put('/api/members/departments/deaconate/leadership/', {
             'assignments': [
@@ -8149,3 +8150,67 @@ class DeaconateSeatTests(APITestCase):
         self.assertIn('does not take an assistant', response.data['detail'])
         self.assertFalse(DepartmentAssignment.objects.filter(
             role=self._role('Head Deacon')).exists())
+
+
+class DeaconateSeatsMigrationTests(TestCase):
+    """The 0159 reshape is replayed the way production meets it: on historical models.
+
+    Migration-time models carry only their columns — no get_assistant_roles()
+    or set_roles() — and the seed once crashed in production for exactly that
+    reason. This test loads the migration's own function and runs it against
+    the model state as it stood at 0158, with a stray assistant flag on an
+    office waiting to be released.
+    """
+
+    def _seed(self):
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).parent / 'migrations' / '0159_deaconate_seats.py'
+        spec = importlib.util.spec_from_file_location('m0159_under_test', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.seed_deaconate
+
+    def test_the_seed_runs_on_historical_models_and_releases_office_flags(self):
+        from django.apps import apps as current_apps
+        from django.db import connection
+        from django.db.migrations.loader import MigrationLoader
+
+        loader = MigrationLoader(connection)
+        history = loader.project_state([('members', '0158_health_ministry')]).apps
+        HistoricalDepartment = history.get_model('members', 'Department')
+        HistoricalDepartmentRole = history.get_model('members', 'DepartmentRole')
+        HistoricalProfile = history.get_model('members', 'MemberProfile')
+
+        # The migrations already seed the deaconate, so it is fetched, not created.
+        deaconate = HistoricalDepartment.objects.filter(code='deaconate').first()
+        if deaconate is None:
+            deaconate = HistoricalDepartment.objects.create(
+                code='deaconate', name='Deaconate', is_active=True,
+            )
+        # The historical profile's user FK wants the user model as 0158 knew it.
+        UserModel = HistoricalProfile._meta.get_field('user').remote_field.model
+        user = UserModel.objects.create_user('mig.desk', 'mig.desk@example.com', 'StrongPass#2026')
+        HistoricalProfile.objects.create(
+            user=user, role='treasurer', roles='treasurer,head_deacon',
+            assistant_roles='treasurer,head_deacon',
+        )
+
+        self._seed()(history, None)
+
+        # The two offices exist and neither takes an assistant.
+        for name in ('Head Deacon', 'Head Deaconess'):
+            role = HistoricalDepartmentRole.objects.get(department=deaconate, name=name)
+            self.assertFalse(role.has_assistant)
+        # The office's assistant flag is released; the treasurer's own stays.
+        profile = HistoricalProfile.objects.get(user=user)
+        held = {c.strip() for c in profile.roles.split(',') if c.strip()}
+        flagged = {c.strip() for c in profile.assistant_roles.split(',') if c.strip()}
+        self.assertEqual(flagged & held, {'treasurer'})
+        self.assertNotIn('head_deacon', flagged)
+        # The current app must read the released flag the same way.
+        current_apps.get_model('members', 'MemberProfile').objects.get(pk=profile.pk).refresh_from_db()
+        self.assertEqual(
+            current_apps.get_model('members', 'MemberProfile').objects.get(pk=profile.pk).get_assistant_roles(),
+            ['treasurer'],
+        )
