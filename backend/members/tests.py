@@ -6585,6 +6585,41 @@ class DepartmentApiTests(APITestCase):
         self.assertIn('men_ministry', profile.get_assistant_roles())
         self.assertIn('men_ministry', profile.get_roles())
 
+    def test_assistant_email_names_the_seat_once(self):
+        """The appointment letter names the seat once: the generic Assistant
+        role is itself called "Assistant", and a custom role may open with
+        the word too — neither may read "Assistant Assistant" in the subject
+        or the body."""
+        self._auth(self.elder)
+        directory = self.client.get('/api/members/departments/').json()['departments']
+        amm_row = next(d for d in directory if d['code'] == 'amm')
+        roles = {r['name']: r for r in amm_row['roles']}
+        res = self.client.put('/api/members/departments/amm/leadership/', {
+            'assignments': [
+                {'role_id': roles['Assistant']['id'], 'member_id': self.plain.id, 'kind': 'assistant'},
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+        appointment = next(m for m in mail.outbox if self.plain.email in m.to)
+        self.assertNotIn('Assistant Assistant', appointment.subject)
+        self.assertNotIn('Assistant Assistant', appointment.body)
+
+        # A custom role that opens with the word keeps the seat named once.
+        created = self.client.post('/api/members/departments/amm/leadership/', {
+            'name': 'Assistant Sponsor', 'has_assistant': True,
+        }, format='json')
+        self.assertEqual(created.status_code, 201)
+        mail.outbox.clear()
+        res = self.client.put('/api/members/departments/amm/leadership/', {
+            'assignments': [
+                {'role_id': created.data['id'], 'member_id': self.assistant.id, 'kind': 'assistant'},
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+        appointment = next(m for m in mail.outbox if self.assistant.email in m.to)
+        self.assertIn('Assistant Sponsor', appointment.subject)
+        self.assertNotIn('Assistant Assistant', appointment.subject)
+
     def test_role_add_and_remove(self):
         self._auth(self.elder)
         res = self.client.post('/api/members/departments/amm/leadership/', {

@@ -7909,7 +7909,13 @@ class DepartmentLeadershipView(APIView):
             else:
                 already = DepartmentAssignment.objects.filter(role=role, kind='assistant', member=member, unit=unit).exists()
                 if not already:
-                    appointment_notes.append({'member': member, 'position': f"Assistant {role.name}", 'kind': kind, 'replaced': None})
+                    # The seat is named once: the generic Assistant role is
+                    # itself called "Assistant", and a custom role may open
+                    # with the word too — prefixing again would read
+                    # "Assistant Assistant" in the subject and the letter.
+                    seat_name = role.name.strip().lower()
+                    position = role.name if seat_name.startswith('assistant') else f"Assistant {role.name}"
+                    appointment_notes.append({'member': member, 'position': position, 'kind': kind, 'replaced': None})
             assignment, _created = DepartmentAssignment.objects.get_or_create(
                 role=role, member=member, kind=kind, unit=unit,
                 defaults={'department': target},
