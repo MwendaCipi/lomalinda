@@ -1038,10 +1038,9 @@ export function CampaignManagement({
           {/* Existing Campaigns List */}
           {!skipList ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-bark">
-              {isAdminMode ? `All Fund Drives (${filteredCampaigns.length})` : `Active Fund Drives (${filteredCampaigns.length})`}
-            </h2>
-
+            {/* No section heading: the table's own columns carry the meaning, so
+                the old "All / Active Fund Drives" label only repeated the page
+                title above it. */}
             {filteredCampaigns.length === 0 ? (
               <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-sand-line">
                 <p className="text-sm text-moss">
