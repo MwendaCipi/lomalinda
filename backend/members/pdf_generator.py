@@ -1327,9 +1327,12 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     story.append(Paragraph("Figures for the period", st["h2"]))
     fig_rows = [
         ("Trust Fund", format_money(report.total_tithes), False),
+        # The trust fund is the church's submission to NEKF, so the statement
+        # names where that line goes, carrying the same figure.
+        ("Submitted to NEKF", format_money(report.total_tithes), False),
         ("Local Church Offerings", format_money(report.total_offerings), False),
         ("Expenditure", format_money(report.total_expenses), False),
-        ("Total (in hand)", format_money(report.total), True),
+        ("Total in hand", format_money(report.total), True),
     ]
     fig_data = [[Paragraph("Figure", st["header"]), Paragraph("KES", st["header_right"])]]
     for label, amount, is_total in fig_rows:
@@ -1355,7 +1358,8 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     story.append(Spacer(1, 8))
     story.append(Paragraph(
         "<i>The total in hand is the local church offerings less what was "
-        "spent; the trust fund is held apart from it.</i>",
+        "spent; the trust fund — the figure submitted to NEKF — is held "
+        "apart from it.</i>",
         st["cell"],
     ))
     story.append(Spacer(1, 15))

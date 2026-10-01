@@ -34,6 +34,29 @@ const PERIOD_TYPES: { value: PeriodType; label: string }[] = [
 const todayInNairobi = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
 
+/** The title the dates themselves describe — "October 2026 stewardship
+ *  report" for a month, a day-first span for anything longer. The desk's
+ *  own typed title always stands until the period moves again. */
+const dateTitle = (periodStart: string, periodEnd: string): string => {
+  const parse = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return year && month && day ? { year, month, day } : null;
+  };
+  const start = parse(periodStart);
+  const end = parse(periodEnd);
+  if (!start || !end) return "";
+  const monthName = (year: number, month: number) =>
+    new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
+  if (start.year === end.year && start.month === end.month) {
+    if (start.day === end.day) return `${start.day} ${monthName(start.year, start.month)} ${start.year} stewardship report`;
+    return `${monthName(start.year, start.month)} ${start.year} stewardship report`;
+  }
+  if (start.year === end.year) {
+    return `${monthName(start.year, start.month)}–${monthName(end.year, end.month)} ${start.year} stewardship report`;
+  }
+  return `${monthName(start.year, start.month)} ${start.year} – ${monthName(end.year, end.month)} ${end.year} stewardship report`;
+};
+
 export type Draft = {
   title: string;
   period_type: PeriodType;
@@ -151,7 +174,9 @@ const downloadStatementPdf = async (reportId: number, title: string) => {
  * The figures belong to the period: moving the From/To dates re-asks the
  * ledger what that period brought in and spent, and the total follows the
  * dates with it. Typing a figure keeps the typed value — the desk's word
- * stands until the period itself changes.
+ * stands until the period itself changes. The title follows the dates the
+ * same way, reading as the period it covers, until the desk types one of
+ * their own.
  */
 export function ReportComposer({
   report,
@@ -179,6 +204,12 @@ export function ReportComposer({
   // Whether the desk has typed a figure since the period last moved: a fetch
   // that was already in flight must not overwrite what they are typing.
   const typedRef = useRef(false);
+  // Whether the desk has typed a title of their own since the period last
+  // moved. A saved report opens with its own title standing unless it is
+  // exactly the one the dates describe.
+  const titleTypedRef = useRef(
+    report ? report.title !== dateTitle(report.period_start, report.period_end) : Boolean(initialDraft?.title)
+  );
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -188,12 +219,20 @@ export function ReportComposer({
     set(key, value);
   };
 
+  const setTitle = (value: string) => {
+    titleTypedRef.current = true;
+    set("title", value);
+  };
+
   // The period's figures, straight from the ledger, whenever the dates move —
   // including the period the form opened with. A typed figure survives only
   // while the period stands still: moving the period is asking about different
   // money, so the ledger answers again and the total follows the dates.
   useEffect(() => {
     typedRef.current = false;
+    // The title follows the dates the same way the figures do — unless the
+    // desk has typed one of their own since the period last moved.
+    titleTypedRef.current = false;
     const asked = ++refreshRef.current;
     let cancelled = false;
     void Promise.resolve().then(() => {
@@ -202,7 +241,12 @@ export function ReportComposer({
     void fetchSuggestions(draft.period_start, draft.period_end).then((next) => {
       if (cancelled || asked !== refreshRef.current) return;
       if (next && !typedRef.current) {
-        setDraft((current) => ({ ...current, ...next }));
+        const suggestedTitle = titleTypedRef.current ? "" : dateTitle(draft.period_start, draft.period_end);
+        setDraft((current) => ({
+          ...current,
+          ...next,
+          ...(suggestedTitle ? { title: suggestedTitle } : {}),
+        }));
       }
       setRefreshing(false);
     });
@@ -374,7 +418,7 @@ export function ReportComposer({
               maxLength={160}
               placeholder="e.g. August 2026 stewardship report"
               value={draft.title}
-              onChange={(e) => set("title", e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               className={fieldClass}
             />
             {errors.title && <span className="mt-1 block text-xs text-ember">{errors.title}</span>}
@@ -481,7 +525,7 @@ export function ReportComposer({
               desk confirms is what the congregation will read. */}
           <div className="flex items-baseline justify-between rounded-xl bg-sand px-4 py-3 sm:col-span-2">
             <span className="text-xs font-bold uppercase tracking-wider text-moss">
-              Total (in hand)
+              Total in hand
               {refreshing && <span className="ml-2 normal-case tracking-normal text-moss-faint">counting…</span>}
             </span>
             <span className="text-lg font-bold text-bark">
