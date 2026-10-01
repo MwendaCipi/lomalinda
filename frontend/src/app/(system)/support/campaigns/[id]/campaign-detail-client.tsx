@@ -348,9 +348,11 @@ export default function CampaignDetailClient() {
           {/* 2. Progress. The per-viewer and per-department charts that used
               to ride beside it are gone — the drive page reads as a poster,
               not a ledger. */}
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          {/* The two cards level on a PC — `items-stretch` (the grid default)
+              lets each card fill the row's height. */}
+          <div className="grid gap-6 lg:grid-cols-2">
             {/* Progress rides beside the story on a PC, under it on a phone. */}
-            <div className="rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
+            <div className="flex flex-col rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-moss">Fund Drive Progress</span>
@@ -463,7 +465,7 @@ export default function CampaignDetailClient() {
           </div>
 
             {/* The viewer's own contribution breakdown. */}
-            <div className="rounded-3xl bg-sand-card p-6 ring-1 ring-sand-line">
+            <div className="flex flex-col rounded-3xl bg-sand-card p-6 ring-1 ring-sand-line">
               <h3 className="text-base font-bold text-bark">
                 {signedIn ? "My Contribution Breakdown" : "Contribution Breakdown"}
               </h3>

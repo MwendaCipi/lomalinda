@@ -200,22 +200,23 @@ function GiveInKindPageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-sand text-bark">
-      <div className="flex">
-
-        <div className="flex-1 min-w-0 px-4 py-8 sm:px-6 lg:px-10">
-          <div className="mx-auto max-w-3xl space-y-6">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark">
+      {/* No bottom padding while pinned: the pinned footer bar meets the
+          mobile tab bar directly (the shell already reserves the bar height). */}
+      <div className="flex min-h-0 flex-1 flex-col px-5 pb-0 pt-3 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10">
+          <div className="flex min-h-0 flex-1 flex-col space-y-4">
             {/* The strip names the page; the h1 is for screen readers. */}
             <h1 className="sr-only">In-Kind Giving</h1>
             <p className="sr-only">Donate goods, produce, or materials instead of money.</p>
 
             {/* ── My In-Kind Givings: the page is the record, like My Givings on
-                the money-giving page. The form is a modal away. ── */}
+                the money-giving page — the same card at the same dimensions,
+                filling the panel with its own scroller. ── */}
             {signedIn && (
-              <section className="overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+              <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand-line px-5 py-4">
                   <div className="flex min-w-0 items-center gap-2">
-                    <h2 className="text-base font-bold text-bark">My In-Kind Givings</h2>
+                    <h2 className="text-lg font-bold text-bark">My In-Kind Givings</h2>
                     {/* Same eye as the money page: crossed while hidden, open
                         while shown, and the state persists across visits. */}
                     <button
@@ -249,7 +250,7 @@ function GiveInKindPageContent() {
                 </div>
 
                 {!givingsVisible ? (
-                  <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-5 py-10">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 py-3">
                     <p className="text-xs text-moss">Your in-kind giving record is hidden. Tap the eye beside “My In-Kind Givings” to show it.</p>
                     <button
                       type="button"
@@ -307,9 +308,9 @@ function GiveInKindPageContent() {
                   </div>
                 </div>
 
-                <div className="max-h-[70vh] overflow-y-auto overscroll-contain custom-table-scrollbar px-5 py-3">
-                  {/* Desktop table */}
-                  <div className="hidden md:block">
+                <div className="custom-table-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 py-3 md:min-h-0 md:overflow-hidden">
+                  {/* Desktop table — its own scroller on md+, header pinned. */}
+                  <div className="hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block">
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-sand-line">
                         <tr className="text-[11px] font-bold uppercase tracking-wider text-ember">
@@ -358,8 +359,9 @@ function GiveInKindPageContent() {
                     </table>
                   </div>
 
-                  {/* Mobile cards scroll inside the same container as the desktop table */}
-                  <div className="grid gap-3 md:hidden">
+                  {/* Mobile cards ride the wrapper's scroller — one scroll for
+                      the page above the pinned footer bar. */}
+                  <div className="grid gap-3 pb-2 md:hidden">
                     {loadingRecords ? (
                       <div className="py-8 text-center text-xs text-moss">Loading records…</div>
                     ) : records.length === 0 ? (
@@ -440,7 +442,6 @@ function GiveInKindPageContent() {
               </section>
             )}
           </div>
-        </div>
       </div>
 
       {/* The giving form, the same modal the announcements open — one form,

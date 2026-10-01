@@ -41,11 +41,12 @@ export type ScrollMode = "panel" | "pinned";
  *
  * - `panel`   the page scrolls inside the panel beside the rail.
  * - `pinned`  app-like: the page fills the panel and its own lists scroll
- *             (the office console and the signed-in giving page).
+ *             (the office console and the signed-in giving pages).
  */
 export function scrollModeForPath(pathname: string): ScrollMode {
   if (pathname.startsWith("/administration")) return "pinned";
   if (pathname === "/give") return "pinned";
+  if (pathname === "/support/in-kind") return "pinned";
   return "panel";
 }
 

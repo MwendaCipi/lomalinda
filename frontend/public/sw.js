@@ -155,11 +155,18 @@
    Deaconess, instead of a generic Leader and Assistant — each office
    seated by the member's sex, and neither taking an assistant. The
    report composer's figures follow the period: moving the dates
-   re-counts the ledger, and the statement downloads beside Cancel.
+   re-counts the ledger, names the report after the period until the
+   desk types a title of their own, and the statement downloads beside
+   Cancel.
    The dashboard's Your roles cards share the section's width — one
    equal row, however many areas a member serves. Departments and
    ministries gain an Accounts view: their fund's balance, the gifts
    that built it, and a withdrawal ask that lands with the treasurer.
+   The in-kind giving record is drawn at the same dimensions as the
+   money-giving one: one full-height card, one scroller. The rail's
+   giving row is Giving again — the strips keep Money Giving — and a
+   fund drive's progress and breakdown cards stand level on a PC.
+   The treasury's rows read in full: Fund Drives and Church Budget.
    Chrome changed, so installed apps must take the new shell. */
 const CACHE_NAME = "sda-loma-linda-meru-v46";
 const STATIC_ASSETS = [

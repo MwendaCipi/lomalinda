@@ -568,12 +568,13 @@ export const treasuryItems: RailRow[] = [
   {
     href: "/administration/fund-drives",
     label: "Fund Drives",
-    short: "Drives",
+    // No `short` here: the row reads Fund Drives at every width, on the rail
+    // and on the strip alike.
     icon: Target,
     match: ["/administration/fund-drives"],
     roles: ["treasurer", "admin"],
   },
-  officeTab("budget", "Budget", BarChart3, { roles: ["treasurer", "admin"] }),
+  officeTab("budget", "Church Budget", BarChart3, { roles: ["treasurer", "admin"] }),
   officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"] }),
 ];
 
@@ -605,7 +606,10 @@ export const railEntries: RailEntry[] = [
   {
     label: "Money Giving",
     icon: HandHeart,
-    items: [page("give"), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
+    // The rail's row keeps its own name — Giving — while the strip's heading
+    // above it reads Money Giving; `page` copies the registry label, so the
+    // one row is overridden here.
+    items: [page("give", { label: "Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
   // Asking the church for something is its own place, not a page of Fellowship:
   // prayer and visitation, dedication, joining — the member's requests live

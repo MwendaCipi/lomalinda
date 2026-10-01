@@ -549,7 +549,7 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><BarChart3 size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Budget</span>
+                          <span className="block text-sm font-bold text-bark">Church Budget</span>
                           <span className="mt-0.5 block text-xs leading-5 text-moss">Post the year's plan — income, spending — and publish it to the congregation.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
