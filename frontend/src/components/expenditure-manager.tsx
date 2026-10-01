@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Receipt, Filter, Search, Trash2, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { localDate } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -41,8 +41,7 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   // The desk-wide compact-rows preference, shared with the other tables.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -221,7 +220,6 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
               <option key={c.key} value={c.key}>{c.label}</option>
             ))}
           </select>
-          <DensityToggle dense={dense} onToggle={toggleDensity} />
         </div>
       </div>
 
@@ -263,7 +261,7 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
                       </td>
                       <td className={`px-5 ${rowPad} font-bold text-bark`}>
                         {exp.title}
-                        {exp.notes && !dense && (
+                        {exp.notes && (
                           <p className="text-[11px] font-normal text-moss mt-0.5">{exp.notes}</p>
                         )}
                       </td>

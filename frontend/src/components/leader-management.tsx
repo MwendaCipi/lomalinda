@@ -6,7 +6,7 @@ import { brand } from "@/lib/brand";
 import { localDate } from "@/lib/dates";
 import { X } from "lucide-react";
 import { RecordList } from "./record-list";
-import { useTableDensity, densityCellPad } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -31,9 +31,7 @@ export function LeaderManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  // The desk-wide compact-rows preference, shared with the other tables.
-  const { dense } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);

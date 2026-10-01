@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentMembership, DepartmentRole, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -4997,6 +4997,141 @@ class FundDriveDonorPrivacyTests(APITestCase):
         self.assertEqual(len(response.data['donors']), 1)
         self.assertEqual(response.data['donors'][0]['amount'], 500.0)
 
+    def test_the_nameless_feed_is_public_and_carries_no_names(self):
+        """Recent gifts show to anyone — the count, ministry and day, never who."""
+        drive = self._drive_with_gift()
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        feed = response.data['recent_gifts']
+        self.assertEqual(len(feed), 1)
+        self.assertEqual(feed[0]['amount'], 500.0)
+        self.assertEqual(feed[0]['ministry'], 'General')
+        self.assertNotIn('name', feed[0])
+
+
+class FundDriveDepartmentBreakdownTests(APITestCase):
+    """The drive breakdown groups gifts by each giver's age-based department."""
+
+    def test_gifts_group_by_department_with_an_unassigned_fallback(self):
+        drive = FundraisingCampaign.objects.create(
+            name='Welfare', title='Welfare', account_name='Welfare', target_amount=Decimal('10000.00'),
+        )
+        youth = User.objects.create_user('dept.youth', 'dept.youth@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=youth, role='member', roles='member', department='youth')
+        adult = User.objects.create_user('dept.adult', 'dept.adult@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=adult, role='member', roles='member', department='adults')
+        unasigned = User.objects.create_user('dept.none', 'dept.none@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=unasigned, role='member', roles='member')
+
+        for member, amount in ((youth, '200.00'), (adult, '300.00'), (unasigned, '50.00')):
+            Contribution.objects.create(
+                member=member, amount=Decimal(amount), giving_type='money',
+                purpose='Welfare', campaign=drive, status='completed', payment_method='mpesa',
+            )
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        rows = {row['department']: row['amount'] for row in response.data['department_breakdown']}
+        self.assertEqual(rows['Adults'], 300.0)
+        self.assertEqual(rows['Youth'], 200.0)
+        self.assertEqual(rows['Unassigned'], 50.0)
+
+
+class CampaignPledgeTests(APITestCase):
+    """A drive owns its pledges: promise, read back, replace, close, match."""
+
+    def _drive(self):
+        return FundraisingCampaign.objects.create(
+            name='Building', title='Building', account_name='Building', target_amount=Decimal('100000.00'),
+        )
+
+    def _member(self, username):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role='member', roles='member', department='adults')
+        return user
+
+    def test_a_member_pledges_and_reads_it_back(self):
+        drive = self._drive()
+        member = self._member('pledge.member')
+        self.client.force_authenticate(member)
+        due = (date.today() + timedelta(days=7)).isoformat()
+
+        created = self.client.post(
+            f'/api/members/campaigns/{drive.id}/pledge/',
+            {'amount': '5000', 'due_date': due}, format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['pledge']['amount'], 5000.0)
+
+        read = self.client.get(f'/api/members/campaigns/{drive.id}/pledge/')
+        self.assertEqual(read.data['pledge']['amount'], 5000.0)
+        self.assertFalse(read.data['pledge']['redeemed'])
+
+    def test_a_second_pledge_replaces_the_standing_one(self):
+        drive = self._drive()
+        member = self._member('pledge.twice')
+        self.client.force_authenticate(member)
+
+        self.client.post(f'/api/members/campaigns/{drive.id}/pledge/', {'amount': '1000'}, format='json')
+        self.client.post(f'/api/members/campaigns/{drive.id}/pledge/', {'amount': '2000'}, format='json')
+
+        rows = CampaignPledge.objects.filter(campaign=drive, member=member)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().amount, Decimal('2000.00'))
+
+    def test_giving_to_the_drive_closes_the_pledge_only_when_it_follows_it(self):
+        from .pledges import redeem_campaign_pledges_matched_by_giving
+
+        drive = self._drive()
+        member = self._member('pledge.giver')
+        Contribution.objects.create(
+            member=member, amount=Decimal('5000.00'), giving_type='money',
+            purpose='Building', campaign=drive, status='completed', payment_method='mpesa',
+        )
+        pledge = CampaignPledge.objects.create(campaign=drive, member=member, amount=Decimal('5000.00'))
+
+        # The gift predates the promise, so it must not close it.
+        redeem_campaign_pledges_matched_by_giving()
+        pledge.refresh_from_db()
+        self.assertIsNone(pledge.redeemed_at)
+
+        Contribution.objects.create(
+            member=member, amount=Decimal('5000.00'), giving_type='money',
+            purpose='Building', campaign=drive, status='completed', payment_method='mpesa',
+        )
+        redeem_campaign_pledges_matched_by_giving()
+        pledge.refresh_from_db()
+        self.assertEqual(pledge.redeemed_via, 'giving')
+
+    def test_the_member_ticks_their_own_pledge_but_cannot_reopen_it(self):
+        drive = self._drive()
+        member = self._member('pledge.tick')
+        pledge = CampaignPledge.objects.create(campaign=drive, member=member, amount=Decimal('1000.00'))
+        self.client.force_authenticate(member)
+
+        given = self.client.patch(f'/api/members/campaign-pledges/{pledge.id}/redeem/', {'redeemed': True}, format='json')
+        self.assertEqual(given.status_code, status.HTTP_200_OK)
+        self.assertTrue(given.data['redeemed'])
+        self.assertEqual(given.data['redeemed_via'], 'member')
+
+        refused = self.client.patch(f'/api/members/campaign-pledges/{pledge.id}/redeem/', {'redeemed': False}, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_due_date_past_the_drive_is_refused(self):
+        drive = FundraisingCampaign.objects.create(
+            name='Timed', title='Timed', account_name='Timed', target_amount=Decimal('1000.00'),
+            end_date=date.today() + timedelta(days=10),
+        )
+        member = self._member('pledge.late')
+        self.client.force_authenticate(member)
+
+        response = self.client.post(
+            f'/api/members/campaigns/{drive.id}/pledge/',
+            {'amount': '500', 'due_date': (date.today() + timedelta(days=30)).isoformat()}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('due_date', response.data)
+
 
 class TreasuryAutoCreditTests(APITestCase):
     """Received money moves the treasury account it names — by itself.
@@ -7517,7 +7652,9 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.assertEqual(response.data['trust_fund'], '3000.00')
         self.assertEqual(response.data['local_church_offerings'], '2000.00')
         self.assertEqual(response.data['expenditure'], '1200.00')
-        self.assertEqual(response.data['total'], '3800.00')
+        # The total is the local offerings less what was spent; the trust
+        # fund's 3000 sits beside it, never inside it.
+        self.assertEqual(response.data['total'], '800.00')
         self.assertEqual(response.data['gift_entries'], 3)
         self.assertEqual(response.data['expense_entries'], 1)
         self.assertIn(str(self.today.year), response.data['title'])
@@ -7556,9 +7693,10 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.client.force_authenticate(None)
         listed = self.client.get('/api/members/reports/')
         self.assertEqual([row['trust_fund'] for row in listed.data], ['4000.00'])
-        # The total the congregation reads is computed, not stored: 4000 in,
-        # nothing out, so 4000 in hand.
-        self.assertEqual([row['total'] for row in listed.data], ['4000.00'])
+        # The total the congregation reads is computed, not stored: nothing
+        # in local offerings and nothing out, so nothing in hand — the 4000
+        # tithe is trust fund, held apart from the total.
+        self.assertEqual([row['total'] for row in listed.data], ['0.00'])
 
 
 class DepartmentGroupAndUnitTests(APITestCase):
@@ -7801,3 +7939,94 @@ class ChurchEventMomentsTests(APITestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.post('/api/members/church-events/', {'title': '   '}, format='json')
         self.assertEqual(response.status_code, 400)
+
+
+class DepartmentRequestDeskTests(APITestCase):
+    """One ledger answers both asks a department desk receives: to join the
+    area, and — under music — to open a singing group. The queue renders one
+    desk, the endpoint answers both, and only the ask's approval writes to
+    the roll or the register."""
+
+    def setUp(self):
+        # The departments are seeded by migrations; music is one of them.
+        self.department = Department.objects.get_or_create(
+            code='music', defaults={'name': 'Music', 'group': 'ministry'},
+        )[0]
+        self.elder = User.objects.create_user('desk.elder', 'desk.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.member = User.objects.create_user('desk.member', 'desk.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    def test_a_member_proposes_a_group_and_the_desk_registers_it(self):
+        self.client.force_authenticate(self.member)
+        raised = self.client.post('/api/members/department-join-requests/music/', {
+            'kind': 'singing_group',
+            'group_name': 'Praise Team',
+            'group_description': 'Sings twice a month',
+        }, format='json')
+        self.assertEqual(raised.status_code, status.HTTP_201_CREATED, raised.data)
+        # The ask alone registers nothing.
+        self.assertFalse(SingingGroup.objects.filter(name='Praise Team').exists())
+
+        self.client.force_authenticate(self.elder)
+        queue = self.client.get('/api/members/department-join-requests/review/')
+        self.assertEqual(queue.status_code, status.HTTP_200_OK)
+        row = next(r for r in queue.data['requests'] if r['kind'] == 'singing_group')
+        self.assertEqual(row['group_name'], 'Praise Team')
+        self.assertEqual(row['member_name'], 'desk.member')
+        answered = self.client.patch(
+            f"/api/members/department-join-requests/{row['id']}/", {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answered.status_code, status.HTTP_200_OK, answered.data)
+
+        group = SingingGroup.objects.get(name='Praise Team')
+        self.assertTrue(SingingGroupMember.objects.filter(group=group, member=self.member).exists())
+        # And the singer rides the music roll through the group.
+        self.client.force_authenticate(self.member)
+        roll = self.client.get('/api/members/departments/music/members/')
+        self.assertEqual(roll.status_code, status.HTTP_200_OK)
+        self.assertIn(self.member.id, [m['id'] for m in roll.data['members']])
+        self.assertTrue(any(m.get('via') == 'Praise Team' for m in roll.data['members']))
+
+    def test_a_proposal_cannot_repeat_a_registered_name(self):
+        SingingGroup.objects.create(name='Praise Team', created_by=self.elder)
+        self.client.force_authenticate(self.member)
+        raised = self.client.post('/api/members/department-join-requests/music/', {
+            'kind': 'singing_group', 'group_name': 'praise team',
+        }, format='json')
+        self.assertEqual(raised.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_join_request_still_puts_the_member_on_the_roll(self):
+        self.client.force_authenticate(self.member)
+        raised = self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+        self.assertEqual(raised.status_code, status.HTTP_201_CREATED, raised.data)
+        self.client.force_authenticate(self.elder)
+        queue = self.client.get('/api/members/department-join-requests/review/')
+        row = next(r for r in queue.data['requests'] if r['kind'] == 'join')
+        answered = self.client.patch(
+            f"/api/members/department-join-requests/{row['id']}/", {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answered.status_code, status.HTTP_200_OK, answered.data)
+        self.assertTrue(DepartmentMembership.objects.filter(member=self.member, department='music').exists())
+        self.assertFalse(SingingGroup.objects.exists())
+
+    def test_only_the_desk_reads_and_answers(self):
+        self.client.force_authenticate(self.member)
+        self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+        outsider = User.objects.create_user('desk.outsider', 'desk.outsider@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=outsider, role='member', roles='member')
+        self.client.force_authenticate(outsider)
+        queue = self.client.get('/api/members/department-join-requests/review/')
+        self.assertEqual(queue.data['requests'], [])
+        answer = self.client.patch('/api/members/department-join-requests/1/', {'status': 'approved'}, format='json')
+        self.assertEqual(answer.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_one_open_ask_per_member_per_area(self):
+        self.client.force_authenticate(self.member)
+        first = self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        second = self.client.post('/api/members/department-join-requests/music/', {
+            'kind': 'singing_group', 'group_name': 'Second Ask',
+        }, format='json')
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(DepartmentJoinRequest.objects.filter(member=self.member, status='pending').count(), 1)

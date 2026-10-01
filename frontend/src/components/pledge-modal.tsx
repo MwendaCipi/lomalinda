@@ -9,6 +9,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 export type PledgeTarget = {
   id: number;
   title: string;
+  /** A drive owns its pledges; an announcement holds its own. Defaults to
+      "announcement" so the existing call sites keep working unchanged. */
+  kind?: "announcement" | "campaign";
   action_type?: string | null;
   support_account_display?: string | null;
   event_date_from?: string | null;
@@ -70,6 +73,13 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
   const [loadingPledge, setLoadingPledge] = useState(false);
 
   const today = todayIso();
+  // A drive's pledge is its own record; an announcement keeps its own. The
+  // two differ only in the door the pledge goes through.
+  const isCampaign = target?.kind === "campaign";
+  const pledgeUrl = `${API_URL}/api/members/${isCampaign ? "campaigns" : "announcements"}/${target?.id}/pledge/`;
+  const redeemUrl = (id: number) =>
+    `${API_URL}/api/members/${isCampaign ? "campaign-pledges" : "pledges"}/${id}/redeem/`;
+  const announceActionUrl = `${API_URL}/api/members/announcements/${target?.id}/action/`;
   // The event's last day is the deadline; with no event, a fortnight is a
   // sensible promise rather than an open-ended one.
   const deadline = target?.event_date_to || target?.event_date_from || null;
@@ -85,7 +95,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
     if (!token) return;
     let alive = true;
     setLoadingPledge(true);
-    fetch(`${API_URL}/api/members/announcements/${target.id}/pledge/`, {
+    fetch(pledgeUrl, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -113,20 +123,26 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
     setMessage("");
     const token = localStorage.getItem("access_token");
     try {
-      const response = await fetch(`${API_URL}/api/members/announcements/${target!.id}/action/`, {
+      const response = await fetch(isCampaign ? pledgeUrl : announceActionUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          action_type: target!.action_type || "none",
-          pledge_amount: parseFloat(amount),
-          pledge_due_date: dueDate,
-        }),
+        body: JSON.stringify(
+          isCampaign
+            ? { amount: parseFloat(amount), due_date: dueDate }
+            : {
+                action_type: target!.action_type || "none",
+                pledge_amount: parseFloat(amount),
+                pledge_due_date: dueDate,
+              }
+        ),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.pledge_due_date || data.detail || "Unable to record your pledge.");
+        throw new Error(data.pledge_due_date || data.due_date || data.amount || data.detail || "Unable to record your pledge.");
       }
-      setPledge({ id: data.id, amount: parseFloat(amount), due_date: dueDate, redeemed: false, redeemed_via: "" });
+      setPledge(
+        data.pledge ?? { id: data.id, amount: parseFloat(amount), due_date: dueDate, redeemed: false, redeemed_via: "" }
+      );
       setMessage(`Thank you — your pledge of ${money(parseFloat(amount))} is recorded for ${prettyDay(dueDate)}.`);
       onPledged?.();
     } catch (error) {
@@ -142,7 +158,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
     setMessage("");
     const token = localStorage.getItem("access_token");
     try {
-      const response = await fetch(`${API_URL}/api/members/pledges/${pledge.id}/redeem/`, {
+      const response = await fetch(redeemUrl(pledge.id), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ redeemed: true }),

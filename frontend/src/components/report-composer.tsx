@@ -301,14 +301,13 @@ export function ReportComposer({
             )}
           </label>
 
-          {/* The total is computed as the desk types — trust fund and local
-              offerings in, expenditure out — so what the desk confirms is
-              what the congregation will read. */}
+          {/* The total is computed as the desk types — local offerings in,
+              expenditure out, the trust fund held apart — so what the desk
+              confirms is what the congregation will read. */}
           <div className="flex items-baseline justify-between rounded-xl bg-sand px-4 py-3 sm:col-span-2">
             <span className="text-xs font-bold uppercase tracking-wider text-moss">Total (in hand)</span>
             <span className="text-lg font-bold text-bark">
               KES {(
-                (Number(draft.trust_fund) || 0) +
                 (Number(draft.local_church_offerings) || 0) -
                 (Number(draft.expenditure) || 0)
               ).toLocaleString("en-KE", { minimumFractionDigits: 2 })}

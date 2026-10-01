@@ -6,7 +6,7 @@ import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, 
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -98,8 +98,7 @@ export default function ReconciliationPage() {
   const [loadingPurpose, setLoadingPurpose] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   // The desk-wide compact-rows preference, shared with the other tables.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [contactModalGiver, setContactModalGiver] = useState<IndividualGiving | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
@@ -755,7 +754,6 @@ export default function ReconciliationPage() {
                                 <span className="text-xs text-moss">
                                   Showing <strong className="text-bark">{filteredList.length}</strong> of <strong className="text-bark">{rawList.length}</strong> entries
                                 </span>
-                                <DensityToggle dense={dense} onToggle={toggleDensity} />
                                 <span className="font-bold text-bark">
                                   {expandedPurpose} Total: <span className="text-ember">{money(purposeTotal)}</span>
                                 </span>

@@ -43,8 +43,8 @@ export default function ReportsPage() {
             </p>
             <h2 className="mt-3 text-2xl font-semibold">{report.title}</h2>
             {/* The statement in the field's own language: trust fund and
-                local offerings in, expenditure out, and the total they leave
-                in hand — computed by the server, never typed twice. */}
+                local offerings in, expenditure out, and the total in hand —
+                computed by the server, never typed twice. */}
             <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
               <div>
                 <dt className="text-moss">Trust Fund</dt>

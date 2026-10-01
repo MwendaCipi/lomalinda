@@ -150,12 +150,18 @@ function AdministrationContent() {
       .then((data) => {
         const rawRole = (data?.role || "").toLowerCase().trim();
         const userRoles: string[] = Array.isArray(data?.roles) && data.roles.length > 0 ? data.roles : [rawRole];
+        // A member with no office still passes when they belong to a
+        // department or ministry (or have asked to): the rail's area rows
+        // open their desk here, read-mostly. The API still enforces every
+        // write, so what they can change is decided server-side.
+        const inArea = (data?.my_departments ?? []).some((row: { code?: string }) => row.code);
         const isOfficial =
           data &&
           (userRoles.some((r) => officialRoles.includes(r as StaffRole)) ||
             data.is_staff ||
             data.is_superuser ||
-            rawRole === "admin");
+            rawRole === "admin" ||
+            inArea);
 
         if (isOfficial) {
           setProfile(data);

@@ -47,6 +47,16 @@ const MINISTRY_OPTIONS = [
   { value: "ambassadors", label: "Ambassadors" },
 ];
 
+// The age-based departments the church reports by — separate from the
+// ministry above (where a member serves). A person belongs to exactly one.
+const DEPARTMENT_OPTIONS = [
+  { value: "children", label: "Children" },
+  { value: "youth", label: "Youth" },
+  { value: "young_adults", label: "Young Adults" },
+  { value: "adults", label: "Adults" },
+  { value: "seniors", label: "Seniors" },
+];
+
 const inputClass =
   "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm text-bark outline-none focus:border-ember";
 
@@ -192,6 +202,7 @@ export default function CompleteProfilePage() {
   const [genderLocked, setGenderLocked] = useState(false);
   const [gifts, setGifts] = useState<string[]>([]);
   const [ministry, setMinistry] = useState("");
+  const [department, setDepartment] = useState("");
   const [disability, setDisability] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -220,6 +231,7 @@ export default function CompleteProfilePage() {
         setGenderLocked(Boolean((me.gender || "").trim()));
         setGifts(me.gifts ? me.gifts.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
         setMinistry(me.ministry || "");
+        setDepartment(me.department || "");
         setDisability(
           me.disability ? me.disability.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
         );
@@ -260,6 +272,7 @@ export default function CompleteProfilePage() {
           gender,
           gifts,
           ministry,
+          department,
           // An empty list is a deliberate "none" — it still saves a value.
           disability: disability.length > 0 ? disability : ["None"],
         }),
@@ -340,6 +353,21 @@ export default function CompleteProfilePage() {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block text-sm font-medium">
+            Department
+            <select value={department} onChange={(event) => setDepartment(event.target.value)} className={inputClass}>
+              <option value="">-- Select Department --</option>
+              {DEPARTMENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-moss">
+              Your age group in the church — different from the ministry above, which is where you serve.
+            </span>
           </label>
 
           <CheckboxCombobox

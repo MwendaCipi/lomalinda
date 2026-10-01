@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { dayFirstTime } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -65,8 +65,7 @@ function StatusPill({ status }: { status: string }) {
 export function MpesaRefundManager() {
   const [contributions, setContributions] = useState<RefundableContribution[]>([]);
   const [refunds, setRefunds] = useState<MpesaRefund[]>([]);
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
@@ -215,7 +214,6 @@ export function MpesaRefundManager() {
         <div className="flex items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
           <h3 className="text-sm font-bold text-bark">Recent M-Pesa Contributions</h3>
           <div className="flex items-center gap-2">
-            <DensityToggle dense={dense} onToggle={toggleDensity} />
             <span className="rounded-full bg-sand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
               {refundableCount} refundable
             </span>
@@ -253,7 +251,7 @@ export function MpesaRefundManager() {
           }
           cardsClassName="custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
           renderCard={(c) => (
-              <div key={c.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+              <div key={c.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${"p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">

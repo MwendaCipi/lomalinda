@@ -62,6 +62,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     gifts = serializers.CharField(source='member_profile.gifts', read_only=True)
     whatsapp_number = serializers.CharField(source='member_profile.whatsapp_number', read_only=True)
     ministry = serializers.CharField(source='member_profile.ministry', read_only=True)
+    department = serializers.CharField(source='member_profile.department', read_only=True, default='')
     disability = serializers.CharField(source='member_profile.disability', read_only=True)
     is_disfellowshipped = serializers.BooleanField(source='member_profile.is_disfellowshipped', read_only=True, default=False)
     # Friends and Sabbath School attendees join as inactive accounts; leadership
@@ -102,6 +103,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'date_of_birth',
             'gifts',
             'ministry',
+            'department',
             'disability',
             'is_disfellowshipped',
             'is_active',
@@ -898,9 +900,10 @@ class TestimonySerializer(serializers.ModelSerializer):
 
 class ChurchFinancialReportSerializer(serializers.ModelSerializer):
     """A statement in the field's own language: Trust Fund, Local Church
-    Offerings, Expenditure and the Total they leave. The stored columns keep
+    Offerings, Expenditure and the Total in hand. The stored columns keep
     their long-standing names; what an API reader sees is the report the NEKF
-    offering summary spells out, with the total computed here so it can never
+    offering summary spells out, with the total — the local offerings less
+    what was spent, the trust fund held apart — computed here so it can never
     disagree with the three figures it is drawn from."""
 
     trust_fund = serializers.DecimalField(
@@ -1263,7 +1266,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             for field_name in set(self.fields) - allowed:
                 self.fields.pop(field_name)
         elif self.context.get('brief'):
-            for field_name in ('contribution_breakdown', 'ministry_breakdown', 'donors', 'deficit'):
+            for field_name in ('contribution_breakdown', 'ministry_breakdown', 'department_breakdown', 'donors', 'recent_gifts', 'deficit'):
                 self.fields.pop(field_name, None)
 
     total_raised = serializers.SerializerMethodField()
@@ -1277,7 +1280,13 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
     # pie chart read. Empty for the detail-level fields=() calls.
     contribution_breakdown = serializers.SerializerMethodField()
     ministry_breakdown = serializers.SerializerMethodField()
+    # The age-based department each giver belongs to — the church's own
+    # reporting categories, separate from where a member serves.
+    department_breakdown = serializers.SerializerMethodField()
     donors = serializers.SerializerMethodField()
+    # A nameless pulse of the drive — amount, ministry, day — safe to show to
+    # every viewer, members and signed-out visitors included.
+    recent_gifts = serializers.SerializerMethodField()
     deficit = serializers.SerializerMethodField()
 
     attachment_name = serializers.SerializerMethodField()
@@ -1306,7 +1315,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             'last_message_sent_at', 'created_by', 'created_at', 'updated_at',
             'total_raised', 'percentage_raised', 'donor_count',
             'assigned_cards_count', 'group_breakdown', 'top_fundraisers',
-            'contribution_breakdown', 'ministry_breakdown', 'donors', 'deficit'
+            'contribution_breakdown', 'ministry_breakdown', 'department_breakdown', 'donors', 'recent_gifts', 'deficit'
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'message_sent', 'last_message_sent_at')
 
@@ -1487,41 +1496,111 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             'total_raised': round(float(total), 2),
         }
 
+    def _ministry_label(self, user):
+        """The ministry a giver serves on their profile, or 'General'.
+
+        The offices the church reports by (Ambassadors, Adventist Youth,
+        Adventist Men, Adventist Women) live on the member profile; a giver
+        with none, or a manual receipt with no matching account, is 'General'.
+        """
+        if not user:
+            return 'General'
+        profile = getattr(user, 'member_profile', None)
+        ministry = (getattr(profile, 'ministry', '') or '').strip() if profile else ''
+        return ministry or 'General'
+
+    def _cash_giver(self, email):
+        """The user behind a manual receipt, matched on the email on its row."""
+        from django.contrib.auth.models import User
+        email = (email or '').strip().lower()
+        if not email:
+            return None
+        return User.objects.filter(email__iexact=email).first()
+
     def get_ministry_breakdown(self, obj):
         """Drive money grouped by the ministry each giver serves.
 
-        A gift belongs to a ministry through its giver's profile (Ambassadors,
-        Adventist Youth, Adventist Men, Adventist Women — the offices the
-        church actually reports by). Everything with no ministry lands in
-        'General'. Reads only completed M-Pesa gifts and manual receipts.
+        Everything with no ministry lands in 'General'. Reads only completed
+        M-Pesa gifts and manual receipts.
         """
-        from django.contrib.auth.models import User
-        from django.db.models import Sum
-
-        def ministry_of(user):
-            if not user:
-                return 'General'
-            profile = getattr(user, 'member_profile', None)
-            ministry = (getattr(profile, 'ministry', '') or '').strip() if profile else ''
-            return ministry or 'General'
-
         totals = {}
         linked, extra = self._drive_mpesa(obj)
         for gift in list(linked) + list(extra):
-            label = ministry_of(gift.member)
+            label = self._ministry_label(gift.member)
             totals[label] = totals.get(label, 0.0) + float(gift.amount or 0)
         cash_query = self._purpose_query(obj)
         for row in CashContribution.objects.filter(cash_query).values('donor_name', 'giver_email', 'amount'):
-            giver = None
-            email = (row.get('giver_email') or '').strip().lower()
-            if email:
-                giver = User.objects.filter(email__iexact=email).first()
-            label = ministry_of(giver)
+            label = self._ministry_label(self._cash_giver(row.get('giver_email')))
             totals[label] = totals.get(label, 0.0) + float(row['amount'] or 0)
         return [
             {'ministry': label, 'amount': round(amount, 2)}
             for label, amount in sorted(totals.items(), key=lambda kv: -kv[1])
         ]
+
+    def _department_label(self, user):
+        """The age-based department a giver belongs to, or 'Unassigned'.
+
+        Departments are the church's reporting categories (Children, Youth,
+        Young Adults, Adults, Seniors); a giver with none on file is grouped
+        under 'Unassigned' rather than dropped.
+        """
+        profile = getattr(user, 'member_profile', None)
+        if not profile:
+            return 'Unassigned'
+        return profile.get_department_display() or 'Unassigned'
+
+    def get_department_breakdown(self, obj):
+        """Drive money grouped by each giver's age-based department.
+
+        Reads only completed M-Pesa gifts and manual receipts, the same union
+        the totals use. A member belongs to exactly one department, so every
+        gift lands in exactly one group.
+        """
+        totals = {}
+        linked, extra = self._drive_mpesa(obj)
+        for gift in list(linked) + list(extra):
+            label = self._department_label(gift.member)
+            totals[label] = totals.get(label, 0.0) + float(gift.amount or 0)
+        for row in CashContribution.objects.filter(self._purpose_query(obj)).values('giver_email', 'amount'):
+            label = self._department_label(self._cash_giver(row.get('giver_email')))
+            totals[label] = totals.get(label, 0.0) + float(row['amount'] or 0)
+        return [
+            {'department': label, 'amount': round(amount, 2)}
+            for label, amount in sorted(totals.items(), key=lambda kv: -kv[1])
+        ]
+
+    def get_recent_gifts(self, obj):
+        """A nameless pulse of the drive: what came in lately, newest first.
+
+        Each entry carries only an amount, the giver's ministry and the day —
+        never a name — so the drive page can show momentum to members and
+        visitors alike without exposing who gave what. Reads the same
+        completed gifts the totals do, from every channel.
+        """
+
+        def day_of(when):
+            if not when:
+                return None
+            if timezone.is_naive(when):
+                when = timezone.make_aware(when, timezone.get_current_timezone())
+            return timezone.localtime(when).date().isoformat()
+
+        entries = []
+        linked, extra = self._drive_mpesa(obj)
+        for gift in list(linked) + list(extra):
+            entries.append({
+                'amount': round(float(gift.amount or 0), 2),
+                'ministry': self._ministry_label(gift.member),
+                'date': day_of(gift.paid_at or gift.created_at),
+            })
+        for row in CashContribution.objects.filter(self._purpose_query(obj)):
+            entries.append({
+                'amount': round(float(row.amount or 0), 2),
+                'ministry': self._ministry_label(self._cash_giver(row.giver_email)),
+                'date': row.received_on.isoformat() if row.received_on else None,
+            })
+        entries.sort(key=lambda e: e['date'] or '', reverse=True)
+        return entries[:10]
 
     def _viewer_may_see_donors(self):
         """Only admins, elders and the treasurer may read donor names.

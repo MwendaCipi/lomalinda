@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { RecordList } from "./record-list";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
@@ -168,8 +168,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   // Inventory state (server-backed: this is the real property register)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
@@ -393,7 +392,6 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                     <option key={state.value} value={state.value}>{state.label}</option>
                   ))}
                 </select>
-                <DensityToggle dense={dense} onToggle={toggleDensity} />
                 <div className="relative min-w-0 sm:w-64">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
                   <input
@@ -432,7 +430,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                   <td className={rowPad + " font-mono font-bold text-ember"}>{item.tag_number || "—"}</td>
                   <td className={rowPad}>
                     <p className="font-bold text-bark">{item.name}</p>
-                    {item.notes && !dense && <p className="text-[11px] italic text-moss">{item.notes}</p>}
+                    {item.notes && <p className="text-[11px] italic text-moss">{item.notes}</p>}
                   </td>
                   <td className={rowPad}>
                     <span className="rounded-md bg-sand-grain px-2 py-0.5 text-[10px] font-bold text-bark">
@@ -472,7 +470,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 </tr>
               )}
               renderCard={(item) => (
-                <div key={item.id} className={`rounded-2xl border border-sand-line bg-white shadow-sm space-y-2 ${dense ? "p-3" : "p-4"}`}>
+                <div key={item.id} className={`rounded-2xl border border-sand-line bg-white shadow-sm space-y-2 ${"p-4"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-mono text-[11px] font-bold text-ember">{item.tag_number || "No tag"}</p>

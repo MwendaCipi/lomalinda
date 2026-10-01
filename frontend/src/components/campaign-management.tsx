@@ -23,7 +23,7 @@ import {
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -106,8 +106,7 @@ export function CampaignManagement({
   // by name or account reference without reading the whole list.
   const [search, setSearch] = useState("");
   // Compact rows for the drive table — the one shared desk preference.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowDrive = densityCellPad(dense);
+  const rowDrive = densityCellPad();
 
   // New Campaign Form state
   const todayStr = localDate();
@@ -617,7 +616,6 @@ export function CampaignManagement({
                 </p>
               </div>
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <DensityToggle dense={dense} onToggle={toggleDensity} className="shrink-0" />
                 <input
                   type="text"
                   placeholder="Search by drive or account..."

@@ -137,9 +137,16 @@
    v42 — the roster's toggles read All, Members, S. School, Friends:
    active and inactive are found by search and switched in Actions. The
    clerkship's transfers desk is Membership Requests, and its filter reads
-   the desk's own statuses, sitting left of the search. Chrome changed, so
-   installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v42";
+   the desk's own statuses, sitting left of the search.
+
+   v43 — the Compact toggle is gone from every desk: one comfortable row
+   height, everywhere.
+
+   v44 — the rail reads Ministry, and a member sees their own areas there
+   (music, the deaconate and APM under Ministries even before joining),
+   with request-to-join and contact-department buttons when they belong
+   to none. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v44";
 const STATIC_ASSETS = [
   "/",
   "/about/",

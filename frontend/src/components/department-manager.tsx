@@ -19,7 +19,7 @@ import {
 import { showAlert } from "@/lib/alerts";
 import { NO_ROLE_LABEL } from "./roles-combobox";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 
 export type DepartmentKey = "amm" | "awm" | "aym" | "apm" | "chaplaincy";
 
@@ -230,9 +230,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  // The desk-wide compact-rows preference, shared with the other tables.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [events, setEvents] = useState<DeptEvent[]>(SAMPLE_EVENTS[deptKey] || []);
 
   // Event Modal State
@@ -347,7 +345,6 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
               />
             </div>
             <div className="flex items-center gap-3">
-              <DensityToggle dense={dense} onToggle={toggleDensity} />
               <p className="text-xs text-moss">
                 Showing <span className="font-bold text-bark">{filteredMembers.length}</span> members automatically assigned to this department.
               </p>
@@ -392,7 +389,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                             <p className="font-bold text-bark">
                               {m.first_name || m.last_name ? `${m.first_name || ""} ${m.last_name || ""}` : m.username}
                             </p>
-                            {!dense && <p className="text-[11px] text-moss">{m.email}</p>}
+                            <p className="text-[11px] text-moss">{m.email}</p>
                           </td>
                           <td className={`px-4 ${rowPad} text-bark font-semibold`}>{m.gender || "—"}</td>
                           <td className={`px-4 ${rowPad}`}>

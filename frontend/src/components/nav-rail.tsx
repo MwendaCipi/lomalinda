@@ -3,12 +3,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { Mail, UserPlus } from "lucide-react";
 
 import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
-import { useDepartments } from "@/hooks/use-departments";
+import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
+import { AreaJoinModal, AreaContactModal } from "./area-modals";
 
 /**
  * The rail — the app's navigation, in one column.
@@ -30,8 +33,13 @@ export function NavRail() {
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
   const departments = useDepartments();
-  const entries = railFor(roles, departments);
+  const myDepartments = useMyDepartments();
+  const entries = railFor({ roles, departmentCodes: myDepartments }, departments);
   const here = useRailHere(pathname, entries);
+
+  // The join and contact affordances: which heading's modal is open.
+  const [joinArea, setJoinArea] = useState<string | null>(null);
+  const [contactArea, setContactArea] = useState<string | null>(null);
 
   return (
     <aside
@@ -67,6 +75,33 @@ export function NavRail() {
               <div className="space-y-0.5">
                 {section.entries.map((entry) => {
                   const href = entryHref(entry);
+                  // A heading the member belongs to nothing under renders a
+                  // quiet invitation instead of rows: ask to join, or reach
+                  // the area's leader directly.
+                  if ("memberJoin" in entry) {
+                    return (
+                      <div key={entry.label} className="space-y-1 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-moss">
+                          <entry.icon className="h-3.5 w-3.5 shrink-0" />
+                          <span>Nothing here yet</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setJoinArea(entry.label)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" /> Request to join
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setContactArea(entry.label)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                        >
+                          <Mail className="h-3.5 w-3.5" /> Contact department
+                        </button>
+                      </div>
+                    );
+                  }
                   if (!href) return null;
                   const Icon = entry.icon;
                   // A row is "here" when it is the section you are in — whatever
@@ -91,6 +126,9 @@ export function NavRail() {
           ))}
         </nav>
       </div>
+
+      <AreaJoinModal open={joinArea !== null} area={joinArea} onClose={() => setJoinArea(null)} />
+      <AreaContactModal open={contactArea !== null} area={contactArea} onClose={() => setContactArea(null)} />
     </aside>
   );
 }

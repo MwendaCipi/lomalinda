@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { brand, pieColors, ministryColors } from "@/lib/brand";
+import { brand, ministryColors } from "@/lib/brand";
 import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { dayFirst, localDate } from "@/lib/dates";
 import { Check, Copy, IdCard, X } from "lucide-react";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { DonutChart } from "@/components/mini-charts";
+import { PledgeModal } from "@/components/pledge-modal";
+import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { stewardshipLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -42,7 +45,12 @@ interface Campaign {
     total_raised: number;
   };
   ministry_breakdown?: { ministry: string; amount: number }[];
+  // Giving grouped by each giver's age-based department — the church's own
+  // reporting categories, one per member.
+  department_breakdown?: { department: string; amount: number }[];
   donors?: { name: string; amount: number; gifts: number }[];
+  // A nameless pulse of the drive — amount, ministry, day — safe for any viewer.
+  recent_gifts?: { amount: number; ministry: string; date?: string | null }[];
 }
 
 interface CardAssignment {
@@ -55,7 +63,6 @@ interface CardAssignment {
 
 const fmtKES = (value: number) => `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-const PIE_COLORS = pieColors;
 const MINISTRY_COLORS = ministryColors;
 
 export default function CampaignDetailClient() {
@@ -71,6 +78,9 @@ export default function CampaignDetailClient() {
 
   // The support form lives in a modal now; the page itself reads as a report.
   const [showSupportModal, setShowSupportModal] = useState(false);
+  // Pledge and in-kind giving open over the page, like the announcement cards.
+  const [pledgeOpen, setPledgeOpen] = useState(false);
+  const [inKindOpen, setInKindOpen] = useState(false);
 
   // Support form states
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -257,18 +267,17 @@ export default function CampaignDetailClient() {
   const breakdown = campaign.contribution_breakdown;
   const deficit = campaign.deficit ?? Math.max(0, Number(campaign.target_amount) - Number(campaign.total_raised));
 
-  // Pie slices: me, my invitees, others — with the remainder to the target as
-  // the neutral part of the ring.
-  const pieItems = breakdown
-    ? [
-        { label: "My contribution", value: breakdown.my_amount, color: brand.sageBright },
-        { label: "My invitees", value: breakdown.invitees_amount, color: brand.goldDeep },
-        { label: "Others", value: breakdown.others_amount, color: brand.sage },
-      ]
-    : [];
-
-  const ministries = (campaign.ministry_breakdown ?? []).filter((m) => m.amount > 0);
-  const maxMinistry = Math.max(0, ...ministries.map((m) => m.amount));
+  const departments = (campaign.department_breakdown ?? []).filter((d) => d.amount > 0);
+  const maxDepartment = Math.max(0, ...departments.map((d) => d.amount));
+  const recentGifts = campaign.recent_gifts ?? [];
+  const totalRaised = Number(campaign.total_raised) || 0;
+  // Whole days from today to the drive's last day, in the church's own day.
+  const daysLeft = campaign.end_date
+    ? Math.round(
+        (new Date(`${campaign.end_date}T00:00:00`).getTime() - new Date(`${localDate()}T00:00:00`).getTime()) /
+          86_400_000
+      )
+    : null;
 
   // A fund drive is a member-facing page — view the card, give, share — so
   // everyone gets the giving sidebar, office holders included. The Leader
@@ -298,9 +307,8 @@ export default function CampaignDetailClient() {
             </div>
           )}
 
-          {/* 1. The story and its progress sit side by side on a PC. */}
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
+          {/* 1. The drive's story and its giving actions take a full row. */}
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
             <h1 className="text-xl font-bold tracking-tight text-bark sm:text-2xl">{campaign.title || campaign.name}</h1>
             {campaign.description ? (
               <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-moss-soft">{campaign.description}</p>
@@ -313,17 +321,38 @@ export default function CampaignDetailClient() {
               </p>
             )}
 
+            {/* The giving actions, always one row, left to right: Pledge,
+                In-kind, Give — the same trio the announcement cards offer. */}
             {campaign.is_active && (
-              <button
-                type="button"
-                onClick={() => setShowSupportModal(true)}
-                className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep sm:w-auto"
-              >
-                Support this Drive
-              </button>
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setPledgeOpen(true)}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-sand-mute bg-white px-6 text-sm font-bold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  Pledge
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInKindOpen(true)}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-sand-mute bg-white px-6 text-sm font-bold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  In-kind
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSupportModal(true)}
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep"
+                >
+                  Support this Drive
+                </button>
+              </div>
             )}
           </div>
 
+          {/* 2. Progress and the viewer's own contribution breakdown share the
+              next row on a PC. */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
             {/* Progress rides beside the story on a PC, under it on a phone. */}
             <div className="rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -336,6 +365,17 @@ export default function CampaignDetailClient() {
                 {deficit > 0 && (
                   <p className="mt-1 text-sm font-semibold text-ember">
                     Deficit: {fmtKES(deficit)} <span className="font-normal text-moss">still needed</span>
+                  </p>
+                )}
+                {daysLeft !== null && (
+                  <p className="mt-1 text-xs font-semibold text-moss">
+                    {daysLeft > 1
+                      ? `${daysLeft} days remaining`
+                      : daysLeft === 1
+                      ? "1 day remaining"
+                      : daysLeft === 0
+                      ? "Closes today"
+                      : "This drive has ended"}
                   </p>
                 )}
               </div>
@@ -424,54 +464,38 @@ export default function CampaignDetailClient() {
             </div>
           </div>
 
-          </div>
-
-          {/* 3. Breakdown and ministry giving sit side by side on a PC. */}
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            {/* The viewer's own contribution breakdown. The pie that used to
+                sit here now lives on the next row, as Contributed vs
+                Remaining. */}
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
               <h3 className="text-base font-bold text-bark">
                 {signedIn ? "My Contribution Breakdown" : "Contribution Breakdown"}
               </h3>
 
               {breakdown && signedIn ? (
-                <>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My contribution</span>
-                      <span className="mt-0.5 block text-base font-bold text-sage-bright">{fmtKES(breakdown.my_amount)}</span>
-                      <span className="text-[11px] text-moss">{breakdown.my_gifts} gift{breakdown.my_gifts === 1 ? "" : "s"}</span>
-                    </div>
-                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My invitees</span>
-                      <span className="mt-0.5 block text-base font-bold text-gold-deep">{fmtKES(breakdown.invitees_amount)}</span>
-                      <span className="text-[11px] text-moss">
-                        {breakdown.invitees_gifts} gift{breakdown.invitees_gifts === 1 ? "" : "s"}
-                        {breakdown.invitee_names.length > 0 && ` · ${breakdown.invitee_names.join(", ")}`}
-                      </span>
-                    </div>
-                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Others</span>
-                      <span className="mt-0.5 block text-base font-bold text-sage">{fmtKES(breakdown.others_amount)}</span>
-                    </div>
-                    <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Total raised</span>
-                      <span className="mt-0.5 block text-base font-bold text-bark">{fmtKES(breakdown.total_raised)}</span>
-                    </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My contribution</span>
+                    <span className="mt-0.5 block text-base font-bold text-sage-bright">{fmtKES(breakdown.my_amount)}</span>
+                    <span className="text-[11px] text-moss">{breakdown.my_gifts} gift{breakdown.my_gifts === 1 ? "" : "s"}</span>
                   </div>
-
-                  {/* Pie: me / invitees / others, remainder neutral. */}
-                  <div className="mt-6">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-moss">Share of the drive</p>
-                    <div className="mt-3">
-                      <DonutChart
-                        items={pieItems}
-                        centerLabel="of goal"
-                        centerValue={`${campaign.percentage_raised}%`}
-                        emptyLabel="No completed gifts to chart yet."
-                      />
-                    </div>
+                  <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">My invitees</span>
+                    <span className="mt-0.5 block text-base font-bold text-gold-deep">{fmtKES(breakdown.invitees_amount)}</span>
+                    <span className="text-[11px] text-moss">
+                      {breakdown.invitees_gifts} gift{breakdown.invitees_gifts === 1 ? "" : "s"}
+                      {breakdown.invitee_names.length > 0 && ` · ${breakdown.invitee_names.join(", ")}`}
+                    </span>
                   </div>
-                </>
+                  <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Others</span>
+                    <span className="mt-0.5 block text-base font-bold text-sage">{fmtKES(breakdown.others_amount)}</span>
+                  </div>
+                  <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Total raised</span>
+                    <span className="mt-0.5 block text-base font-bold text-bark">{fmtKES(breakdown.total_raised)}</span>
+                  </div>
+                </div>
               ) : (
                 <p className="mt-4 rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">
                   {signedIn
@@ -480,31 +504,61 @@ export default function CampaignDetailClient() {
                 </p>
               )}
             </div>
+          </div>
 
+          {/* 3. Where the money comes from, department by department, beside a
+              ring showing how much of the goal is in and how much remains. */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
-              <h3 className="text-base font-bold text-bark">Giving by Ministry</h3>
-              {ministries.length === 0 ? (
+              <h3 className="text-base font-bold text-bark">Contribution by Department</h3>
+              {departments.length === 0 ? (
                 <p className="mt-4 rounded-xl bg-sand-card px-4 py-6 text-center text-xs text-moss">
                   No completed gifts to chart yet.
                 </p>
               ) : (
                 <ul className="mt-4 space-y-3">
-                  {ministries.map((m, i) => (
-                    <li key={m.ministry}>
+                  {departments.map((d, i) => (
+                    <li key={d.department}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-xs font-semibold text-bark">{m.ministry}</span>
-                        <span className="shrink-0 text-xs font-bold text-bark">{fmtKES(m.amount)}</span>
+                        <span className="truncate text-xs font-semibold text-bark">{d.department}</span>
+                        <span className="shrink-0 text-xs font-bold text-bark">{fmtKES(d.amount)}</span>
                       </div>
-                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-sand-light" role="img" aria-label={`${m.ministry}: ${fmtKES(m.amount)}`}>
+                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-sand-light" role="img" aria-label={`${d.department}: ${fmtKES(d.amount)}`}>
                         <div
                           className="h-full rounded-full"
-                          style={{ width: `${Math.max(2, (m.amount / maxMinistry) * 100)}%`, backgroundColor: MINISTRY_COLORS[i % MINISTRY_COLORS.length] }}
+                          style={{ width: `${Math.max(2, (d.amount / maxDepartment) * 100)}%`, backgroundColor: MINISTRY_COLORS[i % MINISTRY_COLORS.length] }}
                         />
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+              <h3 className="text-base font-bold text-bark">Contributed vs Remaining</h3>
+              <p className="mt-1 text-xs text-moss">How much of the goal is in, and how much is still to come.</p>
+              <div className="mt-4">
+                <DonutChart
+                  items={[
+                    { label: "Contributed", value: totalRaised, color: brand.sageBright },
+                    { label: "Remaining", value: deficit, color: brand.sandMute },
+                  ]}
+                  centerLabel="of goal"
+                  centerValue={`${campaign.percentage_raised}%`}
+                  emptyLabel="No completed gifts to chart yet."
+                />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Contributed</span>
+                  <span className="mt-0.5 block text-base font-bold text-sage-bright">{fmtKES(totalRaised)}</span>
+                </div>
+                <div className="rounded-2xl bg-sand-card p-3 ring-1 ring-sand-line">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-moss">Remaining</span>
+                  <span className="mt-0.5 block text-base font-bold text-bark">{fmtKES(deficit)}</span>
+                </div>
+              </div>
             </div>
 
             {/* Ministry-group leaderboard, kept for drives issued by group:
@@ -526,8 +580,50 @@ export default function CampaignDetailClient() {
               </div>
             )}
           </div>
+
+          {/* Recent gifts: a nameless pulse of the drive, visible to everyone.
+              Amount, ministry and day only — never a name. */}
+          {recentGifts.length > 0 && (
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+              <h3 className="text-base font-bold text-bark">Recent Gifts</h3>
+              <p className="mt-1 text-xs text-moss">
+                The latest contributions to this drive — amounts and ministries only, no names.
+              </p>
+              <ul className="mt-4 divide-y divide-sand-light">
+                {recentGifts.map((g, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-semibold text-bark">{g.ministry}</span>
+                    <span className="flex shrink-0 items-baseline gap-3">
+                      <span className="text-[11px] text-moss">{dayFirst(g.date)}</span>
+                      <span className="text-sm font-bold text-gold-deep">{fmtKES(g.amount)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Pledge and in-kind giving open over the page, exactly as they do on
+          the announcement cards. The drive owns the pledge record. */}
+      <PledgeModal
+        open={pledgeOpen}
+        onClose={() => setPledgeOpen(false)}
+        target={{
+          id: campaign.id,
+          title: campaign.title || campaign.name,
+          kind: "campaign",
+          support_account_display: campaign.account_name || campaign.name,
+          event_date_to: campaign.end_date ?? null,
+        }}
+      />
+      <InKindGiftModal
+        open={inKindOpen}
+        onClose={() => setInKindOpen(false)}
+        defaultPurpose={campaign.account_name || campaign.name}
+        announcementTitle={campaign.title || campaign.name}
+      />
 
       {/* ── Support modal ── */}
       {showSupportModal && (

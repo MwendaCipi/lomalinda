@@ -233,6 +233,7 @@ function AccountTypeCell({ member }: { member: MemberUser }) {
 type MemberProfileData = Partial<MemberUser> & {
   date_joined?: string;
   ministry_label?: string;
+  department_label?: string;
   baptismal_status_label?: string;
   current_roles?: RoleHistoryRow[];
   past_roles?: RoleHistoryRow[];
@@ -1012,6 +1013,7 @@ const DEFAULT_MANUAL_PASSWORD = "Welcome@2026";  const initialForm = {
   whatsapp_number: "",
   role: "",
   ministry: "",
+  department: "",
   gifts: [] as string[],
   disability: ["None"] as string[],
   profession: "",
@@ -1223,7 +1225,7 @@ export function UserManagement() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   // The roster reads comfortable rows, always — the Compact toggle left this
   // desk so the strip and search can own the header.
-  const cellPad = densityCellPad(false);
+  const cellPad = densityCellPad();
   const [churchName, setChurchName] = useState("this church");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStep, setAddStep] = useState<1 | 2>(1);
@@ -1589,6 +1591,7 @@ export function UserManagement() {
           gifts: formData.gifts.join(", "),
           disability: formData.disability.filter((d) => d !== "None").join(", "),
           ministry: formData.ministry || "",
+          department: formData.department || "",
         }),
       });
       const data = await res.json();
@@ -2782,6 +2785,22 @@ export function UserManagement() {
                         ))}
                       </select>
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-bark">Department</label>
+                      {/* The age-based department the church reports by — one
+                          per member, and separate from the ministry above. */}
+                      <select value={formData.department}
+                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
+                        <option value="">Unassigned</option>
+                        <option value="children">Children</option>
+                        <option value="youth">Youth</option>
+                        <option value="young_adults">Young Adults</option>
+                        <option value="adults">Adults</option>
+                        <option value="seniors">Seniors</option>
+                      </select>
+                    </div>
                   </div>
 
               {addAccountType === "friend" && (
@@ -3046,6 +3065,7 @@ export function UserManagement() {
                     }
                   />
                   <ProfileField label="Ministry" value={profileData.ministry_label} />
+                  <ProfileField label="Department" value={profileData.department_label} />
                   <ProfileField label="Baptismal status" value={profileData.baptismal_status_label || profileData.baptismal_status} />
                   <ProfileField label="Disability / special needs" value={profileData.disability} />
                 </div>

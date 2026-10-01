@@ -41,15 +41,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CashContribution, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentMembership, DepartmentRole, WeeklyMeeting
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
+    redeem_campaign_pledges_matched_by_giving,
     redeem_due_pledges,
     redeem_pledges_matched_by_giving,
     reopen_pledge,
+    REDEEMED_BY_GIVING,
     REDEEMED_BY_MEMBER,
     REDEEMED_BY_OFFICE,
 )
@@ -2187,6 +2189,180 @@ class PledgeRedeemView(APIView):
         return Response(data)
 
 
+def campaign_pledge_payload(pledge):
+    """One drive pledge, shaped for the member's modal and the office's list."""
+    member = pledge.member
+    return {
+        'id': pledge.id,
+        'campaign': pledge.campaign_id,
+        'member_id': pledge.member_id,
+        'member_name': (member.get_full_name() or member.username) if member else '',
+        'member_email': (member.email if member else '') or '',
+        'amount': float(pledge.amount) if pledge.amount is not None else None,
+        'due_date': pledge.due_date,
+        'redeemed': pledge.redeemed_at is not None,
+        'redeemed_at': pledge.redeemed_at,
+        'redeemed_via': pledge.redeemed_via,
+        'reminded_at': pledge.reminder_sent_at,
+        'created_at': pledge.created_at,
+    }
+
+
+class CampaignPledgeView(APIView):
+    """A member's own pledge to one drive: read it, or make (or replace) it.
+
+    A drive owns its promise records, so this is the drive's own door rather
+    than the announcement's: the modal opens on somebody who may have pledged
+    weeks ago, and reads back what they promised, the day they promised it by,
+    and whether it has been honoured. A second pledge replaces the standing
+    one — a member has one live promise per drive.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        pledge = (
+            CampaignPledge.objects.filter(campaign_id=pk, member=request.user)
+            .select_related('member', 'campaign')
+            .order_by('-created_at')
+            .first()
+        )
+        return Response({'pledge': campaign_pledge_payload(pledge) if pledge else None})
+
+    def post(self, request, pk):
+        campaign = FundraisingCampaign.objects.filter(pk=pk).first()
+        if campaign is None:
+            return Response({'detail': 'Fund drive not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            amount = Decimal(str(request.data.get('amount') or '0'))
+        except (InvalidOperation, TypeError, ValueError):
+            amount = Decimal('0')
+        if amount <= 0:
+            return Response({'amount': 'Enter the amount you are pledging.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        due_date = None
+        if request.data.get('due_date'):
+            due_date = parse_date(str(request.data.get('due_date')))
+            if due_date is None:
+                return Response(
+                    {'due_date': 'Give the day you will give by as YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if due_date < timezone.localdate():
+                return Response(
+                    {'due_date': 'The day you will give by cannot be in the past.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if campaign.end_date and due_date > campaign.end_date:
+                return Response(
+                    {'due_date': f'Choose a day on or before the drive ends, {campaign.end_date.strftime("%d %B %Y")}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        pledge = (
+            CampaignPledge.objects.filter(campaign=campaign, member=request.user, redeemed_at__isnull=True)
+            .order_by('-created_at')
+            .first()
+        )
+        if pledge is None:
+            pledge = CampaignPledge.objects.create(
+                campaign=campaign, member=request.user, amount=amount, due_date=due_date,
+            )
+        else:
+            pledge.amount = amount
+            pledge.due_date = due_date
+            pledge.save(update_fields=['amount', 'due_date'])
+
+        return Response(
+            {'detail': 'Your pledge is recorded.', 'pledge': campaign_pledge_payload(pledge)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CampaignPledgeListView(APIView):
+    """Every pledge a drive drew — the office's list."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            return Response(
+                {'detail': 'Only church treasurers or administrators can read drive pledges.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        campaign = FundraisingCampaign.objects.filter(pk=pk).first()
+        if campaign is None:
+            return Response({'detail': 'Fund drive not found.'}, status=status.HTTP_404_NOT_FOUND)
+        all_pledges = CampaignPledge.objects.filter(campaign=campaign)
+        redeem_campaign_pledges_matched_by_giving(all_pledges)
+        rows = (
+            CampaignPledge.objects.filter(campaign=campaign)
+            .select_related('member')
+            .order_by('redeemed_at', 'due_date')
+        )
+        pledges = [campaign_pledge_payload(row) for row in rows]
+        return Response({
+            'pledges': pledges,
+            'outstanding': sum(1 for row in pledges if not row['redeemed']),
+            'pledged_total': sum(row['amount'] or 0 for row in pledges),
+        })
+
+
+class CampaignPledgeRedeemView(APIView):
+    """Close a drive pledge — by the member who made it, or by the office."""
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        pledge = CampaignPledge.objects.filter(pk=pk).select_related('campaign', 'member').first()
+        if pledge is None:
+            return Response({'detail': 'Pledge not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = getattr(request.user, 'member_profile', None)
+        is_owner = pledge.member_id == request.user.pk
+        is_office = bool(profile and profile.has_role('admin', 'elder', 'clerk', 'treasurer'))
+        if not (is_owner or is_office):
+            return Response(
+                {'detail': 'Only the member who pledged, or the church office, can close a pledge.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        redeemed = request.data.get('redeemed', True)
+        if isinstance(redeemed, str):
+            word = redeemed.strip().lower()
+            if word in ('true', '1', 'yes'):
+                redeemed = True
+            elif word in ('false', '0', 'no'):
+                redeemed = False
+            else:
+                redeemed = None
+        if not isinstance(redeemed, bool):
+            return Response(
+                {'redeemed': 'Send redeemed as true (given) or false (still owed).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not redeemed and not is_office:
+            return Response(
+                {'detail': 'Only the church office can reopen a pledge that has been closed.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if redeemed:
+            pledge.redeemed_at = timezone.now()
+            pledge.redeemed_via = REDEEMED_BY_OFFICE if is_office else REDEEMED_BY_MEMBER
+        else:
+            pledge.redeemed_at = None
+            pledge.redeemed_via = ''
+        pledge.save(update_fields=['redeemed_at', 'redeemed_via'])
+
+        data = campaign_pledge_payload(pledge)
+        data['detail'] = (
+            'Pledge marked as given.' if redeemed else 'Pledge reopened — it will be reminded about again.'
+        )
+        return Response(data)
+
+
 class MissionReadingRedirectView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -2298,6 +2474,7 @@ class MeView(APIView):
             'gender': profile.gender if profile else '',
             'gifts': profile.gifts if profile else '',
             'ministry': profile.ministry if profile else '',
+            'department': profile.department if profile else '',
             'disability': profile.disability if profile else '',
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
@@ -2364,6 +2541,7 @@ class ProfileUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     MINISTRY_VALUES = {code for code, _label in MemberProfile.MINISTRY_CHOICES}
+    DEPARTMENT_VALUES = {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}
 
     def post(self, request):
         profile = MemberProfile.objects.filter(user=request.user).first()
@@ -2397,6 +2575,11 @@ class ProfileUpdateView(APIView):
             if ministry and ministry not in self.MINISTRY_VALUES:
                 return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
             profile.ministry = ministry
+        if 'department' in request.data:
+            department = as_text(request.data.get('department'))
+            if department and department not in self.DEPARTMENT_VALUES:
+                return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+            profile.department = department
         if 'disability' in request.data:
             profile.disability = as_text(request.data.get('disability'))
 
@@ -4437,9 +4620,10 @@ class ChurchFinancialReportSuggestionsView(APIView):
             'trust_fund': str(trust_fund.quantize(Decimal('0.01'))),
             'local_church_offerings': str(local_offerings.quantize(Decimal('0.01'))),
             'expenditure': str(expenditure),
-            # What the period leaves in hand, computed here so the desk sees
-            # the same total the published report will carry.
-            'total': str((trust_fund + local_offerings).quantize(Decimal('0.01')) - expenditure),
+            # What the period leaves in hand — local offerings less what was
+            # spent, with the trust fund held apart — computed here so the
+            # desk sees the same total the published report will carry.
+            'total': str(local_offerings.quantize(Decimal('0.01')) - expenditure),
             # How many lines each figure was drawn from, so the desk can tell
             # an empty month from one it has already posted entries against.
             'gift_entries': gifts,
@@ -5414,6 +5598,9 @@ class UserManagementView(generics.ListCreateAPIView):
         ministry = (request.data.get('ministry') or '').strip()
         if ministry and ministry not in {code for code, _label in MemberProfile.MINISTRY_CHOICES}:
             return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
+        department = (request.data.get('department') or '').strip()
+        if department and department not in {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}:
+            return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
         current_church = (request.data.get('current_church') or '').strip()
         baptismal_status = (request.data.get('baptismal_status') or '').strip()
         if account_type == 'friend':
@@ -5490,6 +5677,7 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj.profession = profession
         profile_obj.gender = gender
         profile_obj.ministry = ministry
+        profile_obj.department = department
         profile_obj.gifts = str(gifts or '').strip()
         profile_obj.disability = str(disability or '').strip()
         if date_of_birth:
@@ -5541,6 +5729,7 @@ def member_profile_payload(user):
         **UserDetailSerializer(user).data,
         'date_joined': user.date_joined,
         'ministry_label': profile.get_ministry_display() if profile and profile.ministry else '',
+        'department_label': profile.get_department_display() if profile and profile.department else '',
         'baptismal_status_label': profile.get_baptismal_status_display() if profile and profile.baptismal_status else '',
         'current_roles': [row(r) for r in current],
         'past_roles': [row(r) for r in past],
@@ -5597,8 +5786,14 @@ class UserDetailUpdateView(APIView):
             'gender': 'gender',
             'date_of_birth': 'date_of_birth',
             'gifts': 'gifts',
+            'department': 'department',
             'disability': 'disability',
         }
+
+        if 'department' in request.data:
+            department = str(request.data.get('department') or '').strip()
+            if department and department not in {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}:
+                return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
 
         def normalise(field, value):
             if field in ('gifts', 'disability') and isinstance(value, list):
@@ -7726,25 +7921,56 @@ class DepartmentMembersView(APIView):
         unit = str(request.query_params.get('unit') or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
-        members = []
-        for membership in (
-            DepartmentMembership.objects.select_related('member', 'member__member_profile')
-            .filter(department=department, member__is_active=True, **({'unit': unit} if unit else {}))
-            .order_by('member__first_name', 'member__last_name')
-        ):
-            user = membership.member
+        def row_for(user, *, membership_id=None, unit_value='', via=''):
+            """One roll row. ``via`` names where a unioned row came from."""
             profile = getattr(user, 'member_profile', None)
-            members.append({
-                'membership_id': membership.id,
+            return {
+                'membership_id': membership_id,
                 'id': user.id,
                 'name': f"{user.first_name} {user.last_name}".strip() or user.get_username(),
                 'username': user.get_username(),
                 'email': user.email or '',
                 'phone_number': (profile.phone_number if profile else '') or '',
                 'gender': (profile.gender if profile else '') or '',
-                'unit': membership.unit,
-                'added_at': membership.created_at,
-            })
+                'unit': unit_value,
+                'via': via,
+                'added_at': None,
+            }
+
+        members = []
+        seen_ids = set()
+        for membership in (
+            DepartmentMembership.objects.select_related('member', 'member__member_profile')
+            .filter(department=department, member__is_active=True, **({'unit': unit} if unit else {}))
+            .order_by('member__first_name', 'member__last_name')
+        ):
+            user = membership.member
+            seen_ids.add(user.id)
+            row = row_for(user, membership_id=membership.id, unit_value=membership.unit)
+            row['added_at'] = membership.created_at
+            members.append(row)
+
+        # Music is the church's singing: whoever is on the choir's roll, or in a
+        # registered singing group, counts as music ministry. The music desk's
+        # roll is therefore a union, not only the rows filed by hand. Unmerged
+        # rows carry no membership id, so removing one means leaving the choir
+        # or the group it came from — the desk cannot quietly undo that here.
+        if department == 'music' and not unit:
+            unioned = [(member_id, 'Choir') for member_id in DepartmentMembership.objects.filter(department='choir').values_list('member_id', flat=True)]
+            unioned += [
+                (row.member_id, row.group.name)
+                for row in SingingGroupMember.objects.select_related('group')
+            ]
+            for user_id, via in unioned:
+                if user_id in seen_ids:
+                    continue
+                user = User.objects.select_related('member_profile').filter(pk=user_id, is_active=True).first()
+                if user is None:
+                    continue
+                seen_ids.add(user_id)
+                members.append(row_for(user, via=via))
+
+        members.sort(key=lambda m: m['name'].lower())
         return Response({'members': members, 'unit': unit, 'units': target.unit_names})
 
     def post(self, request, department):
@@ -7785,6 +8011,127 @@ class DepartmentMembersView(APIView):
         if not deleted:
             return Response({'detail': 'That member is not on this roll.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Member removed from the roll.'})
+
+
+def singing_group_payload(group):
+    """One singing group, with its register of singers."""
+    leader = group.leader
+    memberships = list(group.memberships.select_related('member', 'member__member_profile'))
+    return {
+        'id': group.id,
+        'name': group.name,
+        'description': group.description or '',
+        'leader_id': group.leader_id,
+        'leader_name': (leader.get_full_name() or leader.get_username()) if leader else '',
+        'is_active': group.is_active,
+        'created_at': group.created_at,
+        'member_count': len(memberships),
+        'members': [
+            {
+                'id': row.member_id,
+                'name': row.member.get_full_name() or row.member.get_username(),
+                'username': row.member.get_username(),
+            }
+            for row in memberships
+        ],
+    }
+
+
+class DepartmentSingingGroupsView(APIView):
+    """The singing groups registered under a department — the music register."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        if not Department.objects.filter(code=department, is_active=True).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        groups = SingingGroup.objects.filter(is_active=True).prefetch_related('memberships__member')
+        # The desk reads the same flag its writes are guarded by, so the
+        # register's buttons render only for the hands that can use them.
+        return Response({
+            'groups': [singing_group_payload(group) for group in groups],
+            'can_manage': can_manage_department(request.user, department),
+        })
+
+    def post(self, request, department):
+        if not Department.objects.filter(code=department, is_active=True).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can register a singing group."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = str(request.data.get('name') or '').strip()
+        if len(name) < 3:
+            return Response({'name': 'Give the group a name of at least three characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if SingingGroup.objects.filter(name__iexact=name).exists():
+            return Response({'name': 'A singing group by that name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        leader = None
+        if request.data.get('leader_id'):
+            leader = User.objects.filter(pk=request.data.get('leader_id')).first()
+        group = SingingGroup.objects.create(
+            name=name,
+            description=str(request.data.get('description') or '').strip(),
+            leader=leader,
+            created_by=request.user,
+        )
+        return Response(singing_group_payload(group), status=status.HTTP_201_CREATED)
+
+
+class SingingGroupDetailView(APIView):
+    """One singing group: take it off the register."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, department, group_id):
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can change the register."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        deleted, _ = SingingGroup.objects.filter(pk=group_id).delete()
+        if not deleted:
+            return Response({'detail': 'That singing group does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Singing group removed.'})
+
+
+class SingingGroupMembersView(APIView):
+    """The singers in one group: add one, or take one out."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, department, group_id):
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can change a group's members."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        group = SingingGroup.objects.filter(pk=group_id).first()
+        if group is None:
+            return Response({'detail': 'That singing group does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            target = User.objects.get(pk=request.data.get('member_id'))
+        except (User.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        row, created = SingingGroupMember.objects.get_or_create(
+            group=group, member=target, defaults={'added_by': request.user},
+        )
+        if not created:
+            return Response({'detail': 'That member is already in this group.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(singing_group_payload(group), status=status.HTTP_201_CREATED)
+
+    def delete(self, request, department, group_id):
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can change a group's members."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        deleted, _ = SingingGroupMember.objects.filter(
+            group_id=group_id, member_id=request.data.get('member_id'),
+        ).delete()
+        if not deleted:
+            return Response({'detail': 'That member is not in this group.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Member removed from the group.'})
 
 
 class DepartmentEventsView(APIView):
@@ -7995,3 +8342,196 @@ class AnnouncementResponsesCsvView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="poll_answers_{pk}_{stamp}.csv"'
         return response
+
+
+class DepartmentJoinRequestView(APIView):
+    """A member's asks a desk answers: to join an area, or to open a group.
+
+    POST raises one; GET reads the member's own asks and the answers to
+    them. The desk that answers them is DepartmentJoinRequestReviewView.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = DepartmentJoinRequest.objects.filter(member=request.user)
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'department': row.department,
+                    'kind': row.kind,
+                    'group_name': row.group_name,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                    'reviewed_at': row.reviewed_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def post(self, request, department):
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        kind = str(request.data.get('kind') or 'join')
+        if kind not in ('join', 'singing_group'):
+            return Response({'kind': 'Ask to join the area or to register a singing group.'}, status=status.HTTP_400_BAD_REQUEST)
+        if kind == 'join' and DepartmentMembership.objects.filter(member=request.user, department=department).exists():
+            return Response({'detail': 'You are already on this roll.'}, status=status.HTTP_400_BAD_REQUEST)
+        # One open ask per member per area, whatever kind — the desk answers
+        # people, not stacks.
+        if DepartmentJoinRequest.objects.filter(member=request.user, department=department, status='pending').exists():
+            return Response({'detail': 'You already have a request waiting with this department.'}, status=status.HTTP_400_BAD_REQUEST)
+        group_name = ''
+        group_description = ''
+        if kind == 'singing_group':
+            group_name = str(request.data.get('group_name') or '').strip()
+            if len(group_name) < 3:
+                return Response({'group_name': 'Give the group a name of at least three characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            if SingingGroup.objects.filter(name__iexact=group_name).exists():
+                return Response({'group_name': 'A singing group by that name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+            group_description = str(request.data.get('group_description') or '').strip()[:240]
+        row = DepartmentJoinRequest.objects.create(
+            member=request.user,
+            department=department,
+            kind=kind,
+            group_name=group_name,
+            group_description=group_description,
+            note=str(request.data.get('note') or '').strip()[:500],
+        )
+        # The ask lands with the department's own leadership and the elders'
+        # desk — the people who answer for the area in church.
+        audience_ids = set(DepartmentAssignment.objects.filter(
+            department__code=department, department__is_active=True, member__is_active=True,
+        ).values_list('member_id', flat=True))
+        audience_ids.update(User.objects.filter(
+            member_profile__role='elder', is_active=True,
+        ).values_list('id', flat=True))
+        audience_ids.discard(request.user.id)
+        audience = User.objects.filter(id__in=audience_ids, is_active=True)
+        desk_link = f'{settings.FRONTEND_URL}/requests'
+        ask = (
+            f'wants to register the singing group "{group_name}" under'
+            if kind == 'singing_group' else 'has asked to join'
+        )
+        subject = (
+            f'New singing group proposal for {target.name}'
+            if kind == 'singing_group' else f'New join request for {target.name}'
+        )
+        body = (
+            f"{request.user.get_full_name() or request.user.get_username()} {ask} "
+            f"{target.name}. Open the requests desk to respond: {desk_link}"
+        )
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
+            for person in audience
+        ])
+        try:
+            send_mail(
+                subject, body, settings.DEFAULT_FROM_EMAIL,
+                [u.email for u in audience if u.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+        return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent.'}, status=status.HTTP_201_CREATED)
+
+
+class DepartmentJoinRequestReviewView(APIView):
+    """The desk's answer to a join request: approve, decline, and reply.
+
+    The department's own leadership (leader or assistant, per
+    ``can_manage_department``) and the office review here. Approving puts the
+    member on the roll the same way the desk's own Add member does, and the
+    reply — optional but encouraged — is what the member reads on their rail.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _visible(self, user):
+        managed = DepartmentAssignment.objects.filter(
+            member=user, department__is_active=True,
+        ).values_list('department__code', flat=True)
+        codes = set(managed)
+        profile = department_office_profile(user)
+        if profile:
+            codes.update(code for code in Department.objects.filter(is_active=True).values_list('code', flat=True))
+        return DepartmentJoinRequest.objects.filter(department__in=codes).select_related('member', 'reviewed_by')
+
+    def get(self, request):
+        rows = self._visible(request.user)
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'department': row.department,
+                    'kind': row.kind,
+                    'group_name': row.group_name,
+                    'group_description': row.group_description,
+                    'member_id': row.member_id,
+                    'member_name': f"{row.member.first_name} {row.member.last_name}".strip() or row.member.get_username(),
+                    'member_email': row.member.email or '',
+                    'member_phone': (getattr(row.member, 'member_profile', None).phone_number if getattr(row.member, 'member_profile', None) else '') or '',
+                    'note': row.note,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def patch(self, request, pk):
+        row = DepartmentJoinRequest.objects.select_related('member').filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'Unknown request.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, row.department):
+            return Response({'detail': 'Only this department\u2019s leadership or the office can answer requests.'}, status=status.HTTP_403_FORBIDDEN)
+        decision = str(request.data.get('status') or '')
+        if decision not in ('approved', 'rejected'):
+            return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            row.status = decision
+            row.reply = str(request.data.get('reply') or '').strip()[:500]
+            row.reviewed_by = request.user
+            row.reviewed_at = timezone.now()
+            row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+            if decision == 'approved' and row.kind == 'singing_group':
+                # A proposal the desk accepts becomes a registered group — the
+                # ask itself never wrote to the register. If the name was
+                # registered in the meantime, the desk's approval still honours
+                # the ask by seating the proposer in the group that bears it.
+                group, _ = SingingGroup.objects.get_or_create(
+                    name=row.group_name,
+                    defaults={'description': row.group_description, 'created_by': request.user},
+                )
+                SingingGroupMember.objects.get_or_create(
+                    group=group, member=row.member, defaults={'added_by': request.user},
+                )
+            elif decision == 'approved':
+                DepartmentMembership.objects.get_or_create(
+                    member=row.member, department=row.department,
+                )
+        approved = decision == 'approved'
+        if row.kind == 'singing_group':
+            title = f'Your singing group "{row.group_name}" was {"approved" if approved else "declined"}'
+            message = row.reply or (
+                f'"{row.group_name}" is registered under {row.department.replace("_", " ").title()} — and you are its first singer.'
+                if approved
+                else 'Thank you for offering to start the group. The desk could not take it on this time.'
+            )
+        else:
+            title = f'Your request to join {row.department.replace("_", " ").title()} was {"approved" if approved else "declined"}'
+            message = row.reply or (
+                'Welcome aboard — you are now on the roll.' if approved
+                else 'Thank you for offering to serve. The desk could not take you on this time.'
+            )
+        ChurchNotification.objects.create(
+            user=row.member,
+            title=title,
+            message=message,
+            link=f'{settings.FRONTEND_URL}/member',
+        )
+        return Response({'id': row.id, 'status': row.status, 'reply': row.reply})

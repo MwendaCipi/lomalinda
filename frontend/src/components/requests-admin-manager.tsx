@@ -8,7 +8,7 @@ import { reviewBucket, type StatusFilter } from "@/lib/requests";
 import { Check, Handshake, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 import { TransferManagement } from "./transfer-management";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -75,8 +75,35 @@ type JoinItem = {
   created_at: string;
 };
 
+/** A member's ask a department desk answers: to join the area, or to open a
+    singing group under it. One ledger, one review endpoint, so the queue
+    renders both as one desk. */
+type AreaRequestRow = {
+  id: number;
+  department: string;
+  kind: "join" | "singing_group";
+  group_name?: string;
+  group_description?: string;
+  member_id: number;
+  member_name: string;
+  member_email?: string;
+  member_phone?: string;
+  note?: string;
+  status: "pending" | "approved" | "rejected";
+  reply?: string;
+  created_at: string;
+};
+
+/** The desks' own asks share the review states the office already reads. */
+function statusOfArea(status?: string): { status: string; statusLabel: string } {
+  if (status === "pending") return { status: "pending", statusLabel: "Awaiting approval" };
+  if (status === "approved") return { status: "approved", statusLabel: "Approved" };
+  if (status === "rejected") return { status: "rejected", statusLabel: "Rejected" };
+  return { status: status || "pending", statusLabel: (status || "pending").replace(/_/g, " ") };
+}
+
 /** Every request kind in one table, tagged by desk. */
-type RequestKind = "join" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer";
+type RequestKind = "join" | "area" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer";
 
 type UnifiedRow = {
   key: string;
@@ -99,6 +126,8 @@ type UnifiedRow = {
   join?: JoinItem;
   /** Only set on transfer rows. */
   transferId?: number;
+  /** Only set on area rows: join an area / propose a singing group. */
+  areaRequest?: AreaRequestRow;
 };
 
 type KindFilter = "all" | RequestKind;
@@ -123,6 +152,7 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   dedication: { label: "Child dedications", badge: "bg-bark/10 text-bark" },
   welfare: { label: "Welfare & support", badge: "bg-gold-deep/10 text-gold-shadow" },
   transfer: { label: "Membership requests", badge: "bg-moss/10 text-moss-mid" },
+  area: { label: "Area requests", badge: "bg-blue-50 text-blue-800" },
 };
 
 const JOINING_MODE_LABELS: Record<string, string> = {
@@ -177,12 +207,15 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [supportSubmissions, setSupportSubmissions] = useState<SupportItem[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinItem[]>([]);
   const [transfers, setTransfers] = useState<TransferRow[]>([]);
+  const [areaRequests, setAreaRequests] = useState<AreaRequestRow[]>([]);
+  // Department codes read as names in the queue — from the same directory
+  // the members' own ask modal reads.
+  const [areaLabels, setAreaLabels] = useState<Record<string, string>>({});
   const [isElder, setIsElder] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   // The one request a notification email pointed at, so the desk can show it
   // rather than leaving an elder to hunt through every desk for it.
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
@@ -228,13 +261,17 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     setLoading(true);
     const headers = authHeaders();
     try {
-      const [jRes, pRes, vRes, dRes, sRes, tRes] = await Promise.all([
+      const [jRes, pRes, vRes, dRes, sRes, tRes, aRes, dirRes] = await Promise.all([
         fetch(`${API_URL}/api/members/enrollment-requests/`, { headers }),
         fetch(`${API_URL}/api/members/prayer-requests/`, { headers }),
         fetch(`${API_URL}/api/members/visitations/`, { headers }),
         fetch(`${API_URL}/api/members/child-dedications/`, { headers }),
         fetch(`${API_URL}/api/members/support-submissions/`, { headers }),
         fetch(`${API_URL}/api/members/transfers/`, { headers }),
+        // The desks' own asks — join an area, propose a singing group — from
+        // the one review endpoint that also answers them.
+        fetch(`${API_URL}/api/members/department-join-requests/review/`, { headers }),
+        fetch(`${API_URL}/api/members/departments/`, { headers }),
       ]);
       setJoinRequests(jRes.ok ? await jRes.json() : []);
       setPrayerRequests(pRes.ok ? await pRes.json() : []);
@@ -242,6 +279,11 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       setChildDedications(dRes.ok ? await dRes.json() : []);
       setSupportSubmissions(sRes.ok ? await sRes.json() : []);
       setTransfers(tRes.ok ? await tRes.json() : []);
+      setAreaRequests(aRes.ok ? (await aRes.json()).requests ?? [] : []);
+      const dirData = dirRes.ok ? await dirRes.json() : { departments: [] };
+      const labelMap: Record<string, string> = {};
+      for (const d of (dirData?.departments ?? []) as { code: string; label: string }[]) labelMap[d.code] = d.label;
+      setAreaLabels(labelMap);
     } catch {
       // ignore
     } finally {
@@ -341,6 +383,56 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     }
   };
 
+  // The desks' own asks — join an area, propose a singing group — answered
+  // by the one review endpoint the department leadership and the office share.
+  const handleReviewArea = async (id: number, decision: "approved" | "rejected", area: AreaRequestRow) => {
+    const isGroup = area.kind === "singing_group";
+    const confirmText = decision === "approved"
+      ? isGroup
+        ? `Approve "${area.group_name}"? The group is registered under ${area.department.replace(/_/g, " ")} and ${area.member_name} becomes its first singer.`
+        : "Approve this request? The member is added to the area's roll."
+      : isGroup
+        ? `Decline the proposal for "${area.group_name}"?`
+        : "Decline this join request?";
+    const result = await showAlert(
+      isGroup ? "Singing group proposal" : "Area request",
+      confirmText,
+      "question",
+      { showCancelButton: true, confirmButtonText: decision === "approved" ? "Approve" : "Decline", cancelButtonText: "Cancel", confirmButtonColor: "#3085d6" }
+    );
+    if (!result.isConfirmed) return;
+
+    setReviewingId(`area-${id}`);
+    try {
+      const res = await fetch(`${API_URL}/api/members/department-join-requests/${id}/`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      });
+      if (res.ok) {
+        showAlert(
+          decision === "approved" ? "Request approved" : "Request declined",
+          isGroup
+            ? decision === "approved"
+              ? `"${area.group_name}" is registered, and ${area.member_name} is its first singer.`
+              : "The proposal was declined."
+            : decision === "approved"
+              ? "The member is now on the area's roll."
+              : "The request was declined.",
+          "success"
+        );
+        fetchAll();
+      } else {
+        const data = await res.json().catch(() => null);
+        showAlert("Review Failed", data?.detail || "Could not update the request.", "error");
+      }
+    } catch {
+      showAlert("Network Error", "Could not reach the server.", "error");
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   // ── One table out of every ledger, newest first. ─────────────────────────
   const rows: UnifiedRow[] = useMemo(() => {
     const joinRows: UnifiedRow[] = joinRequests.map((item) => {
@@ -430,10 +522,31 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       };
     });
 
-    return [...joinRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
+    const areaRows: UnifiedRow[] = areaRequests.map((item) => {
+      const { status, statusLabel } = statusOfArea(item.status);
+      const isGroup = item.kind === "singing_group";
+      const label = areaLabels[item.department] || item.department.replace(/_/g, " ");
+      return {
+        key: `area-${item.id}`,
+        kind: "area",
+        title: item.member_name,
+        contact: contactLine(item.member_phone, item.member_email),
+        summary: isGroup
+          ? `Proposes the singing group "${item.group_name || "?"}" under ${label}`
+          : `Asks to join ${label}`,
+        meta: [isGroup ? item.group_description : null, item.note].filter(Boolean).join(" · ") || undefined,
+        status,
+        statusLabel,
+        created_at: item.created_at,
+        reviewable: status === "pending",
+        areaRequest: item,
+      };
+    });
+
+    return [...joinRows, ...areaRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
       (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }, [joinRequests, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
+  }, [joinRequests, areaRequests, areaLabels, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
 
   // A link from a request notification arrives as ?request=<kind>-<id>. The
   // filters are moved to that row once the ledgers have loaded, and only once,
@@ -481,7 +594,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       <h3 className="mt-3 text-lg font-semibold text-bark">No requests found</h3>
       <p className="mt-1 text-sm text-moss">
         {rows.length === 0
-          ? "Join, prayer, visitation, dedication, welfare and transfer requests will appear here."
+          ? "Join, area, prayer, visitation, dedication, welfare and transfer requests will appear here."
           : "Try a different search or clear the filter."}
       </p>
     </div>
@@ -534,6 +647,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const filterOptions: { value: KindFilter; label: string }[] = [
     { value: "all", label: "All requests" },
     { value: "join", label: "Join requests" },
+    { value: "area", label: "Area requests" },
     { value: "prayer", label: "Prayer requests" },
     { value: "visitation", label: "Visitation" },
     { value: "dedication", label: "Child dedications" },
@@ -706,7 +820,6 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           {statusFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
           {search.trim() ? ` · matching “${search.trim()}”` : ""}
         </span>
-        <DensityToggle dense={dense} onToggle={toggleDensity} />
       </div>
       </div>
 
@@ -748,7 +861,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             >
               <td className={`max-w-[220px] px-4 ${rowPad}`}>
                 <p className="truncate font-semibold text-bark">{row.title}</p>
-                {!dense && <p className="mt-0.5 truncate text-xs text-moss">{row.contact}</p>}
+                <p className="mt-0.5 truncate text-xs text-moss">{row.contact}</p>
               </td>
               <td className={`px-4 ${rowPad}`}>
                 <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_META[row.kind].badge}`}>
@@ -757,7 +870,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               </td>
               <td className={`max-w-[280px] px-4 ${rowPad}`}>
                 <p className="line-clamp-2 text-moss-mid">{row.summary}</p>
-                {row.meta && !dense && <p className="mt-0.5 truncate text-xs text-moss">{row.meta}</p>}
+                {row.meta && <p className="mt-0.5 truncate text-xs text-moss">{row.meta}</p>}
               </td>
               <td className={`px-4 ${rowPad}`}>
                 <span
@@ -784,6 +897,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                           type="button"
                           disabled={reviewingId === row.key}
                           onClick={() => handleReviewJoin(row.join!.id, "rejected")}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <X size={12} className="inline" aria-hidden="true" /> Reject
+                        </button>
+                      </>
+                    )}
+                    {row.areaRequest && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewArea(row.areaRequest!.id, "approved", row.areaRequest!)}
+                          className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewArea(row.areaRequest!.id, "rejected", row.areaRequest!)}
                           className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                         >
                           <X size={12} className="inline" aria-hidden="true" /> Reject
@@ -818,7 +951,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           renderCard={(row) => (
             <div
               data-request-row={row.key}
-              className={`space-y-2 rounded-2xl border bg-white shadow-sm ${dense ? "p-2.5" : "p-4"} ${
+              className={`space-y-2 rounded-2xl border bg-white shadow-sm ${"p-4"} ${
                 highlightKey === row.key
                   ? "border-ember/40 bg-sand-bright ring-1 ring-inset ring-ember/40"
                   : "border-sand-line"
@@ -857,6 +990,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         type="button"
                         disabled={reviewingId === row.key}
                         onClick={() => handleReviewJoin(row.join!.id, "rejected")}
+                        className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <X size={12} className="inline" aria-hidden="true" /> Reject
+                      </button>
+                    </>
+                  )}
+                  {row.areaRequest && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewArea(row.areaRequest!.id, "approved", row.areaRequest!)}
+                        className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewArea(row.areaRequest!.id, "rejected", row.areaRequest!)}
                         className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         <X size={12} className="inline" aria-hidden="true" /> Reject

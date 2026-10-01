@@ -8,7 +8,7 @@ import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
 import { railFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
-import { useDepartments } from "@/hooks/use-departments";
+import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
 
@@ -69,8 +69,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const mode = scrollModeForPath(pathname);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
+  const myDepartments = useMyDepartments();
   const departments = useDepartments();
-  const entries = railFor(roles, departments);
+  const entries = railFor({ roles, departmentCodes: myDepartments }, departments);
   const here = useRailHere(pathname, entries);
   /**
    * The place you are in. Its pages are the strip at the top of the content
@@ -80,13 +81,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * itself is noise.
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
-  const sectionPages = (section?.items ?? []).map((item) => ({
-    key: item.href,
-    href: item.href,
-    label: item.short ?? item.label,
-    icon: item.icon,
-    help: item.label,
-  }));
+  const sectionPages = (section && "items" in section && section.items ? section.items : [])
+    .filter((item) => Boolean(item.href))
+    .map((item) => ({
+      key: item.href as string,
+      href: item.href as string,
+      label: item.short ?? item.label,
+      icon: item.icon,
+      help: item.label,
+    }));
 
   // The rail is for members in the app. The website keeps its own header, and
   // the forced-profile gate shows nothing but the form.

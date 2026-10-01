@@ -84,6 +84,57 @@ async function fetchDepartments(): Promise<DepartmentRow[] | null> {
 /** Drop the cache — a desk that just added a ministry should see the row. */
 export function invalidateDepartments() {
   cache = null;
+  myDepartmentsCache = null;
+}
+
+// The signed-in member's own areas (roll memberships plus any they lead or
+// assist), cached like the directory: the rail asks on every mount.
+let myDepartmentsCache: { codes: string[]; at: number } | null = null;
+let myInflight: Promise<string[]> | null = null;
+const myListeners = new Set<(codes: string[]) => void>();
+
+async function fetchMyDepartments(): Promise<string[]> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  if (!token) return [];
+  try {
+    const res = await fetch(`${API_URL}/api/members/me/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.my_departments ?? []).map((row: { code?: string }) => String(row.code || "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function useMyDepartments(): string[] {
+  const [codes, setCodes] = useState<string[]>(() => myDepartmentsCache?.codes ?? []);
+
+  useEffect(() => {
+    const fresh = myDepartmentsCache && Date.now() - myDepartmentsCache.at < TTL;
+    if (fresh) return;
+    let cancelled = false;
+    const listener = (next: string[]) => {
+      if (!cancelled) setCodes(next);
+    };
+    myListeners.add(listener);
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      const next = await (myInflight ?? (myInflight = fetchMyDepartments().finally(() => {
+        myInflight = null;
+      })));
+      if (cancelled) return;
+      myDepartmentsCache = { codes: next, at: Date.now() };
+      myListeners.forEach((notify) => notify(next));
+    });
+    return () => {
+      cancelled = true;
+      myListeners.delete(listener);
+    };
+  }, []);
+
+  return codes;
 }
 
 export function useDepartments(): DepartmentRow[] {

@@ -10,7 +10,7 @@ import { dayFirstTime } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
 import { ExpenditureManager } from "./expenditure-manager";
-import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { densityCellPad } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -51,8 +51,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
   const [view, setView] = useState<"accounts" | "income" | "expenditure">(initialView ?? "accounts");
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
-  const { dense, toggleDensity } = useTableDensity();
-  const rowPad = densityCellPad(dense);
+  const rowPad = densityCellPad();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // Modals
@@ -528,7 +527,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
                   </label>
                 </div>
               )}
-              <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
             </div>
           )}
         </div>
@@ -586,7 +584,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
             </>
           }
           cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
-          renderCard={(acc) => (                <div key={acc.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+          renderCard={(acc) => (                <div key={acc.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${"p-3.5"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="shrink-0 rounded-lg bg-white p-1.5">{getAccountIcon(acc.account_type)}</div>
@@ -751,7 +749,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
             renderCard={(tx) => {
               const isCredit = isCreditMovement(tx);
               return (
-                <div key={tx.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${dense ? "p-2.5" : "p-3.5"}`}>
+                <div key={tx.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${"p-3.5"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-bold text-bark">{tx.account_name}</h4>

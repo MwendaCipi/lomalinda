@@ -110,6 +110,20 @@ class MemberProfile(models.Model):
         max_length=30, choices=MINISTRY_CHOICES, blank=True,
         help_text="Ministry the member belongs to, self-declared at profile update",
     )
+    # The age-based department the church reports by. Deliberately separate
+    # from ``ministry`` (where a member serves): a person belongs to exactly
+    # one department, self-declared at profile update or set by the office.
+    DEPARTMENT_CHOICES = [
+        ('children', 'Children'),
+        ('youth', 'Youth'),
+        ('young_adults', 'Young Adults'),
+        ('adults', 'Adults'),
+        ('seniors', 'Seniors'),
+    ]
+    department = models.CharField(
+        max_length=30, choices=DEPARTMENT_CHOICES, blank=True, default='',
+        help_text="Age-based department the member belongs to (exactly one)",
+    )
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
     # When the office switched this account off. An inactive account is not
     # always a deactivated one — a join request nobody has approved yet is
@@ -409,6 +423,115 @@ class DepartmentMembership(models.Model):
 
     def __str__(self):
         return f"{self.member.get_username()} — {self.department}"
+
+
+class DepartmentJoinRequest(models.Model):
+    """A member asking for something a desk answers: to join an area, or to
+    open a singing group.
+
+    One ledger, two asks. ``join`` — raised from the rail by a member who
+    belongs to none of the church's areas — lands with the department's own
+    leader (and its assistants) plus the elders' desk, who answer it here:
+    approve it and the member joins the roll; decline it and the note
+    explains why. ``singing_group`` — raised from the music desk by a member
+    who wants to start an ensemble — lands the same way, and approving it
+    registers the group and seats its proposer as the first singer. The
+    member can read the answer on their own rail either way.
+    """
+
+    KIND_CHOICES = [
+        ('join', 'Join the area'),
+        ('singing_group', 'Register a singing group'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Declined'),
+    ]
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_join_requests')
+    department = models.CharField(max_length=100)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='join')
+    # For ``singing_group`` asks: the group the member proposes. A proposal is
+    # only a name until the desk approves it — the register is never written
+    # by the ask itself.
+    group_name = models.CharField(max_length=120, blank=True)
+    group_description = models.CharField(max_length=240, blank=True)
+    note = models.TextField(blank=True, help_text="An optional word from the member about why they are asking")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reply = models.TextField(blank=True, help_text="The answer the desk sends back to the member")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_join_requests_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('-created_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=('member', 'department'),
+                condition=models.Q(status='pending', kind='join'),
+                name='uniq_open_join_request_per_department',
+            ),
+            models.UniqueConstraint(
+                fields=('member', 'department'),
+                condition=models.Q(status='pending', kind='singing_group'),
+                name='uniq_open_group_request_per_department',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.member.get_username()} → {self.department} ({self.get_kind_display()})"
+
+
+class SingingGroup(models.Model):
+    """A singing group registered under the church's music ministry.
+
+    The choir is the church's own and lives as a department of its own; the
+    singing groups are the smaller ensembles the office registers — a name,
+    who leads them, and who sings. A group joins the music roll as a whole,
+    so everyone singing in one counts as music ministry whether or not they
+    were put on the roll by hand. A group may be opened by the office here or
+    from a member's registration request the elders approve.
+    """
+
+    name = models.CharField(max_length=120, unique=True)
+    description = models.CharField(max_length=240, blank=True)
+    leader = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='led_singing_groups',
+    )
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='created_singing_groups',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('name',)
+
+    def __str__(self):
+        return self.name
+
+
+class SingingGroupMember(models.Model):
+    """One singer's place in a singing group."""
+
+    group = models.ForeignKey(SingingGroup, on_delete=models.CASCADE, related_name='memberships')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='singing_group_memberships')
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='singing_group_members_added',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('created_at',)
+        constraints = [
+            models.UniqueConstraint(fields=('group', 'member'), name='uniq_member_per_singing_group'),
+        ]
+
+    def __str__(self):
+        return f"{self.member.get_username()} — {self.group.name}"
 
 
 class WeeklyMeeting(models.Model):
@@ -1084,6 +1207,37 @@ class CampaignCardAssignment(models.Model):
         return f"{self.campaign.name} - {self.member.get_full_name() or self.member.username} ({self.group_name})"
 
 
+class CampaignPledge(models.Model):
+    """A promise to give to a fund drive, owned by the drive itself.
+
+    The same shape an announcement pledge has — an amount, the day it was
+    promised by, and how it closed — but the drive holds it, so a drive keeps
+    its promises whether or not anyone posted an announcement for it. A
+    member has at most one standing pledge per drive; a new promise replaces
+    the last standing one rather than stacking beside it.
+    """
+
+    PLEDGE_REDEEMED_VIA_CHOICES = [
+        ('giving', 'Matched to their giving'),
+        ('member', 'Ticked off by the member'),
+        ('office', 'Marked by the office'),
+    ]
+    campaign = models.ForeignKey(FundraisingCampaign, on_delete=models.CASCADE, related_name='pledges')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='campaign_pledges')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField(null=True, blank=True, help_text='The day this pledge was promised to be redeemed by')
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    redeemed_via = models.CharField(max_length=10, choices=PLEDGE_REDEEMED_VIA_CHOICES, blank=True, default='')
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.member} pledged {self.amount} to {self.campaign}"
+
+
 class ChurchFinancialReport(models.Model):
     PERIOD_TYPE_CHOICES = [('monthly', 'Monthly'), ('quarterly', 'Quarterly'), ('annual', 'Annual')]
     title = models.CharField(max_length=160)
@@ -1102,9 +1256,10 @@ class ChurchFinancialReport(models.Model):
 
     @property
     def total(self):
-        """What the period leaves in hand: trust fund plus local offerings,
-        less what was spent."""
-        return self.total_tithes + self.total_offerings - self.total_expenses
+        """What the period leaves in hand: local offerings, less what was
+        spent. The trust fund is held apart — it shows as its own line and
+        never counts toward the total in hand."""
+        return self.total_offerings - self.total_expenses
 
 
 class ChurchBudget(models.Model):
