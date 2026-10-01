@@ -4578,14 +4578,27 @@ class ChurchFinancialReportSuggestionsView(APIView):
 
         today = timezone.localdate()
         start = today.replace(day=1)
+        # The desk may ask for another period — the composer re-asks when the
+        # treasurer moves the From/To dates, so the figures follow the period
+        # they are writing about instead of staying the month to date.
+        asked_start = parse_date(str(request.query_params.get('start') or ''))
+        asked_end = parse_date(str(request.query_params.get('end') or ''))
+        if asked_start:
+            start = asked_start
+        end = today
+        if asked_end:
+            end = asked_end
+        if end < start:
+            end = start
+        period_end = end
 
         # Digital giving counts on the day it was paid; a row still waiting on
         # that stamp falls back to the day it was taken in.
         digital = Contribution.objects.filter(status='completed').filter(
-            Q(paid_at__date__range=(start, today))
-            | Q(paid_at__isnull=True, created_at__date__range=(start, today))
+            Q(paid_at__date__range=(start, period_end))
+            | Q(paid_at__isnull=True, created_at__date__range=(start, period_end))
         )
-        cash = CashContribution.objects.filter(received_on__range=(start, today))
+        cash = CashContribution.objects.filter(received_on__range=(start, period_end))
 
         trust_fund = Decimal('0')
         local_offerings = Decimal('0')
@@ -4607,7 +4620,7 @@ class ChurchFinancialReportSuggestionsView(APIView):
                 local_offerings += Decimal(amount or 0)
             gifts += count
 
-        expenses = Expenditure.objects.filter(expenditure_date__range=(start, today)).aggregate(
+        expenses = Expenditure.objects.filter(expenditure_date__range=(start, period_end)).aggregate(
             total=Sum('amount'),
             rows=Count('id'),
         )
@@ -4615,7 +4628,7 @@ class ChurchFinancialReportSuggestionsView(APIView):
         expenditure = Decimal(expenses['total'] or 0).quantize(Decimal('0.01'))
         return Response({
             'period_start': start.isoformat(),
-            'period_end': today.isoformat(),
+            'period_end': period_end.isoformat(),
             'title': f"{start.strftime('%B %Y')} stewardship report",
             'trust_fund': str(trust_fund.quantize(Decimal('0.01'))),
             'local_church_offerings': str(local_offerings.quantize(Decimal('0.01'))),

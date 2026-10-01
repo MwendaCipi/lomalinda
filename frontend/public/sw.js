@@ -153,8 +153,10 @@
 
    v46 — the deaconate seats its two offices, Head Deacon and Head
    Deaconess, instead of a generic Leader and Assistant — each office
-   seated by the member's sex, and neither taking an assistant. Chrome
-   changed, so installed apps must take the new shell. */
+   seated by the member's sex, and neither taking an assistant. The
+   report composer's figures follow the period: moving the dates
+   re-counts the ledger, and the statement downloads beside Cancel.
+   Chrome changed, so installed apps must take the new shell. */
 const CACHE_NAME = "sda-loma-linda-meru-v46";
 const STATIC_ASSETS = [
   "/",

@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Check, FileText, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Download, FileText, X } from "lucide-react";
 import { parseApiErrors, type FieldErrors } from "@/lib/form-errors";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -81,6 +82,63 @@ export const reportAuthHeaders = (): Record<string, string> => {
     : { "Content-Type": "application/json" };
 };
 
+/** The ledger's answer for one period: what came in, what went out — the
+ *  same starting point the desk's "Publish report" opens with. */
+const fetchSuggestions = async (
+  periodStart: string,
+  periodEnd: string
+): Promise<{ trust_fund: string; local_church_offerings: string; expenditure: string } | null> => {
+  const params = new URLSearchParams({ start: periodStart, end: periodEnd });
+  try {
+    const res = await fetch(`${API_URL}/api/members/reports/suggestions/?${params.toString()}`, {
+      headers: reportAuthHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      trust_fund: String(data.trust_fund ?? ""),
+      local_church_offerings: String(data.local_church_offerings ?? ""),
+      expenditure: String(data.expenditure ?? ""),
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** The statement as a page, downloaded with the viewer's own credentials —
+ *  a plain link would carry no token, and a draft's PDF belongs to the desk. */
+const downloadStatementPdf = async (reportId: number, title: string) => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  try {
+    const res = await fetch(`${API_URL}/api/members/reports/${reportId}/pdf/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      await showAlert(
+        "Could not prepare the PDF",
+        "The church's server could not produce the statement. Please try again.",
+        "error"
+      );
+      return;
+    }
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `Financial_Report_${title.replace(/[^\w-]+/g, "_")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch {
+    await showAlert(
+      "Could not prepare the PDF",
+      "The church's server could not be reached. Please try again.",
+      "error"
+    );
+  }
+};
+
 /**
  * The desk's report form — post or correct one statement.
  *
@@ -89,6 +147,11 @@ export const reportAuthHeaders = (): Record<string, string> => {
  * figures that have to line up. Both places a report can be written from — the
  * Reports page and the treasury accounts desk — open this same form, so a
  * statement is composed one way wherever the treasurer starts from.
+ *
+ * The figures belong to the period: moving the From/To dates re-asks the
+ * ledger what that period brought in and spent, and the total follows the
+ * dates with it. Typing a figure keeps the typed value — the desk's word
+ * stands until the period itself changes.
  */
 export function ReportComposer({
   report,
@@ -106,12 +169,123 @@ export function ReportComposer({
   const [draft, setDraft] = useState<Draft>(() =>
     report ? draftFromReport(report) : initialDraft ?? blankDraft()
   );
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState("");
+  // How many figure-refreshes have been asked for: only the newest may write.
+  const refreshRef = useRef(0);
+  // Whether the desk has typed a figure since the period last moved: a fetch
+  // that was already in flight must not overwrite what they are typing.
+  const typedRef = useRef(false);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
+  const setFigure = (key: "trust_fund" | "local_church_offerings" | "expenditure", value: string) => {
+    typedRef.current = true;
+    set(key, value);
+  };
+
+  // The period's figures, straight from the ledger, whenever the dates move —
+  // including the period the form opened with. A typed figure survives only
+  // while the period stands still: moving the period is asking about different
+  // money, so the ledger answers again and the total follows the dates.
+  useEffect(() => {
+    typedRef.current = false;
+    const asked = ++refreshRef.current;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setRefreshing(true);
+    });
+    void fetchSuggestions(draft.period_start, draft.period_end).then((next) => {
+      if (cancelled || asked !== refreshRef.current) return;
+      if (next && !typedRef.current) {
+        setDraft((current) => ({ ...current, ...next }));
+      }
+      setRefreshing(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only the period re-asks the ledger; the figures themselves are the
+    // answer, not a dependency.
+  }, [draft.period_start, draft.period_end]);
+
+  /** Anything the desk has changed since the form opened: what the download
+   *  would not carry until the statement is saved. */
+  const dirty = useMemo(() => {
+    const initial = report ? draftFromReport(report) : initialDraft ?? blankDraft();
+    return (Object.keys(initial) as (keyof Draft)[]).some((key) => draft[key] !== initial[key]);
+  }, [draft, report, initialDraft]);
+
+  /** The period's PDF, from the saved statement. */
+  const downloadStatement = async () => {
+    if (report) {
+      if (dirty) {
+        const answer = await showAlert(
+          "Unsaved corrections",
+          "Download the statement as it is saved — your corrections stay on screen until you save them.",
+          "info",
+          { confirmButtonText: "Download", showCancelButton: true, cancelButtonText: "Keep editing" }
+        );
+        if (!answer.isConfirmed) return;
+      }
+      setDownloading(true);
+      await downloadStatementPdf(report.id, report.title);
+      setDownloading(false);
+      return;
+    }
+    if (dirty) {
+      await showAlert(
+        "The statement is not saved yet",
+        "Post the report first, then download the PDF — the page is printed from the saved statement.",
+        "info"
+      );
+      return;
+    }
+    // A fresh form with nothing changed: the figures are the ledger's own, so
+    // posting it here is what "download" means — the PDF can only be printed
+    // from a saved statement.
+    const answer = await showAlert(
+      "Post this statement?",
+      "A report is downloaded from the church's records, so this one will be posted first — then the PDF downloads.",
+      "info",
+      { confirmButtonText: "Post & download", showCancelButton: true, cancelButtonText: "Not now" }
+    );
+    if (!answer.isConfirmed) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/reports/`, {
+        method: "POST",
+        headers: reportAuthHeaders(),
+        body: JSON.stringify({
+          title: draft.title.trim(),
+          period_type: draft.period_type,
+          period_start: draft.period_start,
+          period_end: draft.period_end,
+          trust_fund: draft.trust_fund || "0",
+          local_church_offerings: draft.local_church_offerings || "0",
+          expenditure: draft.expenditure || "0",
+          notes: draft.notes.trim(),
+          published_to_members: draft.published_to_members,
+        }),
+      });
+      if (!res.ok) {
+        setDownloading(false);
+        setGeneralError("The report could not be saved. Please check the figures and try again.");
+        return;
+      }
+      const saved = await res.json();
+      await downloadStatementPdf(saved.id, saved.title ?? draft.title);
+      setDownloading(false);
+      onSaved();
+    } catch {
+      setDownloading(false);
+      setGeneralError("The report could not be saved. Please check the figures and try again.");
+    }
+  };
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -261,7 +435,7 @@ export function ReportComposer({
               inputMode="decimal"
               placeholder="0.00"
               value={draft.trust_fund}
-              onChange={(e) => set("trust_fund", e.target.value)}
+              onChange={(e) => setFigure("trust_fund", e.target.value)}
               className={fieldClass}
             />
             {errors.trust_fund && (
@@ -277,7 +451,7 @@ export function ReportComposer({
               inputMode="decimal"
               placeholder="0.00"
               value={draft.local_church_offerings}
-              onChange={(e) => set("local_church_offerings", e.target.value)}
+              onChange={(e) => setFigure("local_church_offerings", e.target.value)}
               className={fieldClass}
             />
             {errors.local_church_offerings && (
@@ -293,7 +467,7 @@ export function ReportComposer({
               inputMode="decimal"
               placeholder="0.00"
               value={draft.expenditure}
-              onChange={(e) => set("expenditure", e.target.value)}
+              onChange={(e) => setFigure("expenditure", e.target.value)}
               className={fieldClass}
             />
             {errors.expenditure && (
@@ -301,11 +475,15 @@ export function ReportComposer({
             )}
           </label>
 
-          {/* The total is computed as the desk types — local offerings in,
-              expenditure out, the trust fund held apart — so what the desk
-              confirms is what the congregation will read. */}
+          {/* The total is computed as the desk works — local offerings in,
+              expenditure out, the trust fund held apart — and it follows the
+              period: move the dates and the ledger re-answers, so what the
+              desk confirms is what the congregation will read. */}
           <div className="flex items-baseline justify-between rounded-xl bg-sand px-4 py-3 sm:col-span-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-moss">Total (in hand)</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-moss">
+              Total (in hand)
+              {refreshing && <span className="ml-2 normal-case tracking-normal text-moss-faint">counting…</span>}
+            </span>
             <span className="text-lg font-bold text-bark">
               KES {(
                 (Number(draft.local_church_offerings) || 0) -
@@ -350,6 +528,15 @@ export function ReportComposer({
               className="rounded-xl border border-sand-mute px-4 py-2 text-sm font-semibold text-bark transition hover:bg-sand-linen"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={downloadStatement}
+              disabled={downloading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute px-4 py-2 text-sm font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              {downloading ? "Preparing…" : "Download report"}
             </button>
             <button
               type="submit"

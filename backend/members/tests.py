@@ -7705,6 +7705,37 @@ class FinancialReportSuggestionsTests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
 
+    def test_the_desk_may_ask_for_any_period(self):
+        """The composer re-asks when the treasurer moves the From/To dates."""
+        this_month = self.today.replace(day=1)
+        self._contribution('Tithe', '7000', self.last_month)
+        self._contribution('Tithe', '3000', self.today)
+        Expenditure.objects.create(
+            title='Old power bill', amount=Decimal('800'), category='utilities',
+            expenditure_date=self.last_month, recorded_by=self.treasurer,
+        )
+
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get(
+            f'/api/members/reports/suggestions/?start={self.last_month.isoformat()}'
+            f'&end={self.today.isoformat()}'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['period_start'], self.last_month.isoformat())
+        self.assertEqual(response.data['period_end'], self.today.isoformat())
+        # The window the desk asked about: last month's tithe and bill are
+        # inside it, this month's gift too, and the total follows the figures.
+        self.assertEqual(response.data['trust_fund'], '10000.00')
+        self.assertEqual(response.data['expenditure'], '800.00')
+
+        # A period with no end is the one day; an end before the start is
+        # pinned to the start rather than reading backwards.
+        single = self.client.get(
+            f'/api/members/reports/suggestions/?start={self.today.isoformat()}'
+        )
+        self.assertEqual(single.data['period_end'], self.today.isoformat())
+        self.assertEqual(single.data['trust_fund'], '3000.00')
+
     def test_suggested_figures_post_as_a_published_report(self):
         self._contribution('Tithe', '4000', self.today)
         self.client.force_authenticate(self.treasurer)
