@@ -8259,3 +8259,152 @@ class DeaconateSeatsMigrationTests(TestCase):
             current_apps.get_model('members', 'MemberProfile').objects.get(pk=profile.pk).get_assistant_roles(),
             ['treasurer'],
         )
+
+
+class DepartmentFundTests(APITestCase):
+    """A department reads its own fund; only the treasurer moves its money.
+
+    The desk's Accounts view answers the balance and the ledger lines the
+    treasury already writes. The leader asks for money with a POST; the
+    treasurer approves — the fund is debited and the ledger gains the line —
+    or declines with a word back. Nobody else may ask, and nobody but the
+    treasurer may answer.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('fund.treasurer', 'fund.treasurer@example.com', 'StrongPass#2026', first_name='Tess', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.leader = User.objects.create_user('fund.leader', 'fund.leader@example.com', 'StrongPass#2026', first_name='Larry', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        self.member = User.objects.create_user('fund.member', 'fund.member@example.com', 'StrongPass#2026', first_name='Marta', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        mail.outbox.clear()
+
+    def tearDown(self):
+        mail.outbox.clear()
+
+    def _fund(self):
+        """The music department's fund, with its leader seated at the desk."""
+        music = Department.objects.get(code='music')
+        role = DepartmentRole.objects.get(department=music, name='Leader')
+        DepartmentAssignment.objects.create(department=music, role=role, member=self.leader, kind='leader')
+        return TreasuryAccount.objects.create(
+            name='MusicFund', description='Music Ministry',
+            balance=Decimal('500.00'), department=music,
+        )
+
+    def _pending(self):
+        from .models import DepartmentWithdrawalRequest
+        return DepartmentWithdrawalRequest.objects.get()
+
+    def test_the_desk_reads_its_own_fund(self):
+        account = self._fund()
+        TreasuryAccountTransaction.objects.create(
+            account=account, transaction_type='credit', amount=Decimal('250.00'),
+            description='Sabbath gifts', reference='SAA1', created_by=self.treasurer,
+        )
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/music/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['account']['balance'], '500.00')
+        self.assertTrue(response.data['can_request_withdrawal'])
+        self.assertEqual([row['amount'] for row in response.data['movements']], ['250.00'])
+
+    def test_a_member_outside_the_desk_reads_nothing(self):
+        self._fund()
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/departments/music/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['account'])
+
+    def test_a_department_without_a_fund_shows_none(self):
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/music/account/')
+        self.assertIsNone(response.data['account'])
+        self.assertFalse(response.data['can_request_withdrawal'])
+
+    def test_the_leader_asks_and_the_treasurer_is_told(self):
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        row = self._pending()
+        self.assertEqual(row.amount, Decimal('200.00'))
+        self.assertEqual(row.status, 'pending')
+        # Only the treasurer's answer moves money.
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+        self.assertTrue(any(m.subject.startswith('Withdrawal request from') for m in mail.outbox))
+
+    def test_the_treasurer_approves_and_the_fund_is_debited(self):
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        queue = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertEqual([row['reason'] for row in queue.data['requests']], ['Buses to the camporee'])
+        response = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': queue.data['requests'][0]['id'], 'approve': True,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('300.00'))
+        movement = TreasuryAccountTransaction.objects.filter(transaction_type='debit').get()
+        self.assertEqual(movement.amount, Decimal('200.00'))
+        self.assertEqual(movement.reference, f"WD-{self._pending().id}")
+        self.assertEqual(self._pending().status, 'approved')
+
+    def test_an_approval_cannot_overdraw_the_fund(self):
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '900', 'reason': 'Too much',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'approve': True,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+        self.assertEqual(self._pending().status, 'pending')
+
+    def test_the_treasurer_declines_with_a_word_back(self):
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'approve': False, 'reply': 'Wait for the board',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+        row = self._pending()
+        self.assertEqual(row.status, 'declined')
+        self.assertEqual(row.reply, 'Wait for the board')
+        # The answer travels back to the desk that asked.
+        self.assertTrue(any('declined' in m.subject for m in mail.outbox))
+
+    def test_nobody_but_the_treasurer_answers(self):
+        self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        self.assertEqual(
+            self.client.get('/api/members/department-withdrawals/review/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post('/api/members/department-withdrawals/review/', {
+                'id': self._pending().id, 'approve': True,
+            }, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
