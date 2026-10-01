@@ -1523,12 +1523,31 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             for label, amount in sorted(totals.items(), key=lambda kv: -kv[1])
         ]
 
+    def _viewer_may_see_donors(self):
+        """Only admins, elders and the treasurer may read donor names.
+
+        The donor list ranks people by what they gave, so it is an
+        office-holder view. Everyone else — members and signed-out visitors
+        alike — still gets ``donor_count`` but never the names behind it.
+        """
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        profile = getattr(user, 'member_profile', None)
+        return bool(profile and profile.has_role('admin', 'elder', 'treasurer'))
+
     def get_donors(self, obj):
         """The donor list behind the headline: name, amount, gift count.
 
         Clicking the donor count opens this. Manual receipts name their giver
         on the row; M-Pesa gifts carry the giver's account or the typed name.
+        The names never leave the server for anyone outside the roles above.
         """
+        if not self._viewer_may_see_donors():
+            return []
         from django.db.models import Sum
         donors = {}
 

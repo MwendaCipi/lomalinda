@@ -82,6 +82,9 @@ export default function CampaignDetailClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [showDonors, setShowDonors] = useState(false);
+  // The donor names are an office-holder privilege: admins, elders and the
+  // treasurer open the list; everyone else reads the count only.
+  const [canSeeDonors, setCanSeeDonors] = useState(false);
 
   // The personalised-link banner and my/invitees rows only mean something to a
   // signed-in viewer; the API scopes the breakdown to the caller.
@@ -119,6 +122,14 @@ export default function CampaignDetailClient() {
         .then((userData) => {
           if (userData) {
             setSignedIn(true);
+            const userRoles: string[] =
+              Array.isArray(userData.roles) && userData.roles.length > 0
+                ? userData.roles.map((r: string) => String(r).toLowerCase().trim())
+                : [String(userData.role || "").toLowerCase().trim()];
+            setCanSeeDonors(
+              userRoles.some((r) => ["admin", "elder", "treasurer"].includes(r)) ||
+                Boolean(userData.is_staff || userData.is_superuser)
+            );
             const phone = userData.phone_number || "";
             const email = userData.email || "";
             const name = [userData.first_name, userData.last_name].filter(Boolean).join(" ").trim();
@@ -268,19 +279,6 @@ export default function CampaignDetailClient() {
         <div className="min-w-0 flex-1">
       <div className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-4xl space-y-6">
-          <div className="flex items-center justify-between">
-            <Link
-              href="/support/campaigns"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-ember"
-            >
-              <span>&larr;</span>
-              <span>All Fund Drives</span>
-            </Link>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${campaign.is_active ? "bg-mist-soft text-sage-bright" : "bg-alert-film text-brick"}`}>
-              {campaign.is_active ? "Active Fund Drive" : "Fund Drive Ended"}
-            </span>
-          </div>
-
           {/* Personalised link banner */}
           {cardAssignment && (
             <div className="flex items-center justify-between rounded-2xl bg-mist-soft p-4 text-sage-bright ring-1 ring-sage/30">
@@ -341,24 +339,30 @@ export default function CampaignDetailClient() {
                   </p>
                 )}
               </div>
-              {/* Percent and donors split the width equally on a phone. */}
+              {/* Percent and donors split the width equally on a phone. The
+                  donor badge opens the names only for the officers who may see
+                  them; everyone else reads the count as a plain figure. */}
               <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDonors((open) => !open)}
-                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line transition hover:ring-ember"
-                >
+                <div className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line">
                   <span className="block text-xs text-moss">Percentage</span>
                   <span className="text-lg font-bold text-sage">{campaign.percentage_raised}%</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDonors((open) => !open)}
-                  className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line transition hover:ring-ember"
-                >
-                  <span className="block text-xs text-moss">Donors</span>
-                  <span className="text-lg font-bold text-gold-deep">{campaign.donor_count}</span>
-                </button>
+                </div>
+                {canSeeDonors ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDonors((open) => !open)}
+                    aria-expanded={showDonors}
+                    className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line transition hover:ring-ember"
+                  >
+                    <span className="block text-xs text-moss">Donors</span>
+                    <span className="text-lg font-bold text-gold-deep">{campaign.donor_count}</span>
+                  </button>
+                ) : (
+                  <div className="rounded-2xl bg-white px-4 py-2 text-center ring-1 ring-sand-line">
+                    <span className="block text-xs text-moss">Donors</span>
+                    <span className="text-lg font-bold text-gold-deep">{campaign.donor_count}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -369,8 +373,8 @@ export default function CampaignDetailClient() {
               />
             </div>
 
-            {/* Donor list, revealed by the donor badge. */}
-            {showDonors && (
+            {/* Donor list, revealed by the donor badge — officers only. */}
+            {showDonors && canSeeDonors && (
               <div className="mt-5 rounded-2xl border border-sand-line bg-white p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-bark">Donors</h3>

@@ -4952,6 +4952,52 @@ class FundDriveTotalTests(APITestCase):
         self.assertEqual(response.data['total_raised'], 500.0)
 
 
+class FundDriveDonorPrivacyTests(APITestCase):
+    """Donor names are an office-holder view: the count is public, the names are not."""
+
+    def _drive_with_gift(self):
+        drive = FundraisingCampaign.objects.create(
+            name='Welfare', title='Welfare', account_name='Welfare', target_amount=Decimal('10000.00'),
+        )
+        giver = User.objects.create_user('privacy.giver', 'privacy.giver@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        Contribution.objects.create(
+            member=giver, amount=Decimal('500.00'), giving_type='money',
+            purpose='Welfare', campaign=drive, status='completed', payment_method='mpesa',
+        )
+        return drive
+
+    def test_a_plain_member_receives_the_count_but_no_names(self):
+        drive = self._drive_with_gift()
+        member = User.objects.create_user('privacy.member', 'privacy.member@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=member, role='member', roles='member')
+        self.client.force_authenticate(member)
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['donor_count'], 1)
+        self.assertEqual(response.data['donors'], [])
+
+    def test_an_anonymous_visitor_receives_no_names(self):
+        drive = self._drive_with_gift()
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['donor_count'], 1)
+        self.assertEqual(response.data['donors'], [])
+
+    def test_the_treasurer_receives_the_names(self):
+        drive = self._drive_with_gift()
+        treasurer = User.objects.create_user('privacy.treasurer', 'privacy.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(treasurer)
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['donors']), 1)
+        self.assertEqual(response.data['donors'][0]['amount'], 500.0)
+
+
 class TreasuryAutoCreditTests(APITestCase):
     """Received money moves the treasury account it names — by itself.
 
