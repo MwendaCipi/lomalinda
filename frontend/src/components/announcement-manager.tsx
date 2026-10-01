@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { ArrowUpRight, Download, Megaphone, X } from "lucide-react";
 import { brand } from "@/lib/brand";
+import { localDate, dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
@@ -77,14 +78,13 @@ type Announcement = {
 
 /** A date-only string from the API, rendered without shifting a day. */
 function dayLabel(iso?: string | null): string {
-  if (!iso) return "—";
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" });
+  return dayFirst(iso, "—");
 }  /** Which reach values are single-choice; the rest are congregation groups. */
   const REACH_VALUES = new Set(["all", "members_only", "public_website"]);
 
   /** The office's words for where this post sits in its display window. */
 function windowLabel(item: Announcement): string {
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const today = localDate();
   if (item.starts_at && item.starts_at > today) return `Starts ${dayLabel(item.starts_at)}`;
   if (item.expires_at && item.expires_at < today) return `Ended ${dayLabel(item.expires_at)}`;
   if (!item.expires_at) return "Shows until removed";
@@ -184,8 +184,7 @@ type PledgeRow = {
 
 function pledgeDay(iso: string | null) {
   if (!iso) return "no date promised";
-  const [year, month, day] = iso.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return dayFirst(iso);
 }
 
 /**
@@ -1029,10 +1028,10 @@ export function AnnouncementManager({
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col gap-6 border-b border-sand-line bg-white p-6 sm:p-8 lg:p-10">
+    <section className="flex h-full min-h-0 w-full flex-col gap-3 border-b border-sand-line bg-white px-6 py-3.5 sm:px-8 sm:py-4 lg:px-10 lg:py-5">
       {/* Top Header — the phone's naming of the page: on a wide screen the
           strip above does it, so the block goes. */}
-      <div className="shrink-0 border-b border-sand-line pb-6 md:hidden">
+      <div className="shrink-0 border-b border-sand-line pb-3 md:hidden">
         <div className="flex items-center gap-1">
           <BackToOverviewArrow />
           <div>

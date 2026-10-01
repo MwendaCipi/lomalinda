@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, type WeeklyMeeting } from "@/lib/gathering";
+import { dayFirst, weekdayOf } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -315,7 +316,7 @@ export function NextGatheringCard() {
           </div>
         ) : !current && gathering ? (
           <div className="border-t border-sage-line pt-6">
-            <p className="text-sm text-moss">{gathering.date.toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric" })}</p>
+            <p className="text-sm text-moss">{weekdayOf(gathering.date)} · {dayFirst(gathering.date)}</p>
             {gathering.online ? (
               joinOpen ? (
                 <Link href={actionHref!} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-semibold text-ember hover:underline">Join meeting &rarr;</Link>

@@ -6,6 +6,7 @@ import { CalendarDays, Film, Images, Loader2, Plus, Sparkles, Trash2, X } from "
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { isImageAttachment, resolveAttachmentUrl } from "@/components/announcement-attachment";
+import { dayFirst } from "@/lib/dates";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -31,9 +32,7 @@ type MomentEvent = {
 };
 
 const dayLabel = (iso: string | null) =>
-  iso
-    ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
-    : null;
+  iso ? dayFirst(iso, "") || null : null;
 
 /**
  * Moments — the church's photo and video wall, kept as event albums.

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { brand } from "@/lib/brand";
+import { dayFirst } from "@/lib/dates";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -112,8 +113,7 @@ const fmtCompact = (value: number) => {
   return String(Math.round(value));
 };
 
-const fmtDay = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const fmtDay = (iso: string) => dayFirst(iso);
 
 /** How the window compares with the one before it; null when there is nothing to compare. */
 const changePercent = (current: number, previous: number) =>

@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
@@ -109,7 +110,7 @@ export function CampaignManagement({
   const rowDrive = densityCellPad(dense);
 
   // New Campaign Form state
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDate();
   const [form, setForm] = useState({
     name: "",
     title: "",

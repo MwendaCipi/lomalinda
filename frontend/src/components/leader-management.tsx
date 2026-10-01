@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS, refreshRoleRegister } from "./roles-combobox";
 import { brand } from "@/lib/brand";
+import { localDate } from "@/lib/dates";
 import { X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad } from "@/lib/table-density";
@@ -148,7 +149,7 @@ export function LeaderManagement() {
   </head>
   <body>
     <h1>Church Leaders</h1>
-    <p class="meta">${filteredMembers.length} leaders &bull; Printed ${new Date().toLocaleDateString()}</p>
+    <p class="meta">${filteredMembers.length} leaders &bull; Printed ${localDate()}</p>
     <table>
       <thead><tr><th>#</th><th>Member</th><th>Contact</th><th>Role(s)</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="4">No members found.</td></tr>`}</tbody>

@@ -5,6 +5,7 @@ import { Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { dayFirstTime } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -42,10 +43,7 @@ function formatKes(value: string | number) {
 
 function formatDateTime(value: string | null) {
   if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? "—"
-    : d.toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" });
+  return dayFirstTime(value);
 }
 
 function StatusPill({ status }: { status: string }) {

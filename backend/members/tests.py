@@ -1985,11 +1985,13 @@ class JoinRequestApprovalTests(APITestCase):
 
 
 class RequestNotificationTests(APITestCase):
-    """A request from the public reaches the elders' and administrator's inboxes.
+    """A request from the public reaches the office that answers its desk.
 
     Every desk that takes a request ends the same way — somebody has to answer
     it — so each submission must say who asked and link straight to that request
     on the requests desk, and nothing about it may break the member's request.
+    Elders hear every desk; the administrator is deliberately noise-reduced to
+    join requests, the desk that gates an account.
     """
 
     def setUp(self):
@@ -2009,7 +2011,7 @@ class RequestNotificationTests(APITestCase):
         from django.core import mail
         return sorted(address for message in mail.outbox for address in message.to)
 
-    def test_a_prayer_request_emails_the_elders_and_the_administrator(self):
+    def test_a_prayer_request_emails_the_elders(self):
         from django.core import mail
 
         response = self.client.post('/api/members/prayer-requests/', {
@@ -2021,7 +2023,10 @@ class RequestNotificationTests(APITestCase):
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self._recipients(), ['notify.admin@example.com', 'notify.elder@example.com'])
+        self.assertEqual(self._recipients(), ['notify.elder@example.com'])
+        # Administrators are noise-reduced to join requests — the desk that
+        # gates an account — so a prayer request stays off their plate.
+        self.assertNotIn('notify.admin@example.com', self._recipients())
 
         body = mail.outbox[0].body
         self.assertIn('Grace Wanjiku', body)
@@ -2097,10 +2102,12 @@ class RequestNotificationTests(APITestCase):
             response = self.client.post(url, payload, format='json')
             self.assertEqual(response.status_code, status.HTTP_201_CREATED, f'{url}: {response.data}')
 
-        # One letter per request per recipient: two recipients, four desks.
+        # One letter per request per recipient: the elder hears every desk,
+        # while the administrator (present in setUp) only hears join requests,
+        # so four desks mean four letters, all to the elder.
         self.assertEqual(
             self._recipients(),
-            sorted(['notify.admin@example.com', 'notify.elder@example.com'] * len(submitted)),
+            ['notify.elder@example.com'] * len(submitted),
         )
         bodies = ' '.join(message.body for message in mail.outbox)
         for who in ('Mary Achieng', 'John Kamau', 'Eunice Nyambura', 'Samuel Otieno'):

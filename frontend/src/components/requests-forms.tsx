@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { HandHelping, Home, Phone, X } from "lucide-react";
 
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -514,7 +515,7 @@ export function PrayerRequestCard({ item }: { item: PrayerItem }) {
       <div>
         <div className="flex items-center justify-between text-xs text-moss">
           <span className="rounded-full bg-ember/10 px-2.5 py-1 font-semibold text-ember">Prayer</span>
-          {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
+          {item.created_at && <span>{dayFirstTime(item.created_at)}</span>}
         </div>
         <p className="mt-2 text-sm leading-6 text-bark">{item.request_text}</p>
       </div>
@@ -538,7 +539,7 @@ export function VisitationRequestCard({ item }: { item: VisitationItem }) {
           <span className="rounded-full bg-sage/10 px-2.5 py-1 font-semibold capitalize text-sage-bright">
             {item.visitation_type} visit
           </span>
-          {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
+          {item.created_at && <span>{dayFirstTime(item.created_at)}</span>}
         </div>
         <p className="mt-2 text-sm font-semibold text-bark">{item.requester_name}</p>
         <p className="mt-0.5 text-xs text-moss">

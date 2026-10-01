@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 import { kenyaCounties } from "@/config/kenya-counties";
 import { getPushState, PushSupport } from "@/lib/push";
 
@@ -212,7 +213,7 @@ export default function MemberPage() {
               <article key={item.id} className="flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold">{item.purpose}</p>
-                  <p className="mt-1 text-sm text-moss">{new Date(item.created_at).toLocaleDateString()}</p>
+                  <p className="mt-1 text-sm text-moss">{dayFirstTime(item.created_at)}</p>
                 </div>
                 <div className="sm:text-right">
                   <p className="text-xl font-semibold">{item.currency} {Number(item.amount).toLocaleString()}</p>

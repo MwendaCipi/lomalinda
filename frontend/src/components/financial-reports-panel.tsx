@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
+import { dayFirst } from "@/lib/dates";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { ReportComposer, reportAuthHeaders as authHeaders, type Report } from "./report-composer";
 
@@ -14,13 +15,7 @@ const money = (value: string | number) =>
 
 /** Dates arrive as plain days; they are periods, not moments, so read them in
  * the church's timezone rather than the browser's. */
-const formatDay = (iso: string) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString("en-KE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Africa/Nairobi",
-  });
+const formatDay = (iso: string) => dayFirst(iso);
 
 /**
  * The published half of Reports: the statements the church puts out, and — for

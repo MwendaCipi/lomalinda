@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 import { Sparkles } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -194,7 +195,7 @@ export default function TestimoniesPage() {
                   <table className="w-full min-w-[42rem] text-left text-sm">
                     <thead className="bg-sand text-xs uppercase tracking-wide text-moss"><tr><th className="px-5 py-3 font-semibold">Name</th><th className="px-5 py-3 font-semibold">Testimony</th><th className="px-5 py-3 font-semibold">Date</th></tr></thead>
                     <tbody className="divide-y divide-sand-line">
-                      {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-moss">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-moss">{new Date(item.created_at).toLocaleDateString()}</td></tr>)}
+                      {filteredTestimonies.map((item) => <tr key={item.id} className="align-top"><td className="px-5 py-4 font-semibold">{item.name || "Church Member"}</td><td className="max-w-xl px-5 py-4 leading-6 text-moss">{item.testimony_text}</td><td className="whitespace-nowrap px-5 py-4 text-xs text-moss">{dayFirstTime(item.created_at)}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -206,7 +207,7 @@ export default function TestimoniesPage() {
                   <div key={item.id} className="rounded-2xl bg-white p-5 border border-sand-line shadow-sm space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="font-bold text-sm text-bark">{item.name || "Church Member"}</h3>
-                      <span className="text-[11px] text-moss">{new Date(item.created_at).toLocaleDateString()}</span>
+                      <span className="text-[11px] text-moss">{dayFirstTime(item.created_at)}</span>
                     </div>
                     <p className="text-xs leading-relaxed text-moss">{item.testimony_text}</p>
                   </div>

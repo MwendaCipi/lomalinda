@@ -6,9 +6,10 @@ import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
-import { SubNav } from "./sub-nav";
+import { ExpenditureManager } from "./expenditure-manager";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -40,13 +41,14 @@ type AccountTransaction = {
   created_at: string;
 };
 
-export function TreasuryAccountsManager() {
+export function TreasuryAccountsManager({ initialView }: { initialView?: "accounts" | "income" | "expenditure" } = {}) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
-  // Two views over one set of data: the accounts themselves, and the movement
-  // log behind them. Accounts opens first — it is what the desk visits for.
+  // Three views over one desk: the accounts themselves, the movement log
+  // behind them, and the spending that leaves them. Church Accounts opens
+  // first — it is what the desk visits for.
   const router = useRouter();
-  const [view, setView] = useState<"accounts" | "transactions">("accounts");
+  const [view, setView] = useState<"accounts" | "income" | "expenditure">(initialView ?? "accounts");
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
   const { dense, toggleDensity } = useTableDensity();
@@ -171,7 +173,17 @@ export function TreasuryAccountsManager() {
     return `${a.description || ""} ${a.name} ${a.account_number || ""}`.toLowerCase().includes(needle);
   });
   const [transactionSearch, setTransactionSearch] = useState("");
+  // The date window the Income view is read through — the ledger's own pair.
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const withinWindow = (iso: string) => {
+    const day = (iso || "").slice(0, 10);
+    if (fromDate && day < fromDate) return false;
+    if (toDate && day > toDate) return false;
+    return true;
+  };
   const filteredTransactions = transactions.filter((tx) => {
+    if (!withinWindow(tx.created_at)) return false;
     const needle = transactionSearch.trim().toLowerCase();
     if (!needle) return true;
     const account = accounts.find((a) => a.id === tx.account);
@@ -450,43 +462,75 @@ export function TreasuryAccountsManager() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {/* ── Header: which of the two tables is showing, its search, and the way between them ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex w-full items-center justify-between gap-3 sm:w-auto">
-          <span className="flex items-center gap-1">
-            <BackToOverviewArrow />
-            {/* Named by the strip above on a wide screen. */}
-            <h2 className="text-xl font-bold text-bark md:hidden">Treasury Accounts</h2>
-          </span>
-          <p className="text-xs text-moss">
-            {view === "accounts"
-              ? `${filteredAccounts.length} of ${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`
-              : `${filteredTransactions.length} of ${transactions.length} ${transactions.length === 1 ? "movement" : "movements"}`}
-          </p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <input
-            type="text"
-            placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
-            value={view === "accounts" ? accountSearch : transactionSearch}
-            onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
-            className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-60"
-            aria-label={view === "accounts" ? "Search treasury accounts" : "Search account transactions"}
-          />
-          <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
-          {/* The desk's two views, on the shared strip. The counts ride the
-              tabs themselves so they read the same way here as on every other
-              desk rather than swelling the label. */}
-          <SubNav
-            label="Treasury views"
-            value={view}
-            onChange={(key) => setView(key as "accounts" | "transactions")}
-            items={[
-              { key: "accounts", label: "Accounts", count: accounts.length },
-              { key: "transactions", label: "Transaction log", count: transactions.length },
-            ]}
-            className="self-start sm:self-auto"
-          />
+      {/* ── Header: the desk's three views as one segmented toggle, with the
+          search and the date window beside them; the metrics ride the footer
+          below, so this row is free for the controls. ── */}
+      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 lg:flex-1">
+            <span className="lg:hidden">
+              <BackToOverviewArrow />
+            </span>
+            {/* The views, as one segmented toggle — the Contributions
+                Ledger's own shape: chips riding inside a single sand pill. */}
+            <div className="flex min-w-0 flex-1 rounded-xl border border-sand-mute bg-sand p-1">
+              {([
+                { key: "accounts", label: "Church Accounts" },
+                { key: "income", label: "Income" },
+                { key: "expenditure", label: "Expenditure" },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setView(tab.key)}
+                  aria-pressed={view === tab.key}
+                  className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
+                    view === tab.key ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search and the date window ride beside the toggles. The
+              expenditure view owns its own filter bar, so they step aside. */}
+          {view !== "expenditure" && (
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
+              <input
+                type="text"
+                placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
+                value={view === "accounts" ? accountSearch : transactionSearch}
+                onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
+                className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-60"
+                aria-label={view === "accounts" ? "Search church accounts" : "Search account movements"}
+              />
+              {view === "income" && (
+                <div className="flex items-center justify-between gap-2 sm:justify-start">
+                  <label className="flex items-center gap-1 text-xs font-medium text-moss">
+                    <span>From</span>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs font-medium text-moss">
+                    <span>To</span>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                </div>
+              )}
+              <DensityToggle dense={dense} onToggle={toggleDensity} className="self-start sm:self-auto" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -496,8 +540,13 @@ export function TreasuryAccountsManager() {
         </div>
       )}
 
-      {/* ── Both tables live here; the chosen one is shown, and only its rows scroll ── */}
+      {/* ── The chosen view lives here; the accounts and income tables stay
+          mounted, while Expenditure hands the space to its own desk. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {view === "expenditure" ? (
+          <ExpenditureManager embedded />
+        ) : (
+          <>
         {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair.
             Both stay mounted with the chosen one shown, so whichever is on screen
             keeps the full height of the workspace instead of sharing it. */}
@@ -707,7 +756,7 @@ export function TreasuryAccountsManager() {
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-bold text-bark">{tx.account_name}</h4>
                       <p className="text-[11px] text-moss">
-                        {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
+                        {dayFirstTime(tx.created_at)}
                       </p>
                     </div>
                     <span
@@ -737,7 +786,7 @@ export function TreasuryAccountsManager() {
               return (
                 <tr key={tx.id} className="hover:bg-sand-linen">
                   <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>
-                    {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—"}
+                    {dayFirstTime(tx.created_at)}
                   </td>
                   <td className={`whitespace-nowrap px-4 ${rowPad} font-semibold text-bark`}>{tx.account_name}</td>
                   <td className={`whitespace-nowrap px-4 ${rowPad}`}>
@@ -767,71 +816,81 @@ export function TreasuryAccountsManager() {
                 </tr>
               );
             }}
-            hidden={view !== "transactions"}
+            hidden={view !== "income"}
         />
-      </div>
-
-      {/* ── Footer: one bar for both views, in the shape the other tables use ──
-          One row on every screen: the stats on the left, the Add Account
-          button on the right (the account count never earned the space it
-          took from a phone's footer). */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
-          {view === "accounts" ? (
-            <span>
-              Total liquidity:{" "}
-              <strong className="text-ember">
-                KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-              </strong>
-            </span>
-          ) : (
-            <>
-              <span>
-                Showing <strong className="text-bark">{transactions.length}</strong> movement
-                {transactions.length === 1 ? "" : "s"}
-              </span>
-              <span>
-                In: <strong className="text-sage-strong">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
-              </span>
-              <span>
-                Out: <strong className="text-alert">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
-              </span>
-              {transactions.length >= TRANSACTION_LOG_LIMIT && (
-                <span>Only the most recent {TRANSACTION_LOG_LIMIT} movements are listed.</span>
-              )}
-            </>
-          )}
-        </div>
-        {view === "accounts" && (
-          <div className="flex shrink-0 items-center gap-2">
-            {/* The congregation's statement is written from the same desk that
-                keeps the accounts: publishing it is what tells members what
-                the month's giving and spending came to. */}
-            <button
-              type="button"
-              onClick={openReportComposer}
-              disabled={preparingReport}
-              className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
-            >
-              <FileText className="h-4 w-4" />
-              <span className="sm:hidden">{preparingReport ? "…" : "Report"}</span>
-              <span className="hidden sm:inline">{preparingReport ? "Preparing…" : "Publish report"}</span>
-            </button>
-            {/* An account is the one way to a drive: each row can be Promoted,
-                which opens the drive form with that account answering for it.
-                A separate "Add Fund Drive" button was a second, disconnected
-                path to the same thing. */}
-            <button
-              type="button"
-              onClick={() => setShowAddAccountModal(true)}
-              className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Account</span>
-            </button>
-          </div>
+          </>
         )}
       </div>
+
+      {/* ── Footer: one bar for the desk's own tables, in the shape the other
+          tables use. The metrics live down here so the row under the toggles
+          stays free for the views, search and dates; Expenditure brings its
+          own footer, so this bar steps aside for it. ── */}
+      {view !== "expenditure" && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
+            {view === "accounts" ? (
+              <>
+                <span>
+                  Total liquidity:{" "}
+                  <strong className="text-ember">
+                    KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </strong>
+                </span>
+                <span>
+                  Showing <strong className="text-bark">{filteredAccounts.length}</strong> of {accounts.length}{" "}
+                  {accounts.length === 1 ? "account" : "accounts"}
+                </span>
+              </>
+            ) : (
+              <>
+                <span>
+                  Showing <strong className="text-bark">{filteredTransactions.length}</strong> of {transactions.length} movement
+                  {transactions.length === 1 ? "" : "s"}
+                </span>
+                <span>
+                  In: <strong className="text-sage-strong">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+                </span>
+                <span>
+                  Out: <strong className="text-alert">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+                </span>
+                {transactions.length >= TRANSACTION_LOG_LIMIT && (
+                  <span>Only the most recent {TRANSACTION_LOG_LIMIT} movements are listed.</span>
+                )}
+              </>
+            )}
+          </div>
+          {view === "accounts" && (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* The congregation's statement is written from the same desk that
+                  keeps the accounts: publishing it is what tells members what
+                  the month's giving and spending came to. */}
+              <button
+                type="button"
+                onClick={openReportComposer}
+                disabled={preparingReport}
+                className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="sm:hidden">{preparingReport ? "…" : "Report"}</span>
+                <span className="hidden sm:inline">{preparingReport ? "Preparing…" : "Publish report"}</span>
+              </button>
+              {/* An account is the one way to a drive: each row can be Promoted,
+                  which opens the drive form with that account answering for it.
+                  A separate "Add Fund Drive" button was a second, disconnected
+                  path to the same thing. */}
+              <button
+                type="button"
+                onClick={() => setShowAddAccountModal(true)}
+                className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Account</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal: the church's financial statement, opened from the ledger's own
           month to date and published to members when the desk confirms it. */}

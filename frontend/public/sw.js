@@ -106,8 +106,25 @@
 
    v34 — Leadership rides the Eldership strip as its second page, and the
    choir hangs with the music desk on one Music row: two fewer rows on
-   the rail. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v34";
+   the rail. Chrome changed, so installed apps must take the new shell.
+
+   v35 — the Personal Ministries rail row takes its own initials, PM,
+   matching its AMM, AWM, AYM and APM neighbours.
+
+   v36 — dates read day-first everywhere, dd/mm/yyyy, through one shared
+   helper: the ledger's from-date opens on the 1st of the month (it used to
+   open on the first Sabbath, which hid the month's first receipts), and
+   en-KE makes the native date pickers agree.
+
+   v37 — a signed-in member requests a transfer from a modal that knows who
+   they are: no name, email or phone to type, and nothing to verify by
+   email — the session is the verification. Church settings loses its
+   Administration badge.
+
+   v38 — the rail reads Dashboard under a Dashboard heading of its own
+   again, before My church. Chrome changed, so installed apps must take the
+   new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v38";
 const STATIC_ASSETS = [
   "/",
   "/about/",

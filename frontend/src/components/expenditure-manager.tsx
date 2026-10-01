@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Receipt, Filter, Search, Trash2, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
+import { localDate } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -30,7 +31,7 @@ type Expenditure = {
   created_at: string;
 };
 
-export function ExpenditureManager() {
+export function ExpenditureManager({ embedded = false }: { embedded?: boolean } = {}) {
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,7 @@ export function ExpenditureManager() {
     payment_method: "cash",
     vendor_payee: "",
     receipt_number: "",
-    expenditure_date: new Date().toISOString().split("T")[0],
+    expenditure_date: localDate(),
     notes: "",
   });
 
@@ -114,7 +115,7 @@ export function ExpenditureManager() {
           payment_method: "cash",
           vendor_payee: "",
           receipt_number: "",
-          expenditure_date: new Date().toISOString().split("T")[0],
+          expenditure_date: localDate(),
           notes: "",
         });
         setActionMessage("Expenditure record added successfully and account debited.");
@@ -173,19 +174,22 @@ export function ExpenditureManager() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-8 overflow-hidden p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
-          {/* Named by the strip above on a wide screen. */}
-          <div className="md:hidden">
-            <h2 className="text-2xl font-bold text-bark">Church Expenditures</h2>
-            <p className="mt-1 text-sm text-moss">
-              Record church expenses, debit designated treasury accounts, and track disbursement logs.
-            </p>
+      {/* Header — dropped when the accounts desk hosts this view, since the
+          desk's own toggle row already names it. */}
+      {!embedded && (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            {/* Named by the strip above on a wide screen. */}
+            <div className="md:hidden">
+              <h2 className="text-2xl font-bold text-bark">Church Expenditures</h2>
+              <p className="mt-1 text-sm text-moss">
+                Record church expenses, debit designated treasury accounts, and track disbursement logs.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {actionMessage && (
         <div className="rounded-2xl border border-sand-mute bg-white p-4 text-xs font-semibold text-bark shadow-xs">

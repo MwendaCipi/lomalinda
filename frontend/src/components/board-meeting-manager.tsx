@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Calendar, ChevronDown, ClipboardList, FileText, Mail, MapPin, Plus, ShieldCheck, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -269,11 +270,7 @@ export function BoardMeetingManager() {
     }
   };
 
-  const formatMeetingDate = (value: string) => {
-    const parsed = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-  };
+  const formatMeetingDate = (value: string) => dayFirst(value, value);
 
   const formatTimeForDisplay = (value: string) => {
     const [hour, minute] = value.split(":");

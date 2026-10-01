@@ -221,9 +221,6 @@ export function ChurchSettingsManager() {
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-bark px-3 py-1 text-xs font-semibold text-white">
-          Administration
-        </span>
       </div>
 
       <form onSubmit={handleSave} className="mt-6 space-y-6">

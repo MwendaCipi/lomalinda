@@ -5,27 +5,13 @@ import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { showAlert } from "@/lib/alerts";
+import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const financeRoles = ["treasurer", "admin"];
-const localDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
 const money = (amount: string | number) => Number(amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const getFirstSabbathOfMonth = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const dayOfWeek = firstDay.getDay();
-  const daysUntilSat = (6 - dayOfWeek + 7) % 7;
-  const firstSat = new Date(year, month, 1 + daysUntilSat);
-  const yyyy = firstSat.getFullYear();
-  const mm = String(firstSat.getMonth() + 1).padStart(2, "0");
-  const dd = String(firstSat.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
 
 const defaultPurposes = [
   "Tithe",
@@ -92,7 +78,9 @@ type IndividualGiving = {
 };
 
 export default function ReconciliationPage() {
-  const [fromDate, setFromDate] = useState(getFirstSabbathOfMonth);
+  // The ledger reads the month so far: the 1st, not the first Sabbath — a
+  // from-date of the 3rd had the treasurer asking why receipts had vanished.
+  const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(localDate);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cashReceipts, setCashReceipts] = useState<CashReceipt[]>([]);
@@ -459,17 +447,13 @@ export default function ReconciliationPage() {
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-sand-line overflow-hidden">
             
-            {/* Header Controls (Flex-shrink-0) — the view's name sits beside the
-                controls on a wide screen; a phone drops it, since the toggle
-                below already says which view is open. */}
+            {/* Header Controls (Flex-shrink-0) — no page heading: the view
+                switcher below already names the mode. */}
             <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <h1 className="hidden sm:block shrink-0 whitespace-nowrap text-sm font-semibold sm:text-base text-bark">
-                {viewMode === "all_givings" ? "Individual Givings" : "Contributions Ledger"}
-              </h1>
-
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
-                {/* View Mode Switcher: two independent buttons, full width. */}
-                <div className="flex w-full flex-1 gap-1.5">
+                {/* View Mode Switcher occupying full width — a segmented
+                    toggle, its chips riding inside one sand pill. */}
+                <div className="flex w-full flex-1 rounded-xl border border-sand-mute bg-sand p-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -478,10 +462,10 @@ export default function ReconciliationPage() {
                       loadAllGivings();
                     }}
                     aria-pressed={viewMode === "all_givings"}
-                    className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold text-center transition ${
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "all_givings"
                         ? "bg-bark text-white shadow-sm"
-                        : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
+                        : "text-moss hover:text-bark"
                     }`}
                   >
                     Individual Givings
@@ -492,13 +476,13 @@ export default function ReconciliationPage() {
                       setViewMode("summary");
                     }}
                     aria-pressed={viewMode === "summary"}
-                    className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold text-center transition ${
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
                       viewMode === "summary"
-                        ? "bg-bark text-white shadow-sm"
-                        : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
+                        ? "bg-white text-bark shadow-sm"
+                        : "text-moss hover:text-bark"
                     }`}
                   >
-                    Summary Breakdown
+                    Summary Contributions
                   </button>
                 </div>
 
@@ -630,7 +614,7 @@ export default function ReconciliationPage() {
                                     </span>
                                   </div>
                                   <div className="flex items-center justify-between text-[11px] text-moss">
-                                    <span>{g.received_at ? new Date(g.received_at).toLocaleDateString() : "—"} · {g.payment_method}</span>
+                                    <span>{dayFirstTime(g.received_at)} · {g.payment_method}</span>
                                     <span>Receipt: {g.receipt_number || "—"}</span>
                                   </div>
                                   <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
@@ -708,7 +692,7 @@ export default function ReconciliationPage() {
                                     <tr key={g.id} className="hover:bg-sand-linen">
                                       <td className={`px-4 ${rowPad} text-xs font-semibold font-mono text-moss`}>{gIdx + 1}</td>
                                       <td className={`px-4 ${rowPad} text-xs text-moss`}>
-                                        {g.received_at ? new Date(g.received_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                                        {dayFirst(g.received_at)}
                                       </td>
                                       <td className={`px-4 ${rowPad} font-semibold text-bark`}>{g.donor_name}</td>
                                       <td className={`px-4 ${rowPad}`}>
@@ -975,7 +959,7 @@ export default function ReconciliationPage() {
                                   <div>
                                     <div className="font-bold text-sm text-bark">{giving.donor_name}</div>
                                     <div className="text-[11px] text-moss">
-                                      {giving.received_at ? new Date(giving.received_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                                      {dayFirst(giving.received_at)}
                                     </div>
                                   </div>
                                   <div className="text-right">
@@ -1064,13 +1048,7 @@ export default function ReconciliationPage() {
                                   <tr key={giving.id} className="hover:bg-sand-plate">
                                     <td className="px-3 py-3 text-xs text-moss font-mono font-semibold">{idx + 1}</td>
                                     <td className="px-3 py-3 text-moss whitespace-nowrap">
-                                      {giving.received_at
-                                        ? new Date(giving.received_at).toLocaleDateString("en-KE", {
-                                            day: "numeric",
-                                            month: "short",
-                                            year: "numeric",
-                                          })
-                                        : "—"}
+                                      {dayFirst(giving.received_at)}
                                     </td>
                                     <td className="px-3 py-3 w-44 shrink-0 font-semibold text-bark truncate max-w-[170px]" title={giving.donor_name}>
                                       {giving.donor_name}

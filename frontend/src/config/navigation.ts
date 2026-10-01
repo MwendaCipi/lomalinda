@@ -21,7 +21,6 @@ import {
   Lightbulb,
   Megaphone,
   Music,
-  Receipt,
   Scale,
   Settings,
   ShieldCheck,
@@ -447,31 +446,44 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
 
 const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
-/** The church's offices owe the register and its programmes to the office. */
+/** Elders and clerks share the church's programmes; the register is the clerk's. */
 const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
+/** The clerk's desk: the register, the meetings' minutes and the transfers. */
+const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
- * Eldership — one desk for the two offices that run the church's life.
+ * Clerkship — the clerk's desk: the church's register, the minutes of the
+ * board and business meetings, and the membership transfers in and out.
  *
- * Elders and clerks saw the same items across two rows, so the rows are one:
- * the register and its transfers, the church's own configuration, the
- * meetings and what is announced, and what is asked. Assigning leaders of
- * the church's areas remains the Leadership desk beside it.
+ * The clerk keeps the books of membership and of every meeting the church
+ * holds, so those four pages are one row rather than scattered through the
+ * elders' strip. An administrator holds the desk too.
+ */
+export const clerkshipItems: RailItem[] = [
+  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES }),
+  // Board and business meetings are two rows of this strip, not a desk
+  // behind another menu. The old "meetings" tab still opens the board list.
+  officeTab("board", "Board Meetings", Armchair, {
+    roles: CLERKSHIP_ROLES,
+    aliasTabs: ["meetings"],
+  }),
+  officeTab("business", "Business Meetings", Briefcase, { roles: CLERKSHIP_ROLES }),
+  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: CLERKSHIP_ROLES }),
+];
+
+/**
+ * Eldership — the elders' desk: the church's programmes and its people's
+ * requests, and the Leadership desk that appoints the church's areas.
+ *
+ * The register, the meetings' minutes and the transfers no longer ride this
+ * strip: they are the clerk's own desk beside it (Clerkship). Elders and
+ * clerks still share every remaining row here.
  */
 export const eldershipItems: RailItem[] = [
-  officeTab("users", "User Management", Users, { roles: ELDERSHIP_ROLES }),
   // Assigning the church's leaders rides the Eldership strip: appointing a
   // leader is work the offices do together, so it is a page of their desk
   // rather than a row of its own.
   officeTab("leaders", "Leadership", Crown, { roles: ELDERSHIP_ROLES }),
-  // Board and business meetings are two rows of this strip, not a desk
-  // behind another menu. The old "meetings" tab still opens the board list.
-  officeTab("board", "Board Meetings", Armchair, {
-    roles: ELDERSHIP_ROLES,
-    aliasTabs: ["meetings"],
-  }),
-  officeTab("business", "Business Meetings", Briefcase, { roles: ELDERSHIP_ROLES }),
-  officeTab("transfers", "Membership Transfers", ClipboardList, { roles: ELDERSHIP_ROLES }),
   officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES }),
   officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES }),
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
@@ -518,14 +530,16 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
 export const treasuryItems: RailItem[] = [
   {
     href: "/administration/reconciliation",
-    label: "Ledger",
-    short: "Ledger",
+    label: "Contributions Ledger",
     icon: Scale,
     match: ["/administration/reconciliation"],
     roles: ["treasurer", "admin"],
   },
-  officeTab("accounts", "Accounts", Landmark, { roles: ["treasurer", "admin"] }),
-  officeTab("expenditures", "Expenditure", Receipt, { roles: ["treasurer", "admin"] }),
+  officeTab("accounts", "Church Accounts", Landmark, { roles: ["treasurer", "admin"] }),
+  // Expenditure is no longer a page of this strip: it is one of the accounts
+  // desk's own views (Church Accounts / Income / Expenditure), where recording
+  // spending sits beside the accounts it debits. An old `?tab=expenditures`
+  // link lands on the accounts desk.
   {
     href: "/administration/fund-drives",
     label: "Fund Drives",
@@ -549,8 +563,8 @@ export const treasuryItems: RailItem[] = [
  * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
-  // The member's own page, first under the My church heading.
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"], sectionKey: "my-church" },
+  // The member's own page, alone under the first heading.
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"], sectionKey: "dashboard" },
   {
     label: "Fellowship",
     icon: Megaphone,
@@ -589,9 +603,11 @@ export const railEntries: RailEntry[] = [
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
-  // treasurer's has always stood on its own. Assigning the church's leaders
-  // rides the Eldership strip, the one work both offices share.
+  // treasurer's has always stood on its own. The register and the meetings'
+  // minutes are the clerk's row, so they are back on a Clerkship of their
+  // own rather than folded into the elders' strip.
   { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
+  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
   // The church's music: one row whose strip carries the music desk and the
@@ -646,14 +662,16 @@ export const railEntries: RailEntry[] = [
 /**
  * How the rail groups its rows. A heading is a reading aid, not a click
  * target — every row under it is a place, exactly as it was flat. The
- * member's own page and the church's life read as one My church list, the
- * church's service — its offices' desks and its ministries — as one Service
- * list, and the departments as a Departments list of their own.
+ * member's own page reads first under a Dashboard heading of its own, the
+ * church's life as one My church list, the church's service — its offices'
+ * desks and its ministries — as one Service list, and the departments as a
+ * Departments list of their own.
  */
-export type RailSection = "my-church" | "service" | "departments";
+export type RailSection = "dashboard" | "my-church" | "service" | "departments";
 
 /** The heading each section goes by, on the rail. */
 export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
+  { key: "dashboard", label: "Dashboard" },
   { key: "my-church", label: "My church" },
   { key: "service", label: "Service" },
   { key: "departments", label: "Departments" },
@@ -666,14 +684,15 @@ const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Giving": "my-church",
   "Requests": "my-church",
   "Eldership": "service",
+  "Clerkship": "service",
   "Treasury": "service",
   "Deaconate": "service",
 };
 
 /**
  * The rail, read as headings with the rows under each: the member's own page
- * first, then the church's life, then the desks — which are the leadership's
- * side of the app.
+ * first, alone, then the church's life, then the desks — which are the
+ * leadership's side of the app.
  */
 export function railSectionsFor(
   entries: RailEntry[]
@@ -734,7 +753,7 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   apm: "APM",
   chaplaincy: "Chaplaincy",
   children: "Children",
-  personal_ministries: "Personal",
+  personal_ministries: "PM",
 };
 
 export function railFor(

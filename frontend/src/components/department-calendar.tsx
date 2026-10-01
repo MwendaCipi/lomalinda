@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, ChevronUp } from "lucide-react";
 import { getMinistryGivingPurpose } from "@/config/ministries";
+import { dayFirst } from "@/lib/dates";
 import { RecordList } from "./record-list";
 
 type DepartmentEvent = { date: string; name: string; department?: string };
@@ -85,7 +86,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                   <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
                     <h3 className="font-bold text-sm text-bark">{event.name}</h3>
                     <span className="rounded-lg bg-mist-select px-2.5 py-1 text-[11px] font-bold text-sage">
-                      {new Date(`${event.date}T12:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
+                      {dayFirst(event.date)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-1 text-xs">
@@ -107,10 +108,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
             renderRow={(event) => (
                   <tr key={`${event.date}-${event.name}`}>
                     <td className="whitespace-nowrap px-4 py-3 text-moss">
-                      {new Date(`${event.date}T12:00:00`).toLocaleDateString(
-                        "en-KE",
-                        { month: "short", day: "numeric", year: "numeric" }
-                      )}
+                      {dayFirst(event.date)}
                     </td>
                     <td className="px-4 py-3 font-medium">{event.name}</td>
                     <td className="px-4 py-3">

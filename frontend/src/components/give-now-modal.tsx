@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { ChevronDown, Landmark, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { localDate } from "@/lib/dates";
 import { useHeaderData, patchCachedMe } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -72,7 +73,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bankRefNumber, setBankRefNumber] = useState("");
   const [senderBankName, setSenderBankName] = useState("");
-  const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
+  const [transferDate, setTransferDate] = useState(() => localDate());
   // Receipts are addressed from the signed-in member's account, so the form
   // asks for neither name nor email — except when the account carries no email
   // at all. That is the one thing the member alone can fix (the only way an

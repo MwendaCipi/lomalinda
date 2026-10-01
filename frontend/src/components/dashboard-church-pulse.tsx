@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, UserRoundPlus, Users } from "lucide-react";
 import { HorizontalBars } from "@/components/mini-charts";
+import { dayFirst } from "@/lib/dates";
 import { REQUESTS_TILE } from "@/config/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -39,8 +40,7 @@ type Pulse = {
 
 const count = (value: number) => Number(value || 0).toLocaleString("en-KE");
 
-const fmtDay = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+const fmtDay = (iso: string) => dayFirst(iso);
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (

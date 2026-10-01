@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 import { Baby, Phone, X } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -386,7 +387,7 @@ export default function ChildDedicationPage() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-moss pt-2 border-t border-sand-line">
                         <span>Status: <strong className="capitalize text-ember">{item.status || "Received"}</strong></span>
-                        {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
+                        {item.created_at && <span>{dayFirstTime(item.created_at)}</span>}
                       </div>
                     </div>
                   ))}

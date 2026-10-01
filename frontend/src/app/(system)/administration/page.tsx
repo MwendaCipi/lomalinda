@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Receipt, Scale, Settings, Undo2, Users } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Scale, Settings, Undo2, Users } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -16,7 +16,6 @@ import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
 import { ChurchBudgetManager } from "@/components/church-budget-manager";
-import { ExpenditureManager } from "@/components/expenditure-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
@@ -61,7 +60,7 @@ type Transfer = {
   other_church: string;
 };
 
-/** The two kinds of meeting the Elders' Desk keeps the minutes for. */
+/** The two kinds of meeting the Clerk's desk keeps the minutes for. */
 type MeetingKind = "board" | "business";
 
 /** Session cache of the gate result — the API still enforces every request. */
@@ -216,13 +215,14 @@ function AdministrationContent() {
   // in; a single-role desk opens its items directly.
   const useSectionCards = isAdmin || userRoles.filter((r) => r !== "member").length > 1;
   // Which section's cards the phone overview is showing (null = the headings).
-  const [overviewSection, setOverviewSection] = useState<"elders" | "finance" | "deaconate" | null>(null);
-  // Four desks, each with its own work: the elders' programmes, the clerk's
+  const [overviewSection, setOverviewSection] = useState<"elders" | "clerks" | "finance" | "deaconate" | null>(null);
+  // Five desks, each with its own work: the elders' programmes, the clerk's
   // register, the treasury's money and the deaconate's property. An officer
   // sees the desks they hold; an admin, who holds them all, drills in.
-  // Eldership is one desk: elders and clerks saw the same items across two
-  // rows, so the phone's section and the cards carry the merged set.
+  // The register, the meetings' minutes and the transfers are the clerk's own
+  // desk (Clerkship), so the phone's cards split them from the elders' strip.
   const showEldersItems = (isElder || isClerk || isAdmin) && (!useSectionCards || overviewSection === "elders");
+  const showClerksItems = isClerk && (!useSectionCards || overviewSection === "clerks");
   const showFinanceItems = isFinance && (!useSectionCards || overviewSection === "finance");
   const showDeaconateItems = isDeaconate && !isElderOnly && (!useSectionCards || overviewSection === "deaconate");
   // Every tab renders a full-height panel (table or cards) that scrolls
@@ -231,9 +231,9 @@ function AdministrationContent() {
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   /**
-   * Meetings — board and business are rows of the Elders' Desk submenu, so
-   * the kind is the tab itself: `?tab=board` and `?tab=business` each open
-   * their own list, and an old `?tab=meetings` link still lands on board.
+   * Meetings — board and business are rows of the Clerkship strip, so the
+   * kind is the tab itself: `?tab=board` and `?tab=business` each open their
+   * own list, and an old `?tab=meetings` link still lands on board.
    */
   const meetingTab = activeTab === "meetings" || activeTab === "board" || activeTab === "business";
   const meetingKind: MeetingKind = activeTab === "business" ? "business" : "board";
@@ -241,7 +241,9 @@ function AdministrationContent() {
   // Synchronize active tab safely without infinite loop
   useEffect(() => {
     if (searchTab) {
-      setActiveTab(searchTab);
+      // An old `?tab=expenditures` link opens the accounts desk's Expenditure
+      // view: the page it named is now a toggle inside Church Accounts.
+      setActiveTab(searchTab === "expenditures" ? "accounts" : searchTab);
     } else if (typeof window !== "undefined" && window.innerWidth >= 1024) {
       const defaultTab = isClerk ? "users" : isElder ? "announcements" : isFinance ? "accounts" : "settings";
       setActiveTab(defaultTab);
@@ -285,8 +287,16 @@ function AdministrationContent() {
                       <SectionHeadingCard
                         icon={<Armchair size={18} aria-hidden="true" />}
                         label="Eldership"
-                        description="The register, transfers, settings, meetings, announcements and requests."
+                        description="Leadership, church settings, announcements and requests."
                         onClick={() => setOverviewSection("elders")}
+                      />
+                    )}
+                    {isClerk && (
+                      <SectionHeadingCard
+                        icon={<ClipboardList size={18} aria-hidden="true" />}
+                        label="Clerkship"
+                        description="The register, the board and business minutes and membership transfers."
+                        onClick={() => setOverviewSection("clerks")}
                       />
                     )}
                     {(isElder || isClerk) && (
@@ -304,7 +314,7 @@ function AdministrationContent() {
                       <SectionHeadingCard
                         icon={<Landmark size={18} aria-hidden="true" />}
                         label="Treasury & Finance"
-                        description="Accounts, ledger, fund drives, expenditure and refunds."
+                        description="Accounts, ledger, fund drives, budget and refunds."
                         onClick={() => setOverviewSection("finance")}
                       />
                     )}
@@ -329,10 +339,10 @@ function AdministrationContent() {
                   </button>
                 )}
                 <div className="grid gap-5 sm:grid-cols-2">
-                  {showEldersItems && (
+                  {showClerksItems && (
                     <>
-                      {/* One desk's cards in the strip's order — elders and
-                          clerks share every row of Eldership. */}
+                      {/* The clerk's desk in the strip's order — the register,
+                          the board and business minutes, then the transfers. */}
                       <div
                         onClick={() => {
                           setActiveTab("users");
@@ -344,22 +354,6 @@ function AdministrationContent() {
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold text-bark">User Management</span>
                           <span className="mt-0.5 block text-xs leading-5 text-moss">The church register: every member, their roles and their details.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("leaders");
-                          setOverviewSection(null);
-                          router.replace("/administration?tab=leaders", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Crown size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Leadership</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Every ministry and department&apos;s leadership, roll and calendar, in one place.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -405,6 +399,28 @@ function AdministrationContent() {
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold text-bark">Membership Transfers</span>
                           <span className="mt-0.5 block text-xs leading-5 text-moss">Process incoming & outgoing church membership transfer requests.</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
+                      </div>
+                    </>
+                  )}
+
+                  {showEldersItems && (
+                    <>
+                      {/* The elders' desk in the strip's order — Leadership
+                          through to Church Settings. */}
+                      <div
+                        onClick={() => {
+                          setActiveTab("leaders");
+                          setOverviewSection(null);
+                          router.replace("/administration?tab=leaders", { scroll: false });
+                        }}
+                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Crown size={20} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-bark">Leadership</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Every ministry and department&apos;s leadership, roll and calendar, in one place.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -475,14 +491,14 @@ function AdministrationContent() {
                   {showFinanceItems && (
                     <>
                       {/* The desk's order mirrors the strip: Ledger, Accounts,
-                          Expenditure, Drives, Budget, Refunds. */}
+                          Drives, Budget, Refunds. */}
                       <Link
                         href="/administration/reconciliation"
                         className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Scale size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Ledger</span>
+                          <span className="block text-sm font-bold text-bark">Contributions Ledger</span>
                           <span className="mt-0.5 block text-xs leading-5 text-moss">Record cash receipts and track all giving breakdown ledgers.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
@@ -500,23 +516,8 @@ function AdministrationContent() {
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Landmark size={20} /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Treasury Accounts</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Set up church accounts, watch balances, and promote an account into a fund drive.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("expenditures");
-                          router.replace("/administration?tab=expenditures", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Receipt size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Expenditure</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record what the church spends, per account, and keep the books balanced.</span>
+                          <span className="block text-sm font-bold text-bark">Church Accounts</span>
+                          <span className="mt-0.5 block text-xs leading-5 text-moss">Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
                       </div>
@@ -608,12 +609,12 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Eldership Church Clerk Approval Notice */}
+            {/* Church Clerk Approval Notice */}
             {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold">Eldership (Church Clerk Access):</span>
-                  <span>You have rights to access and prepare updates across Eldership. Actions require Elder approval to persist.</span>
+                  <span className="font-bold">Church Clerk Access:</span>
+                  <span>You have rights to access and prepare updates across Clerkship and Eldership. Actions require Elder approval to persist.</span>
                 </div>
                 <span className="shrink-0 rounded-md bg-gold-sand px-2 py-0.5 text-[10px] font-bold text-gold-brown">Requires Elder Approval</span>
               </div>
@@ -627,9 +628,9 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub initialDept={searchDept} />}
 
-            {/* Board and Business Meetings — two rows of the Elders' Desk
-                submenu, so the desk opens on the kind the row named and no
-                second toggle sits between the two. */}
+            {/* Board and Business Meetings — two rows of the Clerkship strip,
+                so the desk opens on the kind the row named and no second
+                toggle sits between the two. */}
             {meetingTab && (isClerk || isElder || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 {meetingKind === "board" ? (
@@ -665,7 +666,7 @@ function AdministrationContent() {
             {/* Treasury Accounts Manager */}
             {activeTab === "accounts" && isFinance && (
               <div className="h-full min-h-0">
-                <TreasuryAccountsManager />
+                <TreasuryAccountsManager initialView={searchTab === "expenditures" ? "expenditure" : undefined} />
               </div>
             )}
 
@@ -674,13 +675,6 @@ function AdministrationContent() {
             {activeTab === "budget" && isFinance && (
               <div className="h-full min-h-0">
                 <ChurchBudgetManager />
-              </div>
-            )}
-
-            {/* Expenditure Manager */}
-            {activeTab === "expenditures" && isFinance && (
-              <div className="h-full min-h-0">
-                <ExpenditureManager />
               </div>
             )}
 

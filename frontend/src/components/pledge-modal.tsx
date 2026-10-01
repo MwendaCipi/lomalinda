@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
+import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -42,11 +43,7 @@ function addDays(iso: string, days: number) {
 }
 
 function prettyDay(iso: string | null | undefined) {
-  if (!iso) return "";
-  const [year, month, day] = iso.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-    day: "numeric", month: "long", year: "numeric",
-  });
+  return dayFirst(iso, "");
 }
 
 function money(value: number) {

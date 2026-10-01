@@ -17,6 +17,7 @@ import {
 } from "./roles-combobox";
 import { densityCellPad } from "@/lib/table-density";
 import { showAlert } from "@/lib/alerts";
+import { dayFirst } from "@/lib/dates";
 import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
@@ -154,9 +155,7 @@ function AccountStatus({ member }: { member: MemberUser }) {
     );
   }
   if (member.deactivated_at) {
-    const when = new Date(member.deactivated_at).toLocaleDateString(undefined, {
-      day: "numeric", month: "short", year: "numeric",
-    });
+    const when = dayFirst(member.deactivated_at);
     return (
       <span
         title={`An officer switched this account off on ${when}. The record, roles and history are intact, and Actions can switch it back on.`}
@@ -239,8 +238,7 @@ type MemberProfileData = Partial<MemberUser> & {
   past_roles?: RoleHistoryRow[];
 };
 
-const fmtDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—";
+const fmtDate = (value?: string | null) => dayFirst(value);
 
 /** A label + value line of the profile grid; em-dash when nothing is on file. */
 function ProfileField({ label, value }: { label: string; value?: string | null }) {
@@ -1113,7 +1111,7 @@ function pendingRowBadge(row: PendingRow) {
 function invitationStatusBadge(invitation: InvitationRow) {
   const label =
     invitation.status === "pending"
-      ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}`
+      ? `Pending · expires ${dayFirst(invitation.expires_at)}`
       : invitation.status === "accepted"
         ? "Confirmed"
         : invitation.status === "expired"
@@ -2974,7 +2972,7 @@ export function UserManagement() {
                           </p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${invitation.status === "pending" ? "bg-mist-select text-moss-dark" : invitation.status === "accepted" ? "bg-bark text-white" : "bg-gold-blush text-ember-deep"}`}>
-                          {invitation.status === "pending" ? `Pending · expires ${new Date(invitation.expires_at).toLocaleDateString()}` : invitation.status === "accepted" ? "Accepted" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
+                          {invitation.status === "pending" ? `Pending · expires ${dayFirst(invitation.expires_at)}` : invitation.status === "accepted" ? "Accepted" : invitation.status === "expired" ? "Expired" : "Withdrawn"}
                         </span>
                       </div>
                       {invitation.status !== "accepted" && (

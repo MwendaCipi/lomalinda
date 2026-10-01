@@ -1070,6 +1070,19 @@ class MembershipTransferRequestSerializer(serializers.ModelSerializer):
         data = data.copy() if hasattr(data, 'copy') else dict(data)
         if 'name' in data and not data.get('member_name'):
             data['member_name'] = str(data['name']).strip()
+        # A signed-in member's request carries no identity of its own: the
+        # account they are logged in with *is* the name, the email and the
+        # phone. Only what the session cannot know (the church they are going
+        # to, why) comes from the form.
+        user = getattr(self.context.get('request'), 'user', None)
+        if user is not None and user.is_authenticated:
+            if not data.get('member_name'):
+                data['member_name'] = user.get_full_name() or user.get_username()
+            if not data.get('email'):
+                data['email'] = getattr(user, 'email', '') or ''
+            profile = getattr(user, 'member_profile', None)
+            if not data.get('phone_number') and profile:
+                data['phone_number'] = profile.phone_number or ''
         return super().to_internal_value(data)
 
     def validate_phone_number(self, value):

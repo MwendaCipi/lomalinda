@@ -8,8 +8,13 @@ import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { newsAndEventsLinks } from "@/config/site-sections";
 import { meetingHours, type WeeklyMeeting } from "@/lib/gathering";
+import { dayFirst, weekdayOf } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** "Saturday, 3 October 2026" — the spoken form for programs and headings. */
+const weekdayLabel = (iso: string) =>
+  `${weekdayOf(iso)}, ${dayFirst(iso)}`;
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
@@ -102,10 +107,10 @@ function CalendarPageContent() {
     });
     const newYear = newYearsThanksgiving(selectedYear); entries.push({ date: newYear.date, event: newYear });
     eventMap.forEach((event, date) => { if (!entries.some((entry) => entry.date === date)) entries.push({ date, event }); });
-    return entries.sort((a, b) => a.date.localeCompare(b.date)).filter(({ date, event }) => { const monthMatches = selectedMonth === "all" || Number(date.slice(5, 7)) - 1 === Number(selectedMonth); const dateText = new Date(`${date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }); return monthMatches && `${date} ${dateText} ${event.name} ${event.department ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()); });
+    return entries.sort((a, b) => a.date.localeCompare(b.date)).filter(({ date, event }) => { const monthMatches = selectedMonth === "all" || Number(date.slice(5, 7)) - 1 === Number(selectedMonth); const dateText = weekdayLabel(date); return monthMatches && `${date} ${dateText} ${event.name} ${event.department ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()); });
   }, [events, meetings, search, selectedMonth, selectedYear, settings]);
 
-  function openProgram(row: { date: string; event: CalendarEvent }) { const file = row.event.program_file ? (row.event.program_file.startsWith("http") ? row.event.program_file : `${API_URL}${row.event.program_file}`) : null; setActiveProgram({ name: row.event.name, department: row.event.department, date: new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric", year: "numeric" }), programText: row.event.program_text, programFile: file, programItems: row.event.program_items, isDesignated: row.event.kind === "special" || !row.event.recurring }); }
+  function openProgram(row: { date: string; event: CalendarEvent }) { const file = row.event.program_file ? (row.event.program_file.startsWith("http") ? row.event.program_file : `${API_URL}${row.event.program_file}`) : null; setActiveProgram({ name: row.event.name, department: row.event.department, date: weekdayLabel(row.date), programText: row.event.program_text, programFile: file, programItems: row.event.program_items, isDesignated: row.event.kind === "special" || !row.event.recurring }); }
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   return (
@@ -189,12 +194,7 @@ function CalendarPageContent() {
                 return (
                   <tr key={actionKey} className="hover:bg-sand-plate">
                     <td className="whitespace-nowrap px-5 py-4 text-moss">
-                      {new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                      {dayFirst(row.date)}
                     </td>
                     <td className="px-5 py-4 font-semibold">{row.event.name}</td>
                     <td className="whitespace-nowrap px-5 py-4 text-moss">{row.event.time || "-"}</td>
@@ -275,12 +275,7 @@ function CalendarPageContent() {
         <div className="mt-3 grid gap-4 md:hidden">
           {rows.map((row) => {
             const actionKey = `mobile-${row.date}-${row.event.name}`;
-            const dateStr = new Date(`${row.date}T12:00:00`).toLocaleDateString("en-KE", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            });
+            const dateStr = dayFirst(row.date);
             return (
               <div key={actionKey} className="rounded-2xl bg-white p-5 border border-sand-line shadow-sm space-y-3">
                 <div className="flex items-start justify-between gap-2">

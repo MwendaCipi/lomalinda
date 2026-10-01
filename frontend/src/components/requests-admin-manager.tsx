@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { showAlert } from "@/lib/alerts";
+import { dayFirstTime } from "@/lib/dates";
 import { reviewBucket, type StatusFilter } from "@/lib/requests";
 import { Check, Handshake, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
@@ -153,9 +154,7 @@ function contactLine(...parts: (string | undefined)[]): string {
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" });
+  return value ? dayFirstTime(value, "") : "";
 }
 
 interface RequestsAdminManagerProps {

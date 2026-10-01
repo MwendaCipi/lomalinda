@@ -8,6 +8,7 @@ import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { eventLabel } from "@/lib/announcement-dates";
+import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -312,7 +313,7 @@ export default function AnnouncementsPage() {
                             </div>
                             {drive.end_date && (
                               <p className="mt-1.5 text-[11px] text-moss">
-                                Closes {new Date(`${drive.end_date}T00:00:00`).toLocaleDateString("en-KE", { month: "short", day: "numeric", year: "numeric" })}
+                                Closes {dayFirst(drive.end_date)}
                               </p>
                             )}
                           </div>

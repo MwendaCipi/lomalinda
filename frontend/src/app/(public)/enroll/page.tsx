@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { Church, Handshake, Mail, Phone } from "lucide-react";
+import { dayFirstTime } from "@/lib/dates";
 import { requestsAndCareLinks } from "@/config/site-sections";
 import { EnrollmentForm } from "@/components/enrollment-form";
+import { TransferRequestModal } from "@/components/transfer-request-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -25,6 +27,10 @@ export default function EnrollPage() {
   const [transfers, setTransfers] = useState<TransferRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [fetchingList, setFetchingList] = useState(true);
+  // A signed-in member requests their transfer from a modal that already knows
+  // who they are; the full page form stays for the signed-out visitor.
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   const fetchTransfers = async () => {
     setFetchingList(true);
@@ -49,6 +55,7 @@ export default function EnrollPage() {
 
   useEffect(() => {
     fetchTransfers();
+    setSignedIn(Boolean(typeof window !== "undefined" ? localStorage.getItem("access_token") : null));
   }, []);
 
   return (
@@ -61,7 +68,15 @@ export default function EnrollPage() {
                 <h1 className="sr-only">Membership</h1>
                 <p className="sr-only">Manage membership transfer requests to join SDA Loma Linda or move to another SDA church.</p>
               </div>
-              {!showForm && (
+              {!showForm && (signedIn ? (
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(true)}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-ember px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+                >
+                  Request Transfer
+                </button>
+              ) : (
                 <button
                   type="button"
                   onClick={() => setShowForm(true)}
@@ -69,7 +84,7 @@ export default function EnrollPage() {
                 >
                   + Add Membership / Transfer Request
                 </button>
-              )}
+              ))}
             </div>
 
             {showForm ? (
@@ -110,10 +125,10 @@ export default function EnrollPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => setShowForm(true)}
+                      onClick={() => (signedIn ? setShowTransferModal(true) : setShowForm(true))}
                       className="mt-5 rounded-full bg-ember px-6 py-3 text-sm font-semibold text-white transition hover:bg-ember-dark"
                     >
-                      + Add Membership / Transfer Request
+                      {signedIn ? "Request Transfer" : "+ Add Membership / Transfer Request"}
                     </button>
                   </div>
                 ) : (
@@ -150,7 +165,7 @@ export default function EnrollPage() {
                           <span>
                             Status: <strong className="capitalize text-sage">{item.status || "Pending Board Review"}</strong>
                           </span>
-                          {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
+                          {item.created_at && <span>{dayFirstTime(item.created_at)}</span>}
                         </div>
                       </div>
                     ))}
@@ -160,6 +175,12 @@ export default function EnrollPage() {
             )}
         </div>
       </div>
+
+      <TransferRequestModal
+        open={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        onSubmitted={fetchTransfers}
+      />
 
       {/* The old Requests sidebar, now part of the page. */}
       <PublicSectionNav

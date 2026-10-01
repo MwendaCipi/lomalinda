@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Printer, Receipt, RotateCw } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { showAlert } from "@/lib/alerts";
+import { localDate, firstDayOfMonth, dayFirst } from "@/lib/dates";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -21,14 +22,6 @@ type InKindRecord = {
   received_on: string;
   created_at: string;
 };
-
-// First Sabbath = first Saturday of the current month.
-function firstSabbathOfCurrentMonth(): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), 1);
-  while (d.getDay() !== 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const IN_KIND_PURPOSES = [
   "In-Kind Offering",
@@ -51,8 +44,8 @@ function GiveInKindPageContent() {
   // ── In-Kind Report filters ──────────────────────────────────
   const PAGE_SIZE = 50;
   const [signedIn, setSignedIn] = useState(false);
-  const [fromDate, setFromDate] = useState(firstSabbathOfCurrentMonth);
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fromDate, setFromDate] = useState(firstDayOfMonth);
+  const [toDate, setToDate] = useState(() => localDate());
   const [purposeFilter, setPurposeFilter] = useState("all");
   const [reportSearch, setReportSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -147,10 +140,7 @@ function GiveInKindPageContent() {
     return all;
   };
 
-  const fmtReportDate = (r: InKindRecord) => {
-    const raw = r.received_on || r.created_at;
-    return raw ? new Date(raw).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—";
-  };
+  const fmtReportDate = (r: InKindRecord) => dayFirst(r.received_on || r.created_at);
 
   const handlePrintReport = async () => {
     const all = await fetchAllFiltered();

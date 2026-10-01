@@ -15,6 +15,7 @@ import { RecordList } from "./record-list";
 import { useTableDensity, densityCellPad, DensityToggle } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
+import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -149,7 +150,7 @@ function custodyCell(item: InventoryItem) {
     <div>
       <p className="font-semibold text-bark">{item.assigned_to}</p>
       {item.checked_out_at && (
-        <p className="text-[10px]">Since {new Date(item.checked_out_at).toLocaleDateString()}</p>
+        <p className="text-[10px]">Since {dayFirst(item.checked_out_at)}</p>
       )}
     </div>
   );

@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Landmark, Printer, Receipt, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { brand } from "@/lib/brand";
+import { localDate, firstDayOfMonth, dayFirstTime } from "@/lib/dates";
 import { useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { getMinistryGivingPurpose } from "@/config/ministries";
@@ -47,14 +48,6 @@ type MyGiving = {
   paid_at?: string | null;
   created_at: string;
 };
-
-// First Sabbath = first Saturday of the current month.
-function firstSabbathOfCurrentMonth(): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), 1);
-  while (d.getDay() !== 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /** Safaricom's prefixes on the Communications Authority number plan — the
  * only lines an M-Pesa push can reach, so the account phone pre-fills the
@@ -118,7 +111,7 @@ function GivePageContent() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bankRefNumber, setBankRefNumber] = useState("");
   const [senderBankName, setSenderBankName] = useState("");
-  const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
+  const [transferDate, setTransferDate] = useState(() => localDate());
   // Receipts are addressed from the signed-in member's account, and an
   // anonymous giver's receipt rides the phone they give with, so the form
   // asks for neither name nor email — except when a signed-in account has no
@@ -138,8 +131,8 @@ function GivePageContent() {
   const [signedIn, setSignedIn] = useState(false);
   const [myGivings, setMyGivings] = useState<MyGiving[]>([]);
   const [loadingGivings, setLoadingGivings] = useState(false);
-  const [fromDate, setFromDate] = useState(firstSabbathOfCurrentMonth);
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fromDate, setFromDate] = useState(firstDayOfMonth);
+  const [toDate, setToDate] = useState(() => localDate());
   const [givingSearch, setGivingSearch] = useState("");
   // Status filter replaces the old purpose dropdown: Successful by default,
   // with Failed and All for reviewing attempts that never completed. Purpose
@@ -257,12 +250,7 @@ function GivePageContent() {
     }
   };
 
-  const fmtGivingDate = (g: MyGiving) => {
-    const raw = g.paid_at || g.created_at;
-    return raw
-      ? new Date(raw).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
-      : "—";
-  };
+  const fmtGivingDate = (g: MyGiving) => dayFirstTime(g.paid_at || g.created_at);
 
   const handlePrintMyReport = () => {
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

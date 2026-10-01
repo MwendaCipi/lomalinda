@@ -47,8 +47,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // lang carries Kenya's English dialect: it also makes every native date
+  // input read day-first (dd/mm/yyyy), the way the church writes dates.
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en-KE" className="h-full antialiased" suppressHydrationWarning>
       <head>
         {/* Before the first paint: a member whose stored preferences say dark
             gets the dark palette on the very first frame rather than a white

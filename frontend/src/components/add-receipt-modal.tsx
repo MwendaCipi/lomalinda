@@ -3,10 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { localDate } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-const localDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
 
 // Only reached if the accounts endpoint is unreachable: the church's core
 // funds plus "Other" for anything else. The live list comes from treasury
@@ -90,6 +89,58 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
       setOtherPurposes(false);
     }
   }, [open, presetPurpose]);
+
+  // The delivery channel as one choice: the two switches behind a combo.
+  const receiptChannel: "both" | "email" | "sms" | "none" =
+    sendEmail && sendSms ? "both" : sendEmail ? "email" : sendSms ? "sms" : "none";
+
+  // The phone as the form spells it: a ten-digit local number, however the
+  // member's record stores it (+254…, 254…, 07…).
+  const localPhone = (raw: string) => {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (digits.length === 12 && digits.startsWith("254")) return `0${digits.slice(3)}`;
+    if (digits.length === 9) return `0${digits}`;
+    return digits.slice(0, 10);
+  };
+
+  // A phone or email identifies the giver: when either is entered, look the
+  // member up and fill the details we hold — the name, and the other contact.
+  // Only empty fields are filled, so nothing the desk typed is overwritten.
+  useEffect(() => {
+    if (!open) return;
+    const phone = cashForm.giver_phone.trim();
+    const email = cashForm.giver_email.trim();
+    const byPhone = phone.length === 10;
+    const byEmail = /.+@.+\..+/.test(email);
+    if (!byPhone && !byEmail) return;
+    const query = byEmail ? email : phone;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`${API_URL}/api/members/lookup/?query=${encodeURIComponent(query)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+        },
+        signal: controller.signal,
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!data?.found) return;
+          setCashForm((prev) => {
+            const donor_name = data.name && !prev.donor_name.trim() ? data.name : prev.donor_name;
+            const giver_email = data.email && !prev.giver_email.trim() ? data.email : prev.giver_email;
+            const giver_phone = data.phone_number && !prev.giver_phone.trim() ? localPhone(data.phone_number) : prev.giver_phone;
+            if (donor_name === prev.donor_name && giver_email === prev.giver_email && giver_phone === prev.giver_phone) return prev;
+            return { ...prev, donor_name, giver_email, giver_phone };
+          });
+        })
+        .catch(() => undefined);
+    }, 450);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, cashForm.giver_phone, cashForm.giver_email]);
 
   const formatReceiptDefaultMsg = (name: string, amt: string, purp: string, custPurp: string) => {
     const nameVal = name.trim() || "{name}";
@@ -299,14 +350,25 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
             />
           </label>
 
-          <div className="rounded-xl bg-mist px-3 py-2 text-xs text-moss sm:col-span-2">
-            <p className="font-semibold text-bark">Send receipt through</p>
-            <div className="mt-2 flex gap-5">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Email</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} /> SMS</label>
-            </div>
-            <p className="mt-1">SMS will report that only email was sent until an SMS gateway is configured.</p>
-          </div>
+          {/* The delivery channel, a combo in the same row as the email it
+              sends to. */}
+          <label className="text-sm font-medium text-bark">
+            Send Receipt Through
+            <select
+              value={receiptChannel}
+              onChange={(e) => {
+                const channel = e.target.value as "both" | "email" | "sms" | "none";
+                setSendEmail(channel === "both" || channel === "email");
+                setSendSms(channel === "both" || channel === "sms");
+              }}
+              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+            >
+              <option value="both">Email &amp; SMS</option>
+              <option value="email">Email only</option>
+              <option value="sms">SMS only</option>
+              <option value="none">Do not send</option>
+            </select>
+          </label>
 
           {/* Receipt Notes Textarea */}
           <label className="text-sm font-medium text-bark sm:col-span-2">
