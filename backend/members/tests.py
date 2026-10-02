@@ -8426,6 +8426,84 @@ class DeaconateSeatsBySexMigrationTests(TestCase):
         self.assertTrue(DepartmentAssignment.objects.filter(role=head_deacon, member=unknown, kind='leader').exists())
 
 
+class ClearHeadDeaconSeatMigrationTests(TestCase):
+    """0165 releases the deaconate's Head Deacon seat and its flag.
+
+    Replayed on historical models: the seat's holder is released, the flag
+    the seat granted goes with it, and the Head Deaconess beside it is left
+    untouched.
+    """
+
+    def _clear(self):
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).parent / 'migrations' / '0165_clear_head_deacon_seat.py'
+        spec = importlib.util.spec_from_file_location('m0165_under_test', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.clear_seat
+
+    def _state(self):
+        from django.db import connection
+        from django.db.migrations.loader import MigrationLoader
+        loader = MigrationLoader(connection)
+        return loader.project_state([('members', '0164_deaconate_seats_by_sex')]).apps
+
+    def _deaconate(self, history):
+        Department = history.get_model('members', 'Department')
+        deaconate = Department.objects.filter(code='deaconate').first()
+        if deaconate is None:
+            deaconate = Department.objects.create(code='deaconate', name='Deaconate', is_active=True)
+        return deaconate
+
+    def _person(self, history, username):
+        Profile = history.get_model('members', 'MemberProfile')
+        UserModel = Profile._meta.get_field('user').remote_field.model
+        user = UserModel.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+        Profile.objects.create(user=user, role='member', roles='member')
+        return user
+
+    def test_the_head_deacon_seat_and_its_flag_are_cleared(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        Profile = history.get_model('members', 'MemberProfile')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+        head_deaconess = DepartmentRole.objects.get(department=deaconate, name='Head Deaconess')
+
+        jillian = self._person(history, 'jill.stuck')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deacon, member=jillian, kind='leader')
+        profile = Profile.objects.get(user=jillian)
+        profile.roles = 'member,head_deacon'
+        profile.save(update_fields=['roles'])
+        # The office beside it stays exactly as it is.
+        deaconess = self._person(history, 'standing.deaconess')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deaconess, member=deaconess, kind='leader')
+
+        self._clear()(history, None)
+
+        self.assertFalse(DepartmentAssignment.objects.filter(role=head_deacon, kind='leader').exists())
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deaconess, member=deaconess, kind='leader').exists())
+        held = {c.strip() for c in Profile.objects.get(user=jillian).roles.split(',') if c.strip()}
+        self.assertNotIn('head_deacon', held)
+
+    def test_a_stale_flag_with_no_seat_is_cleared(self):
+        history = self._state()
+        Profile = history.get_model('members', 'MemberProfile')
+        self._deaconate(history)
+
+        leftover = self._person(history, 'leftover.flag')
+        profile = Profile.objects.get(user=leftover)
+        profile.roles = 'member,head_deacon'
+        profile.save(update_fields=['roles'])
+
+        self._clear()(history, None)
+
+        held = {c.strip() for c in Profile.objects.get(user=leftover).roles.split(',') if c.strip()}
+        self.assertNotIn('head_deacon', held)
+
+
 class DepartmentFundTests(APITestCase):
     """A department reads its own fund; only the treasurer moves its money.
 
