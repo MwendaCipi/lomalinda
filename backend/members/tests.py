@@ -8296,6 +8296,136 @@ class DeaconateSeatsMigrationTests(TestCase):
         )
 
 
+class DeaconateSeatsBySexMigrationTests(TestCase):
+    """0164 re-seats a deaconate office held against the seat's sex.
+
+    Replayed on historical models, the way production meets it: the desk once
+    seated a woman as Head Deacon, and the migration moves her to the Head
+    Deaconess while leaving a rightly-seated holder where they stand.
+    """
+
+    def _reseat(self):
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).parent / 'migrations' / '0164_deaconate_seats_by_sex.py'
+        spec = importlib.util.spec_from_file_location('m0164_under_test', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.reseat
+
+    def _state(self):
+        from django.db import connection
+        from django.db.migrations.loader import MigrationLoader
+        loader = MigrationLoader(connection)
+        return loader.project_state([('members', '0163_deaconaterequest')]).apps
+
+    def _deaconate(self, history):
+        Department = history.get_model('members', 'Department')
+        deaconate = Department.objects.filter(code='deaconate').first()
+        if deaconate is None:
+            deaconate = Department.objects.create(code='deaconate', name='Deaconate', is_active=True)
+        return deaconate
+
+    def _person(self, history, username, gender):
+        Profile = history.get_model('members', 'MemberProfile')
+        UserModel = Profile._meta.get_field('user').remote_field.model
+        user = UserModel.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+        Profile.objects.create(user=user, role='member', roles='member', gender=gender)
+        return user
+
+    def _held(self, history, user):
+        profile = history.get_model('members', 'MemberProfile').objects.get(user=user)
+        return {c.strip() for c in profile.roles.split(',') if c.strip()}
+
+    def test_a_woman_on_the_head_deacon_moves_to_the_head_deaconess(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        Profile = history.get_model('members', 'MemberProfile')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+        head_deaconess = DepartmentRole.objects.get(department=deaconate, name='Head Deaconess')
+
+        jillian = self._person(history, 'jill.wanjohi', 'female')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deacon, member=jillian, kind='leader')
+        profile = Profile.objects.get(user=jillian)
+        profile.roles = 'member,head_deacon'
+        profile.save(update_fields=['roles'])
+
+        self._reseat()(history, None)
+
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deaconess, member=jillian, kind='leader').exists())
+        self.assertFalse(DepartmentAssignment.objects.filter(role=head_deacon).exists())
+        self.assertEqual(self._held(history, jillian), {'member', 'head_deaconess'})
+
+    def test_a_man_on_the_head_deaconess_moves_to_the_head_deacon(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+        head_deaconess = DepartmentRole.objects.get(department=deaconate, name='Head Deaconess')
+
+        man = self._person(history, 'wrong.man', 'male')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deaconess, member=man, kind='leader')
+
+        self._reseat()(history, None)
+
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deacon, member=man, kind='leader').exists())
+        self.assertFalse(DepartmentAssignment.objects.filter(role=head_deaconess).exists())
+
+    def test_the_two_misplaced_holders_swap_seats(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+        head_deaconess = DepartmentRole.objects.get(department=deaconate, name='Head Deaconess')
+
+        woman = self._person(history, 'swap.woman', 'female')
+        man = self._person(history, 'swap.man', 'male')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deacon, member=woman, kind='leader')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deaconess, member=man, kind='leader')
+
+        self._reseat()(history, None)
+
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deacon, member=man, kind='leader').exists())
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deaconess, member=woman, kind='leader').exists())
+
+    def test_a_rightful_holder_is_never_displaced(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+        head_deaconess = DepartmentRole.objects.get(department=deaconate, name='Head Deaconess')
+
+        rightful = self._person(history, 'rightful.woman', 'female')
+        misplaced = self._person(history, 'misplaced.woman', 'female')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deaconess, member=rightful, kind='leader')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deacon, member=misplaced, kind='leader')
+
+        self._reseat()(history, None)
+
+        # The seat she belongs in is taken, so nothing moves and no one loses it.
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deaconess, member=rightful, kind='leader').exists())
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deacon, member=misplaced, kind='leader').exists())
+
+    def test_a_blank_gender_leaves_the_seat_alone(self):
+        history = self._state()
+        DepartmentRole = history.get_model('members', 'DepartmentRole')
+        DepartmentAssignment = history.get_model('members', 'DepartmentAssignment')
+        deaconate = self._deaconate(history)
+        head_deacon = DepartmentRole.objects.get(department=deaconate, name='Head Deacon')
+
+        unknown = self._person(history, 'blank.gender', '')
+        DepartmentAssignment.objects.create(department=deaconate, role=head_deacon, member=unknown, kind='leader')
+
+        self._reseat()(history, None)
+
+        self.assertTrue(DepartmentAssignment.objects.filter(role=head_deacon, member=unknown, kind='leader').exists())
+
+
 class DepartmentFundTests(APITestCase):
     """A department reads its own fund; only the treasurer moves its money.
 
