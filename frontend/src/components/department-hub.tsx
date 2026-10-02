@@ -2464,6 +2464,11 @@ function DepartmentDetail({
   // Music is the church's singing, and it sings in groups: the register of
   // singing groups is a music-desk view, not a general department one.
   const isMusic = department.code === "music";
+  // The Deaconate reads as one page: its Team view is the roll itself, and the
+  // desk's own strip above already names Team / Inventory / Duty Rota /
+  // Calendar. The hub's Members / Calendar / Accounts toggles would only repeat
+  // the page under them, so they are held back here.
+  const isDeaconate = department.code === "deaconate";
   // Which unit's desk is open; null is the whole department.
   const [unit, setUnit] = useState<string | null>(null);
   // The unit's own leadership, when one is selected: the directory's board is
@@ -2751,6 +2756,7 @@ function DepartmentDetail({
       {/* The department's own views, on the shared strip: the roll first, the
           calendar beside it. It pins to the top of the page, so the desk can
           switch views without scrolling back up past the table. */}
+      {!isDeaconate && (
       <SubNav
         sticky
         label="Department views"
@@ -2776,9 +2782,6 @@ function DepartmentDetail({
           ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
           ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
           { key: "calendar", label: "Calendar", icon: CalendarDays },
-          ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
-          ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
-          { key: "calendar", label: "Calendar", icon: CalendarDays },
           // Every desk reads its own fund when the treasurer has opened one:
           // the contributions that built it, and the withdrawal the desk's
           // leadership may ask of it.
@@ -2799,6 +2802,7 @@ function DepartmentDetail({
         }}
         className="-mx-2 md:-mx-4 lg:-mx-6"
       />
+      )}
 
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. The department's board
