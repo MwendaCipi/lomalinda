@@ -202,9 +202,11 @@ function GiveInKindPageContent() {
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark">
       {/* No bottom padding while pinned: the pinned footer bar meets the
-          mobile tab bar directly (the shell already reserves the bar height). */}
-      <div className="flex min-h-0 flex-1 flex-col px-5 pb-0 pt-3 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10">
-          <div className="flex min-h-0 flex-1 flex-col space-y-4">
+          mobile tab bar directly (the shell already reserves the bar height).
+          No phone top padding either: the shell's page strip sits directly
+          above, and the card rides up under it. */}
+      <div className="flex min-h-0 flex-1 flex-col px-5 pb-0 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10">
+          <div className="flex min-h-0 flex-1 flex-col">
             {/* The strip names the page; the h1 is for screen readers. */}
             <h1 className="sr-only">In-Kind Giving</h1>
             <p className="sr-only">Donate goods, produce, or materials instead of money.</p>

@@ -77,22 +77,17 @@ export default function AnnouncementsPage() {
   const [opinionBusy, setOpinionBusy] = useState(false);
   const [opinionDone, setOpinionDone] = useState<number[]>([]);
 
-  // The departments this account belongs to, from /me, and which one the
-  // feed is narrowed to. "All" (null) is the whole live feed; picking a
-  // department shows only the posts addressed to that group.
+  // The departments this account belongs to, from /me — the names a post's
+  // badge reads when it is addressed to one of them. The old strip of
+  // department tabs — one chip per area, a whole congregation's worth for
+  // the offices — is gone: a post that belongs to a department or ministry
+  // wears that area's name, and the feed itself stays one unfiltered list.
   const [myDepartments, setMyDepartments] = useState<MyDepartment[]>([]);
-  const [deptFilter, setDeptFilter] = useState<string | null>(null);
 
-  // My departments: only the posts addressed to the chosen department. A
-  // card's department is its audience's ``dept_*`` code; posts addressed to
-  // no department are whole-congregation and appear only under All.
-  const visibleItems = deptFilter
-    ? items.filter((item) => (item.audience ?? []).includes(deptFilter))
-    : items;
-
-  // The feed is what is live right now, nearest event first. Each announcement
-  // carries the window it is displayed for, so there is no From/To to pick and
-  // nothing that has finished its run is served.
+  // The feed is the one live list. Each announcement carries the window it
+  // is displayed for, so there is no From/To to pick and nothing that has
+  // finished its run is served.
+  const visibleItems = items;
   const loadFeed = useCallback(() => {
     setLoading(true);
     const token = localStorage.getItem("access_token");
@@ -109,8 +104,8 @@ export default function AnnouncementsPage() {
   // of the page already reads.
   const setAnnouncements = (rows: FeedItem[]) => setItems(rows);
 
-  // One load: the feed, plus the departments this account belongs to (so the
-  // addressed tab exists only for members of at least one department).
+  // One load: the feed, plus the departments this account belongs to (the
+  // names a post's department badge reads).
   useEffect(() => {
     loadFeed();
     const token = localStorage.getItem("access_token");
@@ -171,36 +166,12 @@ export default function AnnouncementsPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full bg-white px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-5 lg:px-10 lg:pb-10 lg:pt-6 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-4">
-            {/* One toolbar row: the department tabs, and the feed follows
-                immediately under it. The strip above already names the page,
-                so the h1 is for screen readers only. The cards themselves are
-                compact — there is no comfortable/compact toggle here, the feed
-                is a notice board and reads best tight. */}
-            <div className="flex items-center gap-2">
+            {/* The page's h1 is for screen readers only — the strip above
+                already names the page. The cards themselves are compact —
+                there is no comfortable/compact toggle here, the feed is a
+                notice board and reads best tight. */}
+            <div>
               <h1 className="sr-only">Announcements</h1>
-              {myDepartments.length > 0 && (
-                <div className="flex min-w-0 gap-1.5 overflow-x-auto">
-                  <button
-                    type="button"
-                    onClick={() => setDeptFilter(null)}
-                    aria-pressed={deptFilter === null}
-                    className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${deptFilter === null ? "bg-bark text-white" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-ember"}`}
-                  >
-                    All
-                  </button>
-                  {myDepartments.map((dept) => (
-                    <button
-                      key={dept.audience_code}
-                      type="button"
-                      onClick={() => setDeptFilter(dept.audience_code)}
-                      aria-pressed={deptFilter === dept.audience_code}
-                      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${deptFilter === dept.audience_code ? "bg-bark text-white" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-ember"}`}
-                    >
-                      {dept.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {loading ? <p className="text-sm text-moss">Loading announcements…</p> : visibleItems.length === 0 ? (
@@ -213,14 +184,23 @@ export default function AnnouncementsPage() {
                   // A support-account post carries its own giving actions —
                   // the same Pledge / In-kind / Give Money row a drive gets.
                   const supportGives = !isDrive && Boolean(item.support_account_display);
+                  // The area a post is addressed to, by name: the first of
+                  // this account's areas whose audience code the post carries.
+                  const itemBadge = (item.audience ?? [])
+                    .map((code) => myDepartments.find((dept) => dept.audience_code === code)?.label)
+                    .find(Boolean);
                   const cardClasses = "flex flex-col justify-between rounded-2xl border border-sand-line bg-white shadow-sm p-4";
                   const content = (
                     <>
                       <div>
-                        {/* No eyebrow and no badge row: the card is in the
-                            announcements feed, so the title, its event date
-                            and the words are the whole story. */}
-                        <h2 className="text-base font-semibold">{item.title}</h2>
+                        <div className="flex items-start justify-between gap-2">
+                          <h2 className="text-base font-semibold">{item.title}</h2>
+                          {itemBadge && (
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
+                              {itemBadge}
+                            </span>
+                          )}
+                        </div>
                         {eventLabel(item) && (
                           <p className="mt-1 text-sm font-semibold text-ember">Event date: {eventLabel(item)}</p>
                         )}

@@ -123,7 +123,6 @@ export const destinations = {
   announcements: {
     href: "/announcements",
     label: "Announcements",
-    short: "News",
     description: "Notices and updates shared with the church family.",
     icon: Megaphone,
     area: "fellowship",
@@ -617,8 +616,10 @@ export const railEntries: RailEntry[] = [
     icon: HandHeart,
     // The rail's row keeps its own name — Giving — while the strip's heading
     // above it reads Money Giving; `page` copies the registry label, so the
-    // one row is overridden here.
-    items: [page("give", { label: "Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
+    // one row is overridden here. The strip's phone chip reads Money: six
+    // chips share a phone's width, and the leading "Money" is what tells
+    // this row of the strip apart from In-Kind's.
+    items: [page("give", { label: "Giving", short: "Money" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
   // Asking the church for something is its own place, not a page of Fellowship:
   // prayer and visitation, dedication, joining — the member's requests live

@@ -120,7 +120,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 /* The section's pages as the card's top row, at every width —
                    on a phone the same chip strip Materials uses for its
                    shelves, so no section needs a card sheet of its own. */
-                <div className="shrink-0 border-b border-sand-line bg-white px-3 py-3 sm:px-5">
+                <div className="shrink-0 border-b border-sand-line bg-white px-3 py-2 sm:px-5 sm:py-3">
                   <SectionNav
                     label={`${section?.label ?? ""} pages`}
                     activeHref={here.href}

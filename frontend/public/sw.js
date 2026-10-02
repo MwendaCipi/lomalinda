@@ -182,8 +182,14 @@
    the Music desk. On a phone a section's chips wrap into rows rather
    than slip past the strip's edge, reading their short names, so no
    page hides off-screen. Chrome changed, so installed apps must take
-   the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v47";
+   the new shell.
+
+   v48 — the announcements feed is one list again: the row of department
+   tabs that rode under the toggles is gone, and a post addressed to a
+   department or ministry wears that area's name on its card instead.
+   The Fellowship strip's first chip reads Announcements again. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v48";
 const STATIC_ASSETS = [
   "/",
   "/about/",

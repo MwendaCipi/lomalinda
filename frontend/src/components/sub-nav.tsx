@@ -26,6 +26,13 @@ export type SectionNavItem = SubNavItem & { href: string };
 const stripClass =
   "min-h-12 w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
+/** The section strip's phone layout once it is long enough to wrap anyway:
+ *  an equal-share grid, three across — Money Giving's six pages land as two
+ *  level rows of three instead of a wrap that follows each label's length.
+ *  Shorter strips keep the natural wrap, which still fits them on one row. */
+const sectionGridClass =
+  "grid min-h-12 w-full grid-cols-3 items-stretch gap-1.5 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
+
 const tabClass = (active: boolean) =>
   `flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition sm:flex-none ${
     active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
@@ -124,7 +131,8 @@ export function SubNav({
  * These are the rows that used to hang under a rail item: the same list, on
  * the page rather than hidden behind a caret in the sidebar. A phone shows
  * the same strip wrapped into rows — nothing rides out of sight — and a page
- * opens clean.
+ * opens clean. A strip long enough to wrap (Money Giving's six pages) shares
+ * the width equally instead, three chips a row.
  */
 export function SectionNav({
   items,
@@ -138,9 +146,14 @@ export function SectionNav({
   label: string;
   className?: string;
 }) {
+  // Three or fewer pages fit a phone on one natural row; from four up the
+  // strip wraps anyway, so it switches to the equal-share grid instead.
+  const phoneGrid = items.length > 3;
   return (
     <nav aria-label={label} className={className}>
-      <div className={`${stripClass} flex`}>
+      {/* The grid class carries its own display (`grid`, `sm:flex`); the
+          natural-wrap fallback still needs `flex` appended. */}
+      <div className={phoneGrid ? sectionGridClass : `${stripClass} flex`}>
         {items.map((item) => {
           const active = item.href === activeHref;
           return (
