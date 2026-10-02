@@ -621,15 +621,11 @@ export default function ReconciliationPage() {
                                       {g.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
-                                          Receipt sent
-                                        </span>
-                                      ) : g.giver_email ? (
-                                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                          Receipt pending
+                                          Sent
                                         </span>
                                       ) : (
-                                        <span className="rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
-                                          No email on file
+                                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                          Failed
                                         </span>
                                       )}
                                     </div>
@@ -667,9 +663,8 @@ export default function ReconciliationPage() {
                                   <th className="px-4 py-3">Date</th>
                                   <th className="px-4 py-3">Giver</th>
                                   <th className="px-4 py-3">Mode</th>
+                                  <th className="px-4 py-3">Receipt #</th>
                                   <th className="px-4 py-3">Receipt</th>
-                                  <th className="px-4 py-3 text-right">Amount</th>
-                                  <th className="px-4 py-3">Status</th>
                                   <th className="px-4 py-3 text-center">Actions</th>
                                 </tr>
                               </thead>
@@ -709,13 +704,9 @@ export default function ReconciliationPage() {
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Sent
                                           </span>
-                                        ) : g.giver_email ? (
-                                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                                            Pending
-                                          </span>
                                         ) : (
-                                          <span className="rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
-                                            No email on file
+                                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                            Failed
                                           </span>
                                         )}
                                       </td>
@@ -984,12 +975,8 @@ export default function ReconciliationPage() {
                                 )}
 
                                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-sand-soft">
-                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : giving.giver_email ? "text-ember" : "text-moss"}`}>
-                                    {giving.receipt_sent_at
-                                      ? "Receipt sent"
-                                      : giving.giver_email
-                                      ? "Receipt pending"
-                                      : "No email on file"}
+                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : "text-ember"}`}>
+                                    {giving.receipt_sent_at ? "Sent" : "Failed"}
                                   </span>
                                   <div className="flex items-center gap-2">
                                     {(giving.giver_phone || giving.giver_email) && (
@@ -1035,9 +1022,9 @@ export default function ReconciliationPage() {
                                   <th className="px-3 py-2.5 w-44 shrink-0">Giver</th>
                                   <th className="px-3 py-2.5 w-44 shrink-0">Account</th>
                                   <th className="px-3 py-2.5 w-24">Mode</th>
-                                  <th className="px-3 py-2.5 w-32">Receipt</th>
+                                  <th className="px-3 py-2.5 w-32">Receipt #</th>
                                   <th className="px-3 py-2.5 text-right w-28">Amount</th>
-                                  <th className="px-3 py-2.5 w-24">Status</th>
+                                  <th className="px-3 py-2.5 w-24">Receipt</th>
                                   <th className="px-3 py-2.5 text-center w-20">Actions</th>
                                 </tr>
                               </thead>
@@ -1071,15 +1058,11 @@ export default function ReconciliationPage() {
                                       {giving.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
-                                          Receipt sent
-                                        </span>
-                                      ) : giving.giver_email ? (
-                                        <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                          Pending
+                                          Sent
                                         </span>
                                       ) : (
-                                        <span className="inline-block rounded-full bg-sand-haze px-2 py-0.5 text-[10px] font-semibold text-moss">
-                                          No email on file
+                                        <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                          Failed
                                         </span>
                                       )}
                                     </td>

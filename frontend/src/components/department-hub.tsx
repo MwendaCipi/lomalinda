@@ -2490,6 +2490,10 @@ function DepartmentDetail({
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
   const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
+  // The strip names the view, and which unit's roll it reads: All and the
+  // unit fellowships read their roll, the rest name the view itself. This is
+  // what marks the active toggle in the merged strip.
+  const activeStripKey = subTab === "members" ? (unit === null ? "unit:null" : `unit:${unit}`) : subTab;
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -2744,54 +2748,34 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-        {/* A department that runs as units reads one at a time — the roll,
-            the calendar and the leadership all follow the toggle, so
-            Kindergarten and Pathfinders are two desks under one roof. */}
-        {units.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-sand-line pt-4">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-moss">Unit</span>
-            <div role="group" aria-label="Department unit" className="flex flex-wrap items-center gap-1.5">
-              {[{ value: null as string | null, label: "All" }, ...units.map((name) => ({ value: name as string | null, label: name }))].map((option) => {
-                const active = unit === option.value;
-                return (
-                  <button
-                    key={option.label}
-                    type="button"
-                    onClick={() => setUnit(option.value)}
-                    aria-pressed={active}
-                    className={`inline-flex h-8 items-center rounded-xl px-3 text-xs font-semibold transition ${
-                      active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
       {/* The department's own views, on the shared strip: the roll first, the
           calendar beside it. It pins to the top of the page, so the desk can
           switch views without scrolling back up past the table. */}
       <SubNav
         sticky
         label="Department views"
-        trailing={
-          !onRoll && !holdsOffice ? (
-            <button
-              type="button"
-              onClick={() => setShowJoin(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember"
-            >
-              <UserPlus className="h-3.5 w-3.5" /> Request to join
-            </button>
-          ) : null
-        }
         items={[
-          { key: "members", label: "Members", icon: Users },
+          // A department that runs as units reads one at a time — the roll and
+          // the calendar follow the toggle — so the units ride the top strip
+          // beside the views: All, then the desk's own fellowships (AMM and
+          // AWM read All · Young Couples · Single Parents · Calendar).
+          ...(units.length > 0
+            ? [{ key: "unit:null", label: "All", icon: Users }]
+            : []),
+          ...units.map((name) => ({
+            key: `unit:${name}` as string,
+            label: name,
+            icon: Users,
+          })),
+          // A desk without units keeps the roll named plainly; where units
+          // ride the strip, All is the whole roll and Members would say it
+          // twice.
+          ...(units.length === 0 ? [{ key: "members", label: "Members", icon: Users }] : []),
           // Music sings in more than one voice: the choir's own roll and the
           // groups registered under it each get a view beside the roll.
+          ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
+          ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+          { key: "calendar", label: "Calendar", icon: CalendarDays },
           ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
           ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
           { key: "calendar", label: "Calendar", icon: CalendarDays },
@@ -2802,8 +2786,17 @@ function DepartmentDetail({
           // Only the ministry that keeps the church's week carries its panel.
           ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
         ]}
-        value={subTab}
-        onChange={(key) => setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts")}
+        value={activeStripKey}
+        onChange={(key) => {
+          // A unit key selects the unit and lands the desk on its roll; a
+          // plain key is a view of the department as the strip held before.
+          if (key.startsWith("unit:")) {
+            setUnit(key === "unit:null" ? null : key.slice(5));
+            setSubTab("members");
+            return;
+          }
+          setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
+        }}
         className="-mx-2 md:-mx-4 lg:-mx-6"
       />
 
@@ -2960,13 +2953,16 @@ function DepartmentDetail({
               </table>
             )}
           </div>
-          {/* The bottom row: count on the left, Add Member on the right. */}
+          {/* The bottom row: count on the left, Add Member on the right — and
+              the ask to join beneath the table, where a member reading an
+              area they are not on the roll of meets it at the end of the
+              list, not as chrome above it. */}
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
             <p className="text-xs text-moss">
               {visibleRoll.length} {visibleRoll.length === 1 ? "person" : "people"}
               {rollQuery ? ` of ${rollRows.length}` : ""} shown · {roll.length} on the roll
             </p>
-            {canManageRoll && (
+            {canManageRoll ? (
               <button
                 type="button"
                 onClick={() => setShowAddMember(true)}
@@ -2974,7 +2970,15 @@ function DepartmentDetail({
               >
                 <UserPlus className="h-3.5 w-3.5" /> Add Member
               </button>
-            )}
+            ) : !onRoll && !holdsOffice ? (
+              <button
+                type="button"
+                onClick={() => setShowJoin(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Request to join
+              </button>
+            ) : null}
           </div>
         </div>
       )}

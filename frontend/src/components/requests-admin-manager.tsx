@@ -94,6 +94,18 @@ type AreaRequestRow = {
   created_at: string;
 };
 
+/** The deaconate desk's ask of the office: buy an item, or repair one. */
+type DeaconateRequestItem = {
+  id: number;
+  kind: "buy" | "repair";
+  item_name: string;
+  note?: string;
+  status: "pending" | "approved" | "rejected";
+  reply?: string;
+  requested_by_name?: string;
+  created_at: string;
+};
+
 /** The desks' own asks share the review states the office already reads. */
 function statusOfArea(status?: string): { status: string; statusLabel: string } {
   if (status === "pending") return { status: "pending", statusLabel: "Awaiting approval" };
@@ -103,7 +115,7 @@ function statusOfArea(status?: string): { status: string; statusLabel: string } 
 }
 
 /** Every request kind in one table, tagged by desk. */
-type RequestKind = "join" | "area" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer";
+type RequestKind = "join" | "area" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer" | "property";
 
 type UnifiedRow = {
   key: string;
@@ -128,6 +140,8 @@ type UnifiedRow = {
   transferId?: number;
   /** Only set on area rows: join an area / propose a singing group. */
   areaRequest?: AreaRequestRow;
+  /** Only set on property rows: the deaconate's buy/repair ask. */
+  property?: DeaconateRequestItem;
 };
 
 type KindFilter = "all" | RequestKind;
@@ -151,8 +165,9 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   visitation: { label: "Visitation", badge: "bg-sage/10 text-sage-bright" },
   dedication: { label: "Child dedications", badge: "bg-bark/10 text-bark" },
   welfare: { label: "Welfare & support", badge: "bg-gold-deep/10 text-gold-shadow" },
-  transfer: { label: "Membership requests", badge: "bg-moss/10 text-moss-mid" },
+  transfer: { label: "Membership transfer", badge: "bg-moss/10 text-moss-mid" },
   area: { label: "Area requests", badge: "bg-blue-50 text-blue-800" },
+  property: { label: "Property requests", badge: "bg-amber-50 text-amber-800" },
 };
 
 const JOINING_MODE_LABELS: Record<string, string> = {
@@ -208,6 +223,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [joinRequests, setJoinRequests] = useState<JoinItem[]>([]);
   const [transfers, setTransfers] = useState<TransferRow[]>([]);
   const [areaRequests, setAreaRequests] = useState<AreaRequestRow[]>([]);
+  const [deaconateRequests, setDeaconateRequests] = useState<DeaconateRequestItem[]>([]);
   // Department codes read as names in the queue — from the same directory
   // the members' own ask modal reads.
   const [areaLabels, setAreaLabels] = useState<Record<string, string>>({});
@@ -261,7 +277,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     setLoading(true);
     const headers = authHeaders();
     try {
-      const [jRes, pRes, vRes, dRes, sRes, tRes, aRes, dirRes] = await Promise.all([
+      const [jRes, pRes, vRes, dRes, sRes, tRes, aRes, dqRes, dirRes] = await Promise.all([
         fetch(`${API_URL}/api/members/enrollment-requests/`, { headers }),
         fetch(`${API_URL}/api/members/prayer-requests/`, { headers }),
         fetch(`${API_URL}/api/members/visitations/`, { headers }),
@@ -271,6 +287,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         // The desks' own asks — join an area, propose a singing group — from
         // the one review endpoint that also answers them.
         fetch(`${API_URL}/api/members/department-join-requests/review/`, { headers }),
+        // The deaconate desk's property asks — buy or repair — answered here.
+        fetch(`${API_URL}/api/members/deaconate-requests/review/`, { headers }),
         fetch(`${API_URL}/api/members/departments/`, { headers }),
       ]);
       setJoinRequests(jRes.ok ? await jRes.json() : []);
@@ -280,6 +298,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       setSupportSubmissions(sRes.ok ? await sRes.json() : []);
       setTransfers(tRes.ok ? await tRes.json() : []);
       setAreaRequests(aRes.ok ? (await aRes.json()).requests ?? [] : []);
+      setDeaconateRequests(dqRes.ok ? (await dqRes.json()).requests ?? [] : []);
       const dirData = dirRes.ok ? await dirRes.json() : { departments: [] };
       const labelMap: Record<string, string> = {};
       for (const d of (dirData?.departments ?? []) as { code: string; label: string }[]) labelMap[d.code] = d.label;
@@ -433,6 +452,46 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     }
   };
 
+  /** The office's answer to a property request: approve or decline. The
+      deaconate desk reads the answer as a notification either way. */
+  const handleReviewProperty = async (id: number, decision: "approved" | "rejected") => {
+    const confirmText = decision === "approved"
+      ? "Approve this property request? The desk takes the next step with the treasurer."
+      : "Decline this property request?";
+    const result = await showAlert(
+      "Property request",
+      confirmText,
+      "question",
+      { showCancelButton: true, confirmButtonText: decision === "approved" ? "Approve" : "Decline", cancelButtonText: "Cancel" }
+    );
+    if (!result.isConfirmed) return;
+    setReviewingId(`property-${id}`);
+    try {
+      const res = await fetch(`${API_URL}/api/members/deaconate-requests/${id}/`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      });
+      if (res.ok) {
+        showAlert(
+          decision === "approved" ? "Request approved" : "Request declined",
+          decision === "approved"
+            ? "The deaconate desk has your approval."
+            : "The request was declined.",
+          "success"
+        );
+        fetchAll();
+      } else {
+        const data = await res.json().catch(() => null);
+        showAlert("Review Failed", data?.detail || "Could not update the request.", "error");
+      }
+    } catch {
+      showAlert("Network Error", "Could not reach the server.", "error");
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   // ── One table out of every ledger, newest first. ─────────────────────────
   const rows: UnifiedRow[] = useMemo(() => {
     const joinRows: UnifiedRow[] = joinRequests.map((item) => {
@@ -522,6 +581,23 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       };
     });
 
+    const propertyRows: UnifiedRow[] = deaconateRequests.map((item) => ({
+      key: `property-${item.id}`,
+      kind: "property",
+      title: item.item_name,
+      contact: item.requested_by_name || "Deaconate desk",
+      summary:
+        item.kind === "repair"
+          ? `Repairs to ${item.item_name}`
+          : `The deaconate asks to buy ${item.item_name}`,
+      meta: item.note || undefined,
+      status: item.status,
+      statusLabel: statusOfArea(item.status).statusLabel,
+      created_at: item.created_at,
+      reviewable: item.status === "pending",
+      property: item,
+    }));
+
     const areaRows: UnifiedRow[] = areaRequests.map((item) => {
       const { status, statusLabel } = statusOfArea(item.status);
       const isGroup = item.kind === "singing_group";
@@ -543,10 +619,10 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       };
     });
 
-    return [...joinRows, ...areaRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
+    return [...joinRows, ...areaRows, ...propertyRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
       (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }, [joinRequests, areaRequests, areaLabels, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
+  }, [joinRequests, areaRequests, deaconateRequests, areaLabels, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
 
   // A link from a request notification arrives as ?request=<kind>-<id>. The
   // filters are moved to that row once the ledgers have loaded, and only once,
@@ -652,7 +728,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     { value: "visitation", label: "Visitation" },
     { value: "dedication", label: "Child dedications" },
     { value: "welfare", label: "Welfare & support" },
-    { value: "transfer", label: "Membership requests" },
+    { value: "transfer", label: "Membership transfer" },
+    { value: "property", label: "Property requests" },
   ];
 
   const activeFilterLabel = activeTab === "all" ? "All requests" : KIND_META[activeTab].label;
@@ -943,6 +1020,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         </button>
                       </>
                     )}
+                    {row.property && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewProperty(row.property!.id, "approved")}
+                          className="rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === row.key}
+                          onClick={() => handleReviewProperty(row.property!.id, "rejected")}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <X size={12} className="inline" aria-hidden="true" /> Reject
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </td>
@@ -1030,6 +1127,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         type="button"
                         disabled={reviewingId === row.key}
                         onClick={() => handleReviewTransfer(row.transferId!, "cancelled")}
+                        className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <X size={12} className="inline" aria-hidden="true" /> Reject
+                      </button>
+                    </>
+                  )}
+                  {row.property && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewProperty(row.property!.id, "approved")}
+                        className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewProperty(row.property!.id, "rejected")}
                         className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         <X size={12} className="inline" aria-hidden="true" /> Reject

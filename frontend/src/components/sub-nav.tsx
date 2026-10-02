@@ -27,7 +27,7 @@ const stripClass =
   "min-h-12 w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
 /** The section strip's phone layout once it is long enough to wrap anyway:
- *  an equal-share grid, three across — Money Giving's six pages land as two
+ *  an equal-share grid, three across — Giving's six pages land as two
  *  level rows of three instead of a wrap that follows each label's length.
  *  Shorter strips keep the natural wrap, which still fits them on one row. */
 const sectionGridClass =
@@ -131,7 +131,7 @@ export function SubNav({
  * These are the rows that used to hang under a rail item: the same list, on
  * the page rather than hidden behind a caret in the sidebar. A phone shows
  * the same strip wrapped into rows — nothing rides out of sight — and a page
- * opens clean. A strip long enough to wrap (Money Giving's six pages) shares
+ * opens clean. A strip long enough to wrap (Giving's six pages) shares
  * the width equally instead, three chips a row.
  */
 export function SectionNav({

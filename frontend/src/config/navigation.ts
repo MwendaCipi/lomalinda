@@ -230,7 +230,7 @@ export const destinations = {
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
     area: "stewardship",
-    // The section reads as "Money Giving" on the bars — except Ideas, which
+    // The section reads as Giving on the bars — except Ideas, which
     // belongs to Fellowship. Campaigns is deliberately absent: a fund drive
     // is Fund Drives' page, and claiming it here would keep the highlight
     // away from its own row.
@@ -519,11 +519,12 @@ export const eldershipItems: RailRow[] = [
   officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
 ];
 
-/** The deaconate: the church's property, its duty and its ordinances. */
+/** The deaconate: the church's property, its duty and its ordinances. The
+ *  team leads the strip — a desk is its people before its things. */
 export const deaconateItems: RailRow[] = [
+  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES, short: "Team" }),
   officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
   officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
-  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES, short: "Team" }),
   officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES, short: "Calendar" }),
 ];
 
@@ -576,7 +577,7 @@ export const treasuryItems: RailRow[] = [
     href: "/administration/fund-drives",
     label: "Fund Drives",
     // The rail row reads Fund Drives at every width; the phone's strip chip
-    // shortens to Drives, as the member's Money Giving strip does.
+    //    shortens to Drives, as the member's Giving strip does.
     short: "Drives",
     icon: Target,
     match: ["/administration/fund-drives"],
@@ -612,10 +613,9 @@ export const railEntries: RailEntry[] = [
   },
   { label: "Materials", icon: BookOpen, items: [page("materials")] },
   {
-    label: "Money Giving",
+    label: "Giving",
     icon: HandHeart,
-    // The rail's row keeps its own name — Giving — while the strip's heading
-    // above it reads Money Giving; `page` copies the registry label, so the
+    // The rail's row reads Giving; `page` copies the registry label, so the
     // one row is overridden here. The strip's phone chip reads Money: six
     // chips share a phone's width, and the leading "Money" is what tells
     // this row of the strip apart from In-Kind's.
@@ -643,10 +643,10 @@ export const railEntries: RailEntry[] = [
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
   // treasurer's has always stood on its own. The register and the meetings'
-  // minutes are the clerk's row, so they are back on a Clerkship of their
+  // minutes are the clerk's row, so they are back on a desk of their own
   // own rather than folded into the elders' strip.
-  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
-  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
+  { label: "Elder's Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
+  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
   // The church's music. One page, not two: the desk opens straight onto its
@@ -711,10 +711,10 @@ export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
   "Materials": "my-church",
-  "Money Giving": "my-church",
+  "Giving": "my-church",
   "Requests": "my-church",
-  "Eldership": "ministry",
-  "Clerkship": "ministry",
+  "Elder's Desk": "ministry",
+  "Clerk's Desk": "ministry",
   "Treasury": "ministry",
   "Deaconate": "ministry",
 };

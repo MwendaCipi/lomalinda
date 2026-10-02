@@ -95,10 +95,6 @@ export function LiveReportsPanel() {
           </p>
         )}
       </div>
-      <p className="text-sm text-moss">
-        Live balances of the church&apos;s treasury accounts, refreshed every 30 seconds. Support any
-        account to give straight to it.
-      </p>
       <div className="relative sm:max-w-xs">
         <Search
           className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss-faint2"

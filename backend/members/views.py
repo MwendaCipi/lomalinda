@@ -42,7 +42,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
-from .models import DEFAULT_DEPARTMENT_ROLES, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -8932,4 +8932,156 @@ class DepartmentWithdrawalReviewView(APIView):
             )
         except Exception:
             pass
+        return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
+
+
+class DeaconateRequestView(APIView):
+    """The deaconate's asks of the office: to buy an item, or to repair one.
+
+    POST raises one — the deaconate's leadership only (the desk's own
+    ``can_manage_department`` gate, so the Head Deacon, the Head Deaconess
+    and the office). GET reads this member's own asks; the review desk
+    reads them all at DeaconateRequestReviewView.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = DeaconateRequest.objects.filter(requested_by=request.user)
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'kind': row.kind,
+                    'item_name': row.item_name,
+                    'note': row.note,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                    'reviewed_at': row.reviewed_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def post(self, request):
+        if not can_manage_department(request.user, 'deaconate'):
+            return Response(
+                {'detail': 'Only the deaconate leadership or the office can raise a property request.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        kind = str(request.data.get('kind')) or 'buy'
+        if kind not in ('buy', 'repair'):
+            return Response({'kind': 'Ask to buy an item or to repair one.'}, status=status.HTTP_400_BAD_REQUEST)
+        item_name = str(request.data.get('item_name') or '').strip()
+        if len(item_name) < 2:
+            return Response({'item_name': 'Name the item — at least two characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        row = DeaconateRequest.objects.create(
+            requested_by=request.user,
+            kind=kind,
+            item_name=item_name[:200],
+            note=str(request.data.get('note') or '').strip()[:1000],
+        )
+        # The ask lands with the church's offices — the people who answer
+        # for the church's money. The clerk rides along: the register and
+        # the correspondence are the clerk's hands.
+        audience_ids = set(
+            User.objects.filter(
+                Q(member_profile__role__in=['admin', 'pastor', 'elder']) | Q(member_profile__role='clerk'),
+                is_active=True,
+            ).values_list('id', flat=True)
+        )
+        audience_ids.discard(request.user.id)
+        audience = User.objects.filter(id__in=audience_ids, is_active=True)
+        desk_link = f'{settings.FRONTEND_URL}/administration?tab=requests'
+        ask = 'repairs to' if kind == 'repair' else 'the purchase of'
+        subject = f'Property request from the deaconate: {row.item_name}'
+        body = (
+            f"{request.user.get_full_name() or request.user.get_username()} has asked for "
+            f"{ask} {row.item_name}. Open the requests desk to respond: {desk_link}"
+        )
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
+            for person in audience
+        ])
+        try:
+            send_mail(
+                subject, body, settings.DEFAULT_FROM_EMAIL,
+                [u.email for u in audience if u.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+        return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent.'}, status=status.HTTP_201_CREATED)
+
+
+class DeaconateRequestReviewView(APIView):
+    """The office's answer to the deaconate's property asks.
+
+    GET reads the ledger for whoever answers requests today (the offices;
+    the deaconate's leadership may read the state of their own asks).
+    PATCH answers one — approve or decline, with a note the desk reads
+    back. Approving records the decision; the purchase or repair itself
+    stays the treasurer's ledger's business.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = department_office_profile(request.user)
+        if not profile and not can_manage_department(request.user, 'deaconate'):
+            return Response({'requests': []})
+        rows = DeaconateRequest.objects.select_related('requested_by', 'reviewed_by')
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'kind': row.kind,
+                    'item_name': row.item_name,
+                    'note': row.note,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'requested_by': row.requested_by_id,
+                    'requested_by_name': (
+                        f"{row.requested_by.first_name} {row.requested_by.last_name}".strip()
+                        or row.requested_by.get_username()
+                    ),
+                    'created_at': row.created_at,
+                    'reviewed_at': row.reviewed_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def patch(self, request, pk):
+        if not department_office_profile(request.user):
+            return Response(
+                {'detail': 'Only the church offices can answer property requests.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        row = DeaconateRequest.objects.select_related('requested_by').filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'Unknown request.'}, status=status.HTTP_404_NOT_FOUND)
+        decision = str(request.data.get('status') or '')
+        if decision not in ('approved', 'rejected'):
+            return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+        row.status = decision
+        row.reply = str(request.data.get('reply') or '').strip()[:500]
+        row.reviewed_by = request.user
+        row.reviewed_at = timezone.now()
+        row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+        approved = decision == 'approved'
+        verb = 'approved' if approved else 'declined'
+        title = f'Your {row.get_kind_display().lower()} request for {row.item_name} was {verb}'
+        message = row.reply or (
+            'The office has approved it — take the next step with the treasurer.'
+            if approved
+            else 'The office could not take it on this time.'
+        )
+        ChurchNotification.objects.create(
+            user=row.requested_by,
+            title=title,
+            message=message,
+            link=f'{settings.FRONTEND_URL}/administration?tab=inventory',
+        )
         return Response({'id': row.id, 'status': row.status, 'reply': row.reply})

@@ -2128,7 +2128,7 @@ export function UserManagement() {
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {/* ── Header ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:px-6">
+      <div className="flex shrink-0 flex-col gap-1.5 border-b border-sand-line px-5 pb-4 pt-2 sm:px-6">
         {/* Top row: the way back and the desk's name. */}
         <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span className="flex items-center gap-1">

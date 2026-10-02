@@ -14,6 +14,7 @@ import {
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
 
@@ -178,6 +179,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  // The desk's ask of the office: to buy an item, or to repair one. Raised
+  // by the desk's leadership, answered at the requests desk.
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestKind, setRequestKind] = useState<"buy" | "repair">("buy");
+  const [requestItem, setRequestItem] = useState("");
+  const [requestNote, setRequestNote] = useState("");
+  const [sendingRequest, setSendingRequest] = useState(false);
 
   const [newItem, setNewItem] = useState(emptyItemForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
@@ -322,6 +330,35 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       showAlert("Movement not recorded", "Check your connection and try again.", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Raise a buy/repair ask of the office; the desk's leadership only —
+      the endpoint refuses anyone else, so the button rides for managers. */
+  const sendPropertyRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item = requestItem.trim();
+    if (item.length < 2 || sendingRequest) return;
+    setSendingRequest(true);
+    try {
+      const res = await apiFetch("/deaconate-requests/", {
+        method: "POST",
+        body: JSON.stringify({ kind: requestKind, item_name: item, note: requestNote.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Request not sent", data.detail || firstErrorMessage(data) || "The request could not be sent.", "error");
+        return;
+      }
+      setShowRequestModal(false);
+      setRequestItem("");
+      setRequestNote("");
+      setRequestKind("buy");
+      showAlert("Request sent", data.detail || "The office has your property request.", "success");
+    } catch {
+      showAlert("Request not sent", "Check your connection and try again.", "error");
+    } finally {
+      setSendingRequest(false);
     }
   };
 
@@ -510,6 +547,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
             </p>
             <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
               <button
+                onClick={() => setShowRequestModal(true)}
+                className="rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand"
+              >
+                Send request
+              </button>
+              <button
                 onClick={() => { setNewItem(emptyItemForm); setShowAddModal(true); }}
                 className="flex-1 sm:flex-none rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember"
               >
@@ -575,22 +618,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         </div>
       )}
 
-      {/* ── TAB: DEACONATE ROSTER ── */}
-      {activeTab === "members" && (
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
-          <div className="flex items-center gap-1">
-            <BackToOverviewArrow />
-            {/* Named by the strip above on a wide screen. */}
-            <div className="md:hidden">
-              <h2 className="text-base font-bold text-bark">Deaconate Board Roster</h2>
-              <p className="text-xs text-moss">Active ordained deacons &amp; deaconesses responsible for church property, ushering, and sanctuary logistics.</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-            No deaconate members have been recorded yet.
-          </div>
-        </div>
-      )}
+      {/* ── TAB: DEACONATE TEAM ── */}
+      {/* The whole department machinery, pointed at the deaconate: the Head
+          Deacon and Head Deaconess lead the page as the department's board,
+          the roll reads the same endpoint every other desk reads, and Add
+          member — batch picking included — works exactly as the other
+          departments' rolls do. */}
+      {activeTab === "members" && <DepartmentHub initialDept="deaconate" />}
 
       {/* ── TAB: CALENDAR & ORDINANCES ── */}
       {activeTab === "calendar" && (
@@ -605,6 +639,86 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           </div>
           <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
             No deaconate events have been recorded yet.
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SEND PROPERTY REQUEST (buy / repair) */}
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">Send a Property Request</h3>
+              <button onClick={() => setShowRequestModal(false)} className="text-moss hover:text-bark">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-moss">
+              Ask the offices to buy an item or to repair one. The answer comes back to the desk.
+            </p>
+            <form onSubmit={sendPropertyRequest} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-bark">Request type</label>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  {([
+                    { value: "buy", label: "Buy an item" },
+                    { value: "repair", label: "Repair an item" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setRequestKind(option.value)}
+                      aria-pressed={requestKind === option.value}
+                      className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        requestKind === option.value
+                          ? "bg-bark text-white shadow-sm"
+                          : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-bark">Item *</label>
+                <input
+                  type="text"
+                  required
+                  minLength={2}
+                  placeholder={requestKind === "repair" ? "e.g. Sony Projector 4K — the sanctuary one" : "e.g. Two cordless microphones"}
+                  value={requestItem}
+                  onChange={(e) => setRequestItem(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-bark">Details</label>
+                <textarea
+                  rows={3}
+                  placeholder="What is needed and why — quantity, quote, room…"
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRequestModal(false)}
+                  className="rounded-xl border border-sand-line px-4 py-2 font-semibold text-moss transition hover:bg-sand"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingRequest || requestItem.trim().length < 2}
+                  className="rounded-xl bg-ember px-4 py-2 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-50"
+                >
+                  {sendingRequest ? "Sending..." : "Send request"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

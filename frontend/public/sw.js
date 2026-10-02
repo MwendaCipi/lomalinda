@@ -188,8 +188,21 @@
    tabs that rode under the toggles is gone, and a post addressed to a
    department or ministry wears that area's name on its card instead.
    The Fellowship strip's first chip reads Announcements again. Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v48";
+   changed, so installed apps must take the new shell.
+
+   v49 — the rail's two office rows read Elder's Desk and Clerk's Desk,
+   and the contributions ledger's status column reads Receipt: a giving
+   says Sent, or Failed while its receipt has not gone out. On AMM and
+   AWM the unit toggles ride the top strip — All · Young Couples · Single
+   Parents · Calendar — and the ask to join waits under the roll instead
+   of above it. The requests desk's membership row reads Membership
+   transfer, and the deaconate's strip leads with its own team — the
+   whole department desk, the same add-member hands as every other
+   roll — and asks the office for property by a Send request button:
+   to buy an item, or to repair one, answered at the requests desk.
+   The giving row reads Giving. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v49";
 const STATIC_ASSETS = [
   "/",
   "/about/",

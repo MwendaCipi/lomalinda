@@ -482,6 +482,46 @@ class DepartmentJoinRequest(models.Model):
         return f"{self.member.get_username()} → {self.department} ({self.get_kind_display()})"
 
 
+class DeaconateRequest(models.Model):
+    """The deaconate's own ask to the office: to buy an item, or to repair one.
+
+    The desk keeps the church's property register; when the register needs a
+    new entry or an old one needs work, the deaconate's leadership raises a
+    request here instead of a phone call. It lands with the church's offices
+    — the people who answer for the church's money — and the answer, with
+    its note, is what the desk reads back.
+    """
+
+    KIND_CHOICES = [
+        ('buy', 'Buy an item'),
+        ('repair', 'Repair an item'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Declined'),
+    ]
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='deaconate_requests'
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='buy')
+    item_name = models.CharField(max_length=200, help_text="The property to buy, or the item that needs repair")
+    note = models.TextField(blank=True, help_text="What is needed and why — quantity, quote, room")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reply = models.TextField(blank=True, help_text="The answer the office sends back to the desk")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='deaconate_requests_reviewed'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.item_name} — {self.requested_by.get_username()} ({self.status})"
+
+
 class SingingGroup(models.Model):
     """A singing group registered under the church's music ministry.
 
