@@ -49,6 +49,7 @@ echo "📌 Expecting ${EXPECTED_COMMIT:0:7} to land on the server."
 echo "🌐 Connecting to Hetzner Server (${SERVER_USER}@${SERVER_HOST}:${SERVER_PORT})..."
 ssh -p "$SERVER_PORT" "${SERVER_USER}@${SERVER_HOST}" bash -s -- "$EXPECTED_COMMIT" << 'EOF'
 set -euo pipefail
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 EXPECTED="$1"
 PROJECT_DIR="/var/www/loma_linda"
