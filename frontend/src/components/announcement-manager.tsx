@@ -302,8 +302,8 @@ export function AnnouncementManager({
   const [form, setForm] = useState({
     title: "",
     text: "",
-    // Church announcements default to the congregation, not the wider web.
-    visibility: "members_only",
+    // Church announcements default to all users so they reach the widest audience.
+    visibility: "all",
     // Communicate-from-a-department opens the composer already addressed.
     audience: (presetAudience ?? []) as string[],
     // The kind of post decides which special fields the form shows: a plain
@@ -478,7 +478,7 @@ export function AnnouncementManager({
     setForm({
       title: "",
       text: "",
-      visibility: "members_only",
+      visibility: "all",
       audience: (presetAudience ?? []) as string[],
       announcement_type: "awareness",
       action_type: "none",
@@ -512,8 +512,9 @@ export function AnnouncementManager({
       showAlert("Missing Sharing Option", err, "error");
       return;
     }
-    if (form.text.length > ANNOUNCEMENT_TEXT_LIMIT) {
-      const err = `Announcement text must be ${ANNOUNCEMENT_TEXT_LIMIT} characters or fewer (currently ${form.text.length}).`;
+    const textLength = form.text.replace(/\r\n/g, "\n").length;
+    if (textLength > ANNOUNCEMENT_TEXT_LIMIT) {
+      const err = `Announcement text must be ${ANNOUNCEMENT_TEXT_LIMIT} characters or fewer (currently ${textLength}).`;
       setMessage(err);
       showAlert("Announcement Too Long", err, "error");
       return;
@@ -784,16 +785,16 @@ export function AnnouncementManager({
                       rows={3}
                       maxLength={ANNOUNCEMENT_TEXT_LIMIT}
                       value={form.text}
-                      onChange={(e) => setForm({ ...form, text: e.target.value })}
+                      onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
                       placeholder="Ask the question members will answer, e.g. Will you join the choir's visit to Nkubu?"
                       className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                     />
                     <span
                       className={`mt-1 block text-right text-[10px] font-semibold ${
-                        form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-moss"
+                        form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
                       }`}
                     >
-                      {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
+                      {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
                     </span>
                   </label>
                   <label className="block text-xs font-semibold text-bark">
@@ -930,7 +931,7 @@ export function AnnouncementManager({
                     rows={4}
                     maxLength={ANNOUNCEMENT_TEXT_LIMIT}
                     value={form.text}
-                    onChange={(e) => setForm({ ...form, text: e.target.value })}
+                    onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
                     placeholder="Write full announcement content..."
                     className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
@@ -941,10 +942,10 @@ export function AnnouncementManager({
                   )}
                   <span
                     className={`mt-1 block text-right text-[10px] font-semibold ${
-                      form.text.length > ANNOUNCEMENT_TEXT_LIMIT ? "text-red-600" : "text-moss"
+                      form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
                     }`}
                   >
-                    {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT}
+                    {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
                   </span>
                 </label>
               )}

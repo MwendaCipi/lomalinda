@@ -547,9 +547,10 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     def validate_text(self, value):
         # Keep in sync with ANNOUNCEMENT_TEXT_LIMIT in announcement-manager.tsx
         # so long posts are rejected at the API even if a client skips the check.
-        if len(value) > 500:
+        normalized = (value or '').replace('\r\n', '\n')
+        if len(normalized) > 500:
             raise serializers.ValidationError('Announcement text must be 500 characters or fewer.')
-        return value
+        return normalized
 
     def validate_audience(self, value):
         codes = value or []
