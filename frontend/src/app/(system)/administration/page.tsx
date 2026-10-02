@@ -96,6 +96,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
 function AdministrationContent() {
   const searchParams = useSearchParams();
   const searchTab = searchParams.get("tab");
+  const searchView = searchParams.get("view");
   // The unanswered-request count, shared with the sidebar so the phone card
   // and the desktop rail can never disagree about the number.
   const pendingRequests = usePendingRequestCounts();
@@ -695,7 +696,12 @@ function AdministrationContent() {
             {/* Treasury Accounts Manager */}
             {activeTab === "accounts" && isFinance && (
               <div className="h-full min-h-0">
-                <TreasuryAccountsManager initialView={searchTab === "expenditures" ? "expenditure" : undefined} />
+                <TreasuryAccountsManager
+                  initialView={
+                    (searchView as "accounts" | "income" | "expenditure" | "withdrawals") ||
+                    (searchTab === "expenditures" ? "expenditure" : undefined)
+                  }
+                />
               </div>
             )}
 

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, Fragment, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { usePageHeader } from "@/components/app-frame";
@@ -89,6 +90,17 @@ export default function ReconciliationPage() {
   const [message, setMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const searchParams = useSearchParams();
+  const modeParam = searchParams.get("mode");
+
+  useEffect(() => {
+    if (modeParam === "summary") {
+      setViewMode("summary");
+    } else if (modeParam === "all_givings") {
+      setViewMode("all_givings");
+    }
+  }, [modeParam]);
+
   const { setHeaderRightAction, setCustomToggles } = usePageHeader();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -105,6 +117,26 @@ export default function ReconciliationPage() {
   const [contactModalGiver, setContactModalGiver] = useState<IndividualGiving | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
+
+  const headers = useCallback(() => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` }), []);
+
+  const loadAllGivings = useCallback(async (fDate = fromDate, tDate = toDate) => {
+    setLoadingAllGivings(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}`,
+        { headers: headers() }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setAllGivingsList(data);
+      }
+    } catch {
+      // Ignore fetch errors
+    } finally {
+      setLoadingAllGivings(false);
+    }
+  }, [fromDate, toDate, headers]);
 
   // Position search bar and date range pickers to the RIGHT of the page header title & description
   useEffect(() => {
@@ -143,51 +175,66 @@ export default function ReconciliationPage() {
     );
   }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
 
-  // Keep all toggles in ONE single row below the header (no double rows of toggles)
+  // Keep all 6 treasury toggles as separate normal toggles in one row
   useEffect(() => {
+    const getToggleCls = (active: boolean) =>
+      `rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
+        active
+          ? "bg-bark text-white border-bark shadow-sm"
+          : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
+      }`;
+
     setCustomToggles(
-      <div className="flex items-center gap-2">
-        <div className="flex rounded-xl border border-sand-mute bg-sand p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => {
-              setExpandedPurpose(null);
-              setViewMode("all_givings");
-              loadAllGivings();
-            }}
-            aria-pressed={viewMode === "all_givings"}
-            className={`rounded-lg px-3.5 py-1.5 font-semibold transition ${
-              viewMode === "all_givings"
-                ? "bg-bark text-white shadow-sm"
-                : "text-moss hover:text-bark"
-            }`}
-          >
-            Individual Givings
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setViewMode("summary");
-            }}
-            aria-pressed={viewMode === "summary"}
-            className={`rounded-lg px-3.5 py-1.5 font-semibold transition ${
-              viewMode === "summary"
-                ? "bg-white text-bark shadow-sm"
-                : "text-moss hover:text-bark"
-            }`}
-          >
-            Summary Contributions
-          </button>
-        </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedPurpose(null);
+            setViewMode("all_givings");
+            loadAllGivings();
+          }}
+          aria-pressed={viewMode === "all_givings"}
+          className={getToggleCls(viewMode === "all_givings")}
+        >
+          Individual Givings
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setViewMode("summary");
+          }}
+          aria-pressed={viewMode === "summary"}
+          className={getToggleCls(viewMode === "summary")}
+        >
+          Summary Contributions
+        </button>
         <Link
-          href="/administration/accounts"
-          className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark transition hover:bg-sand"
+          href="/administration?tab=accounts&view=accounts"
+          className={getToggleCls(false)}
         >
           Church Accounts
         </Link>
+        <Link
+          href="/administration?tab=accounts&view=income"
+          className={getToggleCls(false)}
+        >
+          Income
+        </Link>
+        <Link
+          href="/administration?tab=accounts&view=expenditure"
+          className={getToggleCls(false)}
+        >
+          Expenses
+        </Link>
+        <Link
+          href="/administration?tab=accounts&view=withdrawals"
+          className={getToggleCls(false)}
+        >
+          Requests
+        </Link>
       </div>
     );
-  }, [setCustomToggles, viewMode]);
+  }, [setCustomToggles, viewMode, loadAllGivings]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -201,8 +248,6 @@ export default function ReconciliationPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeActionMenuId]);
-
-  const headers = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` });
 
   // After the shared Add Receipt modal saves, refresh the ledgers and show
   // the honest delivery feedback line (same banner as before the extraction).
@@ -233,24 +278,6 @@ export default function ReconciliationPage() {
     // reloads batched both updates and the delivery feedback never rendered.
     setMessage(deliveryMessage);
   }
-
-  const loadAllGivings = async (fDate = fromDate, tDate = toDate) => {
-    setLoadingAllGivings(true);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}`,
-        { headers: headers() }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAllGivingsList(data);
-      }
-    } catch {
-      // Ignore fetch errors
-    } finally {
-      setLoadingAllGivings(false);
-    }
-  };
 
   async function load(fDate = fromDate, tDate = toDate) {
     setMessage("");

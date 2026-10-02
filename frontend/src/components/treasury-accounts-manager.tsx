@@ -221,6 +221,12 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
   // first — it is what the desk visits for.
   const router = useRouter();
   const [view, setView] = useState<"accounts" | "income" | "expenditure" | "withdrawals">(initialView ?? "accounts");
+
+  useEffect(() => {
+    if (initialView) {
+      setView(initialView);
+    }
+  }, [initialView]);
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
   const rowPad = densityCellPad();
@@ -642,27 +648,68 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
             <span className="lg:hidden">
               <BackToOverviewArrow />
             </span>
-            {/* The views, as one segmented toggle — the Contributions
-                Ledger's own shape: chips riding inside a single sand pill. */}
-            <div className="flex min-w-0 flex-1 rounded-xl border border-sand-mute bg-sand p-1">
-              {([
-                { key: "accounts", label: "Church Accounts" },
-                { key: "income", label: "Income" },
-                { key: "expenditure", label: "Expenditure" },
-                { key: "withdrawals", label: "Requests" },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setView(tab.key)}
-                  aria-pressed={view === tab.key}
-                  className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
-                    view === tab.key ? "bg-bark text-white shadow-sm" : "text-moss hover:text-bark"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            {/* The treasury views as individual normal toggles in one row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/administration/reconciliation?mode=all_givings"
+                className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark hover:bg-sand transition"
+              >
+                Individual Givings
+              </Link>
+              <Link
+                href="/administration/reconciliation?mode=summary"
+                className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark hover:bg-sand transition"
+              >
+                Summary Contributions
+              </Link>
+              <button
+                type="button"
+                onClick={() => setView("accounts")}
+                aria-pressed={view === "accounts"}
+                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  view === "accounts"
+                    ? "bg-bark text-white border-bark shadow-sm"
+                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
+                }`}
+              >
+                Church Accounts
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("income")}
+                aria-pressed={view === "income"}
+                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  view === "income"
+                    ? "bg-bark text-white border-bark shadow-sm"
+                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
+                }`}
+              >
+                Income
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("expenditure")}
+                aria-pressed={view === "expenditure"}
+                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  view === "expenditure"
+                    ? "bg-bark text-white border-bark shadow-sm"
+                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
+                }`}
+              >
+                Expenses
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("withdrawals")}
+                aria-pressed={view === "withdrawals"}
+                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  view === "withdrawals"
+                    ? "bg-bark text-white border-bark shadow-sm"
+                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
+                }`}
+              >
+                Requests
+              </button>
             </div>
           </div>
 
