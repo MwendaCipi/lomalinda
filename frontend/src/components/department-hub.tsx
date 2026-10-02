@@ -13,7 +13,7 @@
  * server-side, so permissions and audiences follow without a second save.
  */
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { brand } from "@/lib/brand";
 import {
   Accessibility,
@@ -2767,7 +2767,7 @@ function DepartmentDetail({
 
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
-  const { setHeaderRightAction } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
   useEffect(() => {
     const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
     if (subTab === "members") {
@@ -2795,6 +2795,57 @@ function DepartmentDetail({
     }
     return () => setHeaderRightAction(null);
   }, [subTab, rollSearch, eventSearch, setHeaderRightAction]);
+
+  // The desk's own views — the roll (and its fellowships), the calendar, the
+  // fund, the week — ride the shell's header band, exactly as the console's
+  // other desks place their toggles, so every desk reads one strip in one
+  // place. The band draws it instead of the section's pages.
+  const unitsKey = units.join("|");
+  const stripItems = useMemo(() => {
+    const names = unitsKey ? unitsKey.split("|") : [];
+    return [
+      // A department that runs as units reads one at a time — the roll and
+      // the calendar follow the toggle — so the units ride the strip beside
+      // the views: All, then the desk's own fellowships (AMM and AWM read
+      // All · Young Couples · Single Parents · Calendar).
+      ...(names.length > 0
+        ? [{ key: "unit:null", label: department.code === "amm" || department.code === "awm" ? "All members" : "All", icon: Users }]
+        : []),
+      ...names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })),
+      // A desk without units keeps the roll named plainly; where units ride
+      // the strip, All is the whole roll and Members would say it twice.
+      ...(names.length === 0 ? [{ key: "members", label: "Members", icon: Users }] : []),
+      // Music sings in more than one voice: the choir's own roll and the
+      // groups registered under it each get a view beside the roll.
+      ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
+      ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+      { key: "calendar", label: "Calendar", icon: CalendarDays },
+      // Every desk reads its own fund when the treasurer has opened one.
+      { key: "accounts", label: "Accounts", icon: Wallet },
+      // Only the ministry that keeps the church's week carries its panel.
+      ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
+    ];
+  }, [unitsKey, isMusic, keepsTheWeek, department.code]);
+  const handleStripChange = useCallback((key: string) => {
+    // A unit key selects the unit and lands the desk on its roll; a plain key
+    // is a view of the department as the strip held before.
+    if (key.startsWith("unit:")) {
+      setUnit(key === "unit:null" ? null : key.slice(5));
+      setSubTab("members");
+      return;
+    }
+    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
+  }, []);
+  useEffect(() => {
+    if (isDeaconate) {
+      setCustomToggles(null);
+      return;
+    }
+    setCustomToggles(
+      <SubNav label="Department views" items={stripItems} value={activeStripKey} onChange={handleStripChange} />
+    );
+    return () => setCustomToggles(null);
+  }, [setCustomToggles, isDeaconate, stripItems, activeStripKey, handleStripChange]);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
@@ -3043,57 +3094,6 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-
-      {/* The department's own views, on the shared strip: the roll first, the
-          calendar beside it. It pins to the top of the page, so the desk can
-          switch views without scrolling back up past the table. */}
-      {!isDeaconate && (
-      <SubNav
-        sticky
-        label="Department views"
-        items={[
-          // A department that runs as units reads one at a time — the roll and
-          // the calendar follow the toggle — so the units ride the top strip
-          // beside the views: All, then the desk's own fellowships (AMM and
-          // AWM read All · Young Couples · Single Parents · Calendar).
-          ...(units.length > 0
-            ? [{ key: "unit:null", label: department.code === "amm" || department.code === "awm" ? "All members" : "All", icon: Users }]
-            : []),
-          ...units.map((name) => ({
-            key: `unit:${name}` as string,
-            label: name,
-            icon: Users,
-          })),
-          // A desk without units keeps the roll named plainly; where units
-          // ride the strip, All is the whole roll and Members would say it
-          // twice.
-          ...(units.length === 0 ? [{ key: "members", label: "Members", icon: Users }] : []),
-          // Music sings in more than one voice: the choir's own roll and the
-          // groups registered under it each get a view beside the roll.
-          ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
-          ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
-          { key: "calendar", label: "Calendar", icon: CalendarDays },
-          // Every desk reads its own fund when the treasurer has opened one:
-          // the contributions that built it, and the withdrawal the desk's
-          // leadership may ask of it.
-          { key: "accounts", label: "Accounts", icon: Wallet },
-          // Only the ministry that keeps the church's week carries its panel.
-          ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
-        ]}
-        value={activeStripKey}
-        onChange={(key) => {
-          // A unit key selects the unit and lands the desk on its roll; a
-          // plain key is a view of the department as the strip held before.
-          if (key.startsWith("unit:")) {
-            setUnit(key === "unit:null" ? null : key.slice(5));
-            setSubTab("members");
-            return;
-          }
-          setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
-        }}
-        className="-mx-2 md:-mx-4 lg:-mx-6"
-      />
-      )}
 
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. The department's board
