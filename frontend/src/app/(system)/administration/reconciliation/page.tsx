@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { densityCellPad } from "@/lib/table-density";
@@ -88,9 +89,11 @@ export default function ReconciliationPage() {
   const [message, setMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
-  const [purposeSearchQuery, setPurposeSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"summary" | "all_givings">("all_givings");
   const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>([]);
   const [loadingAllGivings, setLoadingAllGivings] = useState(false);
@@ -102,6 +105,89 @@ export default function ReconciliationPage() {
   const [contactModalGiver, setContactModalGiver] = useState<IndividualGiving | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
+
+  // Position search bar and date range pickers to the RIGHT of the page header title & description
+  useEffect(() => {
+    setHeaderRightAction(
+      <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+        <div className="w-full sm:w-64">
+          <input
+            type="text"
+            placeholder="Search giver, receipt, mode..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+          />
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
+          <label className="text-xs font-medium text-moss flex items-center gap-1">
+            <span>From</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => changeFromDate(event.target.value)}
+              className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
+            />
+          </label>
+          <label className="text-xs font-medium text-moss flex items-center gap-1">
+            <span>To</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => changeToDate(event.target.value)}
+              className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
+            />
+          </label>
+        </div>
+      </div>
+    );
+  }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
+
+  // Keep all toggles in ONE single row below the header (no double rows of toggles)
+  useEffect(() => {
+    setCustomToggles(
+      <div className="flex items-center gap-2">
+        <div className="flex rounded-xl border border-sand-mute bg-sand p-1 text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setExpandedPurpose(null);
+              setViewMode("all_givings");
+              loadAllGivings();
+            }}
+            aria-pressed={viewMode === "all_givings"}
+            className={`rounded-lg px-3.5 py-1.5 font-semibold transition ${
+              viewMode === "all_givings"
+                ? "bg-bark text-white shadow-sm"
+                : "text-moss hover:text-bark"
+            }`}
+          >
+            Individual Givings
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("summary");
+            }}
+            aria-pressed={viewMode === "summary"}
+            className={`rounded-lg px-3.5 py-1.5 font-semibold transition ${
+              viewMode === "summary"
+                ? "bg-white text-bark shadow-sm"
+                : "text-moss hover:text-bark"
+            }`}
+          >
+            Summary Contributions
+          </button>
+        </div>
+        <Link
+          href="/administration/accounts"
+          className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark transition hover:bg-sand"
+        >
+          Church Accounts
+        </Link>
+      </div>
+    );
+  }, [setCustomToggles, viewMode]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -446,71 +532,8 @@ export default function ReconciliationPage() {
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
           <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-sand-line overflow-hidden">
             
-            {/* Header Controls (Flex-shrink-0) — no page heading: the view
-                switcher below already names the mode. */}
-            <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 w-full">
-              <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
-                {/* View Mode Switcher occupying full width — a segmented
-                    toggle, its chips riding inside one sand pill. */}
-                <div className="flex w-full flex-1 rounded-xl border border-sand-mute bg-sand p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpandedPurpose(null);
-                      setViewMode("all_givings");
-                      loadAllGivings();
-                    }}
-                    aria-pressed={viewMode === "all_givings"}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
-                      viewMode === "all_givings"
-                        ? "bg-bark text-white shadow-sm"
-                        : "text-moss hover:text-bark"
-                    }`}
-                  >
-                    Individual Givings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setViewMode("summary");
-                    }}
-                    aria-pressed={viewMode === "summary"}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-center transition ${
-                      viewMode === "summary"
-                        ? "bg-white text-bark shadow-sm"
-                        : "text-moss hover:text-bark"
-                    }`}
-                  >
-                    Summary Contributions
-                  </button>
-                </div>
-
-                {/* Date pickers row occupying full width */}
-                <div className="flex w-full sm:w-auto items-center justify-between gap-2">
-                  <label className="flex-1 sm:flex-none text-xs font-medium text-moss flex items-center justify-between gap-1">
-                    <span>From</span>
-                    <input
-                      type="date"
-                      value={fromDate}
-                      onChange={(event) => changeFromDate(event.target.value)}
-                      className="w-full sm:w-auto rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                    />
-                  </label>
-                  <label className="flex-1 sm:flex-none text-xs font-medium text-moss flex items-center justify-between gap-1">
-                    <span>To</span>
-                    <input
-                      type="date"
-                      value={toDate}
-                      onChange={(event) => changeToDate(event.target.value)}
-                      className="w-full sm:w-auto rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
             {message && (
-              <p className="shrink-0 mt-3 rounded-xl bg-sand px-4 py-2.5 text-xs text-moss border border-sand-line">
+              <p className="shrink-0 mt-2 rounded-xl bg-sand px-4 py-2 text-xs text-moss border border-sand-line">
                 {message}
               </p>
             )}
@@ -531,7 +554,6 @@ export default function ReconciliationPage() {
                           type="button"
                           onClick={() => {
                             setExpandedPurpose(null);
-                            setPurposeSearchQuery("");
                           }}
                           className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
                         >
@@ -545,8 +567,8 @@ export default function ReconciliationPage() {
                               {loadingPurpose === expandedPurpose
                                 ? "Loading..."
                                 : `${(purposeGivings[expandedPurpose] || []).filter((g) => {
-                                    if (!purposeSearchQuery.trim()) return true;
-                                    const q = purposeSearchQuery.toLowerCase();
+                                    if (!searchQuery.trim()) return true;
+                                    const q = searchQuery.toLowerCase();
                                     return (
                                       g.donor_name.toLowerCase().includes(q) ||
                                       (g.receipt_number && g.receipt_number.toLowerCase().includes(q)) ||
@@ -560,16 +582,6 @@ export default function ReconciliationPage() {
                           </p>
                         </div>
                       </div>
-
-                      <div className="w-full sm:w-64">
-                        <input
-                          type="text"
-                          placeholder="Search giver, receipt, mode..."
-                          value={purposeSearchQuery}
-                          onChange={(e) => setPurposeSearchQuery(e.target.value)}
-                          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-                        />
-                      </div>
                     </div>
 
                     {/* Main Content Area for Purpose Givings */}
@@ -577,8 +589,8 @@ export default function ReconciliationPage() {
                       const rawList = purposeGivings[expandedPurpose] || [];
                       const isLoading = loadingPurpose === expandedPurpose;
                       const filteredList = rawList.filter((g) => {
-                        if (!purposeSearchQuery.trim()) return true;
-                        const q = purposeSearchQuery.toLowerCase();
+                        if (!searchQuery.trim()) return true;
+                        const q = searchQuery.toLowerCase();
                         return (
                           g.donor_name.toLowerCase().includes(q) ||
                           (g.receipt_number && g.receipt_number.toLowerCase().includes(q)) ||
@@ -925,7 +937,16 @@ export default function ReconciliationPage() {
                 /* VIEW 2: INDIVIDUAL MEMBER GIVINGS TABLE VIEW */
                 <>
                   {(() => {
-                    const listToDisplay = allGivingsList;
+                    const searchQueryLower = searchQuery.trim().toLowerCase();
+                    const listToDisplay = allGivingsList.filter((g) => {
+                      if (!searchQueryLower) return true;
+                      return (
+                        g.donor_name.toLowerCase().includes(searchQueryLower) ||
+                        (g.receipt_number && g.receipt_number.toLowerCase().includes(searchQueryLower)) ||
+                        (g.payment_method && g.payment_method.toLowerCase().includes(searchQueryLower)) ||
+                        (g.purpose && g.purpose.toLowerCase().includes(searchQueryLower))
+                      );
+                    });
                     const isLoading = loadingAllGivings;
                     const displayTotal = listToDisplay.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
