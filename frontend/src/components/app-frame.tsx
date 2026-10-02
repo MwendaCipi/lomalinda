@@ -83,11 +83,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
   /**
-   * The page's own heading — its name and one-line description from the
-   * registry — drawn above the section's toggle strip, so the page is named
-   * before it is navigated rather than by the strip alone.
+   * The page's own heading, drawn above the section's toggle strip. The rail
+   * item you are on names the place — a console tab and an office desk carry
+   * their own line — and the registry answers for the rest. A department's
+   * desk is left out here: it draws its own heading inside the hub.
    */
-  const pageHeader = pageHeaderFor(pathname);
+  const hereItem =
+    section && "items" in section && section.items
+      ? section.items.find((item) => item.href === here.href) ?? null
+      : null;
+  const pageHeader = hereItem?.description
+    ? { label: hereItem.label, description: hereItem.description }
+    : pageHeaderFor(pathname);
   const sectionPages = (section && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({

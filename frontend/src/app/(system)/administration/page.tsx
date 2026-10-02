@@ -109,7 +109,9 @@ function AdministrationContent() {
   const [status, setStatus] = useState<"loading" | "authorized" | "denied">("loading");
   const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  // The desk the URL falls back to when it names no tab: the phone's overview,
+  // or the desk the role keeps on a desktop. The URL itself is the tab.
+  const [defaultTab, setDefaultTab] = useState<string>("overview");
 
   const router = useRouter();
 
@@ -239,6 +241,19 @@ function AdministrationContent() {
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
+  /**
+   * The open desk is whatever the address bar names. A console page is one
+   * route (`/administration`) whose `?tab=` picks the page, so reading it off
+   * the URL shows the right page on the click that asked for it — syncing it
+   * through state a render later showed the previous page first, and only
+   * settled on a second press. `setActiveTab` switches desks the way a strip
+   * chip does: by writing the address bar.
+   */
+  const activeTab = searchTab ? (searchTab === "expenditures" ? "accounts" : searchTab) : defaultTab;
+  const setActiveTab = (tab: string) => {
+    router.replace(`/administration?tab=${tab}`, { scroll: false });
+  };
+
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
   /**
@@ -249,18 +264,21 @@ function AdministrationContent() {
   const meetingTab = activeTab === "meetings" || activeTab === "board" || activeTab === "business";
   const meetingKind: MeetingKind = activeTab === "business" ? "business" : "board";
 
-  // Synchronize active tab safely without infinite loop
+  // The fallback desk, chosen once the role is known. A URL tab always
+  // outranks it (see `activeTab` above), so this never delays a toggle.
   useEffect(() => {
-    if (searchTab) {
-      // An old `?tab=expenditures` link opens the accounts desk's Expenditure
-      // view: the page it named is now a toggle inside Church Accounts.
-      setActiveTab(searchTab === "expenditures" ? "accounts" : searchTab);
-    } else if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-      const defaultTab = isClerk ? "users" : isElder ? "announcements" : isFinance ? "accounts" : "settings";
-      setActiveTab(defaultTab);
-    } else {
-      setActiveTab("overview");
-    }
+    if (searchTab) return;
+    setDefaultTab(
+      typeof window !== "undefined" && window.innerWidth >= 1024
+        ? isClerk
+          ? "users"
+          : isElder
+            ? "announcements"
+            : isFinance
+              ? "accounts"
+              : "settings"
+        : "overview"
+    );
   }, [searchTab, isClerk, isElder, isFinance]);
 
   if (status === "loading") {

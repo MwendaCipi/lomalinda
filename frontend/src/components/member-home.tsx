@@ -9,7 +9,7 @@ import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigatio
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
-import { useDepartments, useMyDepartments, type DepartmentRow } from "@/hooks/use-departments";
+import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
@@ -179,12 +179,14 @@ export function MemberHome() {
 
   // ── The areas this member belongs to ────────────────────────────────────
   // Two sources, one list: the leadership table names the offices a member
-  // holds ("Treasurer", not the generic kind), and the roll names the areas
-  // they simply belong to — a department or ministry they are part of
-  // without leading. Either tie puts the area on the card; the badge says
-  // which way the member holds it.
+  // holds ("Treasurer", not the generic kind), and /me/'s my_ties names the
+  // areas they genuinely belong to or serve in — a department or ministry
+  // they are part of without leading. Either tie puts the area on the card;
+  // the badge says which way the member holds it. An office account's wider
+  // every-area view is deliberately not used here: an administrator sees the
+  // areas that are theirs, and reaches the rest through the rail.
   const myUsername = me?.username ?? "";
-  const myMembershipCodes = useMyDepartments();
+  const myMembershipCodes = useMyTies();
   const myAreas: (DepartmentRow & { as: string })[] = myUsername
     ? departments.flatMap((department) => {
         const offices = department.holders

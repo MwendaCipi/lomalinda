@@ -856,7 +856,7 @@ class ProfessionSerializer(serializers.ModelSerializer):
 class PrayerRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PrayerRequest
-        fields = ('id', 'request_text', 'name', 'email', 'phone_number', 'anonymous', 'created_at')
+        fields = ('id', 'request_text', 'name', 'email', 'phone_number', 'anonymous', 'audience', 'created_at')
         read_only_fields = ('id', 'created_at')
 
     def validate_phone_number(self, value):

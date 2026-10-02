@@ -84,14 +84,27 @@ DESK_EXTRA_ROLE_CODES = {
 }
 
 
-def request_audience(kind=''):
-    """Active accounts that should hear about a request of this kind."""
+def request_audience(kind='', audience=''):
+    """Active accounts that should hear about a request of this kind.
+
+    A prayer request may name who it is for — the elders' desk, the pastor, or
+    the whole congregation — and that choice answers for itself: the desk it
+    names is who is told. Every other request routes to the office roster.
+    """
     from .models import MemberProfile
 
-    wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
-    if kind == 'join':
-        wanted.add(ADMIN_ROLE)
-    wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
+    if kind == 'prayer' and audience == 'church':
+        # The whole congregation prays: every active account is told.
+        return User.objects.filter(is_active=True).distinct()
+    if kind == 'prayer' and audience == 'pastor':
+        wanted = set(PASTOR_ROLE_CODES)
+    elif kind == 'prayer' and audience == 'elders':
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | DESK_EXTRA_ROLE_CODES.get('prayer', set())
+    else:
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
+        if kind == 'join':
+            wanted.add(ADMIN_ROLE)
+        wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
     audience_ids = set()
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
         if set(profile.get_roles()) & wanted:
@@ -171,7 +184,7 @@ def request_email_html(*, heading: str, body_text: str, link: str, church_name: 
     )
 
 
-def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None):
+def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None, audience=''):
     """Email the right office holders that a request is waiting.
 
     Returns how many letters left the building. A failure is never allowed to
@@ -205,8 +218,8 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
 
     sent = 0
     already_sent = set()
-    audience = list(request_audience(kind))
-    for user in audience:
+    listeners = list(request_audience(kind, audience))
+    for user in listeners:
         address = (user.email or '').strip()
         # Two accounts can share one mailbox; that inbox gets one letter, not two.
         if not address or address.lower() in already_sent:
@@ -232,7 +245,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
             message=body,
             link=desk_link,
         )
-        for user in audience
+        for user in listeners
     ])
 
     # And, for those who enabled it, the phone itself: an encrypted web push
@@ -240,7 +253,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     try:
         from .push import push_request_notification
 
-        push_request_notification(kind, subject, body, desk_link)
+        push_request_notification(kind, subject, body, desk_link, audience)
     except Exception:
         pass
     return sent

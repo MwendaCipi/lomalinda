@@ -1344,6 +1344,13 @@ class PrayerRequest(models.Model):
     email = models.EmailField(blank=True)
     phone_number = models.CharField(max_length=40, blank=True)
     anonymous = models.BooleanField(default=True)
+    #: Who the request is for — the elders' desk, the pastor, or the whole
+    #: congregation. Whoever it names is told the request is waiting.
+    audience = models.CharField(
+        max_length=20,
+        choices=[('elders', 'Elders Desk'), ('pastor', 'Pastor'), ('church', 'The Church')],
+        default='elders',
+    )
     status = models.CharField(max_length=20, choices=[('new', 'New'), ('prayed', 'Prayed'), ('closed', 'Closed')], default='new')
     created_at = models.DateTimeField(auto_now_add=True)
 

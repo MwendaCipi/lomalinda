@@ -215,8 +215,22 @@
    v51 — a ministry's or department's desk names itself too: the area's
    name and a line on what it is for stand above its own toggles, the
    heading the shell can't draw because those desks live inside the office
-   console. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v51";
+   console.
+
+   v52 — the office desks name themselves too: the Treasury, the elders'
+   desk and the clerk's desk each show their page's name and a line on what
+   it does above their strip, as every other page does. The console's open
+   desk now follows the address bar, so a strip toggle opens the page it
+   names on the first press. A prayer request can now be addressed to the
+   elders' desk, the pastor, or the whole church, and the desk it names is
+   the one told. Chrome changed, so installed apps must take the new
+   shell.
+
+   v53 — a department's roll reads without the "Department roll" title bar:
+   the desk's page name already stands above it, so only the search and the
+   rows remain. In AWM and AMM the whole-roll toggle now reads "All
+   members". Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v53";
 const STATIC_ASSETS = [
   "/",
   "/about/",

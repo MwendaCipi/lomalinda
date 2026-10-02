@@ -76,13 +76,14 @@ def push_to_user(user, *, title: str, body: str, link: str = "", respect_prefs: 
     return sent
 
 
-def push_request_notification(kind: str, title: str, body: str, link: str) -> int:
+def push_request_notification(kind: str, title: str, body: str, link: str, audience: str = "") -> int:
     """Fan a request notice out to the right office holders' devices.
 
     The audience rule is the request-audience rule (elders and clerk for every
     desk, admins for join only) and duty notices ride past the announcement
     preference — the switch governs mass communication, not the requests that
-    answer to your role.
+    answer to your role. A prayer request that named who it is for stays with
+    the same choice here, so its phone notice matches its letter.
     """
     from .requests import request_audience
 
@@ -90,7 +91,7 @@ def push_request_notification(kind: str, title: str, body: str, link: str) -> in
         return 0
     return sum(
         push_to_user(user, title=title, body=body, link=link)
-        for user in request_audience(kind)
+        for user in request_audience(kind, audience)
     )
 
 

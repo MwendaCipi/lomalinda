@@ -86,6 +86,9 @@ export function PrayerRequestForm({
   const [optionalName, setOptionalName] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
+  // Who the request is for: the elders' desk (the default), the pastor, or the
+  // whole congregation. The desk it names is who is told it is waiting.
+  const [audience, setAudience] = useState<"elders" | "pastor" | "church">("elders");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -139,6 +142,7 @@ export function PrayerRequestForm({
     const body: Record<string, unknown> = {
       request_text: requestText,
       anonymous: isAnonymous,
+      audience,
     };
     if (senderName) {
       body.name = senderName;
@@ -219,6 +223,19 @@ export function PrayerRequestForm({
             />
           </label>
         )}
+
+        <label className="block text-sm font-medium">
+          Send request to
+          <select
+            value={audience}
+            onChange={(event) => setAudience(event.target.value as "elders" | "pastor" | "church")}
+            className="mt-2 w-full rounded-xl border border-sand-mute bg-sand px-4 py-2.5 text-sm outline-none focus:border-ember"
+          >
+            <option value="elders">Elders Desk</option>
+            <option value="pastor">Pastor</option>
+            <option value="church">The Church</option>
+          </select>
+        </label>
 
         <label className="block text-sm font-medium">
           Your prayer request

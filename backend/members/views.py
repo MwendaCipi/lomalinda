@@ -2484,6 +2484,11 @@ class MeView(APIView):
             # those groups. Labels ride along so tabs read as members see
             # them ("Adventist Youth", not "aym").
             'my_departments': list(user_departments(request.user)),
+            # The areas the member actually belongs to or serves in, without
+            # the every-area view an office account gets — the dashboard's
+            # "Your areas" reads this, so an administrator sees their own
+            # departments and ministries, not the whole church.
+            'my_ties': member_tie_codes(request.user),
             'profile_update_pending': bool(profile and profile.needs_profile_update()),
         })
 
@@ -4365,6 +4370,7 @@ class PrayerRequestView(generics.ListCreateAPIView):
             submitted_by='Someone anonymous' if instance.anonymous else (instance.name or 'A church member'),
             church_name=current_church_name(),
             submitted_at=instance.created_at,
+            audience=instance.audience,
         )
 
 
@@ -7358,22 +7364,21 @@ def role_labels_with_assistants(profile, codes):
     )
 
 
-def member_area_codes(user):
-    """The areas of the church this account may see, as department codes.
+def member_tie_codes(user):
+    """The areas a member genuinely belongs to or serves in.
 
-    The age- and gender-based groups — AMM, AWM, Young Adults, the rest —
-    are the church's own way of filing its people: each member belongs to
-    exactly one, the profile's ``ministry`` naming the gender-based group
-    and ``department`` the age-based one. A member sees that one group (or
-    both, when the office has filed them in two), the offices see every
-    area, and anyone serving as a department's leader or assistant — or
-    carrying a place on its roll — sees that area beside their own, because
-    they work there.
+    Three ties, and only these: the gender- and age-based groups the office
+    filed them under (the profile's ``ministry`` and ``department``), their
+    places on a department's roll, and the leadership rows they hold. It is
+    the honest answer to "which areas are mine" — an elder or administrator
+    with no tie to AWM gets nothing back, even though they may open every
+    area. The dashboard's "Your areas" reads this, so an office holder sees
+    the departments and ministries they are actually part of and reaches the
+    rest through the rail; :func:`member_area_codes` keeps the wider
+    every-area view the rail and the directory are built on.
     """
     if not getattr(user, 'is_active', False):
         return []
-    if department_office_profile(user):
-        return list(Department.objects.filter(is_active=True).values_list('code', flat=True))
     profile = getattr(user, 'member_profile', None)
     # The profile names the ties in its own vocabulary — ``ministry`` speaks
     # of Adventist Men, ``department`` of age buckets — so both are translated
@@ -7396,6 +7401,25 @@ def member_area_codes(user):
         ).values_list('department__code', flat=True)
     )
     return list(ties | roll_codes | assigned_codes)
+
+
+def member_area_codes(user):
+    """The areas of the church this account may see, as department codes.
+
+    The age- and gender-based groups — AMM, AWM, Young Adults, the rest —
+    are the church's own way of filing its people: each member belongs to
+    exactly one, the profile's ``ministry`` naming the gender-based group
+    and ``department`` the age-based one. A member sees that one group (or
+    both, when the office has filed them in two), the offices see every
+    area, and anyone serving as a department's leader or assistant — or
+    carrying a place on its roll — sees that area beside their own, because
+    they work there.
+    """
+    if not getattr(user, 'is_active', False):
+        return []
+    if department_office_profile(user):
+        return list(Department.objects.filter(is_active=True).values_list('code', flat=True))
+    return member_tie_codes(user)
 
 
 def user_departments(user):

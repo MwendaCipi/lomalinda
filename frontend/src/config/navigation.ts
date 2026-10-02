@@ -159,7 +159,7 @@ export const destinations = {
     href: "/community/prayer",
     label: "Prayer Requests",
     short: "Prayer",
-    description: "Send a prayer request — the church's pastoral prayer team will pray with and for you.",
+    description: "You don't have to carry it alone. Send a prayer request and get help in prayer.",
     icon: Heart,
     area: "fellowship",
     match: ["/community"],
@@ -424,6 +424,8 @@ export type RailItem = {
   href: string;
   label: string;
   short?: string;
+  /** One-line description the shell shows under the page's name. */
+  description?: string;
   icon: LucideIcon;
   /** Path prefixes that count as "here"; registry items carry their own. */
   match?: readonly string[];
@@ -453,6 +455,8 @@ export type RailRow = {
   icon: LucideIcon;
   href?: string;
   short?: string;
+  /** One-line description the shell shows under the page's name. */
+  description?: string;
   match?: readonly string[];
   /** For a row that *is* a console tab, the `?tab=` value that is this page. */
   tab?: string;
@@ -523,16 +527,29 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * elders' strip. An administrator holds the desk too.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("users", "User Management", Users, { roles: CLERKSHIP_ROLES, short: "Users" }),
+  officeTab("users", "User Management", Users, {
+    roles: CLERKSHIP_ROLES,
+    short: "Users",
+    description: "The church's accounts, their roles and their standing.",
+  }),
   // Board and business meetings are two rows of this strip, not a desk
   // behind another menu. The old "meetings" tab still opens the board list.
   officeTab("board", "Board Meetings", Armchair, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["meetings"],
     short: "Board",
+    description: "The board's minutes, agendas, attendance and follow-ups.",
   }),
-  officeTab("business", "Business Meetings", Briefcase, { roles: CLERKSHIP_ROLES, short: "Business" }),
-  officeTab("transfers", "Membership Requests", ClipboardList, { roles: CLERKSHIP_ROLES, short: "Transfers" }),
+  officeTab("business", "Business Meetings", Briefcase, {
+    roles: CLERKSHIP_ROLES,
+    short: "Business",
+    description: "The church's business meetings and the decisions they carry.",
+  }),
+  officeTab("transfers", "Membership Requests", ClipboardList, {
+    roles: CLERKSHIP_ROLES,
+    short: "Transfers",
+    description: "Membership transfers into the church and out of it.",
+  }),
 ];
 
 /**
@@ -551,19 +568,41 @@ export const eldershipItems: RailRow[] = [
     roles: ELDERSHIP_ROLES,
     // The one-worder rides a phone; the desk's full name rides everywhere else.
     short: "Leadership",
+    description: "The church's offices and its areas, with each leader and assistant.",
   }),
-  officeTab("settings", "Church Settings", Settings, { roles: ELDERSHIP_ROLES, short: "Settings" }),
-  officeTab("announcements", "Announcements", Megaphone, { roles: ELDERSHIP_ROLES, short: "News" }),
-  officeTab("requests", "Requests", HeartHandshake, { roles: REQUESTS_DESK_ROLES }),
+  officeTab("settings", "Church Settings", Settings, {
+    roles: ELDERSHIP_ROLES,
+    short: "Settings",
+    description: "The church's name, contacts, giving details and the messages it sends.",
+  }),
+  officeTab("announcements", "Announcements", Megaphone, {
+    roles: ELDERSHIP_ROLES,
+    short: "News",
+    description: "Notices and updates shared with the church family.",
+  }),
+  officeTab("requests", "Requests", HeartHandshake, {
+    roles: REQUESTS_DESK_ROLES,
+    description: "The asks the church has received — joining, prayer, visits, dedications and welfare.",
+  }),
 ];
 
 /** The deaconate: the church's property, its duty and its ordinances. The
  *  team leads the strip — a desk is its people before its things. */
 export const deaconateItems: RailRow[] = [
   officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES, short: "Team" }),
-  officeTab("inventory", "Inventory", Boxes, { roles: DEACONATE_ROLES }),
-  officeTab("deaconate-rota", "Duty Rota", ClipboardList, { roles: DEACONATE_ROLES }),
-  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, { roles: DEACONATE_ROLES, short: "Calendar" }),
+  officeTab("inventory", "Inventory", Boxes, {
+    roles: DEACONATE_ROLES,
+    description: "The church's property register and the movements of each item.",
+  }),
+  officeTab("deaconate-rota", "Duty Rota", ClipboardList, {
+    roles: DEACONATE_ROLES,
+    description: "The deacons' and deaconesses' duty rosters for the church's services.",
+  }),
+  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, {
+    roles: DEACONATE_ROLES,
+    short: "Calendar",
+    description: "Communion services, foot washing and the ordinances the desk keeps.",
+  }),
 ];
 
 /** Which heading a department is filed under. */
@@ -627,8 +666,13 @@ export const treasuryItems: RailRow[] = [
     icon: Scale,
     match: ["/administration/reconciliation"],
     roles: ["treasurer", "admin"],
+    description: "Every contribution the church has received, reconciled line by line.",
   },
-  officeTab("accounts", "Church Accounts", Landmark, { roles: ["treasurer", "admin"], short: "Accounts" }),
+  officeTab("accounts", "Church Accounts", Landmark, {
+    roles: ["treasurer", "admin"],
+    short: "Accounts",
+    description: "The church's treasury accounts, their balances and their movements.",
+  }),
   // Expenditure is no longer a page of this strip: it is one of the accounts
   // desk's own views (Church Accounts / Income / Expenditure), where recording
   // spending sits beside the accounts it debits. An old `?tab=expenditures`
@@ -642,9 +686,18 @@ export const treasuryItems: RailRow[] = [
     icon: Target,
     match: ["/administration/fund-drives"],
     roles: ["treasurer", "admin"],
+    description: "Active fund drives and how far along each one is.",
   },
-  officeTab("budget", "Church Budget", BarChart3, { roles: ["treasurer", "admin"], short: "Budget" }),
-  officeTab("refunds", "M-Pesa Refunds", Undo2, { roles: ["treasurer", "admin"], short: "Refunds" }),
+  officeTab("budget", "Church Budget", BarChart3, {
+    roles: ["treasurer", "admin"],
+    short: "Budget",
+    description: "The church's annual budgets and how the areas plan to use them.",
+  }),
+  officeTab("refunds", "M-Pesa Refunds", Undo2, {
+    roles: ["treasurer", "admin"],
+    short: "Refunds",
+    description: "M-Pesa refunds issued back to givers, and where each one stands.",
+  }),
 ];
 
 /**

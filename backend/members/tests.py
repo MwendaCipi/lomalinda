@@ -2037,6 +2037,32 @@ class RequestNotificationTests(APITestCase):
         self.assertIn('/administration', unquote(body))
         self.assertNotIn('notify.plain@example.com', body)
 
+    def test_a_request_addressed_to_the_pastor_reaches_the_pastor(self):
+        from django.core import mail
+
+        self.pastor = User.objects.create_user('notify.pastor', 'notify.pastor@example.com', 'PastorPass#2026')
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+
+        self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'Please pray for wisdom as I make a hard decision.',
+            'anonymous': True,
+            'audience': 'pastor',
+        }, format='json')
+
+        self.assertIn('notify.pastor@example.com', self._recipients())
+        # The desk it did not name is not told.
+        self.assertNotIn('notify.elder@example.com', self._recipients())
+
+    def test_a_request_addressed_to_the_church_reaches_a_member(self):
+        self.client.post('/api/members/prayer-requests/', {
+            'request_text': 'Please pray with us for our family through this season.',
+            'anonymous': True,
+            'audience': 'church',
+        }, format='json')
+
+        # The whole congregation is told, so even a plain member hears it.
+        self.assertIn('notify.plain@example.com', self._recipients())
+
     def test_an_anonymous_prayer_request_does_not_name_its_author(self):
         from django.core import mail
 
@@ -8702,6 +8728,22 @@ class DepartmentVisibilityTests(APITestCase):
         self.assertIn('amm', codes)
         self.assertIn('awm', codes)
         self.assertIn('aym', codes)
+
+    def test_my_ties_names_only_the_areas_an_office_holder_belongs_to(self):
+        """The dashboard's "Your areas" reads /me's ``my_ties``, the member's
+        real map, not the every-area view an office gets: an elder tied to no
+        group gets none of them back, though the directory and the rail still
+        let them open every area."""
+        self.client.force_authenticate(self.elder)
+        me = self.client.get('/api/members/me/')
+        # The wider view still lets the rail and the directory carry every area.
+        self.assertIn('awm', {row['code'] for row in me.data['my_departments']})
+        self.assertEqual(me.data['my_ties'], [])
+
+        # A real tie — a place on AWM's roll — is the only thing that shows.
+        DepartmentMembership.objects.create(member=self.elder, department='awm')
+        me = self.client.get('/api/members/me/')
+        self.assertEqual(set(me.data['my_ties']), {'awm'})
 
     def test_a_roll_place_adds_the_area_to_the_members_map(self):
         """Serving outside the member's own group — a place on another

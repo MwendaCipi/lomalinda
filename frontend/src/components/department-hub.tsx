@@ -2780,7 +2780,7 @@ function DepartmentDetail({
           // beside the views: All, then the desk's own fellowships (AMM and
           // AWM read All · Young Couples · Single Parents · Calendar).
           ...(units.length > 0
-            ? [{ key: "unit:null", label: "All", icon: Users }]
+            ? [{ key: "unit:null", label: department.code === "amm" || department.code === "awm" ? "All members" : "All", icon: Users }]
             : []),
           ...units.map((name) => ({
             key: `unit:${name}` as string,
@@ -2823,22 +2823,6 @@ function DepartmentDetail({
           leads the table, so opening a department shows who leads it first. */}
       {subTab === "members" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-            <h3 className="text-sm font-bold text-bark">Department roll</h3>
-            <div className="flex items-center gap-2">
-              {/* Only the hands the roll's endpoint would accept: the office
-                  and the area's own leadership. A member reads the roll. */}
-              {canManageRoll && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddMember(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-                >
-                  <UserPlus className="h-3.5 w-3.5" /> Add member
-                </button>
-              )}
-            </div>
-          </div>
           <div className="border-b border-sand-line px-4 py-2.5">
             <input
               type="text"
