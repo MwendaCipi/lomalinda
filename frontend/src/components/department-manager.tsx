@@ -322,7 +322,16 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
               </p>
             </div>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center gap-2.5 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
+              <input
+                type="text"
+                placeholder={`Search ${config.name} members…`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white placeholder-white/60 backdrop-blur-sm outline-none focus:bg-white/20 focus:border-white/40"
+              />
+            </div>
             <span className="rounded-full bg-white/20 px-3.5 py-1 text-xs font-bold backdrop-blur-sm">
               Target: {config.targetCriteria}
             </span>
@@ -332,24 +341,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
 
       {/* SUB-TAB 1: MEMBERS */}
       {activeSubTab === "members" && (
-        <div className="space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
-            <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
-              <input
-                type="text"
-                placeholder={`Search ${config.name} members by name, email, phone...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-sand-line bg-sand-card pl-9 pr-3 py-2 text-xs font-medium text-bark focus:border-ember focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-moss">
-                Showing <span className="font-bold text-bark">{filteredMembers.length}</span> members automatically assigned to this department.
-              </p>
-            </div>
-          </div>
+        <div className="space-y-4">
 
           <div className="overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
             <div className="overflow-x-auto">

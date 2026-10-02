@@ -2758,13 +2758,39 @@ function DepartmentDetail({
           the heading the shell draws on a page of its own. An area's desk
           lives inside the office console, which the shell leaves unnamed, so
           it carries the heading here instead. */}
-      <div className="shrink-0">
-        <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{department.label}</h1>
-        {(department.description || DEPARTMENT_BLURBS[department.code]) && (
-          <p className="mt-1 text-xs text-moss sm:text-sm">
-            {department.description || DEPARTMENT_BLURBS[department.code]}
-          </p>
-        )}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{department.label}</h1>
+          {(department.description || DEPARTMENT_BLURBS[department.code]) && (
+            <p className="mt-1 text-xs text-moss sm:text-sm">
+              {department.description || DEPARTMENT_BLURBS[department.code]}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {subTab === "members" && (
+            <div className="w-full sm:w-64">
+              <input
+                type="text"
+                value={rollSearch}
+                onChange={(e) => setRollSearch(e.target.value)}
+                placeholder="Search the roll by name, phone or email…"
+                className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+              />
+            </div>
+          )}
+          {subTab === "calendar" && (
+            <div className="w-full sm:w-64">
+              <input
+                type="text"
+                value={eventSearch}
+                onChange={(e) => setEventSearch(e.target.value)}
+                placeholder="Search the calendar by title, date or location…"
+                className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* The department's own views, on the shared strip: the roll first, the
@@ -2823,15 +2849,6 @@ function DepartmentDetail({
           leads the table, so opening a department shows who leads it first. */}
       {subTab === "members" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
-          <div className="border-b border-sand-line px-4 py-2.5">
-            <input
-              type="text"
-              value={rollSearch}
-              onChange={(e) => setRollSearch(e.target.value)}
-              placeholder="Search the roll by name, phone or email…"
-              className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
-            />
-          </div>
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
@@ -2999,15 +3016,6 @@ function DepartmentDetail({
               <CalendarDays className="h-3.5 w-3.5" /> Add event
             </button>
           </div>
-          {events.length > 0 && (
-            <input
-              type="text"
-              value={eventSearch}
-              onChange={(e) => setEventSearch(e.target.value)}
-              placeholder="Search the calendar by title, date or location…"
-              className="mt-3 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
-            />
-          )}
           {loadingEvents ? (
             <p className="py-8 text-center text-xs text-moss">Loading the calendar…</p>
           ) : events.length === 0 ? (
