@@ -43,6 +43,7 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { DEPARTMENT_BLURBS } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
@@ -2753,6 +2754,19 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
+      {/* The desk names itself and says what it is for, above its own toggles —
+          the heading the shell draws on a page of its own. An area's desk
+          lives inside the office console, which the shell leaves unnamed, so
+          it carries the heading here instead. */}
+      <div className="shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{department.label}</h1>
+        {(department.description || DEPARTMENT_BLURBS[department.code]) && (
+          <p className="mt-1 text-xs text-moss sm:text-sm">
+            {department.description || DEPARTMENT_BLURBS[department.code]}
+          </p>
+        )}
+      </div>
+
       {/* The department's own views, on the shared strip: the roll first, the
           calendar beside it. It pins to the top of the page, so the desk can
           switch views without scrolling back up past the table. */}

@@ -592,6 +592,28 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
 };
 
 /**
+ * A one-line description for each known area, keyed by its code — the small
+ * paragraph under an area's name on its desk. An area's own description (set
+ * when the desk writes one) wins where it carries one.
+ */
+export const DEPARTMENT_BLURBS: Record<string, string> = {
+  eldership: "The church's elders — its spiritual leadership and the programmes it keeps.",
+  clerkship: "The church's records — the membership register, the minutes and the letters.",
+  deaconate: "The church's property, its duty rota, and the ordinances it serves.",
+  amm: "Men growing in faith and friendship, and serving the church and the community.",
+  awm: "Women encouraging one another through fellowship, discipleship and care.",
+  aym: "Young people growing in faith, friendship, leadership and service.",
+  children: "Nurturing children into a loving, lifelong relationship with Jesus.",
+  ambassadors: "Young adults growing together in faith, service and leadership.",
+  apm: "Belonging and full participation for people with disabilities, orphans, widows and caregivers.",
+  chaplaincy: "A ministry of presence, comfort and prayer in places of need.",
+  health: "The church's health ministry — wholeness of body, mind and spirit.",
+  personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
+  music: "The church's music — its choir and the singing groups it keeps.",
+  choir: "The church's singing — its choir and the groups that sing in it.",
+};
+
+/**
  * The treasury's pages — the treasurer's desk, as its own row on the rail.
  *
  * It answers one question (what does the church hold, and where did it go),

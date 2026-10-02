@@ -210,8 +210,13 @@
    every other department's strip too, so Calendar reads once. Every page
    is now named above its toggles: the shell draws the page's title and
    one-line description from the registry, and the pages' own headings
-   step aside. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v50";
+   step aside.
+
+   v51 — a ministry's or department's desk names itself too: the area's
+   name and a line on what it is for stand above its own toggles, the
+   heading the shell can't draw because those desks live inside the office
+   console. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v51";
 const STATIC_ASSETS = [
   "/",
   "/about/",
