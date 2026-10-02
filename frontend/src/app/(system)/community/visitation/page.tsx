@@ -48,13 +48,6 @@ export default function VisitationRequestsPage() {
         <div className="flex h-full min-w-0 flex-1 flex-col md:overflow-hidden">
           <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
             <div className="mx-auto max-w-5xl space-y-6 px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Visitation Requests</h1>
-                <p className="mt-1 text-sm text-moss">
-                  Ask for a pastoral, home or hospital visit — pin where to come on the map in the form.
-                </p>
-              </div>
-
               {message && (
                 <div
                   className={`rounded-2xl p-4 text-sm font-medium ${

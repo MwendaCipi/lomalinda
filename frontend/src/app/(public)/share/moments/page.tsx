@@ -199,8 +199,13 @@ export default function MomentsPage() {
     <main className="min-h-screen bg-sand text-bark">
       <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
         <div className="mx-auto max-w-6xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Fellowship</p>
+          {/* A signed-in member reads the name from the shell's page heading;
+              a visitor keeps the hero. The Add button stays either way. */}
+          {!me && (
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Fellowship</p>
+          )}
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+            {!me && (
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Moments</h1>
               <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
@@ -208,6 +213,7 @@ export default function MomentsPage() {
                 camporees, the life of the family, album by album.
               </p>
             </div>
+            )}
             {canManage && (
               <button
                 type="button"

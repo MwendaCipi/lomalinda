@@ -15,13 +15,6 @@ export default function LiveBalancesPage() {
     <main className="min-h-screen bg-sand text-bark">
       <div className="p-5 pb-28 sm:p-8 lg:p-10">
         <div className="mx-auto max-w-5xl">
-          {/* The panel names itself (Account Liquidity); the h1 is for
-              screen readers, as on the Reports page beside it. */}
-          <h1 className="sr-only">Live Balances</h1>
-          <p className="sr-only">
-            What the church holds right now, account by account, refreshed every
-            thirty seconds.
-          </p>
           <LiveReportsPanel />
         </div>
       </div>

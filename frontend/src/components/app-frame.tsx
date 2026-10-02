@@ -6,7 +6,7 @@ import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
-import { railFor } from "@/config/navigation";
+import { pageHeaderFor, railFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -82,6 +82,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * itself is noise.
    */
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
+  /**
+   * The page's own heading — its name and one-line description from the
+   * registry — drawn above the section's toggle strip, so the page is named
+   * before it is navigated rather than by the strip alone.
+   */
+  const pageHeader = pageHeaderFor(pathname);
   const sectionPages = (section && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({
@@ -116,6 +122,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 it. Both are inside the same surface, so the tabs read as the
                 card's first row rather than chrome above it. */}
             <div className="app-content">
+              {pageHeader && (
+                /* The page's name and description, above the strip: the
+                   heading names the place, the strip switches within it. */
+                <div className="shrink-0 bg-white px-3 pt-4 sm:px-5 sm:pt-5">
+                  <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{pageHeader.label}</h1>
+                  {pageHeader.description && (
+                    <p className="mt-1 pb-4 text-xs text-moss sm:pb-5 sm:text-sm">{pageHeader.description}</p>
+                  )}
+                </div>
+              )}
               {sectionPages.length > 1 && (
                 /* The section's pages as the card's top row, at every width —
                    on a phone the same chip strip Materials uses for its

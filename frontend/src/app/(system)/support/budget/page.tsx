@@ -24,10 +24,6 @@ export default function ChurchBudgetPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
-          {/* The strip names the page; the h1 is for screen readers. */}
-          <h1 className="sr-only">Church Budget</h1>
-          <p className="sr-only">Published annual operating budgets and project allocations for SDA Loma Linda.</p>
-
           {/* Budget Content */}
           <div className="mt-8">
             {loading ? (

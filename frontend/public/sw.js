@@ -201,8 +201,17 @@
    roll — and asks the office for property by a Send request button:
    to buy an item, or to repair one, answered at the requests desk.
    The giving row reads Giving. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v49";
+   take the new shell.
+
+   v50 — the deaconate's Team view is its roll, read whole: the hub's
+   Members / Calendar / Accounts toggles no longer ride under the desk's
+   own strip, which already names Team, Inventory, Duty Rota and the
+   Deaconate Calendar. A stray repeat of the Calendar toggle is gone from
+   every other department's strip too, so Calendar reads once. Every page
+   is now named above its toggles: the shell draws the page's title and
+   one-line description from the registry, and the pages' own headings
+   step aside. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v50";
 const STATIC_ASSETS = [
   "/",
   "/about/",

@@ -21,13 +21,6 @@ export default function ChurchWelfarePage() {
 
         <div className="flex-1 min-w-0 h-full md:h-full p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-8">
-            <div className="max-w-3xl">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Welfare</h1>
-              <p className="hidden sm:block mt-4 text-lg leading-8 text-moss">
-                A ministry of practical care, compassion, and connection for our church family and neighbours.
-              </p>
-            </div>
-
             <div className="grid gap-6 md:grid-cols-2">
               <section className="rounded-3xl border border-sand-line bg-white p-6 shadow-sm sm:p-8">
                 <h2 className="text-2xl font-semibold">What we do</h2>

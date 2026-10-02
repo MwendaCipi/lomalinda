@@ -182,13 +182,7 @@ export default function ChildDedicationPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full bg-white p-5 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Child Dedication</h1>
-              <p className="mt-1 text-sm text-moss">
-                Schedule a child dedication service during Sabbath worship with our pastoral team.
-              </p>
-            </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
             {!showForm && (
               <button
                 type="button"

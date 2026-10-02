@@ -143,12 +143,7 @@ export default function IdeasPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              {/* The strip names the page; the h1 is for screen readers. */}
-              <h1 className="sr-only">Ideas</h1>
-              <p className="sr-only">Share ideas, feedback, or innovative proposals to help SDA Loma Linda grow and improve ministry.</p>
-            </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
             {!showForm && (
               <button
                 type="button"

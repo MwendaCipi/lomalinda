@@ -207,10 +207,6 @@ function GiveInKindPageContent() {
           above, and the card rides up under it. */}
       <div className="flex min-h-0 flex-1 flex-col px-5 pb-0 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10">
           <div className="flex min-h-0 flex-1 flex-col">
-            {/* The strip names the page; the h1 is for screen readers. */}
-            <h1 className="sr-only">In-Kind Giving</h1>
-            <p className="sr-only">Donate goods, produce, or materials instead of money.</p>
-
             {/* ── My In-Kind Givings: the page is the record, like My Givings on
                 the money-giving page — the same card at the same dimensions,
                 filling the panel with its own scroller. ── */}

@@ -172,8 +172,6 @@ export default function TestimoniesPage() {
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
-            <h1 className="sr-only">Testimonies</h1>
-
         <section className="mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="block text-sm font-medium sm:w-72">Search testimonies

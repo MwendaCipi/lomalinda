@@ -159,7 +159,7 @@ export const destinations = {
     href: "/community/prayer",
     label: "Prayer Requests",
     short: "Prayer",
-    description: "Send a prayer request to the church's pastoral prayer team.",
+    description: "Send a prayer request — the church's pastoral prayer team will pray with and for you.",
     icon: Heart,
     area: "fellowship",
     match: ["/community"],
@@ -362,6 +362,44 @@ export function isVisible(dest: Destination, roles: readonly string[]): boolean 
 export function isActive(dest: Destination, pathname: string): boolean {
   const patterns = dest.match ?? [dest.href];
   return patterns.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
+ * The destinations that draw their own heading: the dashboard (a personal
+ * greeting), the office console (a pinned workspace with its own internal
+ * navigation) and About (a marketing page a signed-out visitor reads too).
+ * The shell shows a heading for every other page it frames.
+ */
+const HEADERLESS_DESTINATIONS = new Set<DestinationKey>(["administration", "about", "dashboard"]);
+
+/** The longest prefix a destination claims — the tie-break between close matchers. */
+function matchLength(dest: Destination): number {
+  return Math.max(...(dest.match ?? [dest.href]).map((pattern) => pattern.length));
+}
+
+/**
+ * The heading the shell shows above a page: the destination the path is — by
+ * its exact href where one matches, and by the most specific matcher
+ * otherwise, so `/member/reports` is not read as `/member`. Returns the whole
+ * destination so the title and its one-line description stay in one place.
+ */
+export function pageHeaderFor(pathname: string): Destination | null {
+  const all = Object.entries(destinations) as [DestinationKey, Destination][];
+  const showable = (key: DestinationKey) => !HEADERLESS_DESTINATIONS.has(key);
+  // Two destinations may share one href — a section alias (`fellowship`,
+  // `requests`) and the page it opens on. The page is the one with the
+  // narrower set of matchers, so it takes the heading.
+  const exact = all
+    .filter(([, dest]) => dest.href === pathname)
+    .sort((a, b) => (a[1].match?.length ?? 0) - (b[1].match?.length ?? 0));
+  if (exact.length > 0) {
+    const [key, dest] = exact[0];
+    return showable(key) ? dest : null;
+  }
+  const active = all.filter(([key, dest]) => showable(key) && isActive(dest, pathname));
+  if (active.length === 0) return null;
+  active.sort((a, b) => matchLength(b[1]) - matchLength(a[1]));
+  return active[0][1];
 }
 
 /** Does any of these roles reach the office console? */

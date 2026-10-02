@@ -98,11 +98,7 @@ export default function MemberPage() {
     <main className="min-h-full bg-sand text-bark">
       <div className="p-4 sm:p-8 lg:p-10">
         <div className="mx-auto max-w-5xl space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Member space</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Your giving history</h1>
-            </div>
+            <div className="flex flex-wrap items-center justify-end gap-4">
             <Link href="/give" className="rounded-full bg-ember px-5 py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-ember-dark">
               Give now
             </Link>

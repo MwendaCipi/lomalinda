@@ -28,13 +28,6 @@ export default function ReportsPage() {
 
   return (
     <MemberWorkspace>
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church financial reports</h1>
-        <p className="mt-2 max-w-2xl text-moss">
-          Published reports help our church family stay informed about giving and stewardship.
-        </p>
-      </div>
-
       <div className="grid gap-6 md:grid-cols-2">
         {reports.map((report) => (
           <article key={report.id} className="rounded-3xl bg-white p-7 shadow-sm ring-1 ring-sand-line">
