@@ -9,7 +9,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect, Http404
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
@@ -1395,7 +1395,7 @@ def announcement_emails_run_inline():
     return not settings.EMAIL_BACKEND.endswith('smtp.EmailBackend')
 
 
-def dispatch_announcement_emails_safely(announcement_id):
+def dispatch_announcement_emails_safely(announcement_id, schema_name=None):
     """Run the announcement broadcast off the request cycle, failures logged.
 
     Threaded because the throttled pace makes a whole-congregation broadcast a
@@ -1404,6 +1404,18 @@ def dispatch_announcement_emails_safely(announcement_id):
     escapes it — a database error, a closed connection at the very first open —
     is logged here so a failed broadcast is a visible log line, not silence.
     """
+    if schema_name:
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                _dispatch_announcement_emails_impl(announcement_id)
+            return
+        except ImportError:
+            pass
+    _dispatch_announcement_emails_impl(announcement_id)
+
+
+def _dispatch_announcement_emails_impl(announcement_id):
     try:
         announcement = Announcement.objects.get(id=announcement_id)
     except Announcement.DoesNotExist:
@@ -1415,8 +1427,20 @@ def dispatch_announcement_emails_safely(announcement_id):
         logger.exception('Announcement email broadcast for #%s failed', announcement_id)
 
 
-def _push_announcement_safely(announcement_id):
+def _push_announcement_safely(announcement_id, schema_name=None):
     """Deliver an announcement as web push off the request cycle, failures logged."""
+    if schema_name:
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                _push_announcement_impl(announcement_id)
+            return
+        except ImportError:
+            pass
+    _push_announcement_impl(announcement_id)
+
+
+def _push_announcement_impl(announcement_id):
     try:
         announcement = Announcement.objects.get(id=announcement_id)
     except Announcement.DoesNotExist:
@@ -1653,7 +1677,7 @@ def announcement_email_recipients(announcement, church_name):
         if wants_email is False:
             continue
         address = (email or '').strip()
-        if not address or address.lower() in seen:
+        if not address or address.lower() in seen or address.lower().endswith('@friend.church'):
             continue
         seen.add(address.lower())
         # Same convention as a receipt: the member's own name, or a plain
@@ -1883,6 +1907,10 @@ class AnnouncementView(generics.ListCreateAPIView):
         announcement.published = show_site
         announcement.save(update_fields=['published'])
 
+        schema_name = getattr(connection, 'schema_name', None)
+        if not schema_name and hasattr(self.request, 'tenant'):
+            schema_name = getattr(self.request.tenant, 'schema_name', None)
+
         if send_email:
             # The broadcast takes a real-time pause between messages (a pace
             # mail hosts accept), so it runs in a background thread and the
@@ -1898,7 +1926,7 @@ class AnnouncementView(generics.ListCreateAPIView):
             else:
                 threading.Thread(
                     target=dispatch_announcement_emails_safely,
-                    args=(announcement.id,),
+                    args=(announcement.id, schema_name),
                     name=f'announcement-email-{announcement.id}',
                     daemon=True,
                 ).start()
@@ -1915,7 +1943,7 @@ class AnnouncementView(generics.ListCreateAPIView):
                 if vapid_keys_ready():
                     threading.Thread(
                         target=_push_announcement_safely,
-                        args=(announcement.id,),
+                        args=(announcement.id, schema_name),
                         name=f'announcement-push-{announcement.id}',
                         daemon=True,
                     ).start()
