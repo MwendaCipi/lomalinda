@@ -890,9 +890,16 @@ export function canSee(
 /** The rail's wording for an area — the short forms, so a 256px rail never
  *  has to ellipsis "Adventist Possibility Ministries (APM)" into mush. The
  *  full names stay everywhere else (the directory, the desks, the titles). */
-/** The areas the Ministries heading never generates a row for: Music keeps
- *  a row of its own, and the choir stands inside the Music desk now. */
-const RAIL_AREA_CODES_MOVED = new Set(["music", "choir"]);
+const RAIL_AREA_CODES_MOVED = new Set([
+  "music",
+  "choir",
+  "beginners",
+  "kindergarten",
+  "primary",
+  "junior",
+  "teens",
+  "pathfinders",
+]);
 
 
 const RAIL_AREA_LABELS: Record<string, string> = {

@@ -14,6 +14,7 @@ from .models import (
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest,
     WeeklyMeeting,
+    ChildrenGroup, ChildRecord, Pathfinder,
 )
 from .meetings import APPOINTMENT_PLACEHOLDERS, PLACEHOLDERS as MEETING_PLACEHOLDERS
 from .requests import APPROVAL_PLACEHOLDERS, REQUEST_PLACEHOLDERS
@@ -895,6 +896,69 @@ class ChildDedicationRequestSerializer(serializers.ModelSerializer):
 
     def validate_child_name(self, value):
         return validate_text_min_length(value, 2, 'Child name')
+
+
+class ChildrenGroupSerializer(serializers.ModelSerializer):
+    children_count = serializers.IntegerField(source='children.count', read_only=True)
+
+    class Meta:
+        model = ChildrenGroup
+        fields = ('id', 'name', 'code', 'min_age', 'max_age', 'description', 'sort_order', 'is_active', 'children_count')
+
+
+class ChildRecordSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source='group.name', read_only=True)
+    computed_age = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChildRecord
+        fields = (
+            'id', 'first_name', 'last_name', 'gender', 'date_of_birth', 'age',
+            'group', 'group_name', 'unit', 'parent', 'guardian_name',
+            'guardian_phone', 'guardian_email', 'notes', 'is_active',
+            'computed_age', 'created_at',
+        )
+        read_only_fields = ('id', 'created_at')
+
+    def get_computed_age(self, obj):
+        return obj.get_computed_age()
+
+    def create(self, validated_data):
+        group = validated_data.get('group')
+        dob = validated_data.get('date_of_birth')
+        age = validated_data.get('age')
+
+        if not group:
+            computed_age = None
+            if dob:
+                today = timezone.localdate()
+                computed_age = today.year - dob.year - (
+                    (today.month, today.day) < (dob.month, dob.day)
+                )
+            elif age is not None:
+                computed_age = age
+
+            if computed_age is not None:
+                group = ChildrenGroup.get_group_for_age(computed_age)
+                validated_data['group'] = group
+
+        if group and not validated_data.get('unit'):
+            validated_data['unit'] = group.name
+
+        return super().create(validated_data)
+
+
+class PathfinderSerializer(serializers.ModelSerializer):
+    class_display = serializers.CharField(source='get_pathfinder_class_display', read_only=True)
+
+    class Meta:
+        model = Pathfinder
+        fields = (
+            'id', 'child', 'member', 'first_name', 'last_name', 'pathfinder_class',
+            'class_display', 'rank', 'guardian_name', 'guardian_phone', 'enrolled_at',
+            'is_active', 'created_at',
+        )
+        read_only_fields = ('id', 'created_at')
 
 
 class TestimonySerializer(serializers.ModelSerializer):

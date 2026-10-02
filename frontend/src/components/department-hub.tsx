@@ -33,6 +33,7 @@ import {
   Plus,
   Pencil,
   Search,
+  Sparkles,
   Sun,
   UserCog,
   UserMinus,
@@ -49,6 +50,7 @@ import { dayFirst, dayFirstTime } from "@/lib/dates";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
+import { usePageHeader } from "@/components/app-frame";
 import { densityCellPad } from "@/lib/table-density";
 import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
@@ -259,6 +261,261 @@ function unitQuery(unit: string | null) {
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+const UNIT_AGE_LABELS: Record<string, string> = {
+  Beginners: "Beginners (0–3 yrs)",
+  Kindergarten: "Kindergarten (4–6 yrs)",
+  Primary: "Primary (7–9 yrs)",
+  Junior: "Junior (10–12 yrs)",
+  Teens: "Teens (13–15 yrs)",
+  Pathfinders: "Pathfinders (10–15 yrs)",
+};
+
+function AddChildModal({
+  onClose,
+  onAdded,
+  initialUnit,
+}: {
+  onClose: () => void;
+  onAdded: () => void;
+  initialUnit?: string | null;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "other">("male");
+  const [dob, setDob] = useState("");
+  const [age, setAge] = useState<number | "">("");
+  const [category, setCategory] = useState<string>(initialUnit || "Beginners");
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Auto-detect category from age or DOB
+  const handleAgeChange = (enteredAge: number | "") => {
+    setAge(enteredAge);
+    if (enteredAge !== "") {
+      if (enteredAge <= 3) setCategory("Beginners");
+      else if (enteredAge <= 6) setCategory("Kindergarten");
+      else if (enteredAge <= 9) setCategory("Primary");
+      else if (enteredAge <= 12) setCategory(category === "Pathfinders" ? "Pathfinders" : "Junior");
+      else setCategory(category === "Pathfinders" ? "Pathfinders" : "Teens");
+    }
+  };
+
+  const handleDobChange = (enteredDob: string) => {
+    setDob(enteredDob);
+    if (enteredDob) {
+      const birth = new Date(enteredDob);
+      const today = new Date();
+      let calculatedAge = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        calculatedAge--;
+      }
+      if (calculatedAge >= 0) {
+        setAge(calculatedAge);
+        handleAgeChange(calculatedAge);
+      }
+    }
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firstName.trim()) {
+      showAlert("Missing name", "Please enter the child's first name.", "warning");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/children/records/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          gender,
+          date_of_birth: dob || null,
+          age: age === "" ? null : Number(age),
+          unit: category,
+          guardian_name: guardianName.trim(),
+          guardian_phone: guardianPhone.trim(),
+          notes: notes.trim(),
+        }),
+      });
+      if (res.ok) {
+        showAlert(
+          "Child Registered",
+          `${firstName.trim()} has been registered in Children's Ministry under ${category}.`,
+          "success",
+          { toast: true, timer: 4500, showConfirmButton: false }
+        );
+        onAdded();
+        onClose();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showAlert("Could not register child", data.detail || "Please verify the information and try again.", "error");
+      }
+    } catch {
+      showAlert("Error", "Could not connect to the server.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add Child to Children Ministry"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-bark">Add Child to Children's Ministry</h3>
+            <p className="text-[11px] text-moss">Enter child details, age and assign to their age division.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="mt-4 space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-bark">
+              First Name *
+              <input
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="e.g. Samuel"
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-bark">
+              Last Name
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="e.g. Mwangi"
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block text-xs font-semibold text-bark">
+              Date of Birth
+              <input
+                type="date"
+                value={dob}
+                onChange={(e) => handleDobChange(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-bark">
+              Age (Years)
+              <input
+                type="number"
+                min="0"
+                max="18"
+                value={age}
+                onChange={(e) => handleAgeChange(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="e.g. 5"
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-bark">
+              Sex
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value as "male" | "female" | "other")}
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              >
+                <option value="male">Boy (Male)</option>
+                <option value="female">Girl (Female)</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="block text-xs font-semibold text-bark">
+            Children Division / Category *
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none font-medium"
+            >
+              <option value="Beginners">Beginners (0–3 yrs / Cradle Roll)</option>
+              <option value="Kindergarten">Kindergarten (4–6 yrs)</option>
+              <option value="Primary">Primary (7–9 yrs)</option>
+              <option value="Junior">Junior (10–12 yrs)</option>
+              <option value="Teens">Teens (13–15 yrs)</option>
+              <option value="Pathfinders">Pathfinders Club (10–15 yrs)</option>
+            </select>
+            <span className="mt-1 block text-[11px] font-normal text-moss">
+              Auto-selected based on age, or chosen manually.
+            </span>
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-bark">
+              Parent / Guardian Name
+              <input
+                type="text"
+                value={guardianName}
+                onChange={(e) => setGuardianName(e.target.value)}
+                placeholder="e.g. Mary Mwangi"
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-bark">
+              Parent / Guardian Phone
+              <input
+                type="tel"
+                value={guardianPhone}
+                onChange={(e) => setGuardianPhone(e.target.value)}
+                placeholder="e.g. 0712345678"
+                className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <label className="block text-xs font-semibold text-bark">
+            Notes (Special needs, allergies, medical)
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any special notes or care instructions (optional)"
+              className="mt-1 w-full rounded-xl border border-sand-line px-3 py-2 text-xs font-normal focus:border-ember focus:outline-none"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !firstName.trim()}
+              className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {saving ? "Registering…" : "Register Child"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function AddMemberModal({
@@ -2480,6 +2737,7 @@ function DepartmentDetail({
   const [loadingRoll, setLoadingRoll] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
@@ -2506,6 +2764,37 @@ function DepartmentDetail({
   const rowPad = densityCellPad();
 
   const [canManageRoll, setCanManageRoll] = useState(false);
+
+  // Inject the search bar into the AppFrame page header's right slot — the
+  // shell draws the title and description; we slot the search beside them.
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
+    if (subTab === "members") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={rollSearch}
+          onChange={(e) => setRollSearch(e.target.value)}
+          placeholder="Search the roll…"
+          className={inputCls}
+        />
+      );
+    } else if (subTab === "calendar") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={eventSearch}
+          onChange={(e) => setEventSearch(e.target.value)}
+          placeholder="Search the calendar…"
+          className={inputCls}
+        />
+      );
+    } else {
+      setHeaderRightAction(null);
+    }
+    return () => setHeaderRightAction(null);
+  }, [subTab, rollSearch, eventSearch, setHeaderRightAction]);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
@@ -2754,44 +3043,6 @@ function DepartmentDetail({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
-      {/* The desk names itself and says what it is for, above its own toggles —
-          the heading the shell draws on a page of its own. An area's desk
-          lives inside the office console, which the shell leaves unnamed, so
-          it carries the heading here instead. */}
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{department.label}</h1>
-          {(department.description || DEPARTMENT_BLURBS[department.code]) && (
-            <p className="mt-1 text-xs text-moss sm:text-sm">
-              {department.description || DEPARTMENT_BLURBS[department.code]}
-            </p>
-          )}
-        </div>
-        <div className="shrink-0 flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {subTab === "members" && (
-            <div className="w-full sm:w-64">
-              <input
-                type="text"
-                value={rollSearch}
-                onChange={(e) => setRollSearch(e.target.value)}
-                placeholder="Search the roll by name, phone or email…"
-                className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-              />
-            </div>
-          )}
-          {subTab === "calendar" && (
-            <div className="w-full sm:w-64">
-              <input
-                type="text"
-                value={eventSearch}
-                onChange={(e) => setEventSearch(e.target.value)}
-                placeholder="Search the calendar by title, date or location…"
-                className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-              />
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* The department's own views, on the shared strip: the roll first, the
           calendar beside it. It pins to the top of the page, so the desk can
@@ -2982,13 +3233,24 @@ function DepartmentDetail({
               {rollQuery ? ` of ${rollRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
-              <button
-                type="button"
-                onClick={() => setShowAddMember(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Add Member
-              </button>
+              <div className="flex items-center gap-2">
+                {department.code === "children" && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddChild(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-fuchsia-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-fuchsia-800"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Child
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAddMember(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Add Member
+                </button>
+              </div>
             ) : !onRoll && !holdsOffice ? (
               <button
                 type="button"
@@ -3071,6 +3333,17 @@ function DepartmentDetail({
           the roll the same way Add member does. */}
       <JoinRequestsPanel departmentCode={department.code} onChanged={onChanged} />
 
+      {showAddChild && (
+        <AddChildModal
+          initialUnit={unit}
+          onClose={() => setShowAddChild(false)}
+          onAdded={() => {
+            setShowAddChild(false);
+            loadRoll();
+            onChanged();
+          }}
+        />
+      )}
       {showAddMember && (
         <AddMemberModal
           departmentLabel={department.label}

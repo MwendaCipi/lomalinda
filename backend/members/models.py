@@ -2150,6 +2150,116 @@ class ProfileChangeRequest(models.Model):
         return f"Profile change for {member_name} ({self.status}, {len(self.changes)} field(s))"
 
 
+class ChildrenGroup(models.Model):
+    """A children division / category in the church (Beginners, Kindergarten, Primary, Teens, Pathfinders...).
+
+    Each group carries an age bracket (min_age, max_age) so the church system can
+    automatically categorize children and progress them as they grow older.
+    """
+    name = models.CharField(max_length=80, unique=True)
+    code = models.SlugField(max_length=60, unique=True)
+    min_age = models.PositiveSmallIntegerField(default=0)
+    max_age = models.PositiveSmallIntegerField(default=18)
+    description = models.CharField(max_length=240, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('sort_order', 'min_age', 'id')
+
+    def __str__(self):
+        return f"{self.name} ({self.min_age}–{self.max_age} yrs)"
+
+    @classmethod
+    def get_group_for_age(cls, age):
+        """Find the matching children group for a given age (e.g. 5 -> Kindergarten)."""
+        if age is None:
+            return None
+        return cls.objects.filter(is_active=True, min_age__lte=age, max_age__gte=age).order_by('sort_order', 'min_age').first()
+
+
+class ChildRecord(models.Model):
+    """A child registered in the church's care and children's ministries."""
+    GENDER_CHOICES = [('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
+
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80, blank=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    age = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Age in years if exact birth date is unknown")
+    group = models.ForeignKey(ChildrenGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    unit = models.CharField(max_length=60, blank=True, help_text="Sub-unit or category name e.g. Beginners, Kindergarten, Primary, Teens, Pathfinders")
+    parent = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='children_records')
+    guardian_name = models.CharField(max_length=120, blank=True)
+    guardian_phone = models.CharField(max_length=30, blank=True)
+    guardian_email = models.EmailField(blank=True)
+    notes = models.TextField(blank=True, help_text="Special needs, dietary, or medical notes")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('first_name', 'last_name', 'id')
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def get_computed_age(self):
+        if self.date_of_birth:
+            today = timezone.localdate()
+            return today.year - self.date_of_birth.year - (
+                (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+            )
+        return self.age
+
+    def auto_progress(self):
+        """Automatically progress the child to the appropriate group based on current age."""
+        computed_age = self.get_computed_age()
+        if computed_age is not None:
+            new_group = ChildrenGroup.get_group_for_age(computed_age)
+            if new_group and self.group != new_group:
+                self.group = new_group
+                self.unit = new_group.name
+                self.save(update_fields=['group', 'unit'])
+                return new_group
+        return self.group
+
+
+class Pathfinder(models.Model):
+    """A Pathfinder club member and their class progression (Friend, Companion, Explorer, Ranger, Voyager, Guide)."""
+    CLASS_CHOICES = [
+        ('friend', 'Friend (10 yrs / Grade 5)'),
+        ('companion', 'Companion (11 yrs / Grade 6)'),
+        ('explorer', 'Explorer (12 yrs / Grade 7)'),
+        ('ranger', 'Ranger (13 yrs / Grade 8)'),
+        ('voyager', 'Voyager (14 yrs / Grade 9)'),
+        ('guide', 'Guide (15 yrs / Grade 10)'),
+        ('master_guide', 'Master Guide (16+ yrs)'),
+    ]
+
+    child = models.OneToOneField(ChildRecord, on_delete=models.CASCADE, null=True, blank=True, related_name='pathfinder_profile')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='pathfinder_memberships')
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80, blank=True)
+    pathfinder_class = models.CharField(max_length=20, choices=CLASS_CHOICES, default='friend')
+    rank = models.CharField(max_length=60, blank=True, help_text="Club rank or office e.g. Captain, Scribe")
+    guardian_name = models.CharField(max_length=120, blank=True)
+    guardian_phone = models.CharField(max_length=30, blank=True)
+    enrolled_at = models.DateField(default=timezone.now)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('first_name', 'last_name', 'id')
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.get_pathfinder_class_display()})"
+
+
 def giver_display_name(donor_name, *, member=None, email='', phone=''):
     """The real name behind a giving record, or '' when nobody is identifiable.
 

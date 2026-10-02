@@ -41,7 +41,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
@@ -87,7 +87,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -9241,3 +9241,100 @@ class DeaconateRequestReviewView(APIView):
             link=f'{settings.FRONTEND_URL}/administration?tab=inventory',
         )
         return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
+
+
+class ChildrenGroupsView(generics.ListCreateAPIView):
+    """List or create children groups and their age brackets (Beginners, Kindergarten, Primary, Junior, Teens, Pathfinders)."""
+    queryset = ChildrenGroup.objects.filter(is_active=True)
+    serializer_class = ChildrenGroupSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return ChildrenGroup.objects.filter(is_active=True).order_by('sort_order', 'min_age')
+
+
+class ChildrenRecordsView(generics.ListCreateAPIView):
+    """List and register children records under children ministries."""
+    serializer_class = ChildRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = ChildRecord.objects.filter(is_active=True).select_related('group', 'parent')
+        unit = self.request.query_params.get('unit')
+        group_code = self.request.query_params.get('group')
+        search = self.request.query_params.get('search')
+        if unit:
+            qs = qs.filter(Q(unit__iexact=unit) | Q(group__name__iexact=unit))
+        if group_code:
+            qs = qs.filter(group__code=group_code)
+        if search:
+            q = search.strip().lower()
+            qs = qs.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(guardian_name__icontains=q)
+                | Q(guardian_phone__icontains=q)
+            )
+        return qs.order_by('first_name', 'last_name')
+
+    def perform_create(self, serializer):
+        parent = serializer.validated_data.get('parent') or self.request.user
+        serializer.save(parent=parent)
+
+
+class ChildRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or remove a child record."""
+    queryset = ChildRecord.objects.all()
+    serializer_class = ChildRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class ChildrenAutoProgressView(APIView):
+    """Batch run age progression across all active children."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        progressed = []
+        for child in ChildRecord.objects.filter(is_active=True).select_related('group'):
+            old_group_name = child.group.name if child.group else None
+            new_group = child.auto_progress()
+            if new_group and (old_group_name != new_group.name):
+                progressed.append({
+                    'id': child.id,
+                    'name': child.full_name,
+                    'old_group': old_group_name,
+                    'new_group': new_group.name,
+                })
+        return Response({
+            'progressed_count': len(progressed),
+            'progressed': progressed,
+        })
+
+
+class PathfinderClubView(generics.ListCreateAPIView):
+    """List and enroll Pathfinder club members."""
+    queryset = Pathfinder.objects.filter(is_active=True).select_related('child', 'member')
+    serializer_class = PathfinderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Pathfinder.objects.filter(is_active=True).select_related('child', 'member')
+        cls = self.request.query_params.get('class')
+        search = self.request.query_params.get('search')
+        if cls:
+            qs = qs.filter(pathfinder_class=cls)
+        if search:
+            q = search.strip().lower()
+            qs = qs.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(guardian_name__icontains=q)
+            )
+        return qs.order_by('first_name', 'last_name')
+
+
+class PathfinderDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or unenroll a Pathfinder member."""
+    queryset = Pathfinder.objects.all()
+    serializer_class = PathfinderSerializer
+    permission_classes = [permissions.IsAuthenticated]
