@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePageHeader } from "@/components/app-frame";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -221,6 +222,48 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
     loadInventory();
   }, []);
 
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    if (activeTab !== "inventory") return;
+    setHeaderRightAction(
+      <div className="flex items-center gap-2">
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none"
+          aria-label="Property category filter"
+        >
+          <option value="all">All categories</option>
+          {INVENTORY_CATEGORIES.map((category) => (
+            <option key={category.value} value={category.value}>{category.label}</option>
+          ))}
+        </select>
+        <select
+          value={stateFilter}
+          onChange={(e) => setStateFilter(e.target.value)}
+          className="rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none"
+          aria-label="Property condition filter"
+        >
+          <option value="all">All conditions</option>
+          {INVENTORY_STATES.map((state) => (
+            <option key={state.value} value={state.value}>{state.label}</option>
+          ))}
+        </select>
+        <div className="relative w-44 sm:w-56">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
+          <input
+            type="text"
+            placeholder="Search item, tag, room..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+          />
+        </div>
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [activeTab, searchQuery, categoryFilter, stateFilter, setHeaderRightAction]);
+
   // Close the row actions menu when the press lands anywhere else. The open
   // menu is found by a marker on its own wrapper, not by a ref — the table row
   // and the phone card both render, and a single ref only attaches to whichever
@@ -396,50 +439,14 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {activeTab === "inventory" && (
         <>
           <div className="shrink-0 border-b border-sand-line bg-white px-5 py-3 sm:px-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <BackToOverviewArrow />
-                <Boxes className="h-4 w-4 shrink-0 text-ember" />
-                {/* Named by the strip above on a wide screen. */}
-                <h2 className="text-sm font-bold text-bark md:hidden">Property Inventory</h2>
-                <span className="text-[11px] text-moss">
-                  {inventory.length} {inventory.length === 1 ? "item" : "items"} registered
-                </span>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
-                  aria-label="Property category filter"
-                >
-                  <option value="all">All categories</option>
-                  {INVENTORY_CATEGORIES.map((category) => (
-                    <option key={category.value} value={category.value}>{category.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={stateFilter}
-                  onChange={(e) => setStateFilter(e.target.value)}
-                  className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none sm:flex-none"
-                  aria-label="Property condition filter"
-                >
-                  <option value="all">All conditions</option>
-                  {INVENTORY_STATES.map((state) => (
-                    <option key={state.value} value={state.value}>{state.label}</option>
-                  ))}
-                </select>
-                <div className="relative min-w-0 sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
-                  <input
-                    type="text"
-                    placeholder="Search item, tag number, room..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-sand-line bg-sand py-2.5 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
-                  />
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <BackToOverviewArrow />
+              <Boxes className="h-4 w-4 shrink-0 text-ember" />
+              {/* Named by the strip above on a wide screen. */}
+              <h2 className="text-sm font-bold text-bark md:hidden">Property Inventory</h2>
+              <span className="text-[11px] text-moss">
+                {inventory.length} {inventory.length === 1 ? "item" : "items"} registered
+              </span>
             </div>
           </div>
 

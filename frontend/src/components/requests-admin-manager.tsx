@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePageHeader } from "@/components/app-frame";
 
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
@@ -245,6 +246,107 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [statusOpen, setStatusOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
+
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    const statusOpts: { value: string; label: string }[] =
+      activeTab === "transfer"
+        ? [
+            { value: "pending", label: "Pending" },
+            { value: "under_review", label: "Under review" },
+            { value: "approved", label: "Approved" },
+            { value: "completed", label: "Completed" },
+            { value: "cancelled", label: "Cancelled" },
+            { value: "all", label: "All" },
+          ]
+        : [
+            { value: "pending", label: "Pending" },
+            { value: "approved", label: "Approved" },
+            { value: "rejected", label: "Rejected" },
+            { value: "all", label: "All" },
+          ];
+    const deskOpts: { value: KindFilter; label: string }[] = [
+      { value: "all", label: "All requests" },
+      { value: "join", label: "Join requests" },
+      { value: "area", label: "Area requests" },
+      { value: "prayer", label: "Prayer requests" },
+      { value: "visitation", label: "Visitation" },
+      { value: "dedication", label: "Child dedications" },
+      { value: "welfare", label: "Welfare & support" },
+      { value: "transfer", label: "Membership transfer" },
+      { value: "property", label: "Property requests" },
+    ];
+    setHeaderRightAction(
+      <div className="flex items-center gap-2">
+        <div className="relative" ref={statusRef}>
+          <button
+            type="button"
+            onClick={() => setStatusOpen((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
+          >
+            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" || statusFilter === "completed" ? "bg-emerald-600" : statusFilter === "rejected" || statusFilter === "cancelled" ? "bg-rose-500" : statusFilter === "under_review" ? "bg-blue-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
+            {statusOpts.find((o) => o.value === statusFilter)?.label ?? "Pending"}
+            <svg className={`h-3 w-3 text-moss transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {statusOpen && (
+            <div role="menu" className="absolute right-0 z-50 mt-2 w-52 rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show by review state</p>
+              {statusOpts.map((option) => (
+                <button key={option.value} type="button" role="menuitemradio" aria-checked={statusFilter === option.value}
+                  onClick={() => { setStatusFilter(option.value as StatusFilter); setStatusOpen(false); }}
+                  className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition ${statusFilter === option.value ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"}`}>
+                  <span className="flex items-center gap-2">
+                    {statusFilter === option.value && <svg className="h-3 w-3 text-ember" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    <span className={statusFilter === option.value ? "" : "pl-4"}>{option.label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative" ref={filterRef}>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
+          >
+            <svg className="h-3.5 w-3.5 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" /></svg>
+            Filter
+            {activeTab !== "all" && <span className="rounded-full bg-bark px-1.5 py-0.5 text-[10px] font-bold text-white">{KIND_META[activeTab as Exclude<KindFilter, "all">]?.label ?? ""}</span>}
+            <svg className={`h-3 w-3 text-moss transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {filterOpen && (
+            <div role="menu" className="absolute right-0 z-50 mt-2 max-h-80 w-60 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show requests by desk</p>
+              {deskOpts.map((option) => (
+                <button key={option.value} type="button" role="menuitemradio" aria-checked={activeTab === option.value}
+                  onClick={() => { setActiveTab(option.value); setStatusFilter("pending"); setFilterOpen(false); }}
+                  className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition ${activeTab === option.value ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"}`}>
+                  <span className="flex items-center gap-2">
+                    {activeTab === option.value && <svg className="h-3 w-3 text-ember" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    <span className={activeTab === option.value ? "" : "pl-4"}>{option.label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative w-44 sm:w-56">
+          <svg className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search requests..."
+            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none transition focus:border-ember"
+          />
+        </div>
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [search, statusFilter, filterOpen, statusOpen, activeTab, setHeaderRightAction]);
 
   useEffect(() => {
     if (initialTab) {
@@ -750,141 +852,6 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* The two popover filters on the left, the search beside them — the
-          office narrows first, then looks. */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Status filter: pending by default — the desk exists to answer. */}
-        <div className="relative" ref={statusRef}>
-          <button
-            type="button"
-            onClick={() => setStatusOpen((open) => !open)}
-            aria-expanded={statusOpen}
-            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember"
-          >
-            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" || statusFilter === "completed" ? "bg-emerald-600" : statusFilter === "rejected" || statusFilter === "cancelled" ? "bg-rose-500" : statusFilter === "under_review" ? "bg-blue-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
-            {activeStatusLabel}
-            <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{statusCount(statusFilter)}</span>
-            <svg className={`h-3 w-3 text-moss transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {statusOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-sand-line bg-white py-2 shadow-xl"
-            >
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
-                Show by review state
-              </p>
-              {statusFilterOptions.map((option) => {
-                const count = statusCount(option.value);
-                const selected = statusFilter === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    onClick={() => {
-                      setStatusFilter(option.value as StatusFilter | TransferOnlyStatus);
-                      setStatusOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
-                      selected ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      {selected && <Check size={14} className="text-ember" aria-hidden="true" />}
-                      <span className={selected ? "" : "pl-5"}>{option.label}</span>
-                    </span>
-                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="relative" ref={filterRef}>
-          <button
-            type="button"
-            onClick={() => setFilterOpen((open) => !open)}
-            aria-expanded={filterOpen}
-            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember"
-          >
-            <svg className="h-4 w-4 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" />
-            </svg>
-            Filter
-            {activeTab !== "all" && (
-              <span className="rounded-full bg-bark px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterLabel}</span>
-            )}
-            <svg className={`h-3 w-3 text-moss transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {filterOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 z-50 mt-2 max-h-80 w-64 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl"
-            >
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">
-                Show requests by desk
-              </p>
-              {filterOptions.map((option) => {
-                const count = kindCount(option.value);
-                const selected = activeTab === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    onClick={() => {
-                      setActiveTab(option.value);
-                      // Each desk opens on its default answer — the membership
-                      // desk's own statuses would leave a stale bucket active.
-                      setStatusFilter("pending");
-                      setFilterOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition ${
-                      selected ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      {selected && <Check size={14} className="text-ember" aria-hidden="true" />}
-                      <span className={selected ? "" : "pl-5"}>{option.label}</span>
-                    </span>
-                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* The search sits beside the filters — narrowed first, then found. */}
-        <div className="relative min-w-0 flex-1 sm:max-w-sm">
-          <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-          </svg>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, contact, details..."
-            className="w-full rounded-full border border-sand-mute bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-ember"
-          />
         </div>
       </div>
 

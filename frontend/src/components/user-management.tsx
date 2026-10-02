@@ -21,6 +21,7 @@ import { dayFirst } from "@/lib/dates";
 import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { usePageHeader } from "@/components/app-frame";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 import { useDepartments } from "@/hooks/use-departments";
@@ -1222,6 +1223,22 @@ export function UserManagement() {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    setHeaderRightAction(
+      <div className="w-56 sm:w-64">
+        <input
+          type="text"
+          placeholder="Search by name, email, phone..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+        />
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [search, setHeaderRightAction]);
   // One tab strip drives the desk: All / Active / Inactive read the confirmed
   // roster, Invites (pending) reads the invitation, transfer and awaiting
   // lists. The filter here is which list is on show.
@@ -2185,13 +2202,6 @@ export function UserManagement() {
               help: tab.help,
               count: tab.key === "awaiting" ? awaitingCount : tab.key === "all" ? rosterScoped.length : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === tab.key).length,
             }))}
-          />
-          <input
-            type="text"
-            placeholder="Search by name, email, phone, gifts..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-12 w-full min-w-0 rounded-xl border border-sand-line bg-white px-4 text-xs focus:border-ember focus:outline-none sm:ml-auto sm:w-auto sm:min-w-[220px] sm:flex-1 sm:max-w-sm"
           />
         </div>
       </div>
