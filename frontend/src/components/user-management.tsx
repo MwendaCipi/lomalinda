@@ -1224,7 +1224,7 @@ export function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const { setHeaderRightAction } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
   useEffect(() => {
     setHeaderRightAction(
       <div className="w-56 sm:w-64">
@@ -1966,6 +1966,39 @@ export function UserManagement() {
 
   const filteredMembers = rosterScoped.filter(matchesTypeFilter);
 
+  // The record filter rides the shell's header band, so the desk shows one
+  // line of toggles instead of the section strip plus a row of its own. The
+  // counts read what the search leaves, so a tab never looks busy then opens
+  // on an empty list.
+  useEffect(() => {
+    setCustomToggles(
+      <SubNav
+        label="Record filter"
+        value={invitationFilter === "pending" ? "awaiting" : typeFilter}
+        onChange={(key) => {
+          if (key === "awaiting") {
+            setInvitationFilter("pending");
+            return;
+          }
+          setInvitationFilter("confirmed");
+          setTypeFilter(key as TypeFilter);
+        }}
+        items={TYPE_TABS.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          help: tab.help,
+          count:
+            tab.key === "awaiting"
+              ? awaitingCount
+              : tab.key === "all"
+                ? rosterScoped.length
+                : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === tab.key).length,
+        }))}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [setCustomToggles, invitationFilter, typeFilter, awaitingCount, rosterScoped]);
+
   // ── Transfer handler ─────────────────────────────────────────────────────
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2176,33 +2209,6 @@ export function UserManagement() {
             <h2 className="text-xl font-bold text-bark md:hidden">User Management</h2>
           </span>
           {/* Row density left this desk: the roster reads comfortable rows. */}
-        </div>
-        {/* The record row: the tab strip on the left, the search beside it
-            on the right — All / Members / S. School / Friends over the
-            confirmed roster (active and inactive are found by search, and
-            switched in Actions), Invites (pending) over the invitation,
-            transfer and awaiting lists — with each tab counting what the
-            search leaves. */}
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <SubNav
-            className="w-full sm:w-auto"
-            label="Record filter"
-            value={invitationFilter === "pending" ? "awaiting" : typeFilter}
-            onChange={(key) => {
-              if (key === "awaiting") {
-                setInvitationFilter("pending");
-                return;
-              }
-              setInvitationFilter("confirmed");
-              setTypeFilter(key as TypeFilter);
-            }}
-            items={TYPE_TABS.map((tab) => ({
-              key: tab.key,
-              label: tab.label,
-              help: tab.help,
-              count: tab.key === "awaiting" ? awaitingCount : tab.key === "all" ? rosterScoped.length : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === tab.key).length,
-            }))}
-          />
         </div>
       </div>
 

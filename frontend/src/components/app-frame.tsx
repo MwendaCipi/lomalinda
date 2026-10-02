@@ -7,7 +7,7 @@ import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
-import { pageHeaderFor, railFor } from "@/config/navigation";
+import { pageHeaderFor, railFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -64,10 +64,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const here = useRailHere(pathname, entries);
 
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
-  const hereItem =
-    section && "items" in section && section.items
-      ? section.items.find((item) => item.href === here.href) ?? null
-      : null;
+  // The row that is "here", whether it sits inside a section's list (the
+  // clerk's pages) or stands on its own (a department's desk, whose rail row
+  // is top-level). Reading both is what lets a department's desk show its own
+  // heading instead of falling back to the console's.
+  const railRows: RailRow[] = entries.flatMap((entry) =>
+    "items" in entry && entry.items ? entry.items : "href" in entry && entry.href ? [entry as RailRow] : []
+  );
+  const hereItem = railRows.find((item) => item.href === here.href) ?? null;
   const pageHeader = hereItem?.description
     ? { label: hereItem.label, description: hereItem.description }
     : pageHeaderFor(pathname);
@@ -114,9 +118,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               {(customToggles || sectionPages.length > 1) && (
-                <div className="shrink-0 border-b border-sand-line bg-white px-3 py-2 sm:px-5 sm:py-2.5">
+                <div className="shrink-0 border-b border-sand-line bg-white px-3 sm:px-5">
                   {customToggles ? (
-                    customToggles
+                    <div className="pt-2">{customToggles}</div>
                   ) : (
                     <SectionNav
                       label={`${section?.label ?? ""} pages`}

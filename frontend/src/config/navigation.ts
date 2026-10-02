@@ -366,11 +366,12 @@ export function isActive(dest: Destination, pathname: string): boolean {
 
 /**
  * The destinations that draw their own heading: the dashboard (a personal
- * greeting), the office console (a pinned workspace with its own internal
- * navigation) and About (a marketing page a signed-out visitor reads too).
- * The shell shows a heading for every other page it frames.
+ * greeting) and About (a marketing page a signed-out visitor reads too). The
+ * shell shows a heading for every other page it frames — the office console
+ * included, where each tab or department desk names itself through its rail
+ * row and the overview falls back to the console's own name and description.
  */
-const HEADERLESS_DESTINATIONS = new Set<DestinationKey>(["administration", "about", "dashboard"]);
+const HEADERLESS_DESTINATIONS = new Set<DestinationKey>(["about", "dashboard"]);
 
 /** The longest prefix a destination claims — the tie-break between close matchers. */
 function matchLength(dest: Destination): number {
@@ -782,6 +783,7 @@ export const railEntries: RailEntry[] = [
         match: ["/administration"],
         tab: "leaders",
         dept: "music",
+        description: DEPARTMENT_BLURBS.music,
       },
     ],
     sectionKey: "ministry",
@@ -899,7 +901,18 @@ const RAIL_AREA_CODES_MOVED = new Set([
   "junior",
   "teens",
   "pathfinders",
+  // The men's and women's fellowships' sub-units. They belong inside the AMM
+  // and AWM desks (whose `units` field names them), not as rows of their own.
+  "young_couples",
+  "single_parents",
 ]);
+
+/**
+ * Areas that read as a fellowship inside another desk, never a rail row of
+ * their own — matched by name, so a desk the church created with the same
+ * wording is filed the same way whatever code it was given.
+ */
+const RAIL_UNIT_LABELS_MOVED = new Set(["young couples", "single parents"]);
 
 
 const RAIL_AREA_LABELS: Record<string, string> = {
@@ -960,8 +973,10 @@ export function railFor(
       const visible = departments
         .filter((department) => department.group === group)
         // Music and choir stand outside the heading — music has a row of
-        // its own, and the choir lives in the Music desk.
+        // its own, and the choir lives in the Music desk. The AMM/AWM
+        // sub-units (Young Couples, Single Parents) read inside those desks.
         .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
+        .filter((department) => !RAIL_UNIT_LABELS_MOVED.has(department.label.trim().toLowerCase()))
         .filter(
           (department) =>
             group === "ministry" ||
@@ -975,6 +990,8 @@ export function railFor(
         match: ["/administration"],
         tab: "leaders",
         dept: department.code,
+        // The desk's own blurb, so its page heading has a line under it too.
+        description: DEPARTMENT_BLURBS[department.code],
         roles: memberRowRoles,
         sectionKey: entry.sectionKey,
       }));

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
@@ -92,6 +93,7 @@ export default function ReconciliationPage() {
 
   const searchParams = useSearchParams();
   const modeParam = searchParams.get("mode");
+  const router = useRouter();
 
   useEffect(() => {
     if (modeParam === "summary") {
@@ -175,66 +177,34 @@ export default function ReconciliationPage() {
     );
   }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
 
-  // Keep all 6 treasury toggles as separate normal toggles in one row
+  // The treasury's six views, as one line. The ledger owns Individual Givings
+  // and Summary in place; the other four walk to the accounts desk, which is
+  // where those views live. The shell's header band draws it — one strip for
+  // the whole treasury, never a second row under this page's own header.
   useEffect(() => {
-    const getToggleCls = (active: boolean) =>
-      `rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
-        active
-          ? "bg-bark text-white border-bark shadow-sm"
-          : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
-      }`;
-
     setCustomToggles(
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => {
+      <TreasuryNav
+        active={viewMode === "summary" ? "summary" : "givings"}
+        onSelect={(view) => {
+          if (view === "givings") {
             setExpandedPurpose(null);
             setViewMode("all_givings");
             loadAllGivings();
-          }}
-          aria-pressed={viewMode === "all_givings"}
-          className={getToggleCls(viewMode === "all_givings")}
-        >
-          Individual Givings
-        </button>
-        <button
-          type="button"
-          onClick={() => {
+          } else if (view === "summary") {
             setViewMode("summary");
-          }}
-          aria-pressed={viewMode === "summary"}
-          className={getToggleCls(viewMode === "summary")}
-        >
-          Summary Contributions
-        </button>
-        <Link
-          href="/administration?tab=accounts&view=accounts"
-          className={getToggleCls(false)}
-        >
-          Church Accounts
-        </Link>
-        <Link
-          href="/administration?tab=accounts&view=income"
-          className={getToggleCls(false)}
-        >
-          Income
-        </Link>
-        <Link
-          href="/administration?tab=accounts&view=expenditure"
-          className={getToggleCls(false)}
-        >
-          Expenses
-        </Link>
-        <Link
-          href="/administration?tab=accounts&view=withdrawals"
-          className={getToggleCls(false)}
-        >
-          Requests
-        </Link>
-      </div>
+          } else if (view === "accounts") {
+            router.push("/administration?tab=accounts&view=accounts");
+          } else if (view === "income") {
+            router.push("/administration?tab=accounts&view=income");
+          } else if (view === "expenses") {
+            router.push("/administration?tab=accounts&view=expenditure");
+          } else {
+            router.push("/administration?tab=accounts&view=withdrawals");
+          }
+        }}
+      />
     );
-  }, [setCustomToggles, viewMode, loadAllGivings]);
+  }, [setCustomToggles, viewMode, loadAllGivings, router]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

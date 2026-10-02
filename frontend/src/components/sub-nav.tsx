@@ -19,23 +19,25 @@ export type SubNavItem = {
 /** One page of a section, as the section's own strip names it. */
 export type SectionNavItem = SubNavItem & { href: string };
 
-/** The segmented strip. Independent buttons: no pill around them. On a phone
- *  the strip wraps into rows rather than scrolling sideways — a chip pushed
- *  off-screen is a page the member does not know exists, so every view stays
- *  in sight, and the desk-sized widths keep the one-row scroll. */
+/** The strip. Independent tabs that read as labels over a rule, not as pills
+ *  around them: the active view (and whatever the pointer is over) carries an
+ *  underscore, and the hairline they share runs the width of the strip. On a
+ *  phone the strip wraps into rows rather than scrolling sideways — a chip
+ *  pushed off-screen is a page the member does not know exists, so every view
+ *  stays in sight, and the desk-sized widths keep the one-row scroll. */
 const stripClass =
-  "min-h-12 w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
+  "min-h-12 w-full flex-wrap items-end gap-1 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
 /** The section strip's phone layout once it is long enough to wrap anyway:
  *  an equal-share grid, three across — Giving's six pages land as two
  *  level rows of three instead of a wrap that follows each label's length.
  *  Shorter strips keep the natural wrap, which still fits them on one row. */
 const sectionGridClass =
-  "grid min-h-12 w-full grid-cols-3 items-stretch gap-1.5 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
+  "grid min-h-12 w-full grid-cols-3 items-stretch gap-1 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
 const tabClass = (active: boolean) =>
-  `flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition sm:flex-none ${
-    active ? "bg-bark text-white shadow-sm" : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
+  `relative flex h-11 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 text-sm font-semibold transition sm:flex-none ${
+    active ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
   }`;
 
 /** The inside of a strip tab — the name and any count, no icon. A tab with a
@@ -53,7 +55,7 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
         item.label
       )}
       {typeof item.count === "number" ? (
-        <span className={`text-xs font-bold ${active ? "text-white/70" : "text-moss-faint"}`}>{item.count}</span>
+        <span className={`text-xs font-bold ${active ? "text-ember" : "text-moss-faint"}`}>{item.count}</span>
       ) : null}
     </>
   );

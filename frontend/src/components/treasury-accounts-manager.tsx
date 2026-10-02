@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { TreasuryNav } from "@/components/treasury-nav";
+import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 import { RecordList } from "./record-list";
@@ -227,6 +229,31 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       setView(initialView);
     }
   }, [initialView]);
+
+  // The treasury's six views, drawn once in the shell's header band. The two
+  // ledgers live on the reconciliation page; the four desks here are this
+  // page's own views. Rendering it through the band (rather than as a row in
+  // this component's own header) is what keeps the treasury to a single line
+  // of toggles — the band shows this strip instead of the section's pages.
+  const { setCustomToggles, setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    setCustomToggles(
+      <TreasuryNav
+        active={
+          view === "accounts" ? "accounts" : view === "income" ? "income" : view === "expenditure" ? "expenses" : "requests"
+        }
+        onSelect={(next) => {
+          if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
+          else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
+          else if (next === "accounts") setView("accounts");
+          else if (next === "income") setView("income");
+          else if (next === "expenses") setView("expenditure");
+          else setView("withdrawals");
+        }}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [setCustomToggles, view, router]);
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
   const rowPad = densityCellPad();
@@ -368,6 +395,52 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       .toLowerCase()
       .includes(needle);
   });
+
+  // The desk's search — and, on Income, its date window — rides the shell's
+  // header beside the page's name, so the heading and its search share a row
+  // and the toggles sit below both. The Expenditure and Requests views own
+  // their own filter bars, so the slot steps aside for them.
+  useEffect(() => {
+    if (view === "expenditure" || view === "withdrawals") {
+      setHeaderRightAction(null);
+      return;
+    }
+    setHeaderRightAction(
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <input
+          type="text"
+          placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
+          value={view === "accounts" ? accountSearch : transactionSearch}
+          onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
+          className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+          aria-label={view === "accounts" ? "Search church accounts" : "Search account movements"}
+        />
+        {view === "income" && (
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>From</span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>To</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [setHeaderRightAction, view, accountSearch, transactionSearch, fromDate, toDate]);
 
   /** Money arriving in an account (a credit, or the receiving half of a transfer). */
   const isCreditMovement = (tx: AccountTransaction) =>
@@ -639,117 +712,12 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {/* ── Header: the desk's three views as one segmented toggle, with the
-          search and the date window beside them; the metrics ride the footer
-          below, so this row is free for the controls. ── */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-sand-line px-5 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 lg:flex-1">
-            <span className="lg:hidden">
-              <BackToOverviewArrow />
-            </span>
-            {/* The treasury views as individual normal toggles in one row */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/administration/reconciliation?mode=all_givings"
-                className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark hover:bg-sand transition"
-              >
-                Individual Givings
-              </Link>
-              <Link
-                href="/administration/reconciliation?mode=summary"
-                className="rounded-xl border border-sand-mute bg-white px-3.5 py-1.5 text-xs font-semibold text-moss hover:text-bark hover:bg-sand transition"
-              >
-                Summary Contributions
-              </Link>
-              <button
-                type="button"
-                onClick={() => setView("accounts")}
-                aria-pressed={view === "accounts"}
-                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
-                  view === "accounts"
-                    ? "bg-bark text-white border-bark shadow-sm"
-                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
-                }`}
-              >
-                Church Accounts
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("income")}
-                aria-pressed={view === "income"}
-                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
-                  view === "income"
-                    ? "bg-bark text-white border-bark shadow-sm"
-                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
-                }`}
-              >
-                Income
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("expenditure")}
-                aria-pressed={view === "expenditure"}
-                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
-                  view === "expenditure"
-                    ? "bg-bark text-white border-bark shadow-sm"
-                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
-                }`}
-              >
-                Expenses
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("withdrawals")}
-                aria-pressed={view === "withdrawals"}
-                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition ${
-                  view === "withdrawals"
-                    ? "bg-bark text-white border-bark shadow-sm"
-                    : "bg-white text-moss border-sand-mute hover:text-bark hover:bg-sand"
-                }`}
-              >
-                Requests
-              </button>
-            </div>
-          </div>
-
-          {/* Search and the date window ride beside the toggles. The
-              expenditure view owns its own filter bar, so they step aside. */}
-          {view !== "expenditure" && view !== "withdrawals" && (
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-              <input
-                type="text"
-                placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
-                value={view === "accounts" ? accountSearch : transactionSearch}
-                onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
-                className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-60"
-                aria-label={view === "accounts" ? "Search church accounts" : "Search account movements"}
-              />
-              {view === "income" && (
-                <div className="flex items-center justify-between gap-2 sm:justify-start">
-                  <label className="flex items-center gap-1 text-xs font-medium text-moss">
-                    <span>From</span>
-                    <input
-                      type="date"
-                      value={fromDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1 text-xs font-medium text-moss">
-                    <span>To</span>
-                    <input
-                      type="date"
-                      value={toDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+      {/* ── The phone's way back. The six treasury views ride the shell's band
+          above (see `TreasuryNav`) and the search rides the shell's header
+          beside the page's name, so only the back arrow needs a row here; the
+          metrics ride the footer below. ── */}
+      <div className="flex shrink-0 items-center border-b border-sand-line px-5 py-1.5 sm:px-6 lg:hidden">
+        <BackToOverviewArrow />
       </div>
 
       {actionMessage && (
@@ -795,7 +763,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
           tableEmpty={
             <>
               <p className="text-sm font-semibold text-bark">No Treasury Accounts configured yet.</p>
-              <p className="mt-1 text-xs text-moss">Click "Add Account" below to set up bank, paybill, or cash accounts.</p>
+              <p className="mt-1 text-xs text-moss">Click &quot;Add Account&quot; below to set up bank, paybill, or cash accounts.</p>
             </>
           }
           cardsStateClassName="py-12 text-center text-sm text-moss"
@@ -803,7 +771,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
             <>
               <Landmark className="mx-auto h-10 w-10 text-moss" />
               <p className="mt-3 text-sm font-semibold text-bark">No Treasury Accounts configured yet.</p>
-              <p className="mt-1 text-xs text-moss">Tap "Add Account" below to set up bank, paybill, or cash accounts.</p>
+              <p className="mt-1 text-xs text-moss">Tap &quot;Add Account&quot; below to set up bank, paybill, or cash accounts.</p>
             </>
           }
           cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
