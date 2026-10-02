@@ -124,6 +124,30 @@ class MemberProfile(models.Model):
         max_length=30, choices=DEPARTMENT_CHOICES, blank=True, default='',
         help_text="Age-based department the member belongs to (exactly one)",
     )
+    #: The one department the member belongs to, as a real row of the church's
+    #: areas. Every band is a ``Department`` row of its own — Beginners,
+    #: Kindergarten, Primary, Junior, Teens, the AYM, the Ambassadors — and the
+    #: frontend is where the bands are gathered under one heading for ease of
+    #: management. Exactly one: a person is filed in a single department. It
+    #: sits beside the legacy ``department`` string above while the office
+    #: re-files members, so nothing already on file breaks.
+    department_ref = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='members_by_department',
+        help_text="The department the member belongs to (exactly one)",
+    )
+    #: The ministries the member serves in — several are allowed (AMM, AWM,
+    #: Young Couples, Single Parents, APM, Chaplaincy). They are rows of the
+    #: same ``Department`` table, filed under its ministry heading. Beside the
+    #: legacy ``ministry`` string above while the office re-files members.
+    ministries = models.ManyToManyField(
+        'Department',
+        blank=True,
+        related_name='members_by_ministry',
+        help_text="The ministries the member serves in (several allowed)",
+    )
     is_disfellowshipped = models.BooleanField(default=False, help_text="Whether the member has been disfellowshipped")
     # When the office switched this account off. An inactive account is not
     # always a deactivated one — a join request nobody has approved yet is
@@ -154,7 +178,7 @@ class MemberProfile(models.Model):
             missing.append('gender')
         if not (self.gifts or '').strip():
             missing.append('gifts')
-        if not (self.ministry or '').strip():
+        if not (self.ministry or '').strip() and not (self.pk and self.ministries.exists()):
             missing.append('ministry')
         if not (self.disability or '').strip():
             missing.append('disability')
@@ -259,6 +283,18 @@ SEED_DEPARTMENTS = (
     ('ambassadors', 'Ambassadors', 14),
     ('apm', 'Adventist Possibility Ministries (APM)', 15),
     ('chaplaincy', 'Chaplaincy Ministry', 16),
+    # The children's bands, each a department of its own — the frontend gathers
+    # them under Children. Filed below the desk that leads them.
+    ('beginners', 'Beginners', 20),
+    ('kindergarten', 'Kindergarten', 21),
+    ('primary', 'Primary', 22),
+    ('junior', 'Junior', 23),
+    ('teens', 'Teens', 24),
+    # The fellowships that used to ride AMM and AWM as sub-units, now rows of
+    # their own; the frontend groups them back under the men's and women's
+    # desks for ease of management.
+    ('young_couples', 'Young Couples', 30),
+    ('single_parents', 'Single Parents', 31),
 )
 
 #: The roles each area carries — (name, has_assistant). Every area keeps

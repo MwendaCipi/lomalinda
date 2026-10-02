@@ -7852,8 +7852,16 @@ class DepartmentGroupAndUnitTests(APITestCase):
         MemberProfile.objects.create(user=self.one, role='member', roles='member')
         self.two = User.objects.create_user('grp.two', 'grp.two@example.com', 'StrongPass#2026', first_name='Two', last_name='Member')
         MemberProfile.objects.create(user=self.two, role='member', roles='member')
-        self.children = Department.objects.get(code='children')
-        self.children_role = DepartmentRole.objects.get(department=self.children, name='Leader')
+        # A department that runs as units, for the unit tests to work in. The
+        # children's bands are departments of their own now, so Children keeps
+        # no units and the mechanism is exercised on one made for the test.
+        self.club = Department.objects.create(
+            code='club', name='Club Ministry', group='department',
+            units='Adventurers, Pathfinders',
+        )
+        self.club_role = DepartmentRole.objects.create(
+            department=self.club, name='Leader', has_assistant=True,
+        )
         self.client.force_authenticate(self.elder)
 
     def test_the_seeded_departments_are_filed_under_a_heading(self):
@@ -7870,7 +7878,11 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['deaconate']['group'], 'office')
         # The AYM is the Young Adults under the name the church uses.
         self.assertEqual(rows['aym']['label'], 'Young Adults')
-        self.assertEqual(rows['children']['units'], ['Kindergarten', 'Pathfinders'])
+        # The children's bands are departments of their own now; Kindergarten
+        # left Children's sub-units (Pathfinders stays), and the grouping is
+        # the frontend's job.
+        self.assertEqual(rows['children']['units'], ['Pathfinders'])
+        self.assertEqual(rows['kindergarten']['group'], 'department')
 
     def test_the_desk_adds_a_ministry_and_names_its_units(self):
         created = self.client.post('/api/members/departments/create/', {
@@ -7893,74 +7905,74 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertFalse(Department.objects.filter(name='Nowhere').exists())
 
     def test_a_unit_roll_is_kept_apart_from_the_other(self):
-        kindergarten = self.client.post('/api/members/departments/children/members/', {
-            'member_id': self.one.id, 'unit': 'Kindergarten',
+        adventurers = self.client.post('/api/members/departments/club/members/', {
+            'member_id': self.one.id, 'unit': 'Adventurers',
         }, format='json')
-        self.assertEqual(kindergarten.status_code, 201)
-        self.client.post('/api/members/departments/children/members/', {
+        self.assertEqual(adventurers.status_code, 201)
+        self.client.post('/api/members/departments/club/members/', {
             'member_id': self.two.id, 'unit': 'Pathfinders',
         }, format='json')
 
-        kids = self.client.get('/api/members/departments/children/members/?unit=Kindergarten')
+        kids = self.client.get('/api/members/departments/club/members/?unit=Adventurers')
         self.assertEqual(kids.status_code, 200)
         self.assertEqual([row['id'] for row in kids.data['members']], [self.one.id])
-        self.assertEqual(kids.data['units'], ['Kindergarten', 'Pathfinders'])
+        self.assertEqual(kids.data['units'], ['Adventurers', 'Pathfinders'])
 
-        pathfinders = self.client.get('/api/members/departments/children/members/?unit=Pathfinders')
+        pathfinders = self.client.get('/api/members/departments/club/members/?unit=Pathfinders')
         self.assertEqual([row['id'] for row in pathfinders.data['members']], [self.two.id])
 
         # The whole department, units and all.
-        everyone = self.client.get('/api/members/departments/children/members/')
+        everyone = self.client.get('/api/members/departments/club/members/')
         self.assertEqual(sorted(row['id'] for row in everyone.data['members']), [self.one.id, self.two.id])
 
-        # Moving a child is an edit on their one place on the roll.
-        moved = self.client.post('/api/members/departments/children/members/', {
-            'member_id': self.two.id, 'unit': 'Kindergarten',
+        # Moving a member is an edit on their one place on the roll.
+        moved = self.client.post('/api/members/departments/club/members/', {
+            'member_id': self.two.id, 'unit': 'Adventurers',
         }, format='json')
         self.assertEqual(moved.status_code, 200)
-        self.assertEqual(DepartmentMembership.objects.filter(member=self.two, department='children').count(), 1)
-        self.assertEqual(DepartmentMembership.objects.get(member=self.two).unit, 'Kindergarten')
+        self.assertEqual(DepartmentMembership.objects.filter(member=self.two, department='club').count(), 1)
+        self.assertEqual(DepartmentMembership.objects.get(member=self.two).unit, 'Adventurers')
 
         # A unit the department does not run is refused.
-        unknown = self.client.get('/api/members/departments/children/members/?unit=Adventurers')
+        unknown = self.client.get('/api/members/departments/club/members/?unit=Kindergarten')
         self.assertEqual(unknown.status_code, 400)
 
     def test_each_unit_keeps_its_own_leaders_and_calendar(self):
-        first = self.client.put('/api/members/departments/children/leadership/', {
-            'unit': 'Kindergarten',
-            'assignments': [{'role_id': self.children_role.id, 'member_id': self.one.id, 'kind': 'leader'}],
+        first = self.client.put('/api/members/departments/club/leadership/', {
+            'unit': 'Adventurers',
+            'assignments': [{'role_id': self.club_role.id, 'member_id': self.one.id, 'kind': 'leader'}],
         }, format='json')
         self.assertEqual(first.status_code, 200)
-        second = self.client.put('/api/members/departments/children/leadership/', {
+        second = self.client.put('/api/members/departments/club/leadership/', {
             'unit': 'Pathfinders',
-            'assignments': [{'role_id': self.children_role.id, 'member_id': self.two.id, 'kind': 'leader'}],
+            'assignments': [{'role_id': self.club_role.id, 'member_id': self.two.id, 'kind': 'leader'}],
         }, format='json')
         self.assertEqual(second.status_code, 200)
-        # Appointing Pathfinders' leader did not unseat Kindergarten's.
-        self.assertEqual(DepartmentAssignment.objects.filter(department=self.children, kind='leader').count(), 2)
+        # Appointing Pathfinders' leader did not unseat Adventurers'.
+        self.assertEqual(DepartmentAssignment.objects.filter(department=self.club, kind='leader').count(), 2)
 
-        kindergarten = self.client.get('/api/members/departments/children/leadership/?unit=Kindergarten')
-        self.assertEqual(kindergarten.data['leader']['id'], self.one.id)
-        pathfinders = self.client.get('/api/members/departments/children/leadership/?unit=Pathfinders')
+        adventurers = self.client.get('/api/members/departments/club/leadership/?unit=Adventurers')
+        self.assertEqual(adventurers.data['leader']['id'], self.one.id)
+        pathfinders = self.client.get('/api/members/departments/club/leadership/?unit=Pathfinders')
         self.assertEqual(pathfinders.data['leader']['id'], self.two.id)
 
-        added = self.client.post('/api/members/departments/children/events/', {
-            'title': 'Kindergarten Sabbath',
+        added = self.client.post('/api/members/departments/club/events/', {
+            'title': 'Adventurer Sabbath',
             'date': '2026-10-04',
-            'unit': 'Kindergarten',
+            'unit': 'Adventurers',
         }, format='json')
         self.assertEqual(added.status_code, 201)
-        self.client.post('/api/members/departments/children/events/', {
+        self.client.post('/api/members/departments/club/events/', {
             'title': 'Pathfinder Camporee',
             'date': '2026-10-11',
             'unit': 'Pathfinders',
         }, format='json')
 
-        events = self.client.get('/api/members/departments/children/events/?unit=Kindergarten')
-        self.assertEqual([event['title'] for event in events.data['events']], ['Kindergarten Sabbath'])
+        events = self.client.get('/api/members/departments/club/events/?unit=Adventurers')
+        self.assertEqual([event['title'] for event in events.data['events']], ['Adventurer Sabbath'])
         self.assertEqual(
-            [event['title'] for event in self.client.get('/api/members/departments/children/events/').data['events']],
-            ['Kindergarten Sabbath', 'Pathfinder Camporee'],
+            [event['title'] for event in self.client.get('/api/members/departments/club/events/').data['events']],
+            ['Adventurer Sabbath', 'Pathfinder Camporee'],
         )
 
     def test_a_department_without_units_refuses_a_unit(self):
@@ -8806,27 +8818,94 @@ class DepartmentVisibilityTests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
 
-    def test_amm_and_awm_carry_a_young_couples_unit(self):
-        """The men's and women's groups each keep a Young Couples fellowship
-        inside them: the directory names the unit, the roll reads one at a
-        time, and a couple seated under the unit answers to it and to the
-        group as a whole."""
+    def test_the_fellowships_are_their_own_areas_not_units(self):
+        """Young Couples and Single Parents left AMM's and AWM's sub-units and
+        became areas of their own; the desks carry no duplicate."""
         for code in ('amm', 'awm'):
             department = Department.objects.get(code=code)
-            self.assertIn('Young Couples', department.unit_names, f"{code} should carry the Young Couples unit")
-
+            self.assertNotIn('Young Couples', department.unit_names)
+            self.assertNotIn('Single Parents', department.unit_names)
         self.client.force_authenticate(self.elder)
-        directory = self.client.get('/api/members/departments/').data['departments']
-        awm_row = next(d for d in directory if d['code'] == 'awm')
-        self.assertIn('Young Couples', awm_row['units'])
+        codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertIn('young_couples', codes)
+        self.assertIn('single_parents', codes)
 
-        # A couple seated in the unit rides the unit toggle: the unit read
-        # names them, and the whole-group read carries them too.
-        DepartmentMembership.objects.create(
-            member=self.plain, department='awm', unit='Young Couples',
+
+class ProfileAreaRefTests(APITestCase):
+    """The profile's areas are records now: one department, many ministries."""
+
+    def setUp(self):
+        self.member = User.objects.create_user('area.member', 'area.member@example.com', 'StrongPass#2026', first_name='Ama', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.admin = User.objects.create_user('area.admin', 'area.admin@example.com', 'StrongPass#2026', first_name='Ada', last_name='Admin')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
+
+    def test_the_bands_and_fellowships_are_seeded_areas(self):
+        for code in ('beginners', 'kindergarten', 'primary', 'junior', 'teens', 'young_couples', 'single_parents'):
+            department = Department.objects.filter(code=code, is_active=True).first()
+            self.assertIsNotNone(department, f"{code} should be seeded")
+            self.assertTrue(
+                DepartmentRole.objects.filter(department=department, name='Leader').exists(),
+                f"{code} should start with a Leader role",
+            )
+
+    def test_me_reports_the_profile_department_and_ministries(self):
+        profile = self.member.member_profile
+        profile.department_ref = Department.objects.get(code='primary')
+        profile.save(update_fields=['department_ref'])
+        profile.ministries.add(Department.objects.get(code='amm'))
+        self.client.force_authenticate(self.member)
+        me = self.client.get('/api/members/me/').data
+        self.assertEqual(me['department_ref'], 'primary')
+        self.assertEqual(me['ministries'], ['amm'])
+        # A department and a ministry are both areas the member may open.
+        self.assertIn('primary', {row['code'] for row in me['my_departments']})
+        self.assertIn('amm', {row['code'] for row in me['my_departments']})
+
+    def test_a_member_may_set_a_department_and_several_ministries(self):
+        self.client.force_authenticate(self.member)
+        res = self.client.post('/api/members/me/profile-update/', {
+            'gender': 'Female',
+            'gifts': 'Teaching',
+            'ministry': 'adventist_men',
+            'disability': 'None',
+            'department_ref': 'junior',
+            'ministries': ['amm', 'single_parents'],
+        }, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+
+        profile = MemberProfile.objects.get(user=self.member)
+        self.assertEqual(profile.department_ref.code, 'junior')
+        self.assertEqual(
+            set(profile.ministries.values_list('code', flat=True)),
+            {'amm', 'single_parents'},
         )
-        unit_read = self.client.get('/api/members/departments/awm/members/?unit=Young%20Couples').data
-        self.assertIn(self.plain.id, {row['id'] for row in unit_read['members']})
-        self.assertEqual(unit_read['unit'], 'Young Couples')
-        all_read = self.client.get('/api/members/departments/awm/members/').data
-        self.assertIn(self.plain.id, {row['id'] for row in all_read['members']})
+
+    def test_department_directory_with_all_query_param(self):
+        # Ordinary member with no ties gets all areas when ?all=1 is passed
+        plain_user = User.objects.create_user('plain.user', 'plain@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=plain_user, role='member', roles='member')
+        self.client.force_authenticate(plain_user)
+
+        res_default = self.client.get('/api/members/departments/')
+        self.assertEqual(len(res_default.data['departments']), 0)
+
+        res_all = self.client.get('/api/members/departments/?all=1')
+        all_codes = {row['code'] for row in res_all.data['departments']}
+        self.assertIn('primary', all_codes)
+        self.assertIn('amm', all_codes)
+        self.assertIn('single_parents', all_codes)
+
+    def test_see_profile_payload_displays_department_and_ministry_labels(self):
+        profile = self.member.member_profile
+        profile.department_ref = Department.objects.get(code='primary')
+        profile.save(update_fields=['department_ref'])
+        profile.ministries.add(Department.objects.get(code='amm'), Department.objects.get(code='single_parents'))
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.get(f'/api/members/users/{self.member.id}/profile/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['department_label'], 'Primary')
+        self.assertIn('Adventist Men', res.data['ministry_label'])
+        self.assertIn('Single Parents', res.data['ministry_label'])
+

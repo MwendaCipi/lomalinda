@@ -589,7 +589,11 @@ export const eldershipItems: RailRow[] = [
 /** The deaconate: the church's property, its duty and its ordinances. The
  *  team leads the strip — a desk is its people before its things. */
 export const deaconateItems: RailRow[] = [
-  officeTab("deaconate-members", "Deaconate Team", UserCheck, { roles: DEACONATE_ROLES, short: "Team" }),
+  officeTab("deaconate-members", "Deaconate Team", UserCheck, {
+    roles: DEACONATE_ROLES,
+    short: "Team",
+    description: "The deacons and deaconesses who serve the church's property, duty and ordinances.",
+  }),
   officeTab("inventory", "Inventory", Boxes, {
     roles: DEACONATE_ROLES,
     description: "The church's property register and the movements of each item.",

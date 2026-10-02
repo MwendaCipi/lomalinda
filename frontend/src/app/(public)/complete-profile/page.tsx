@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { ChevronDown } from "lucide-react";
 import { ComboboxPopover } from "@/components/combobox-popover";
+import { AreaOption, DepartmentPicker, MinistriesPicker } from "@/components/area-pickers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -40,22 +41,18 @@ const DISABILITY_OPTIONS = [
   "Other Special Need",
 ];
 
-const MINISTRY_OPTIONS = [
-  { value: "adventist_men", label: "Adventist Men" },
-  { value: "adventist_women", label: "Adventist Women" },
-  { value: "young_adults", label: "Young Adults" },
-  { value: "ambassadors", label: "Ambassadors" },
-];
+const LEGACY_MINISTRY_MAP: Record<string, string> = {
+  adventist_men: "amm",
+  adventist_women: "awm",
+  young_adults: "aym",
+  ambassadors: "ambassadors",
+};
 
-// The age-based departments the church reports by — separate from the
-// ministry above (where a member serves). A person belongs to exactly one.
-const DEPARTMENT_OPTIONS = [
-  { value: "children", label: "Children" },
-  { value: "youth", label: "Youth" },
-  { value: "young_adults", label: "Young Adults" },
-  { value: "adults", label: "Adults" },
-  { value: "seniors", label: "Seniors" },
-];
+const LEGACY_DEPT_MAP: Record<string, string> = {
+  children: "children",
+  youth: "teens",
+  young_adults: "aym",
+};
 
 const inputClass =
   "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm text-bark outline-none focus:border-ember";
@@ -201,8 +198,10 @@ export default function CompleteProfilePage() {
   // Set once by the member; after that the office is the only way to correct it.
   const [genderLocked, setGenderLocked] = useState(false);
   const [gifts, setGifts] = useState<string[]>([]);
-  const [ministry, setMinistry] = useState("");
-  const [department, setDepartment] = useState("");
+  const [ministries, setMinistries] = useState<string[]>([]);
+  const [departmentRef, setDepartmentRef] = useState("");
+  const [departmentOptions, setDepartmentOptions] = useState<AreaOption[]>([]);
+  const [ministryOptions, setMinistryOptions] = useState<AreaOption[]>([]);
   const [disability, setDisability] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -219,19 +218,46 @@ export default function CompleteProfilePage() {
       router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
-    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (res) => {
+
+    Promise.all([
+      fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } }).then(async (res) => {
         if (!res.ok) throw new Error();
         return res.json();
-      })
-      .then((me) => {
+      }),
+      fetch(`${API_URL}/api/members/departments/?all=1`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (res) => (res.ok ? res.json() : { departments: [] }))
+        .catch(() => ({ departments: [] })),
+    ])
+      .then(([me, deptsData]) => {
+        const rows: AreaOption[] = (deptsData?.departments ?? []).map(
+          (d: { code: string; label: string; group?: string; description?: string }) => ({
+            code: d.code,
+            label: d.label,
+            group: (d.group === "ministry" || d.group === "office" ? d.group : "department") as "department" | "ministry" | "office",
+            description: d.description || "",
+          }),
+        );
+        const depts = rows.filter((r) => r.group === "department");
+        const mins = rows.filter((r) => r.group === "ministry");
+        setDepartmentOptions(depts);
+        setMinistryOptions(mins);
+
         // Pre-fill whatever the office already has on record so the member
         // only fills the gaps.
         setGender(me.gender || "");
         setGenderLocked(Boolean((me.gender || "").trim()));
         setGifts(me.gifts ? me.gifts.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
-        setMinistry(me.ministry || "");
-        setDepartment(me.department || "");
+
+        const initialMinCodes: string[] = Array.isArray(me.ministries) && me.ministries.length > 0
+          ? me.ministries
+          : me.ministry
+            ? [LEGACY_MINISTRY_MAP[me.ministry] || me.ministry]
+            : [];
+        setMinistries(initialMinCodes);
+
+        const initialDeptCode = me.department_ref || (me.department ? LEGACY_DEPT_MAP[me.department] || me.department : "");
+        setDepartmentRef(initialDeptCode);
+
         setDisability(
           me.disability ? me.disability.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
         );
@@ -257,8 +283,8 @@ export default function CompleteProfilePage() {
       setError("Please select at least one gift or talent.");
       return;
     }
-    if (!ministry) {
-      setError("Please select your ministry.");
+    if (ministries.length === 0) {
+      setError("Please select at least one ministry.");
       return;
     }
 
@@ -271,8 +297,11 @@ export default function CompleteProfilePage() {
         body: JSON.stringify({
           gender,
           gifts,
-          ministry,
-          department,
+          ministries,
+          department_ref: departmentRef,
+          // Legacy backwards compatibility fallbacks
+          ministry: ministries[0] || "",
+          department: departmentRef || "",
           // An empty list is a deliberate "none" — it still saves a value.
           disability: disability.length > 0 ? disability : ["None"],
         }),
@@ -343,32 +372,25 @@ export default function CompleteProfilePage() {
             placeholder="Select gifts & talents…"
           />
 
-          <label className="block text-sm font-medium">
-            Ministry
-            <select value={ministry} onChange={(event) => setMinistry(event.target.value)} className={inputClass} required>
-              <option value="">-- Select Ministry --</option>
-              {MINISTRY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <MinistriesPicker
+            legend="Ministries"
+            options={ministryOptions}
+            selected={ministries}
+            onChange={setMinistries}
+            placeholder="Select ministries…"
+            helpText="The ministries you serve in (several allowed)."
+            required
+          />
 
-          <label className="block text-sm font-medium">
-            Department
-            <select value={department} onChange={(event) => setDepartment(event.target.value)} className={inputClass}>
-              <option value="">-- Select Department --</option>
-              {DEPARTMENT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-xs text-moss">
-              Your age group in the church — different from the ministry above, which is where you serve.
-            </span>
-          </label>
+          <DepartmentPicker
+            legend="Department"
+            options={departmentOptions}
+            value={departmentRef}
+            onChange={setDepartmentRef}
+            placeholder="-- Select Department --"
+            allowUnassigned
+            helpText="The department you belong to (e.g. Beginners, Primary, Junior, Teens, Young Adults)."
+          />
 
           <CheckboxCombobox
             legend="Disability / special needs"

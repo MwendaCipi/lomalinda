@@ -2475,6 +2475,10 @@ class MeView(APIView):
             'gifts': profile.gifts if profile else '',
             'ministry': profile.ministry if profile else '',
             'department': profile.department if profile else '',
+            # The same ties as real records: the one department the member
+            # belongs to, and the ministries they serve in.
+            'department_ref': profile.department_ref.code if profile and profile.department_ref else '',
+            'ministries': list(profile.ministries.values_list('code', flat=True)) if profile else [],
             'disability': profile.disability if profile else '',
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
@@ -2585,6 +2589,28 @@ class ProfileUpdateView(APIView):
             if department and department not in self.DEPARTMENT_VALUES:
                 return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
             profile.department = department
+        if 'department_ref' in request.data:
+            ref_code = as_text(request.data.get('department_ref'))
+            if ref_code:
+                ref_row = Department.objects.filter(code=ref_code, is_active=True).first()
+                if ref_row is None:
+                    return Response({'department_ref': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+                profile.department_ref = ref_row
+            else:
+                profile.department_ref = None
+        if 'ministries' in request.data:
+            raw_ministries = request.data.get('ministries')
+            wanted = (
+                raw_ministries
+                if isinstance(raw_ministries, list)
+                else [part.strip() for part in str(raw_ministries or '').split(',') if part.strip()]
+            )
+            ministry_codes = [str(code).strip() for code in wanted if str(code).strip()]
+            ministry_rows = list(Department.objects.filter(code__in=ministry_codes, is_active=True))
+            if len(ministry_rows) != len(set(ministry_codes)):
+                return Response({'ministries': 'Choose from the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
+            profile.save()
+            profile.ministries.set(ministry_rows)
         if 'disability' in request.data:
             profile.disability = as_text(request.data.get('disability'))
 
@@ -5653,6 +5679,22 @@ class UserManagementView(generics.ListCreateAPIView):
         department = (request.data.get('department') or '').strip()
         if department and department not in {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}:
             return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+        department_ref_code = (request.data.get('department_ref') or '').strip()
+        department_ref_row = None
+        if department_ref_code:
+            department_ref_row = Department.objects.filter(code=department_ref_code, is_active=True).first()
+            if department_ref_row is None:
+                return Response({'department_ref': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+        raw_ministries = request.data.get('ministries')
+        ministry_wanted = (
+            raw_ministries
+            if isinstance(raw_ministries, list)
+            else [part.strip() for part in str(raw_ministries or '').split(',') if part.strip()]
+        )
+        ministry_codes = [str(code).strip() for code in ministry_wanted if str(code).strip()]
+        ministry_rows = list(Department.objects.filter(code__in=ministry_codes, is_active=True))
+        if len(ministry_rows) != len(set(ministry_codes)):
+            return Response({'ministries': 'Choose from the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
         current_church = (request.data.get('current_church') or '').strip()
         baptismal_status = (request.data.get('baptismal_status') or '').strip()
         if account_type == 'friend':
@@ -5730,11 +5772,14 @@ class UserManagementView(generics.ListCreateAPIView):
         profile_obj.gender = gender
         profile_obj.ministry = ministry
         profile_obj.department = department
+        profile_obj.department_ref = department_ref_row
         profile_obj.gifts = str(gifts or '').strip()
         profile_obj.disability = str(disability or '').strip()
         if date_of_birth:
             profile_obj.date_of_birth = date_of_birth
         profile_obj.save()
+        if ministry_rows:
+            profile_obj.ministries.set(ministry_rows)
         sync_role_groups(user, roles_param)
 
         response_data = UserDetailSerializer(user).data
@@ -5777,11 +5822,25 @@ def member_profile_payload(user):
             'ended_at': row_.ended_at,
         }
 
+    dept_label = ''
+    if profile:
+        if profile.department_ref:
+            dept_label = profile.department_ref.name
+        elif profile.department:
+            dept_label = profile.get_department_display()
+
+    ministry_names = []
+    if profile:
+        ministry_names = list(profile.ministries.values_list('name', flat=True))
+        if not ministry_names and profile.ministry:
+            ministry_names = [profile.get_ministry_display()]
+
     return {
         **UserDetailSerializer(user).data,
         'date_joined': user.date_joined,
-        'ministry_label': profile.get_ministry_display() if profile and profile.ministry else '',
-        'department_label': profile.get_department_display() if profile and profile.department else '',
+        'ministry_label': ", ".join(ministry_names) if ministry_names else '',
+        'ministries_list': ministry_names,
+        'department_label': dept_label,
         'baptismal_status_label': profile.get_baptismal_status_display() if profile and profile.baptismal_status else '',
         'current_roles': [row(r) for r in current],
         'past_roles': [row(r) for r in past],
@@ -5846,6 +5905,31 @@ class UserDetailUpdateView(APIView):
             department = str(request.data.get('department') or '').strip()
             if department and department not in {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}:
                 return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if 'department_ref' in request.data:
+            ref_code = str(request.data.get('department_ref') or '').strip()
+            if ref_code:
+                if not Department.objects.filter(code=ref_code, is_active=True).exists():
+                    return Response({'department_ref': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
+            current_ref = target_profile.department_ref.code if target_profile.department_ref else ''
+            if ref_code != current_ref:
+                changes['department_ref'] = ref_code
+
+        if 'ministries' in request.data:
+            raw_ministries = request.data.get('ministries')
+            wanted = (
+                raw_ministries
+                if isinstance(raw_ministries, list)
+                else [part.strip() for part in str(raw_ministries or '').split(',') if part.strip()]
+            )
+            ministry_codes = sorted({str(c).strip() for c in wanted if str(c).strip()})
+            if ministry_codes:
+                valid_count = Department.objects.filter(code__in=ministry_codes, is_active=True).count()
+                if valid_count != len(ministry_codes):
+                    return Response({'ministries': 'Choose from the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
+            current_min_codes = sorted(target_profile.ministries.values_list('code', flat=True))
+            if ministry_codes != current_min_codes:
+                changes['ministries'] = ministry_codes
 
         def normalise(field, value):
             if field in ('gifts', 'disability') and isinstance(value, list):
@@ -5961,14 +6045,21 @@ class ProfileChangeDecisionView(APIView):
 
         if decision == 'approve':
             for field, value in proposal.changes.items():
-                if field in account_fields:
+                if field == 'department_ref':
+                    profile.department_ref = Department.objects.filter(code=value, is_active=True).first() if value else None
+                elif field == 'ministries':
+                    if isinstance(value, list):
+                        profile.ministries.set(Department.objects.filter(code__in=value, is_active=True))
+                elif field in account_fields:
                     setattr(member, field, value)
                 elif hasattr(profile, field):
                     setattr(profile, field, value)
             member.save(update_fields=[f for f in account_fields if f in proposal.changes])
-            profile_fields = [f for f in proposal.changes if f not in account_fields]
+            profile_fields = [f for f in proposal.changes if f not in account_fields and f not in ('ministries',)]
             if profile_fields:
                 profile.save(update_fields=profile_fields)
+            else:
+                profile.save()
             proposal.status = 'approved'
             proposal.decided_at = timezone.now()
             proposal.save(update_fields=['status', 'decided_at'])
@@ -7400,7 +7491,17 @@ def member_tie_codes(user):
             member=user, department__is_active=True,
         ).values_list('department__code', flat=True)
     )
-    return list(ties | roll_codes | assigned_codes)
+    # The member's own department and the ministries they serve in, now held as
+    # real rows — the same areas the legacy strings name, once the office has
+    # re-filed them.
+    own_codes = set()
+    if profile is not None:
+        if profile.department_ref_id and profile.department_ref.is_active:
+            own_codes.add(profile.department_ref.code)
+        own_codes |= set(
+            profile.ministries.filter(is_active=True).values_list('code', flat=True)
+        )
+    return list(ties | roll_codes | assigned_codes | own_codes)
 
 
 def member_area_codes(user):
@@ -7526,7 +7627,10 @@ class DepartmentDirectoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        visible_codes = set(member_area_codes(request.user))
+        if request.query_params.get('all') in ('true', '1', 'yes', 'True'):
+            visible_codes = set(Department.objects.filter(is_active=True).values_list('code', flat=True))
+        else:
+            visible_codes = set(member_area_codes(request.user))
         counts = {
             row['department']: row['total']
             for row in DepartmentMembership.objects.values('department').annotate(total=Count('id'))

@@ -63,7 +63,19 @@ class UserDetailSerializer(serializers.ModelSerializer):
     whatsapp_number = serializers.CharField(source='member_profile.whatsapp_number', read_only=True)
     ministry = serializers.CharField(source='member_profile.ministry', read_only=True)
     department = serializers.CharField(source='member_profile.department', read_only=True, default='')
+    # The same ties as records: the one department the member belongs to and
+    # the ministries they serve in, both by code.
+    department_ref = serializers.SerializerMethodField()
+    ministries = serializers.SerializerMethodField()
     disability = serializers.CharField(source='member_profile.disability', read_only=True)
+
+    def get_department_ref(self, obj):
+        profile = getattr(obj, 'member_profile', None)
+        return profile.department_ref.code if profile and profile.department_ref else ''
+
+    def get_ministries(self, obj):
+        profile = getattr(obj, 'member_profile', None)
+        return list(profile.ministries.values_list('code', flat=True)) if profile else []
     is_disfellowshipped = serializers.BooleanField(source='member_profile.is_disfellowshipped', read_only=True, default=False)
     # Friends and Sabbath School attendees join as inactive accounts; leadership
     # sees this on the roster so "Confirmed" never reads as "can sign in".
@@ -104,6 +116,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'gifts',
             'ministry',
             'department',
+            'department_ref',
+            'ministries',
             'disability',
             'is_disfellowshipped',
             'is_active',

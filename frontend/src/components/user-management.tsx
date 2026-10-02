@@ -23,6 +23,8 @@ import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
+import { useDepartments } from "@/hooks/use-departments";
+import { DepartmentPicker, MinistriesPicker, type AreaOption } from "./area-pickers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -1014,6 +1016,8 @@ const DEFAULT_MANUAL_PASSWORD = "Welcome@2026";  const initialForm = {
   role: "",
   ministry: "",
   department: "",
+  department_ref: "",
+  ministries: [] as string[],
   gifts: [] as string[],
   disability: ["None"] as string[],
   profession: "",
@@ -1298,6 +1302,19 @@ export function UserManagement() {
   const [typeMember, setTypeMember] = useState<MemberUser | null>(null);
   const [typeChoice, setTypeChoice] = useState<AccountTypeOption["value"]>("member");
 
+  const departments = useDepartments();
+  const departmentOptions: AreaOption[] = departments.filter((d) => d.group === "department");
+  const ministryOptions: AreaOption[] = departments.filter((d) => d.group === "ministry");
+
+  const getFilteredMinistryOptions = (gender: string | undefined): AreaOption[] => {
+    const lower = (gender || "").toLowerCase();
+    return ministryOptions.filter((m) => {
+      if (lower === "male" && (m.code === "awm" || m.code === "adventist_women")) return false;
+      if (lower === "female" && (m.code === "amm" || m.code === "adventist_men")) return false;
+      return true;
+    });
+  };
+
   const getFilteredMinistries = (gender: string | undefined) => {
     const lower = (gender || "").toLowerCase();
     return MINISTRIES.filter((m) => {
@@ -1311,13 +1328,16 @@ export function UserManagement() {
   const handleGenderChange = (selectedGender: string) => {
     setFormData((prev) => {
       let ministry = prev.ministry;
+      let ministries = prev.ministries || [];
       const lower = selectedGender.toLowerCase();
-      if (lower === "male" && ministry === "adventist_women") {
-        ministry = "";
-      } else if (lower === "female" && ministry === "adventist_men") {
-        ministry = "";
+      if (lower === "male") {
+        if (ministry === "adventist_women" || ministry === "awm") ministry = "";
+        ministries = ministries.filter((m) => m !== "awm" && m !== "adventist_women");
+      } else if (lower === "female") {
+        if (ministry === "adventist_men" || ministry === "amm") ministry = "";
+        ministries = ministries.filter((m) => m !== "amm" && m !== "adventist_men");
       }
-      return { ...prev, gender: selectedGender, ministry };
+      return { ...prev, gender: selectedGender, ministry, ministries };
     });
   };
 
@@ -1590,8 +1610,10 @@ export function UserManagement() {
           password: formData.password,
           gifts: formData.gifts.join(", "),
           disability: formData.disability.filter((d) => d !== "None").join(", "),
-          ministry: formData.ministry || "",
-          department: formData.department || "",
+          department_ref: formData.department_ref || "",
+          ministries: formData.ministries || [],
+          ministry: formData.ministry || (formData.ministries?.[0] || ""),
+          department: formData.department || formData.department_ref || "",
         }),
       });
       const data = await res.json();
@@ -2772,35 +2794,36 @@ export function UserManagement() {
                       <ProfessionCombobox value={formData.profession} onChange={(val) => setFormData({ ...formData, profession: val })} />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-bark">Ministry</label>
-                      {/* Ministry membership, not a role: roles are handed out in
-                          the Role column, so a new member is never secretly made
-                          a ministry's leader here. */}
-                      <select value={formData.ministry}
-                        onChange={(e) => setFormData({ ...formData, ministry: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
-                        {getFilteredMinistries(formData.gender).map((r) => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <MinistriesPicker
+                      legend="Ministry / Ministries"
+                      options={getFilteredMinistryOptions(formData.gender)}
+                      selected={formData.ministries}
+                      onChange={(mins) =>
+                        setFormData({
+                          ...formData,
+                          ministries: mins,
+                          ministry: mins[0] || "",
+                        })
+                      }
+                      placeholder="-- Select Ministries --"
+                      compact
+                    />
 
-                    <div>
-                      <label className="block text-xs font-semibold text-bark">Department</label>
-                      {/* The age-based department the church reports by — one
-                          per member, and separate from the ministry above. */}
-                      <select value={formData.department}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark focus:border-ember focus:bg-white focus:outline-none">
-                        <option value="">Unassigned</option>
-                        <option value="children">Children</option>
-                        <option value="youth">Youth</option>
-                        <option value="young_adults">Young Adults</option>
-                        <option value="adults">Adults</option>
-                        <option value="seniors">Seniors</option>
-                      </select>
-                    </div>
+                    <DepartmentPicker
+                      legend="Department"
+                      options={departmentOptions}
+                      value={formData.department_ref}
+                      onChange={(dept) =>
+                        setFormData({
+                          ...formData,
+                          department_ref: dept,
+                          department: dept,
+                        })
+                      }
+                      placeholder="-- Select Department --"
+                      allowUnassigned
+                      compact
+                    />
                   </div>
 
               {addAccountType === "friend" && (

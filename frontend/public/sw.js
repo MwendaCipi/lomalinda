@@ -229,8 +229,13 @@
    v53 — a department's roll reads without the "Department roll" title bar:
    the desk's page name already stands above it, so only the search and the
    rows remain. In AWM and AMM the whole-roll toggle now reads "All
-   members". Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v53";
+   members". Chrome changed, so installed apps must take the new shell.
+
+   v54 — the deaconate's Team page now names itself with the rest of its
+   desk: the description that rode the other deaconate pages reaches the
+   page the desk opens on. Chrome changed, so installed apps must take the
+   new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v54";
 const STATIC_ASSETS = [
   "/",
   "/about/",
