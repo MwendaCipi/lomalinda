@@ -60,11 +60,17 @@ export const EXPENDITURE_CATEGORIES: { key: string; label: string }[] = [
 export function ExpenditureManager({
   search = "",
   category = "all",
+  fromDate = "",
+  toDate = "",
 }: {
   /** The desk's search, drawn in the shell's header row beside the page name. */
   search?: string;
   /** The category the desk's header filter narrowed to. */
   category?: string;
+  /** The first day of the window the desk's header is showing (ISO date). */
+  fromDate?: string;
+  /** The last day of that window (ISO date). */
+  toDate?: string;
 } = {}) {
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
@@ -204,6 +210,11 @@ export function ExpenditureManager({
   const filteredExpenditures = expenditures.filter((exp) => {
     const matchesCategory = category === "all" || exp.category === category;
     if (!matchesCategory) return false;
+    // The date inputs and the record both speak ISO (YYYY-MM-DD), so the
+    // window is a plain string comparison — no parsing, no timezone drift.
+    const day = (exp.expenditure_date || "").slice(0, 10);
+    if (fromDate && day < fromDate) return false;
+    if (toDate && day > toDate) return false;
     if (!needle) return true;
     return `${exp.title || ""} ${exp.vendor_payee || ""} ${exp.receipt_number || ""} ${exp.account_name || ""}`
       .toLowerCase()

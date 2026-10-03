@@ -285,10 +285,15 @@
    only drops to signed-out chrome when the server actually refuses the
    token (401/403), so a 500 or a dropped link no longer makes the app look
    logged out and no longer sends the dashboard to /login; the profile form
-   and the sign-in page say the connection is down instead of asking for a
+   and   the sign-in page say the connection is down instead of asking for a
    password again. Chrome changed, so installed apps must take the new
-   shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v61";
+   shell.
+
+   v62 — Expenses reads a window: the desk's header carries a From and a To
+   date beside its search and category, opening on the church's month to
+   date, and the table and its total answer only the spending inside it.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v62";
 const STATIC_ASSETS = [
   "/",
   "/about/",

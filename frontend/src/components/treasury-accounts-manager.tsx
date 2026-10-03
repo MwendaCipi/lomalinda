@@ -8,7 +8,7 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
-import { dayFirst } from "@/lib/dates";
+import { dayFirst, firstDayOfMonth, localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
 import { ExpenditureManager, EXPENDITURE_CATEGORIES } from "./expenditure-manager";
@@ -380,6 +380,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // they ride the same header slot as the accounts' search, one row for both.
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseCategory, setExpenseCategory] = useState("all");
+  // The spending window opens on the church's month to date — the same window
+  // the reconciliation ledger and the report composer open on — so the desk
+  // lands on what it is reviewing rather than on the whole history.
+  const [expenseFrom, setExpenseFrom] = useState(firstDayOfMonth);
+  const [expenseTo, setExpenseTo] = useState(localDate);
 
   // The desk's search — and, on Expenses, its category — rides the shell's
   // header beside the page's name, so the heading and its search share a row
@@ -413,6 +418,28 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
               </option>
             ))}
           </select>
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>From</span>
+              <input
+                type="date"
+                value={expenseFrom}
+                onChange={(e) => setExpenseFrom(e.target.value)}
+                className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
+                aria-label="Expenditures from date"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>To</span>
+              <input
+                type="date"
+                value={expenseTo}
+                onChange={(e) => setExpenseTo(e.target.value)}
+                className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
+                aria-label="Expenditures to date"
+              />
+            </label>
+          </div>
         </div>
       );
       return () => setHeaderRightAction(null);
@@ -428,7 +455,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       />
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory]);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -712,7 +739,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
         {view === "withdrawals" ? (
           <WithdrawalRequestsPanel />
         ) : view === "expenditure" ? (
-          <ExpenditureManager search={expenseSearch} category={expenseCategory} />
+          <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : (
         /* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */
         <RecordList
