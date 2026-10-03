@@ -241,7 +241,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   // The one search box, matched against names, contacts and summaries.
   const [search, setSearch] = useState("");
 
-  // The filter popovers.
+  // The filter popover, and the review-state one that rides beside it on the
+  // desks that read a queue. The Membership Requests desk keeps the funnel
+  // alone, so its header stays a single control.
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -265,19 +267,25 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             { value: "rejected", label: "Rejected" },
             { value: "all", label: "All" },
           ];
+    // Short labels: the popover is a jump between desks, not an explanation,
+    // and the long names are what made it occupy most of the header.
     const deskOpts: { value: KindFilter; label: string }[] = [
       { value: "all", label: "All requests" },
-      { value: "join", label: "Join requests" },
-      { value: "area", label: "Area requests" },
-      { value: "prayer", label: "Prayer requests" },
+      { value: "join", label: "Join" },
+      { value: "area", label: "Area" },
+      { value: "prayer", label: "Prayer" },
       { value: "visitation", label: "Visitation" },
-      { value: "dedication", label: "Child dedications" },
-      { value: "welfare", label: "Welfare & support" },
-      { value: "transfer", label: "Membership transfer" },
-      { value: "property", label: "Property requests" },
+      { value: "dedication", label: "Dedication" },
+      { value: "welfare", label: "Welfare" },
+      { value: "transfer", label: "Transfers" },
+      { value: "property", label: "Property" },
     ];
+    // Membership Requests reads every request and shows each row's state, so
+    // it needs no review-state control — one popover, and a narrow one.
+    const showStateFilter = activeTab !== "transfer";
     setHeaderRightAction(
       <div className="flex items-center gap-2">
+        {showStateFilter && (
         <div className="relative" ref={statusRef}>
           <button
             type="button"
@@ -304,6 +312,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             </div>
           )}
         </div>
+        )}
         <div className="relative" ref={filterRef}>
           <button
             type="button"
@@ -312,11 +321,10 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           >
             <svg className="h-3.5 w-3.5 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" /></svg>
             Filter
-            {activeTab !== "all" && <span className="rounded-full bg-bark px-1.5 py-0.5 text-[10px] font-bold text-white">{KIND_META[activeTab as Exclude<KindFilter, "all">]?.label ?? ""}</span>}
             <svg className={`h-3 w-3 text-moss transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
           </button>
           {filterOpen && (
-            <div role="menu" className="absolute right-0 z-50 mt-2 max-h-80 w-60 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
+            <div role="menu" className="absolute right-0 z-50 mt-2 max-h-80 w-44 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
               <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show requests by desk</p>
               {deskOpts.map((option) => (
                 <button key={option.value} type="button" role="menuitemradio" aria-checked={activeTab === option.value}
@@ -354,6 +362,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     }
   }, [initialTab]);
 
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
@@ -363,6 +372,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         setStatusOpen(false);
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -741,14 +751,22 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     setSearch("");
   }, [focusRequest, loading, rows]);
 
+  // The Membership Requests desk carries no review-state control, so nothing
+  // may hide its rows behind a state: it reads them all, and each row shows
+  // where it stands. Derived rather than written into the state, so the desk
+  // needs no effect and no request ever disappears behind a control that is
+  // not on screen.
+  const reviewFilter: StatusFilter | TransferOnlyStatus =
+    activeTab === "transfer" ? "all" : statusFilter;
+
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (activeTab !== "all" && row.kind !== activeTab) return false;
-      if (statusFilter !== "all") {
+      if (reviewFilter !== "all") {
         if (activeTab === "transfer" && row.kind === "transfer") {
-          if (row.status !== statusFilter) return false;
-        } else if (reviewBucket(row) !== (statusFilter as StatusFilter)) {
+          if (row.status !== reviewFilter) return false;
+        } else if (reviewBucket(row) !== (reviewFilter as StatusFilter)) {
           return false;
         }
       }
@@ -762,7 +780,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         KIND_META[row.kind].label.toLowerCase().includes(query)
       );
     });
-  }, [rows, activeTab, search, statusFilter]);
+  }, [rows, activeTab, search, reviewFilter]);
 
   // Shared by the desktop table and the phone cards: RecordList renders one
   // empty state for whichever layout is on screen.
@@ -861,7 +879,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         <span className="text-right">
           {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
           {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
-          {statusFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
+          {reviewFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
           {search.trim() ? ` · matching “${search.trim()}”` : ""}
         </span>
       </div>

@@ -256,8 +256,16 @@
    category ride the shell's header beside the page's name, the rows are the
    shared table (cards on a phone), the total sits in the footer with the
    Record button, and recording or removing a record is a toast. Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v57";
+   changed, so installed apps must take the new shell.
+
+   v58 — one strip again: the shell cleared a page's own toggles in an
+   effect that ran after the page's, so the page's strip lost to the
+   section's and the ledger read "Contributions Ledger" where Individual
+   Givings and Summary Contributions belong. Sabbath School joins the
+   Ministry rows, Expenses drops its receipt column, and Membership
+   Requests keeps a single compact filter. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v58";
 const STATIC_ASSETS = [
   "/",
   "/about/",

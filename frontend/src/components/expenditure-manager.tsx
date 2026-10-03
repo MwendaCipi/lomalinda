@@ -225,11 +225,12 @@ export function ExpenditureManager({
         headCellClassName=""
         headers={[
           { label: "Date", className: "px-4 py-3 text-left" },
+          // No receipt column: the vendor and the account carry the record,
+          // and the width is better spent on the title.
           { label: "Title / Description", className: "px-4 py-3" },
           { label: "Category", className: "px-4 py-3" },
           { label: "Debited Account", className: "px-4 py-3" },
           { label: "Payee / Vendor", className: "px-4 py-3" },
-          { label: "Receipt / Ref", className: "px-4 py-3" },
           { label: "Amount (KES)", className: "px-4 py-3 text-right" },
           { label: "Action", className: "px-4 py-3 text-center" },
         ]}
@@ -271,7 +272,6 @@ export function ExpenditureManager({
             <p className="text-[11px] text-moss">
               {exp.account_name || "No account debited"}
               {exp.vendor_payee && ` · ${exp.vendor_payee}`}
-              {exp.receipt_number && ` · ${exp.receipt_number}`}
             </p>
             {exp.notes && <p className="text-[11px] leading-relaxed text-moss">{exp.notes}</p>}
             <div className="flex justify-end border-t border-sand-line pt-2">
@@ -289,7 +289,7 @@ export function ExpenditureManager({
         renderRow={(exp) => (
           <tr key={exp.id} className="hover:bg-sand-linen">
             <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{exp.expenditure_date}</td>
-            <td className={`px-4 ${rowPad} font-semibold text-bark`}>
+            <td className={`px-4 ${rowPad} min-w-[240px] font-semibold text-bark`}>
               {exp.title}
               {exp.notes && <p className="text-[11px] font-normal text-moss">{exp.notes}</p>}
             </td>
@@ -300,7 +300,6 @@ export function ExpenditureManager({
             </td>
             <td className={`whitespace-nowrap px-4 ${rowPad} text-xs font-semibold text-bark`}>{exp.account_name || "—"}</td>
             <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{exp.vendor_payee || "—"}</td>
-            <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-moss`}>{exp.receipt_number || "—"}</td>
             <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold text-alert`}>
               KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
             </td>

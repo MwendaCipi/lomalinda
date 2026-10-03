@@ -633,6 +633,7 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   music: Gift,
   personal_ministries: Megaphone,
   health: HeartPulse,
+  sabbath_school: BookOpen,
 };
 
 /**
@@ -652,6 +653,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   apm: "Belonging and full participation for people with disabilities, orphans, widows and caregivers.",
   chaplaincy: "A ministry of presence, comfort and prayer in places of need.",
   health: "The church's health ministry — wholeness of body, mind and spirit.",
+  sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
   music: "The church's music — its choir and the singing groups it keeps.",
   choir: "The church's singing — its choir and the groups that sing in it.",

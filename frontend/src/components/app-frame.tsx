@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
@@ -75,11 +75,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     [setHeaderRightAction, setCustomToggles, setCustomHeader]
   );
 
-  useEffect(() => {
+  // A page's header chrome belongs to the route it was drawn for, so it is
+  // cleared the moment the route changes — but the clearing has to land
+  // *before* the new page's effects register their own. Left to an effect it
+  // ran after the child's (a child's effects fire first), wiping the strip the
+  // page had just set; that is how a page's own toggles kept losing to the
+  // section's and two strips seemed to take turns. Adjusting the state during
+  // render settles it in the same pass, so the page always has the last word.
+  const [routeAtLastReset, setRouteAtLastReset] = useState(pathname);
+  if (pathname !== routeAtLastReset) {
+    setRouteAtLastReset(pathname);
     setHeaderRightAction(null);
     setCustomToggles(null);
     setCustomHeader(null);
-  }, [pathname]);
+  }
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const myDepartments = useMyDepartments();
