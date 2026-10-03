@@ -320,8 +320,15 @@
    the app follows the device until a member chooses Light or Dark for
    themselves in settings. The Summary Contributions totals row lines up
    with its columns (both tables now declare one fixed column grid). Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v66";
+   changed, so installed apps must take the new shell.
+
+   v67 — the rail reads the youth ministries as the church names them: Young
+   Adults is AYM, with Ambassadors its own row beside it (the fellowship
+   rides the AYM desk as a unit, so each keeps its own roll). Join requests
+   leave the foot of the roll and become a desk view on the strip, carrying
+   the count of asks still waiting. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v67";
 const STATIC_ASSETS = [
   "/",
   "/about/",

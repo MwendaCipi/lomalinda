@@ -2779,7 +2779,13 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests">(initialTab);
+  // How many asks are waiting on this desk. The strip carries the count and
+  // the Requests view is only offered when there is something to answer —
+  // the shell has no room for a toggle that would open onto an empty page.
+  const [joinRequests, setJoinRequests] = useState<
+    { id: number; member_name: string; note: string; status: string; created_at: string }[]
+  >([]);
   // The strip names the view, and which unit's roll it reads: All and the
   // unit fellowships read their roll, the rest name the view itself. This is
   // what marks the active toggle in the merged strip.
@@ -2787,6 +2793,7 @@ function DepartmentDetail({
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
+  const [requestSearch, setRequestSearch] = useState("");
   const rowPad = densityCellPad();
 
   const [canManageRoll, setCanManageRoll] = useState(false);
@@ -2816,11 +2823,21 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
+    } else if (subTab === "requests") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={requestSearch}
+          onChange={(e) => setRequestSearch(e.target.value)}
+          placeholder="Search join requests…"
+          className={inputCls}
+        />
+      );
     } else {
       setHeaderRightAction(null);
     }
     return () => setHeaderRightAction(null);
-  }, [subTab, rollSearch, eventSearch, setHeaderRightAction]);
+  }, [subTab, rollSearch, eventSearch, requestSearch, setHeaderRightAction]);
 
   // The deaconate's Team view rides the *section's* strip, not a strip of its
   // own, so the roll's second Add Member takes that strip's right edge — a PC
@@ -2866,10 +2883,16 @@ function DepartmentDetail({
       { key: "calendar", label: "Calendar", icon: CalendarDays },
       // Every desk reads its own fund when the treasurer has opened one.
       { key: "accounts", label: "Accounts", icon: Wallet },
+      // The asks raised from the rail. A toggle rather than a table beneath
+      // the roll — it is a view of the desk, and the count says when there is
+      // something waiting.
+      ...(joinRequests.length > 0
+        ? [{ key: "requests", label: "Join Requests", icon: UserPlus, count: joinRequests.filter((row) => row.status === "pending").length }]
+        : []),
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
     ];
-  }, [unitsKey, isMusic, keepsTheWeek, department.code]);
+  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests]);
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
     // is a view of the department as the strip held before.
@@ -2878,7 +2901,7 @@ function DepartmentDetail({
       setSubTab("members");
       return;
     }
-    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
+    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests");
   }, []);
   useEffect(() => {
     if (isDeaconate) {
@@ -2912,11 +2935,27 @@ function DepartmentDetail({
       .finally(() => setLoadingEvents(false));
   }, [department.code, unit]);
 
+  // The asks raised from the rail, answered on this desk. Loaded with the
+  // roll so the strip can carry the waiting count before the view is opened.
+  const loadJoinRequests = useCallback(() => {
+    fetch(`${API_URL}/api/members/department-join-requests/review/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { requests: [] }))
+      .then((data) =>
+        setJoinRequests(
+          (data?.requests ?? []).filter(
+            (row: { department: string }) => row.department === department.code,
+          ),
+        ),
+      )
+      .catch(() => setJoinRequests([]));
+  }, [department.code]);
+
   useEffect(() => {
     // Every department carries a roll — Eldership, Clerkship and Deaconate
     // included; the church itself is not a department.
     loadRoll();
     loadEvents();
+    loadJoinRequests();
   }, [loadRoll, loadEvents]);
 
   const loadUnitBoard = useCallback(() => {
@@ -3383,8 +3422,19 @@ function DepartmentDetail({
 
       {/* Join requests — the asks raised from the rail, answered here by the
           desk's own leadership or the office. Approving puts the member on
-          the roll the same way Add member does. */}
-      <JoinRequestsPanel departmentCode={department.code} onChanged={onChanged} />
+          the roll the same way Add member does. Its own view, not a table
+          beneath the roll. */}
+      {subTab === "requests" && (
+        <JoinRequestsPanel
+          departmentCode={department.code}
+          requests={joinRequests}
+          search={requestSearch}
+          onChanged={() => {
+            loadJoinRequests();
+            onChanged();
+          }}
+        />
+      )}
 
       {showAddChild && (
         <AddChildModal
@@ -4032,31 +4082,19 @@ function AddAreaModal({
  * own rail. Visible to whoever can open this desk — the leadership and the
  * office — and the API decides the same way on the way out.
  */
-function JoinRequestsPanel({ departmentCode, onChanged }: { departmentCode: string; onChanged: () => void }) {
-  const [requests, setRequests] = useState<
-    { id: number; member_name: string; note: string; status: string; created_at: string }[]
-  >([]);
+function JoinRequestsPanel({
+  departmentCode,
+  requests,
+  search,
+  onChanged,
+}: {
+  departmentCode: string;
+  requests: { id: number; member_name: string; note: string; status: string; created_at: string }[];
+  search: string;
+  onChanged: () => void;
+}) {
   const [replies, setReplies] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    fetch(`${API_URL}/api/members/department-join-requests/review/`, { headers: authHeaders() })
-      .then((res) => (res.ok ? res.json() : { requests: [] }))
-      .then((data) =>
-        setRequests(
-          (data?.requests ?? []).filter(
-            (row: { department: string }) => row.department === departmentCode,
-          ),
-        ),
-      )
-      .catch(() => setRequests([]))
-      .finally(() => setLoading(false));
-  }, [departmentCode]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   async function answer(id: number, status: "approved" | "rejected") {
     setBusyId(id);
@@ -4074,7 +4112,6 @@ function JoinRequestsPanel({ departmentCode, onChanged }: { departmentCode: stri
             : "The member has been told.",
           "success",
         );
-        load();
         onChanged();
       } else {
         const data = await res.json().catch(() => ({}));
@@ -4087,13 +4124,20 @@ function JoinRequestsPanel({ departmentCode, onChanged }: { departmentCode: stri
     }
   }
 
-  const open = requests.filter((row) => row.status === "pending");
-  const answered = requests.filter((row) => row.status !== "pending");
+  const query = search.trim().toLowerCase();
+  const matching = query
+    ? requests.filter((row) => `${row.member_name} ${row.note}`.toLowerCase().includes(query))
+    : requests;
+  const open = matching.filter((row) => row.status === "pending");
+  const answered = matching.filter((row) => row.status !== "pending");
 
-  if (loading) {
-    return <p className="text-center text-xs text-moss">Loading join requests…</p>;
+  if (requests.length === 0) {
+    return (
+      <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+        No one has asked to join {departmentCode.replace("_", " ")} yet.
+      </div>
+    );
   }
-  if (requests.length === 0) return null;
 
   return (
     <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
@@ -4101,6 +4145,9 @@ function JoinRequestsPanel({ departmentCode, onChanged }: { departmentCode: stri
       <p className="mt-0.5 text-xs text-moss">
         Members asking to join {departmentCode.replace("_", " ")} — approve to add them to the roll, with a reply they will read.
       </p>
+      {query && open.length === 0 && answered.length === 0 && (
+        <p className="mt-4 text-center text-xs text-moss">No join request matches that search.</p>
+      )}
       {open.length > 0 && (
         <div className="mt-4 space-y-3">
           {open.map((row) => (
