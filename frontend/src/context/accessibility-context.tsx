@@ -11,7 +11,8 @@ export interface AccessibilityPrefs {
   dyslexicFont: boolean;
   reducedMotion: boolean;
   highVisFocus: boolean;
-  /** Light or dark. Stored here so one "Reset Defaults" resets everything. */
+  /** System, light or dark. Stored here so one "Reset Defaults" resets
+      everything. */
   theme: ThemeChoice;
 }
 
@@ -34,7 +35,9 @@ const DEFAULT_PREFS: AccessibilityPrefs = {
   // Light until someone asks for dark: the theme is opt-in, never inferred
   // from the device, so a member's screen looks the same as it did before a
   // dark palette existed.
-  theme: "light",
+  // System is the default: the app follows the device until the member picks
+  // Light or Dark for themselves.
+  theme: "system",
 };
 
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
@@ -50,6 +53,20 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     }
     return DEFAULT_PREFS;
   });
+
+  // The device's own preference, tracked live: on System the app must follow it
+  // as it changes, not only read it once at first paint. Only the attribute
+  // below depends on this, never the markup, so there is no hydration gap.
+  const [deviceIsDark, setDeviceIsDark] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-color-scheme: dark)").matches
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event: MediaQueryListEvent) => setDeviceIsDark(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
   const updatePref = <K extends keyof AccessibilityPrefs>(key: K, value: AccessibilityPrefs[K]) => {
     setPrefs((prev) => {
@@ -99,10 +116,11 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     else root.removeAttribute("data-focus-ring");
 
     // The dark palette hangs off this attribute. `color-scheme` rides along in
-    // CSS so form controls and scrollbars follow.
-    if (prefs.theme === "dark") root.setAttribute("data-theme", "dark");
+    // CSS so form controls and scrollbars follow. On System the device decides.
+    const dark = prefs.theme === "dark" || (prefs.theme === "system" && deviceIsDark);
+    if (dark) root.setAttribute("data-theme", "dark");
     else root.removeAttribute("data-theme");
-  }, [prefs]);
+  }, [prefs, deviceIsDark]);
 
   return (
     <AccessibilityContext.Provider

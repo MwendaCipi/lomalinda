@@ -843,9 +843,21 @@ export default function ReconciliationPage() {
                       )}
                     </div>
 
-                    {/* Desktop Table View (visible on md and up) */}
+                    {/* Desktop Table View (visible on md and up). The column
+                        grid is fixed and declared once, because the totals row
+                        below is a second table and auto layout would size its
+                        columns to its own (different) contents. */}
                     <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
-                      <table className="w-full text-left text-sm">
+                      <table className="w-full table-fixed text-left text-sm">
+                        <colgroup>
+                          <col className="w-12" />
+                          <col className="w-56" />
+                          <col />
+                          <col />
+                          <col />
+                          <col />
+                          <col />
+                        </colgroup>
                         <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm">
                           <tr>
                             <th className="px-4 py-3 text-left w-12">#</th>
@@ -894,7 +906,16 @@ export default function ReconciliationPage() {
 
                     {/* Fixed Totals Footer at the bottom of the card with Print Report & Spreadsheet buttons — flush on the tab bar. The column totals belong to the table, so a phone (where the rows are cards) drops them and keeps the actions. */}
                     <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
-                      <table className="hidden w-full text-left text-sm md:table">
+                      <table className="hidden w-full table-fixed text-left text-sm md:table">
+                        <colgroup>
+                          <col className="w-12" />
+                          <col className="w-56" />
+                          <col />
+                          <col />
+                          <col />
+                          <col />
+                          <col />
+                        </colgroup>
                         <tfoot>
                           <tr>
                             <td className="px-4 py-2.5 text-xs text-moss font-mono w-12">#</td>

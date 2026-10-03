@@ -6,12 +6,15 @@ import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
 import { kenyaCounties } from "@/config/kenya-counties";
 import { getPushState, PushSupport } from "@/lib/push";
+import { useAccessibility } from "@/context/accessibility-context";
+import type { ThemeChoice } from "@/lib/theme";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
 type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
 
 export default function MemberPage() {
+  const { theme, setTheme } = useAccessibility();
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [details, setDetails] = useState<Details | null>(null);
   const [token] = useState(() => typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
@@ -153,6 +156,32 @@ export default function MemberPage() {
               {detailsMessage && <p className="mt-3 text-sm text-moss">{detailsMessage}</p>}
             </form>
           )}
+
+          <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <h2 className="text-xl font-semibold">Appearance</h2>
+            <p className="mt-2 text-sm leading-6 text-moss">
+              How the app is lit. <strong>System</strong> follows your device and keeps following it
+              as the device switches between light and dark; Light and Dark hold the app still
+              whatever the device does. Resetting the display defaults returns you to System.
+            </p>
+            <div className="mt-5 grid grid-cols-3 gap-2 sm:max-w-md">
+              {(["system", "light", "dark"] as ThemeChoice[]).map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  onClick={() => setTheme(choice)}
+                  aria-pressed={theme === choice}
+                  className={`rounded-xl py-2 text-sm font-semibold capitalize transition ${
+                    theme === choice
+                      ? "bg-bark text-white shadow-sm"
+                      : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
+                  }`}
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          </section>
 
           {announcePrefs && (
             <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">

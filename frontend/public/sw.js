@@ -313,8 +313,15 @@
    and calendar, read-only. Neither office desks nor the sex-only
    fellowships are offered to the wrong member. Testimonies reads Testimonies
    on a phone, not Stories. Chrome changed, so installed apps must take the
-   new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v65";
+   new shell.
+
+   v66 — the colour mode leaves the top bar and lives on My Account: the bar
+   no longer spends a control on light/dark, and System is the default, so
+   the app follows the device until a member chooses Light or Dark for
+   themselves in settings. The Summary Contributions totals row lines up
+   with its columns (both tables now declare one fixed column grid). Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v66";
 const STATIC_ASSETS = [
   "/",
   "/about/",

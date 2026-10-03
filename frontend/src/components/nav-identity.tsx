@@ -16,7 +16,6 @@ import {
 import Swal from "sweetalert2";
 
 import { AccessibilityMenu } from "./accessibility-menu";
-import { ThemeToggle } from "./theme-toggle";
 import { triggerPwaInstall } from "./pwa-register";
 import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -89,10 +88,12 @@ export function useUnreadNotifications(): number {
 /**
  * The member's identity controls, sitting at the right end of the top bar.
  *
- * This is the bell, the theme switch, the accessibility menu, install and the
- * account menu — everything the bar carries that is *not* navigation. The rail
- * owns the map, so these are the only three things that ever load a page: the
- * member's own account, the calendar, and the console for staff.
+ * This is the bell, the accessibility menu, install and the account menu —
+ * everything the bar carries that is *not* navigation. The colour mode is not
+ * here: it follows the device by default and is chosen on My Account, so the
+ * bar no longer spends a control on it. The rail owns the map, so these are the
+ * only three things that ever load a page: the member's own account, the
+ * calendar, and the console for staff.
  */
 export function NavIdentity() {
   const router = useRouter();
@@ -288,10 +289,6 @@ export function NavIdentity() {
   return (
     <div ref={controlsRef} className="flex items-center gap-1.5">
       <div className="flex items-center gap-1.5">
-        {/* The light/dark switch leads the controls: the member's own display
-            choice comes before everything the church sends them. */}
-        <ThemeToggle className={barButton} />
-
         <div className="relative">
           <button
             type="button"
