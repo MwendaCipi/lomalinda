@@ -3410,8 +3410,26 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
   const [leadershipDept, setLeadershipDept] = useState<DepartmentRow | null>(null);
   // The Add area modal.
   const [showAddArea, setShowAddArea] = useState(false);
-  // The directory search: narrows by area or by any name seated at it.
+  // The directory search: narrows by area or by any name seated at it. It
+  // rides the shell's header beside the page's name, the way every other
+  // desk places its own — one row for the heading and the search, at both
+  // widths. A single department's desk draws its own search there instead
+  // (see `DepartmentDetail`), so opening a row takes the slot over.
   const [directorySearch, setDirectorySearch] = useState("");
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    setHeaderRightAction(
+      <input
+        type="text"
+        value={directorySearch}
+        onChange={(e) => setDirectorySearch(e.target.value)}
+        placeholder="Search areas or the people leading them…"
+        aria-label="Search the leadership directory"
+        className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64"
+      />
+    );
+    return () => setHeaderRightAction(null);
+  }, [directorySearch, setHeaderRightAction]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>
@@ -3467,19 +3485,6 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
         <p className="mt-0.5 text-xs text-moss">
           Every leadership area — the church's offices and each department — with its leader and assistants.
         </p>
-      </div>
-
-      {/* One search above the directory: find an area or anyone seated in
-          one, at either width. */}
-      <div className="shrink-0">
-        <input
-          type="text"
-          value={directorySearch}
-          onChange={(e) => setDirectorySearch(e.target.value)}
-          placeholder="Search areas or the people leading them…"
-          aria-label="Search the leadership directory"
-          className="w-full rounded-xl border border-sand-line bg-white px-4 py-2.5 text-xs shadow-sm focus:border-ember focus:outline-none"
-        />
       </div>
 
       {/* One table, one row per department — the directory a desk scans, not

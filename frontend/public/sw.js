@@ -292,8 +292,12 @@
    v62 — Expenses reads a window: the desk's header carries a From and a To
    date beside its search and category, opening on the church's month to
    date, and the table and its total answer only the spending inside it.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v62";
+
+   v63 — Church Leadership's directory search takes its place beside the
+   page's name with every other desk's: it used to stand alone above the
+   table instead of in the shell's header row. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v63";
 const STATIC_ASSETS = [
   "/",
   "/about/",
