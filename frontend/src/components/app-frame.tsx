@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
@@ -52,6 +52,17 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
 
+  // The setters never change identity, so the context value must not either.
+  // A fresh object on every shell render re-renders every page that injects a
+  // header control or a toggle strip — and a page whose effect depends on a
+  // value it rebuilds each render (a filtered array, say) then loops: effect →
+  // `setHeaderRightAction` → shell re-render → new context → page re-render →
+  // effect. One stable value breaks the loop for every desk at once.
+  const pageHeaderSlots = useMemo(
+    () => ({ setHeaderRightAction, setCustomToggles }),
+    [setHeaderRightAction, setCustomToggles]
+  );
+
   useEffect(() => {
     setHeaderRightAction(null);
     setCustomToggles(null);
@@ -92,7 +103,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   if (!showRail) return <>{children}</>;
 
   return (
-    <PageHeaderContext.Provider value={{ setHeaderRightAction, setCustomToggles }}>
+    <PageHeaderContext.Provider value={pageHeaderSlots}>
       <div
         className="app-shell flex min-h-0 flex-1 flex-col pb-24 md:h-full md:overflow-hidden md:pb-0"
         data-scroll-mode={mode}
@@ -102,14 +113,24 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           <div className="app-panel-column">
             <AppTopBar />
             <div className="app-content">
-              {pageHeader && (
-                <div className="shrink-0 bg-white px-3 py-3.5 sm:px-5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{pageHeader.label}</h1>
-                    {pageHeader.description && (
-                      <p className="mt-0.5 text-xs text-moss sm:text-sm">{pageHeader.description}</p>
-                    )}
-                  </div>
+              {(pageHeader || headerRightAction) && (
+                // A phone spends its height on the page, not on the chrome: the
+                // heading and its description ride the wider screens only, and a
+                // header with nothing left on a phone (no controls) steps out
+                // entirely. The row of toggles below still names the place.
+                <div
+                  className={`shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    headerRightAction ? "" : "hidden sm:flex"
+                  }`}
+                >
+                  {pageHeader && (
+                    <div className="hidden sm:block">
+                      <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{pageHeader.label}</h1>
+                      {pageHeader.description && (
+                        <p className="mt-0.5 text-xs text-moss sm:text-sm">{pageHeader.description}</p>
+                      )}
+                    </div>
+                  )}
                   {headerRightAction && (
                     <div className="shrink-0 w-full sm:w-auto flex flex-wrap items-center gap-2">
                       {headerRightAction}

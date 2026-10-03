@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Scale, Settings, Undo2, Users } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -224,21 +223,14 @@ function AdministrationContent() {
   // clerks reach their work from the Elders' Desk.
   const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
   const isElderOnly = isElder && !isAdmin;
-  // Mobile overview: an office spanning more than one role — and the admin,
-  // who spans all of them — lands on the sidebar's section headings and drills
-  // in; a single-role desk opens its items directly.
-  const useSectionCards = isAdmin || userRoles.filter((r) => r !== "member").length > 1;
-  // Which section's cards the phone overview is showing (null = the headings).
-  const [overviewSection, setOverviewSection] = useState<"elders" | "clerks" | "finance" | "deaconate" | null>(null);
-  // Five desks, each with its own work: the elders' programmes, the clerk's
-  // register, the treasury's money and the deaconate's property. An officer
-  // sees the desks they hold; an admin, who holds them all, drills in.
-  // The register, the meetings' minutes and the transfers are the clerk's own
-  // desk (Clerkship), so the phone's cards split them from the elders' strip.
-  const showEldersItems = (isElder || isClerk || isAdmin) && (!useSectionCards || overviewSection === "elders");
-  const showClerksItems = isClerk && (!useSectionCards || overviewSection === "clerks");
-  const showFinanceItems = isFinance && (!useSectionCards || overviewSection === "finance");
-  const showDeaconateItems = isDeaconate && !isElderOnly && (!useSectionCards || overviewSection === "deaconate");
+  // The phone overview is one page of desks, each with its own heading and a
+  // card per page it holds — the same sections for every officer, so an admin
+  // and a single-desk clerk read the same shape. A desk the officer does not
+  // hold contributes nothing.
+  const hasEldership = isElder || isClerk || isAdmin;
+  const hasClerkship = isClerk;
+  const hasTreasury = isFinance;
+  const hasDeaconate = isDeaconate && !isElderOnly;
   // Every tab renders a full-height panel (table or cards) that scrolls
   // internally, so the workspace never scrolls the page itself. "overview"
   // is the mobile card grid and keeps normal scrolling.
@@ -247,13 +239,10 @@ function AdministrationContent() {
    * route (`/administration`) whose `?tab=` picks the page, so reading it off
    * the URL shows the right page on the click that asked for it — syncing it
    * through state a render later showed the previous page first, and only
-   * settled on a second press. `setActiveTab` switches desks the way a strip
-   * chip does: by writing the address bar.
+   * settled on a second press. The overview's cards write the address bar the
+   * same way, through a plain link.
    */
   const activeTab = searchTab ? (searchTab === "expenditures" ? "accounts" : searchTab) : defaultTab;
-  const setActiveTab = (tab: string) => {
-    router.replace(`/administration?tab=${tab}`, { scroll: false });
-  };
 
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
 
@@ -282,6 +271,64 @@ function AdministrationContent() {
     );
   }, [searchTab, isClerk, isElder, isFinance]);
 
+  // The phone's overview, grouped by desk: each desk is a heading with a card
+  // per page it holds. The desktop rail already names these places, which is
+  // why the whole page is hidden from `lg`.
+  const overviewDesks: OverviewDesk[] = (
+    [
+    hasClerkship
+      ? {
+          label: "Clerkship",
+          icon: <ClipboardList size={16} aria-hidden="true" />,
+          description: "The register, the meetings' minutes and the membership transfers.",
+          cards: [
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: every member, their roles and their details.", href: "/administration?tab=users" },
+            { icon: <Armchair size={20} aria-hidden="true" />, label: "Board Meetings", description: "The board's schedules, agendas, files and minutes.", href: "/administration?tab=board" },
+            { icon: <Briefcase size={20} aria-hidden="true" />, label: "Business Meetings", description: "The congregation in session: agendas, files and minutes.", href: "/administration?tab=business" },
+            { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
+          ],
+        }
+      : null,
+    hasEldership
+      ? {
+          label: "Eldership",
+          icon: <Armchair size={16} aria-hidden="true" />,
+          description: "Leadership, church settings, announcements and the requests members send.",
+          cards: [
+            { icon: <Crown size={20} aria-hidden="true" />, label: "Leadership", description: "Every ministry and department's leadership, roll and calendar, in one place.", href: "/administration?tab=leaders" },
+            { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
+            { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
+            { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
+          ],
+        }
+      : null,
+    hasTreasury
+      ? {
+          label: "Treasury & Finance",
+          icon: <Landmark size={16} aria-hidden="true" />,
+          description: "Accounts, ledger, fund drives, budget and refunds.",
+          cards: [
+            { icon: <Scale size={20} aria-hidden="true" />, label: "Contributions Ledger", description: "Record cash receipts and track all giving breakdown ledgers.", href: "/administration/reconciliation" },
+            { icon: <Landmark size={20} aria-hidden="true" />, label: "Church Accounts", description: "Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.", href: "/administration?tab=accounts" },
+            { icon: <Heart size={20} aria-hidden="true" />, label: "Fund Drives", description: "Manage the church's fund drives — targets, dates, receipts and member invites.", href: "/administration/fund-drives" },
+            { icon: <BarChart3 size={20} aria-hidden="true" />, label: "Church Budget", description: "Post the year's plan — income, spending — and publish it to the congregation.", href: "/administration?tab=budget" },
+            { icon: <Undo2 size={20} aria-hidden="true" />, label: "M-Pesa Refunds", description: "Return mistaken or duplicate giving through B2C payouts.", href: "/administration?tab=refunds" },
+          ],
+        }
+      : null,
+    hasDeaconate
+      ? {
+          label: "Deaconate Ministry",
+          icon: <Package size={16} aria-hidden="true" />,
+          description: "Church property, the duty rota, the team and the ordinances calendar.",
+          cards: [
+            { icon: <Package size={20} aria-hidden="true" />, label: "Deaconate Ministry", description: "Church property inventory, duty rota, deaconate roster and ordinances calendar.", href: "/administration?tab=inventory" },
+          ],
+        }
+      : null,
+    ] as (OverviewDesk | null)[]
+  ).filter((desk): desk is OverviewDesk => desk !== null);
+
   if (status === "loading") {
     return (
       <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
@@ -306,336 +353,20 @@ function AdministrationContent() {
               }`}
             >
 
-            {/* Overview / Card Grid View (Mobile Only) */}
+            {/* Overview — the phone's card grid, grouped by desk so the
+                sections read the same for an admin and a single-desk clerk. */}
             {activeTab === "overview" && (
-              <div className="space-y-6 p-4 sm:p-6 lg:hidden">
-                {useSectionCards && overviewSection === null ? (
-                  /* The section headings, one card each — the phone's front
-                     page of the sidebar. */
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    {(isElder || isClerk || isAdmin) && (
-                      <SectionHeadingCard
-                        icon={<Armchair size={18} aria-hidden="true" />}
-                        label="Eldership"
-                        description="Leadership, church settings, announcements and requests."
-                        onClick={() => setOverviewSection("elders")}
-                      />
-                    )}
-                    {isClerk && (
-                      <SectionHeadingCard
-                        icon={<ClipboardList size={18} aria-hidden="true" />}
-                        label="Clerkship"
-                        description="The register, the board and business minutes and membership transfers."
-                        onClick={() => setOverviewSection("clerks")}
-                      />
-                    )}
-                    {(isElder || isClerk) && (
-                      <SectionHeadingCard
-                        icon={<Crown size={18} aria-hidden="true" />}
-                        label="Leadership"
-                        description="Every ministry and department's leadership, roll and calendar, in one place."
-                        onClick={() => {
-                          setActiveTab("leaders");
-                          router.replace("/administration?tab=leaders", { scroll: false });
-                        }}
-                      />
-                    )}
-                    {isFinance && (
-                      <SectionHeadingCard
-                        icon={<Landmark size={18} aria-hidden="true" />}
-                        label="Treasury & Finance"
-                        description="Accounts, ledger, fund drives, budget and refunds."
-                        onClick={() => setOverviewSection("finance")}
-                      />
-                    )}
-                    {isDeaconate && !isElderOnly && (
-                      <SectionHeadingCard
-                        icon={<Package size={18} aria-hidden="true" />}
-                        label="Deaconate Ministry"
-                        description="Inventory, duty rota, team and ordinances calendar."
-                        onClick={() => setOverviewSection("deaconate")}
-                      />
-                    )}
-                  </div>
-                ) : (
-                <>
-                {useSectionCards && (
-                  <button
-                    type="button"
-                    onClick={() => setOverviewSection(null)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember"
-                  >
-                    &larr; All sections
-                  </button>
-                )}
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {showClerksItems && (
-                    <>
-                      {/* The clerk's desk in the strip's order — the register,
-                          the board and business minutes, then the transfers. */}
-                      <div
-                        onClick={() => {
-                          setActiveTab("users");
-                          router.replace("/administration?tab=users", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Users size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">User Management</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">The church register: every member, their roles and their details.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("board");
-                          router.replace("/administration?tab=board", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Armchair size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Board Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">The board&apos;s schedules, agendas, files and minutes.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("business");
-                          router.replace("/administration?tab=business", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Briefcase size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Business Meetings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">The congregation in session: agendas, files and minutes.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("transfers");
-                          router.replace("/administration?tab=transfers", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><ClipboardList size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Membership Requests</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Process incoming & outgoing church membership requests.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-                    </>
-                  )}
-
-                  {showEldersItems && (
-                    <>
-                      {/* The elders' desk in the strip's order — Leadership
-                          through to Church Settings. */}
-                      <div
-                        onClick={() => {
-                          setActiveTab("leaders");
-                          setOverviewSection(null);
-                          router.replace("/administration?tab=leaders", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Crown size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Leadership</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Every ministry and department&apos;s leadership, roll and calendar, in one place.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("settings");
-                          router.replace("/administration?tab=settings", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Settings size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Church Settings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">The church&apos;s name, channels, meeting times and public record.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-                    </>
-                  )}
-
-                  {showEldersItems && (
-                    <div
-                      onClick={() => {
-                        setActiveTab("announcements");
-                        router.replace("/administration?tab=announcements", { scroll: false });
-                      }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Megaphone size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Announcements</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Publish Sabbath & weekly public announcements and track pledges.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
+              <div className="space-y-8 p-4 sm:p-6 lg:hidden">
+                {overviewDesks.map((desk) => (
+                  <section key={desk.label} className="space-y-3">
+                    <DeskHeading icon={desk.icon} label={desk.label} description={desk.description} />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {desk.cards.map((card) => (
+                        <OverviewCard key={card.href} {...card} />
+                      ))}
                     </div>
-                  )}
-
-                  {showEldersItems && (
-                    <div
-                      onClick={() => {
-                        setActiveTab("requests");
-                        router.replace("/administration?tab=requests", { scroll: false });
-                      }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><HandHelping size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="block text-sm font-bold text-bark">Received Requests</span>
-                            {/* The phone hub is where a leader lands, so the count of
-                                unanswered requests travels with the card. */}
-                            {pendingRequests.total > 0 && (
-                              <span
-                                title={`${pendingRequests.total} request${pendingRequests.total === 1 ? "" : "s"} awaiting review`}
-                                className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
-                              >
-                                {pendingRequests.total}
-                              </span>
-                            )}
-                          </span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Review join, prayer, visitation, dedication, and support requests.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                    </div>
-                  )}
-
-                  {showFinanceItems && (
-                    <>
-                      {/* The desk's order mirrors the strip: Ledger, Accounts,
-                          Drives, Budget, Refunds. */}
-                      <Link
-                        href="/administration/reconciliation"
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Scale size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Contributions Ledger</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Record cash receipts and track all giving breakdown ledgers.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </Link>
-
-                      {/* The finances' own desk. It was only reachable from the
-                          desktop sidebar, so a treasurer on a phone had no card
-                          for the accounts they open most. */}
-                      <div
-                        onClick={() => {
-                          setActiveTab("accounts");
-                          router.replace("/administration?tab=accounts", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Landmark size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Church Accounts</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <Link
-                        href="/administration/fund-drives"
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Heart size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Fund Drives</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Manage the church's fund drives — targets, dates, receipts and member invites.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </Link>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("budget");
-                          router.replace("/administration?tab=budget", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><BarChart3 size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Church Budget</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Post the year's plan — income, spending — and publish it to the congregation.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-
-                      <div
-                        onClick={() => {
-                          setActiveTab("refunds");
-                          router.replace("/administration?tab=refunds", { scroll: false });
-                        }}
-                        className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Undo2 size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">M-Pesa Refunds</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Return mistaken or duplicate giving through B2C payouts.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                      </div>
-                    </>
-                  )}
-
-                  {/* The deaconate desk, on phones as in the desktop sidebar —
-                      deacons and admin; elders and clerks are not shown it. */}
-                  {showDeaconateItems ? (
-                    <div
-                      onClick={() => {
-                        setActiveTab("inventory");
-                        router.replace("/administration?tab=inventory", { scroll: false });
-                      }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Package size={20} /></span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-bark">Deaconate Ministry</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-moss">Church property inventory, duty rota, deaconate roster and ordinances calendar.</span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                    </div>
-                  ) : null}
-
-                  {showEldersItems && isAdmin && (
-                    <div
-                      onClick={() => {
-                        setActiveTab("settings");
-                        router.replace("/administration?tab=settings", { scroll: false });
-                      }}
-                      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true"><Settings size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-bark">Church Settings</span>
-                          <span className="mt-0.5 block text-xs leading-5 text-moss">Configure homepage clarion call message, church location, and church parameters.</span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-                    </div>
-                  )}
-
-
-                </div>
-                </>
-                )}
+                  </section>
+                ))}
               </div>
             )}
 
@@ -763,34 +494,66 @@ function AdministrationContent() {
   );
 }
 
-/** One section heading in the phone overview: the front page for anyone whose
-    office spans more than one role — the sidebar's sections as cards. */
-function SectionHeadingCard({
-  icon,
-  label,
-  description,
-  onClick,
-}: {
+/** One page of a desk in the phone overview. */
+type OverviewCardDef = {
   icon: ReactNode;
   label: string;
   description: string;
-  onClick: () => void;
-}) {
+  href: string;
+  /** A count to show beside the label — only when there is one. */
+  badge?: number;
+};
+
+/** One desk of the phone overview: a heading and the pages it holds. */
+type OverviewDesk = {
+  label: string;
+  icon: ReactNode;
+  description: string;
+  cards: OverviewCardDef[];
+};
+
+/** The heading above a desk's cards in the phone overview. */
+function DeskHeading({ icon, label, description }: { icon: ReactNode; label: string; description: string }) {
   return (
-    <div
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
-      className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
+    <div className="flex items-center gap-2.5 px-1">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sand text-ember" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-bark">{label}</h2>
+        <p className="text-xs leading-5 text-moss">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+/** One page of a desk in the phone overview. A real link, so the whole card is
+    keyboard-reachable and every card navigates the same way. */
+function OverviewCard({ icon, label, description, href, badge }: OverviewCardDef) {
+  return (
+    <Link
+      href={href}
+      replace
+      scroll={false}
+      className="group flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ember/50"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-2xl" aria-hidden="true">{icon}</span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sand text-ember" aria-hidden="true">{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold text-bark">{label}</span>
+        <span className="flex items-center gap-2">
+          <span className="block text-sm font-bold text-bark">{label}</span>
+          {badge ? (
+            <span
+              title={`${badge} request${badge === 1 ? "" : "s"} awaiting review`}
+              className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
+            >
+              {badge}
+            </span>
+          ) : null}
+        </span>
         <span className="mt-0.5 block text-xs leading-5 text-moss">{description}</span>
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-sand-mute transition group-hover:text-ember" aria-hidden="true" />
-    </div>
+    </Link>
   );
 }
 

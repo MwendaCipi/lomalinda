@@ -234,8 +234,14 @@
    v54 — the deaconate's Team page now names itself with the rest of its
    desk: the description that rode the other deaconate pages reaches the
    page the desk opens on. Chrome changed, so installed apps must take the
-   new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v54";
+   new shell.
+
+   v55 — the office console's phone overview groups its cards by desk, the
+   phone drops the page heading and its description to keep the height for
+   the page, the clerk's record filter is a popover beside the search and
+   Ambassadors reads inside the youth desk. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v55";
 const STATIC_ASSETS = [
   "/",
   "/about/",
