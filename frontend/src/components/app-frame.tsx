@@ -104,7 +104,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const myDepartments = useMyDepartments();
   const departments = useDepartments();
-  const entries = railFor({ roles, departmentCodes: myDepartments }, departments);
+  const entries = railFor({ roles, departmentCodes: myDepartments, sex: me?.gender }, departments);
   const here = useRailHere(pathname, entries);
 
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;

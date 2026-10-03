@@ -327,8 +327,15 @@
    rides the AYM desk as a unit, so each keeps its own roll). Join requests
    leave the foot of the roll and become a desk view on the strip, carrying
    the count of asks still waiting. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v67";
+   take the new shell.
+
+   v68 — a member sees the areas they could join, not only the ones they are
+   already in: the rail's Departments heading lists every joinable department
+   (AYM, Ambassadors, Children) rather than only the member's own, with the
+   offices never offered. The men's and women's fellowships show to their own
+   sex. The choir reads Ensemble throughout. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v68";
 const STATIC_ASSETS = [
   "/",
   "/about/",

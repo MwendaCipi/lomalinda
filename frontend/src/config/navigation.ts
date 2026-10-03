@@ -673,8 +673,8 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   health: "The church's health ministry — wholeness of body, mind and spirit.",
   sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
-  music: "The church's music — its choir and the singing groups it keeps.",
-  choir: "The church's singing — its choir and the groups that sing in it.",
+  music: "The church's music — its ensemble and the singing groups it keeps.",
+  choir: "The church's singing — its ensemble and the groups that sing in it.",
 };
 
 /**
@@ -917,7 +917,6 @@ export function canSee(
  *  full names stay everywhere else (the directory, the desks, the titles). */
 const RAIL_AREA_CODES_MOVED = new Set([
   "music",
-  "choir",
   "beginners",
   "kindergarten",
   "primary",
@@ -937,12 +936,18 @@ const RAIL_AREA_CODES_MOVED = new Set([
  */
 const RAIL_UNIT_LABELS_MOVED = new Set(["young couples", "single parents"]);
 
+/** The two fellowships that are one sex's own: the other sex may still belong
+ *  by the desk's own hand, but the row is not offered them to join. */
+const SEX_ONLY_RAIL = new Set(["amm", "awm"]);
+
 
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "AMM",
   awm: "AWM",
   aym: "AYM",
   apm: "APM",
+  // Loma Linda calls the choir the Ensemble.
+  choir: "Ensemble",
   chaplaincy: "Chaplaincy",
   children: "Children",
   personal_ministries: "PM",
@@ -961,6 +966,9 @@ export type RailMember = {
   roles: readonly string[];
   /** The codes of the departments the member belongs to or serves. */
   departmentCodes: readonly string[];
+  /** The member's recorded sex, for the two fellowships that are one sex's
+   *  own. A blank field offers both, the desk's own hand deciding. */
+  sex?: string;
 };
 
 export function railFor(
@@ -968,6 +976,7 @@ export function railFor(
   departments: readonly DepartmentSummary[] = []
 ): RailEntry[] {
   const { roles, departmentCodes: myCodes } = member;
+  const sex = (member.sex || "").trim().toLowerCase();
   const isStaff = roles.some((role) => STAFF_ROLES.includes(role));
   const memberRowRoles: readonly string[] = isStaff ? STAFF_ROLES : ["member"];
   return railEntries.flatMap((entry): RailEntry[] => {
@@ -1000,12 +1009,21 @@ export function railFor(
         // sub-units (Young Couples, Single Parents) read inside those desks.
         .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
         .filter((department) => !RAIL_UNIT_LABELS_MOVED.has(department.label.trim().toLowerCase()))
-        .filter(
-          (department) =>
-            group === "ministry" ||
-            myCodes.length === 0 ||
-            myCodes.includes(department.code),
-        );
+        // Every joinable area is a row: the ministries are the church's open
+        // doors, and the departments are shown whether or not the member is
+        // already in them — a member should see the ones they could join, not
+        // only the ones they belong to. The offices never appear here: they
+        // are filed under the `office` group, which has no heading of its
+        // own, so a normal member is never offered Treasury, Eldership or
+        // Clerkship. The wrong-sex fellowship is filtered out by its code.
+        .filter((department) => {
+          if (!SEX_ONLY_RAIL.has(department.code)) return true;
+          // The member's own fellowship always shows; the other sex's is
+          // hidden unless the desk has already put them on its roll.
+          if (myCodes.includes(department.code)) return true;
+          if (!sex) return true;
+          return (department.code === "amm" ? "male" : "female") === sex;
+        });
       return visible.map((department) => ({
         label: RAIL_AREA_LABELS[department.code] ?? department.label,
         icon: DEPARTMENT_ICONS[department.code] ?? Users,

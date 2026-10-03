@@ -1395,19 +1395,19 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      showAlert("Singer added", `${member.name} now sings with the choir.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      showAlert("Singer added", `${member.name} now sings with the ensemble.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       setShowAdd(false);
       loadChoir();
       onChanged();
     } else {
-      showAlert("Could not add", data.detail || "The member could not be added to the choir.", "error");
+      showAlert("Could not add", data.detail || "The member could not be added to the ensemble.", "error");
     }
   };
 
   const removeSinger = async (singer: ChoirMember) => {
     const result = await showAlert(
-      "Remove from choir",
-      `Take ${singer.name} off the choir's roll? Their membership in the church is not affected.`,
+      "Remove from ensemble",
+      `Take ${singer.name} off the ensemble's roll? Their membership in the church is not affected.`,
       "question",
       { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
     );
@@ -1417,11 +1417,11 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
       headers: authHeaders(),
     });
     if (res.ok) {
-      showAlert("Removed", `${singer.name} is off the choir's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      showAlert("Removed", `${singer.name} is off the ensemble's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       loadChoir();
       onChanged();
     } else {
-      showAlert("Could not remove", "The member could not be removed from the choir.", "error");
+      showAlert("Could not remove", "The member could not be removed from the ensemble.", "error");
     }
   };
 
@@ -1433,7 +1433,7 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-        <h3 className="text-sm font-bold text-bark">Church Choir</h3>
+        <h3 className="text-sm font-bold text-bark">Ensemble</h3>
         {canManage && (
           <button
             type="button"
@@ -1449,20 +1449,20 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search the choir by name, phone or email…"
+          placeholder="Search the ensemble by name, phone or email…"
           className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
         {loading ? (
-          <p className="py-8 text-center text-xs text-moss">Loading the choir…</p>
+          <p className="py-8 text-center text-xs text-moss">Loading the ensemble…</p>
         ) : visibleChoir.length === 0 ? (
           <p className="py-8 text-center text-xs text-moss">
             {members.length === 0
               ? canManage
-                ? "Nobody is on the choir's roll yet. Use “Add singer” to build it."
-                : "Nobody is on the choir's roll yet."
-              : "No choir member matches that search."}
+                ? "Nobody is on the ensemble's roll yet. Use “Add singer” to build it."
+                : "Nobody is on the ensemble's roll yet."
+              : "No ensemble member matches that search."}
           </p>
         ) : (
           <table className="w-full text-left text-xs">
@@ -1508,10 +1508,10 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
       {showAdd && (
         <AddMemberModal
           departmentLabel={departmentLabel}
-          title="Add singers to the choir"
+          title="Add singers to the ensemble"
           rollIds={new Set<number>()}
           excludeIds={new Set(members.map((m) => m.id))}
-          takenLabel="Already in the choir"
+          takenLabel="Already in the ensemble"
           onClose={() => setShowAdd(false)}
           onAdd={addSinger}
         />
@@ -2878,7 +2878,7 @@ function DepartmentDetail({
       ...(names.length === 0 ? [{ key: "members", label: "Members", icon: Users }] : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll.
-      ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
+      ...(isMusic ? [{ key: "choir", label: "Ensemble", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
       { key: "calendar", label: "Calendar", icon: CalendarDays },
       // Every desk reads its own fund when the treasurer has opened one.

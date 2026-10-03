@@ -34,7 +34,7 @@ export function NavRail() {
 
   const departments = useDepartments();
   const myDepartments = useMyDepartments();
-  const entries = railFor({ roles, departmentCodes: myDepartments }, departments);
+  const entries = railFor({ roles, departmentCodes: myDepartments, sex: me?.gender }, departments);
   const here = useRailHere(pathname, entries);
 
   // The join and contact affordances: which heading's modal is open.
