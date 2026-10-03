@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { isSystemRoute } from "@/lib/route-visibility";
@@ -18,7 +18,11 @@ export function SystemGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [status, setStatus] = useState<"checking" | "signed-out" | "ok">("checking");
 
-  useEffect(() => {
+  // A layout effect, not an effect: the stored token is a synchronous read, and
+  // running it before the browser paints is what keeps a signed-in member from
+  // ever seeing the wait screen — the prerendered HTML still says "checking",
+  // but that line is never painted for someone who is signed in.
+  useLayoutEffect(() => {
     if (!isSystemRoute(pathname)) return;
     const token = localStorage.getItem("access_token");
     if (!token) {

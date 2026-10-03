@@ -54,10 +54,30 @@ export function PwaRegister() {
     // just landed. Only when a worker was already in charge — on a first
     // install there is nothing to replace and a reload would be noise.
     const hadController = Boolean(navigator.serviceWorker.controller);
-    let reloaded = false;
+    // One reload per tab, not one per page load. The worker takes over at once
+    // (`skipWaiting` + `clients.claim`), so every activation raises this event;
+    // reloading on each one turns a worker that keeps re-activating — or a
+    // flaky link that keeps re-fetching the script — into an endless refresh
+    // loop. The latch lives in sessionStorage so it survives the reload it
+    // causes, and the reload is skipped entirely while the browser is offline,
+    // where a reload can only land on a cached shell.
+    const RELOAD_LATCH = "sw_reload_for_version";
+    let reloadedThisSession = (() => {
+      try {
+        return Boolean(sessionStorage.getItem(RELOAD_LATCH));
+      } catch {
+        return false;
+      }
+    })();
     const handleControllerChange = () => {
-      if (!hadController || reloaded) return;
-      reloaded = true;
+      if (!hadController || reloadedThisSession) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      reloadedThisSession = true;
+      try {
+        sessionStorage.setItem(RELOAD_LATCH, String(Date.now()));
+      } catch {
+        // Storage switched off: the in-memory latch still bounds this page.
+      }
       window.location.reload();
     };
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);

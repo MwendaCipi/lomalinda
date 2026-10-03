@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Scale, Settings, Undo2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
@@ -106,7 +106,7 @@ function AdministrationContent() {
   // which is how the rail's Ministries and Departments rows link to one.
   const searchDept = searchParams.get("dept");
 
-  const [status, setStatus] = useState<"loading" | "authorized" | "denied">("loading");
+  const [status, setStatus] = useState<"loading" | "authorized" | "denied" | "offline">("loading");
   const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   // The desk the URL falls back to when it names no tab: the phone's overview,
@@ -115,7 +115,19 @@ function AdministrationContent() {
 
   const router = useRouter();
 
-  useEffect(() => {
+  /**
+   * Ask the API who this browser is.
+   *
+   * Only an explicit 401/403 denies: a request that never arrived — the
+   * browser offline, the network dropped, the server briefly down — is not a
+   * lost session. Treating the two alike sent a signed-in member to /login on
+   * a dead link, and the sign-in page would then validate the very same token
+   * and bounce them straight back: the endless "Taking you in…" loop. A
+   * member who already passed the gate keeps the session they were granted,
+   * and one who has not is told the connection is down instead of being asked
+   * for a password they already gave.
+   */
+  const checkAccess = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) {
       setStatus("denied");
@@ -139,16 +151,28 @@ function AdministrationContent() {
       }
     }
 
-    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => {
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem("access_token");
-          }
-          throw new Error("Unauthorized");
-        }
-        return response.json();
-      })
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } });
+    } catch {
+      setStatus((current) => (current === "authorized" ? current : "offline"));
+      return;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem("access_token");
+      sessionStorage.removeItem(ADMIN_GATE_KEY);
+      setStatus("denied");
+      return;
+    }
+    if (!response.ok) {
+      // The server answered, but not with an identity — a 5xx, say. Keep the
+      // session the cache granted and let the member retry.
+      setStatus((current) => (current === "authorized" ? current : "offline"));
+      return;
+    }
+
+    await response.json()
       .then((data) => {
         const rawRole = (data?.role || "").toLowerCase().trim();
         const userRoles: string[] = Array.isArray(data?.roles) && data.roles.length > 0 ? data.roles : [rawRole];
@@ -187,8 +211,22 @@ function AdministrationContent() {
           setStatus("denied");
         }
       })
-      .catch(() => setStatus("denied"));
-  }, []);
+      .catch(() => setStatus((current) => (current === "authorized" ? current : "offline")));
+  }, [searchDept]);
+
+  useEffect(() => {
+    void checkAccess();
+  }, [checkAccess]);
+
+  // A dropped connection is not a lost session: when the browser reports it is
+  // back, ask again rather than making the member reload the page by hand.
+  useEffect(() => {
+    const onOnline = () => {
+      void checkAccess();
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [checkAccess]);
 
   useEffect(() => {
     if (status === "denied") {
@@ -338,6 +376,29 @@ function AdministrationContent() {
   }
 
   if (status === "denied") return null;
+
+  // Offline (or the server unreachable) with no session cached: say so rather
+  // than asking for a password over a dead link.
+  if (status === "offline") {
+    return (
+      <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
+        <p className="text-sm font-semibold text-bark">You&apos;re offline</p>
+        <p className="mx-auto mt-1 max-w-sm text-xs">
+          The workspace needs the church&apos;s server. Nothing is lost — it opens again the moment the connection is back.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("loading");
+            void checkAccess();
+          }}
+          className="mt-4 rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark-900"
+        >
+          Try again
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen md:h-full bg-sand text-bark md:overflow-hidden">

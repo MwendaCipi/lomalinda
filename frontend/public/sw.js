@@ -264,8 +264,16 @@
    Givings and Summary Contributions belong. Sabbath School joins the
    Ministry rows, Expenses drops its receipt column, and Membership
    Requests keeps a single compact filter. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v58";
+   apps must take the new shell.
+
+   v59 — the session check stops shouting and stops lying offline: the
+   gate reads the stored token before the browser paints, so a signed-in
+   member never sees the wait screen; the console treats only an explicit
+   401/403 as a denial, so a dropped connection no longer sends them to
+   the sign-in page and back — the loop that kept them reloading; and the
+   worker's one reload per generation is latched per tab and skipped while
+   offline. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v59";
 const STATIC_ASSETS = [
   "/",
   "/about/",
