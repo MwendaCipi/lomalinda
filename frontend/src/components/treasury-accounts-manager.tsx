@@ -235,7 +235,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
   // page's own views. Rendering it through the band (rather than as a row in
   // this component's own header) is what keeps the treasury to a single line
   // of toggles — the band shows this strip instead of the section's pages.
-  const { setCustomToggles, setHeaderRightAction } = usePageHeader();
+  const { setCustomToggles, setHeaderRightAction, setCustomHeader } = usePageHeader();
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
@@ -254,6 +254,22 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
     );
     return () => setCustomToggles(null);
   }, [setCustomToggles, view, router]);
+  // The desk answers four of the treasury's six views under the console's
+  // accounts tab, and the rail row that led here is named "Church Accounts".
+  // Naming the view the treasurer chose keeps the shell's heading in step with
+  // the toggle strip above, the way the ledger does for its two views.
+  useEffect(() => {
+    setCustomHeader(
+      {
+        accounts: { label: "Church Accounts", description: "The church's treasury accounts, their balances and their movements." },
+        income: { label: "Income", description: "Money arriving in the church's accounts, movement by movement." },
+        expenditure: { label: "Expenses", description: "Spending recorded against the church's accounts." },
+        withdrawals: { label: "Requests", description: "The departments' asks for money from their funds." },
+      }[view]
+    );
+    return () => setCustomHeader(null);
+  }, [setCustomHeader, view]);
+
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.
   const rowPad = densityCellPad();
@@ -500,14 +516,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       if (res.ok) {
         setShowAddAccountModal(false);
         setAddForm({ name: "", account_number: "", account_type: "bank", balance: "", description: "" });
-        setActionMessage("Treasury account created successfully.");
+        // Account information is announced by a toast, the same way every
+        // other desk's saved detail is — the banner is left for movements.
+        showAlert("Account created", `${addForm.description || addForm.name} is on the desk.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
         await fetchAccountsAndTransactions();
       } else {
         const err = await res.json().catch(() => ({}));
-        setActionMessage(err.detail || "Failed to create treasury account.");
+        showAlert("Could not create account", err.detail || "Try again.", "error", { toast: true, timer: 4500, showConfirmButton: false });
       }
     } catch {
-      setActionMessage("Network error creating account.");
+      showAlert("Could not create account", "The desk could not be reached.", "error", { toast: true, timer: 4500, showConfirmButton: false });
     } finally {
       setSubmitting(false);
     }
@@ -645,16 +663,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       });
       if (res.ok) {
         setEditAccount(null);
-        setActionMessage("Treasury account updated.");
+        showAlert("Account updated", `${editForm.description || editForm.name} keeps its new details.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
         await fetchAccountsAndTransactions();
       } else {
         const err = await res.json().catch(() => ({}));
         // The API's wording explains the 12-character M-Pesa cap by name.
-        const detail = typeof err === "object" && err !== null ? Object.values(err).flat().join(" ") : "Failed to update account.";
-        setActionMessage(detail || "Failed to update account.");
+        const detail = typeof err === "object" && err !== null ? Object.values(err).flat().join(" ") : "";
+        showAlert("Could not update account", detail || "Try again.", "error", { toast: true, timer: 4500, showConfirmButton: false });
       }
     } catch {
-      setActionMessage("Network error updating account.");
+      showAlert("Could not update account", "The desk could not be reached.", "error", { toast: true, timer: 4500, showConfirmButton: false });
     } finally {
       setSubmitting(false);
     }
@@ -670,16 +688,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
         headers: authHeaders(),
       });
       if (res.ok) {
-        setActionMessage("Treasury account deleted.");
         if (fromMenu) setOpenMenuAccountId(null);
+        showAlert("Account deleted", `${account.description || account.name} and its movement history are gone.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
         await fetchAccountsAndTransactions();
       } else {
         const err = await res.json().catch(() => ({}));
         const detail = authErrors(err);
-        setActionMessage(detail || "Failed to delete account.");
+        showAlert("Could not delete account", detail || "Try again.", "error", { toast: true, timer: 4500, showConfirmButton: false });
       }
     } catch {
-      setActionMessage("Network error deleting account.");
+      showAlert("Could not delete account", "The desk could not be reached.", "error", { toast: true, timer: 4500, showConfirmButton: false });
     } finally {
       setSubmitting(false);
     }

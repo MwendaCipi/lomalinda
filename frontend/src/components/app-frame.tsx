@@ -13,14 +13,25 @@ import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
 
+type PageHeaderHeading = { label: string; description?: string };
+
 type PageHeaderContextType = {
   setHeaderRightAction: (node: React.ReactNode) => void;
   setCustomToggles: (node: React.ReactNode) => void;
+  /**
+   * Let a page name itself, overriding the heading its rail row would give it.
+   * A desk that answers several views under one route (the treasury's six, say)
+   * uses this so the heading follows the view the visitor chose rather than
+   * staying fixed on whichever row led here — otherwise pressing "Individual
+   * Givings" leaves the page titled after the ledger it sits in.
+   */
+  setCustomHeader: (heading: PageHeaderHeading | null) => void;
 };
 
 const PageHeaderContext = createContext<PageHeaderContextType>({
   setHeaderRightAction: () => {},
   setCustomToggles: () => {},
+  setCustomHeader: () => {},
 });
 
 export function usePageHeader() {
@@ -51,6 +62,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
+  const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
 
   // The setters never change identity, so the context value must not either.
   // A fresh object on every shell render re-renders every page that injects a
@@ -59,13 +71,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // `setHeaderRightAction` → shell re-render → new context → page re-render →
   // effect. One stable value breaks the loop for every desk at once.
   const pageHeaderSlots = useMemo(
-    () => ({ setHeaderRightAction, setCustomToggles }),
-    [setHeaderRightAction, setCustomToggles]
+    () => ({ setHeaderRightAction, setCustomToggles, setCustomHeader }),
+    [setHeaderRightAction, setCustomToggles, setCustomHeader]
   );
 
   useEffect(() => {
     setHeaderRightAction(null);
     setCustomToggles(null);
+    setCustomHeader(null);
   }, [pathname]);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -86,6 +99,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const pageHeader = hereItem?.description
     ? { label: hereItem.label, description: hereItem.description }
     : pageHeaderFor(pathname);
+  // A page that names itself wins over the rail row that led here.
+  const header = customHeader ?? pageHeader;
   const sectionPages = (section && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({
@@ -113,7 +128,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           <div className="app-panel-column">
             <AppTopBar />
             <div className="app-content">
-              {(pageHeader || headerRightAction) && (
+              {(header || headerRightAction) && (
                 // A phone spends its height on the page, not on the chrome: the
                 // heading and its description ride the wider screens only, and a
                 // header with nothing left on a phone (no controls) steps out
@@ -123,11 +138,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                     headerRightAction ? "" : "hidden sm:flex"
                   }`}
                 >
-                  {pageHeader && (
+                  {header && (
                     <div className="hidden sm:block">
-                      <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{pageHeader.label}</h1>
-                      {pageHeader.description && (
-                        <p className="mt-0.5 text-xs text-moss sm:text-sm">{pageHeader.description}</p>
+                      <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{header.label}</h1>
+                      {header.description && (
+                        <p className="mt-0.5 text-xs text-moss sm:text-sm">{header.description}</p>
                       )}
                     </div>
                   )}

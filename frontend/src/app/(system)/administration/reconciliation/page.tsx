@@ -103,7 +103,7 @@ export default function ReconciliationPage() {
     }
   }, [modeParam]);
 
-  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setCustomHeader } = usePageHeader();
   const [searchQuery, setSearchQuery] = useState("");
 
   // Purpose Expansion & View Mode State
@@ -205,6 +205,20 @@ export default function ReconciliationPage() {
       />
     );
   }, [setCustomToggles, viewMode, loadAllGivings, router]);
+
+  // This desk answers two of the treasury's six views under one route, and
+  // the rail row that led here is named "Contributions Ledger" — which is the
+  // ledger's own name, not the view's. Naming the active view keeps the
+  // heading honest, so pressing Individual Givings does not leave the page
+  // titled after the ledger it sits in.
+  useEffect(() => {
+    setCustomHeader(
+      viewMode === "summary"
+        ? { label: "Summary Contributions", description: "Each purpose's giving, totalled by how it came in." }
+        : { label: "Individual Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
+    );
+    return () => setCustomHeader(null);
+  }, [setCustomHeader, viewMode]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

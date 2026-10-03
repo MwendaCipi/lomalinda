@@ -240,8 +240,16 @@
    phone drops the page heading and its description to keep the height for
    the page, the clerk's record filter is a popover beside the search and
    Ambassadors reads inside the youth desk. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v55";
+   apps must take the new shell.
+
+   v56 — the treasury's heading follows the view: choosing Individual
+   Givings or Summary Contributions names the ledger's own heading (it used
+   to keep the Contributions Ledger row that led there), and Church
+   Accounts, Income, Expenses and Requests name themselves on the accounts
+   desk. Editing an account's information is now announced by a toast
+   rather than a line in the page. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v56";
 const STATIC_ASSETS = [
   "/",
   "/about/",
