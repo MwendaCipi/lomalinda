@@ -248,8 +248,16 @@
    Accounts, Income, Expenses and Requests name themselves on the accounts
    desk. Editing an account's information is now announced by a toast
    rather than a line in the page. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v56";
+   take the new shell.
+
+   v57 — the treasury's Income view is gone: the strip reads Individual
+   Givings, Summary Contributions, Church Accounts, Expenses and Requests,
+   and Expenses now keeps the shape of its neighbours — the search and the
+   category ride the shell's header beside the page's name, the rows are the
+   shared table (cards on a phone), the total sits in the footer with the
+   Record button, and recording or removing a record is a toast. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v57";
 const STATIC_ASSETS = [
   "/",
   "/about/",

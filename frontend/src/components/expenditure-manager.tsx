@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Receipt, Filter, Search, Trash2, X } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { Plus, Receipt, Trash2, X } from "lucide-react";
+import { RecordList } from "./record-list";
+import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
 import { localDate } from "@/lib/dates";
 
@@ -31,15 +32,43 @@ type Expenditure = {
   created_at: string;
 };
 
-export function ExpenditureManager({ embedded = false }: { embedded?: boolean } = {}) {
+/**
+ * The spending categories, in one place: the desk draws them in its header
+ * filter and this view reads the same list, so the two can never drift.
+ */
+export const EXPENDITURE_CATEGORIES: { key: string; label: string }[] = [
+  { key: "operations", label: "Church Operations" },
+  { key: "evangelism", label: "Evangelism & Missions" },
+  { key: "utilities", label: "Utilities" },
+  { key: "maintenance", label: "Maintenance & Repairs" },
+  { key: "welfare", label: "Welfare & Assistance" },
+  { key: "sabbath_school", label: "Sabbath School" },
+  { key: "building", label: "Building & Development" },
+  { key: "other", label: "Other Expenditure" },
+];
+
+/**
+ * The church's spending, as one of the treasury desk's views.
+ *
+ * It is hosted by the accounts desk (the shell's toggle strip already names
+ * it), so it reads like the accounts table beside it: the search and the
+ * category sit in the shell's header row, the rows are `RecordList` — a table
+ * on a PC, cards on a phone — and the footer carries the total and the
+ * Record button. Recording and removing a record announce themselves with a
+ * toast, the same way the desk's account information does.
+ */
+export function ExpenditureManager({
+  search = "",
+  category = "all",
+}: {
+  /** The desk's search, drawn in the shell's header row beside the page name. */
+  search?: string;
+  /** The category the desk's header filter narrowed to. */
+  category?: string;
+} = {}) {
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(false);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-
-  // Filters
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
   // The desk-wide compact-rows preference, shared with the other tables.
   const rowPad = densityCellPad();
 
@@ -94,7 +123,6 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
   const handleCreateExpenditure = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setActionMessage(null);
     try {
       const res = await fetch(`${API_URL}/api/members/treasury/expenditures/`, {
         method: "POST",
@@ -117,199 +145,190 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
           expenditure_date: localDate(),
           notes: "",
         });
-        setActionMessage("Expenditure record added successfully and account debited.");
+        showAlert("Expenditure recorded", "The record is saved and the designated account debited.", "success", {
+          toast: true,
+          timer: 4000,
+          showConfirmButton: false,
+        });
         await fetchData();
       } else {
         const err = await res.json().catch(() => ({}));
-        setActionMessage(err.detail || "Failed to record expenditure.");
+        showAlert("Could not record the expenditure", err.detail || "Try again.", "error", {
+          toast: true,
+          timer: 4500,
+          showConfirmButton: false,
+        });
       }
     } catch {
-      setActionMessage("Network error recording expenditure.");
+      showAlert("Could not record the expenditure", "The desk could not be reached.", "error", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteExpenditure = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this expenditure record?")) return;
+  const handleDeleteExpenditure = async (expenditure: Expenditure) => {
+    if (!confirm(`Delete "${expenditure.title}"? If it debited an account, that movement stays.`)) return;
     try {
-      const res = await fetch(`${API_URL}/api/members/treasury/expenditures/${id}/`, {
+      const res = await fetch(`${API_URL}/api/members/treasury/expenditures/${expenditure.id}/`, {
         method: "DELETE",
         headers: authHeaders(),
       });
       if (res.ok) {
-        setActionMessage("Expenditure record removed.");
+        showAlert("Expenditure removed", `"${expenditure.title}" is off the spending record.`, "success", {
+          toast: true,
+          timer: 4000,
+          showConfirmButton: false,
+        });
         await fetchData();
       } else {
-        setActionMessage("Failed to delete expenditure.");
+        showAlert("Could not remove the expenditure", "Try again.", "error", {
+          toast: true,
+          timer: 4500,
+          showConfirmButton: false,
+        });
       }
     } catch {
-      setActionMessage("Network error deleting expenditure.");
+      showAlert("Could not remove the expenditure", "The desk could not be reached.", "error", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
     }
   };
 
+  const needle = search.trim().toLowerCase();
   const filteredExpenditures = expenditures.filter((exp) => {
-    const matchesCategory = selectedCategory === "all" || exp.category === selectedCategory;
-    const matchesSearch =
-      searchQuery === "" ||
-      exp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exp.vendor_payee.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exp.receipt_number.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    const matchesCategory = category === "all" || exp.category === category;
+    if (!matchesCategory) return false;
+    if (!needle) return true;
+    return `${exp.title || ""} ${exp.vendor_payee || ""} ${exp.receipt_number || ""} ${exp.account_name || ""}`
+      .toLowerCase()
+      .includes(needle);
   });
 
   const filteredTotal = filteredExpenditures.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
-  const categoryOptions = [
-    { key: "operations", label: "Church Operations" },
-    { key: "evangelism", label: "Evangelism & Missions" },
-    { key: "utilities", label: "Utilities" },
-    { key: "maintenance", label: "Maintenance & Repairs" },
-    { key: "welfare", label: "Welfare & Assistance" },
-    { key: "sabbath_school", label: "Sabbath School" },
-    { key: "building", label: "Building & Development" },
-    { key: "other", label: "Other Expenditure" },
-  ];
-
   return (
-    <div className="flex h-full min-h-0 flex-col gap-8 overflow-hidden p-4 sm:p-6 lg:p-8">
-      {/* Header — dropped when the accounts desk hosts this view, since the
-          desk's own toggle row already names it. */}
-      {!embedded && (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1">
-            <BackToOverviewArrow />
-            {/* Named by the strip above on a wide screen. */}
-            <div className="md:hidden">
-              <h2 className="text-2xl font-bold text-bark">Church Expenditures</h2>
-              <p className="mt-1 text-sm text-moss">
-                Record church expenses, debit designated treasury accounts, and track disbursement logs.
-              </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <RecordList
+        rows={filteredExpenditures}
+        loading={loading}
+        rowKey={(exp) => exp.id}
+        tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
+        tableClassName="w-full text-left text-sm"
+        headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm"
+        headRowClassName=""
+        headCellClassName=""
+        headers={[
+          { label: "Date", className: "px-4 py-3 text-left" },
+          { label: "Title / Description", className: "px-4 py-3" },
+          { label: "Category", className: "px-4 py-3" },
+          { label: "Debited Account", className: "px-4 py-3" },
+          { label: "Payee / Vendor", className: "px-4 py-3" },
+          { label: "Receipt / Ref", className: "px-4 py-3" },
+          { label: "Amount (KES)", className: "px-4 py-3 text-right" },
+          { label: "Action", className: "px-4 py-3 text-center" },
+        ]}
+        loadingLabel="Loading expenditure records..."
+        stateClassName="px-4 py-12 text-center text-moss"
+        tableEmptyClassName="px-4 py-12 text-center"
+        tableEmpty={
+          <>
+            <p className="text-sm font-semibold text-bark">No expenditure records found.</p>
+            <p className="mt-1 text-xs text-moss">Record the church&apos;s spending with the button below.</p>
+          </>
+        }
+        cardsStateClassName="py-12 text-center text-sm text-moss"
+        cardsEmpty={
+          <>
+            <Receipt className="mx-auto h-10 w-10 text-moss" />
+            <p className="mt-3 text-sm font-semibold text-bark">No expenditure records found.</p>
+            <p className="mt-1 text-xs text-moss">Tap &quot;Record Expenditure&quot; below to log the church&apos;s spending.</p>
+          </>
+        }
+        cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
+        renderCard={(exp) => (
+          <div key={exp.id} className="space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h4 className="truncate text-sm font-bold text-bark" title={exp.title}>{exp.title}</h4>
+                <p className="text-[11px] text-moss">{exp.expenditure_date}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
+                {exp.category_display || exp.category}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-moss">Amount</span>
+              <span className="text-sm font-bold text-alert">
+                KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <p className="text-[11px] text-moss">
+              {exp.account_name || "No account debited"}
+              {exp.vendor_payee && ` · ${exp.vendor_payee}`}
+              {exp.receipt_number && ` · ${exp.receipt_number}`}
+            </p>
+            {exp.notes && <p className="text-[11px] leading-relaxed text-moss">{exp.notes}</p>}
+            <div className="flex justify-end border-t border-sand-line pt-2">
+              <button
+                type="button"
+                onClick={() => handleDeleteExpenditure(exp)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-alert hover:text-alert"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+        renderRow={(exp) => (
+          <tr key={exp.id} className="hover:bg-sand-linen">
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{exp.expenditure_date}</td>
+            <td className={`px-4 ${rowPad} font-semibold text-bark`}>
+              {exp.title}
+              {exp.notes && <p className="text-[11px] font-normal text-moss">{exp.notes}</p>}
+            </td>
+            <td className={`whitespace-nowrap px-4 ${rowPad}`}>
+              <span className="rounded-full bg-mist-select px-2.5 py-0.5 text-xs font-semibold text-sage">
+                {exp.category_display || exp.category}
+              </span>
+            </td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-xs font-semibold text-bark`}>{exp.account_name || "—"}</td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{exp.vendor_payee || "—"}</td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-moss`}>{exp.receipt_number || "—"}</td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold text-alert`}>
+              KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+            </td>
+            <td className={`px-4 ${rowPad} text-center`}>
+              <button
+                type="button"
+                onClick={() => handleDeleteExpenditure(exp)}
+                aria-label={`Delete ${exp.title}`}
+                className="rounded-lg p-1.5 text-moss transition hover:bg-alert-wash hover:text-alert"
+                title="Delete Expenditure"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </td>
+          </tr>
+        )}
+      />
 
-      {actionMessage && (
-        <div className="rounded-2xl border border-sand-mute bg-white p-4 text-xs font-semibold text-bark shadow-xs">
-          {actionMessage}
-        </div>
-      )}
-
-      {/* Search & Category Filter Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-sand-line bg-white p-4 shadow-xs">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss" />
-          <input
-            type="text"
-            placeholder="Search by title, payee vendor, or receipt #..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-sand-mute pl-10 pr-4 py-2 text-xs text-bark outline-none focus:border-ember"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-moss" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark outline-none focus:border-ember"
-          >
-            <option value="all">All Categories</option>
-            {categoryOptions.map((c) => (
-              <option key={c.key} value={c.key}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Expenditures Table */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
-          <div className="h-full overflow-auto custom-table-scrollbar">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-sand text-xs font-semibold uppercase tracking-wider text-moss">
-                <tr>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Title / Description</th>
-                  <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Debited Account</th>
-                  <th className="px-5 py-3">Payee / Vendor</th>
-                  <th className="px-5 py-3">Receipt / Ref</th>
-                  <th className="px-5 py-3 text-right">Amount (KES)</th>
-                  <th className="px-5 py-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand-line">
-                {loading ? (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-8 text-center text-xs text-moss">
-                      Loading expenditure records...
-                    </td>
-                  </tr>
-                ) : filteredExpenditures.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-8 text-center text-xs text-moss">
-                      No expenditure records found matching criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredExpenditures.map((exp) => (
-                    <tr key={exp.id} className="hover:bg-sand-vellum">
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs text-moss`}>
-                        {exp.expenditure_date}
-                      </td>
-                      <td className={`px-5 ${rowPad} font-bold text-bark`}>
-                        {exp.title}
-                        {exp.notes && (
-                          <p className="text-[11px] font-normal text-moss mt-0.5">{exp.notes}</p>
-                        )}
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad}`}>
-                        <span className="inline-flex rounded-full bg-sand px-2.5 py-0.5 text-[10px] font-bold text-moss uppercase">
-                          {exp.category_display || exp.category}
-                        </span>
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs font-semibold text-bark`}>
-                        {exp.account_name || "—"}
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs text-moss`}>
-                        {exp.vendor_payee || "—"}
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-xs font-mono text-moss`}>
-                        {exp.receipt_number || "—"}
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-right font-black text-alert`}>
-                        KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className={`whitespace-nowrap px-5 ${rowPad} text-center`}>
-                        <button
-                          onClick={() => handleDeleteExpenditure(exp.id)}
-                          className="rounded-lg p-1.5 text-moss hover:bg-alert-wash hover:text-alert transition"
-                          title="Delete Expenditure"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer: what the filtered spending comes to, with the Record
-          button beside it — the shape the accounts desk's bar uses. */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-5">
+      {/* Footer: what the filtered spending comes to, with the Record button
+          beside it — the shape the accounts desk's bar uses. */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
         <p className="text-xs text-moss">
-          Showing <strong className="text-bark">{filteredExpenditures.length}</strong> of {expenditures.length} records ·
-          Total: <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
+          Showing <strong className="text-bark">{filteredExpenditures.length}</strong> of {expenditures.length} records · Total:{" "}
+          <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
         </p>
         <button
           onClick={() => setShowModal(true)}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+          className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
         >
           <Plus className="h-4 w-4" />
           <span>Record Expenditure</span>
@@ -361,9 +380,9 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
                   <select
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                   >
-                    {categoryOptions.map((c) => (
+                    {EXPENDITURE_CATEGORIES.map((c) => (
                       <option key={c.key} value={c.key}>{c.label}</option>
                     ))}
                   </select>
@@ -375,7 +394,7 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
                 <select
                   value={form.account}
                   onChange={(e) => setForm({ ...form, account: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 >
                   <option value="">-- None (Record without Debit) --</option>
                   {accounts.map((a) => (
@@ -393,7 +412,7 @@ export function ExpenditureManager({ embedded = false }: { embedded?: boolean } 
                   <select
                     value={form.payment_method}
                     onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
+                    className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                   >
                     <option value="cash">Cash</option>
                     <option value="mpesa">M-Pesa / Mobile</option>

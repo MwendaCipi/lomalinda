@@ -1,27 +1,26 @@
 "use client";
 
 /**
- * The treasury's six views, as one line of toggles.
+ * The treasury's views, as one line of toggles.
  *
  * The ledger (reconciliation) and the accounts desk both show this same strip
- * — Individual Givings, Summary Contributions, Church Accounts, Income,
- * Expenses and Requests — so the treasurer meets one navigation wherever in
- * the treasury they stand. Each page renders it into the shell's header band
+ * — Individual Givings, Summary Contributions, Church Accounts, Expenses and
+ * Requests — so the treasurer meets one navigation wherever in the treasury
+ * they stand. Each page renders it into the shell's header band
  * (`usePageHeader().setCustomToggles`), which is what keeps it a single line:
  * the band shows either this strip or the section's own pages, never both.
  *
  * The strip is purely presentational. Which view is active, and what a press
  * does (swap the page in place, or walk to the sibling page that owns the
- * view), is the page's to decide — the two desks read the same six names but
+ * view), is the page's to decide — the two desks read the same names but
  * answer them with different state.
  */
-export type TreasuryView = "givings" | "summary" | "accounts" | "income" | "expenses" | "requests";
+export type TreasuryView = "givings" | "summary" | "accounts" | "expenses" | "requests";
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string }[] = [
   { key: "givings", label: "Individual Givings" },
   { key: "summary", label: "Summary Contributions" },
   { key: "accounts", label: "Church Accounts" },
-  { key: "income", label: "Income" },
   { key: "expenses", label: "Expenses" },
   { key: "requests", label: "Requests" },
 ];
@@ -30,7 +29,7 @@ export function TreasuryNav({
   active,
   onSelect,
 }: {
-  /** Which of the six views the page is showing. */
+  /** Which of the treasury's views the page is showing. */
   active: TreasuryView;
   onSelect: (view: TreasuryView) => void;
 }) {

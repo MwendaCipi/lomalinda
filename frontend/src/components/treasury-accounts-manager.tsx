@@ -8,16 +8,13 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
-import { dayFirst, dayFirstTime } from "@/lib/dates";
+import { dayFirst } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
-import { ExpenditureManager } from "./expenditure-manager";
+import { ExpenditureManager, EXPENDITURE_CATEGORIES } from "./expenditure-manager";
 import { densityCellPad } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-/** The movement endpoint returns its newest rows up to this many; the log says so. */
-const TRANSACTION_LOG_LIMIT = 150;
 
 type TreasuryAccount = {
   id: number;
@@ -202,31 +199,26 @@ function WithdrawalRequestsPanel() {
   );
 }
 
-type AccountTransaction = {
-  id: number;
-  account: number;
-  account_name: string;
-  transaction_type: "credit" | "debit" | "transfer_in" | "transfer_out";
-  transaction_type_display: string;
-  amount: string | number;
-  description: string;
-  reference: string;
-  related_account_name?: string;
-  created_at: string;
-};
+type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals";
 
-export function TreasuryAccountsManager({ initialView }: { initialView?: "accounts" | "income" | "expenditure" | "withdrawals" } = {}) {
+/**
+ * The desk answers three views. Anything else in the address bar — an old
+ * `?view=income` link, say — opens Church Accounts rather than a view that no
+ * longer exists.
+ */
+const deskViewOf = (value?: string): TreasuryDeskView =>
+  value === "expenditure" || value === "withdrawals" ? value : "accounts";
+
+export function TreasuryAccountsManager({ initialView }: { initialView?: TreasuryDeskView } = {}) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
-  const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
-  // Three views over one desk: the accounts themselves, the movement log
-  // behind them, and the spending that leaves them. Church Accounts opens
-  // first — it is what the desk visits for.
+  // Two views over one desk: the accounts themselves and the spending that
+  // leaves them. Church Accounts opens first — it is what the desk visits for.
   const router = useRouter();
-  const [view, setView] = useState<"accounts" | "income" | "expenditure" | "withdrawals">(initialView ?? "accounts");
+  const [view, setView] = useState<TreasuryDeskView>(deskViewOf(initialView));
 
   useEffect(() => {
     if (initialView) {
-      setView(initialView);
+      setView(deskViewOf(initialView));
     }
   }, [initialView]);
 
@@ -239,14 +231,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
-        active={
-          view === "accounts" ? "accounts" : view === "income" ? "income" : view === "expenditure" ? "expenses" : "requests"
-        }
+        active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : "requests"}
         onSelect={(next) => {
           if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
           else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
           else if (next === "accounts") setView("accounts");
-          else if (next === "income") setView("income");
           else if (next === "expenses") setView("expenditure");
           else setView("withdrawals");
         }}
@@ -254,7 +243,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
     );
     return () => setCustomToggles(null);
   }, [setCustomToggles, view, router]);
-  // The desk answers four of the treasury's six views under the console's
+  // The desk answers three of the treasury's views under the console's
   // accounts tab, and the rail row that led here is named "Church Accounts".
   // Naming the view the treasurer chose keeps the shell's heading in step with
   // the toggle strip above, the way the ledger does for its two views.
@@ -262,7 +251,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
     setCustomHeader(
       {
         accounts: { label: "Church Accounts", description: "The church's treasury accounts, their balances and their movements." },
-        income: { label: "Income", description: "Money arriving in the church's accounts, movement by movement." },
         expenditure: { label: "Expenses", description: "Spending recorded against the church's accounts." },
         withdrawals: { label: "Requests", description: "The departments' asks for money from their funds." },
       }[view]
@@ -361,15 +349,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
     return "";
   };
 
-  const fetchAccountsAndTransactions = async () => {
+  const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const [accRes, txRes] = await Promise.all([
-        fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: authHeaders() }),
-        fetch(`${API_URL}/api/members/treasury/account-transactions/`, { headers: authHeaders() }),
-      ]);
-      if (accRes.ok) setAccounts(await accRes.json());
-      if (txRes.ok) setTransactions(await txRes.json());
+      const res = await fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: authHeaders() });
+      if (res.ok) setAccounts(await res.json());
     } catch {
       // ignore
     } finally {
@@ -378,7 +362,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
   };
 
   useEffect(() => {
-    fetchAccountsAndTransactions();
+    fetchAccounts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -392,82 +376,59 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
     if (!needle) return true;
     return `${a.description || ""} ${a.name} ${a.account_number || ""}`.toLowerCase().includes(needle);
   });
-  const [transactionSearch, setTransactionSearch] = useState("");
-  // The date window the Income view is read through — the ledger's own pair.
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const withinWindow = (iso: string) => {
-    const day = (iso || "").slice(0, 10);
-    if (fromDate && day < fromDate) return false;
-    if (toDate && day > toDate) return false;
-    return true;
-  };
-  const filteredTransactions = transactions.filter((tx) => {
-    if (!withinWindow(tx.created_at)) return false;
-    const needle = transactionSearch.trim().toLowerCase();
-    if (!needle) return true;
-    const account = accounts.find((a) => a.id === tx.account);
-    return `${tx.description || ""} ${tx.reference || ""} ${tx.account_name || ""} ${tx.related_account_name || ""} ${account?.description || ""} ${tx.transaction_type_display || tx.transaction_type}`
-      .toLowerCase()
-      .includes(needle);
-  });
+  // Expenses has a search and a category of its own; the desk holds them so
+  // they ride the same header slot as the accounts' search, one row for both.
+  const [expenseSearch, setExpenseSearch] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState("all");
 
-  // The desk's search — and, on Income, its date window — rides the shell's
+  // The desk's search — and, on Expenses, its category — rides the shell's
   // header beside the page's name, so the heading and its search share a row
-  // and the toggles sit below both. The Expenditure and Requests views own
-  // their own filter bars, so the slot steps aside for them.
+  // and the toggles sit below both. The Requests view keeps its own space.
   useEffect(() => {
-    if (view === "expenditure" || view === "withdrawals") {
+    if (view === "withdrawals") {
       setHeaderRightAction(null);
       return;
     }
+    if (view === "expenditure") {
+      setHeaderRightAction(
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <input
+            type="text"
+            placeholder="Search by title, payee or receipt..."
+            value={expenseSearch}
+            onChange={(e) => setExpenseSearch(e.target.value)}
+            className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+            aria-label="Search expenditures"
+          />
+          <select
+            value={expenseCategory}
+            onChange={(e) => setExpenseCategory(e.target.value)}
+            className="w-full rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember sm:w-auto"
+            aria-label="Filter expenditures by category"
+          >
+            <option value="all">All categories</option>
+            {EXPENDITURE_CATEGORIES.map((category) => (
+              <option key={category.key} value={category.key}>
+                {category.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+      return () => setHeaderRightAction(null);
+    }
     setHeaderRightAction(
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-        <input
-          type="text"
-          placeholder={view === "accounts" ? "Search by description, account..." : "Search movements..."}
-          value={view === "accounts" ? accountSearch : transactionSearch}
-          onChange={(e) => (view === "accounts" ? setAccountSearch(e.target.value) : setTransactionSearch(e.target.value))}
-          className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
-          aria-label={view === "accounts" ? "Search church accounts" : "Search account movements"}
-        />
-        {view === "income" && (
-          <div className="flex items-center justify-between gap-2 sm:justify-start">
-            <label className="flex items-center gap-1 text-xs font-medium text-moss">
-              <span>From</span>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="flex items-center gap-1 text-xs font-medium text-moss">
-              <span>To</span>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-              />
-            </label>
-          </div>
-        )}
-      </div>
+      <input
+        type="text"
+        placeholder="Search by description, account..."
+        value={accountSearch}
+        onChange={(e) => setAccountSearch(e.target.value)}
+        className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+        aria-label="Search church accounts"
+      />
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, transactionSearch, fromDate, toDate]);
-
-  /** Money arriving in an account (a credit, or the receiving half of a transfer). */
-  const isCreditMovement = (tx: AccountTransaction) =>
-    tx.transaction_type === "credit" || tx.transaction_type === "transfer_in";
-
-  const moneyIn = transactions
-    .filter(isCreditMovement)
-    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-  const moneyOut = transactions
-    .filter((tx) => !isCreditMovement(tx))
-    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -519,7 +480,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
         // Account information is announced by a toast, the same way every
         // other desk's saved detail is — the banner is left for movements.
         showAlert("Account created", `${addForm.description || addForm.name} is on the desk.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
-        await fetchAccountsAndTransactions();
+        await fetchAccounts();
       } else {
         const err = await res.json().catch(() => ({}));
         showAlert("Could not create account", err.detail || "Try again.", "error", { toast: true, timer: 4500, showConfirmButton: false });
@@ -551,7 +512,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
         setShowCreditDebitModal(false);
         setCreditDebitForm({ account_id: "", action_type: "credit", amount: "", description: "", reference: "" });
         setActionMessage(data.detail || `Account ${endpoint}ed successfully.`);
-        await fetchAccountsAndTransactions();
+        await fetchAccounts();
       } else {
         const err = await res.json().catch(() => ({}));
         setActionMessage(err.detail || `Failed to ${endpoint} account.`);
@@ -578,7 +539,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
         setShowTransferModal(false);
         setTransferForm({ source_account_id: "", target_account_id: "", amount: "", description: "", reference: "" });
         setActionMessage(data.detail || "Funds transferred successfully.");
-        await fetchAccountsAndTransactions();
+        await fetchAccounts();
       } else {
         const err = await res.json().catch(() => ({}));
         setActionMessage(err.detail || "Failed to transfer funds.");
@@ -664,7 +625,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       if (res.ok) {
         setEditAccount(null);
         showAlert("Account updated", `${editForm.description || editForm.name} keeps its new details.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
-        await fetchAccountsAndTransactions();
+        await fetchAccounts();
       } else {
         const err = await res.json().catch(() => ({}));
         // The API's wording explains the 12-character M-Pesa cap by name.
@@ -690,7 +651,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
       if (res.ok) {
         if (fromMenu) setOpenMenuAccountId(null);
         showAlert("Account deleted", `${account.description || account.name} and its movement history are gone.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
-        await fetchAccountsAndTransactions();
+        await fetchAccounts();
       } else {
         const err = await res.json().catch(() => ({}));
         const detail = authErrors(err);
@@ -744,19 +705,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
         </div>
       )}
 
-      {/* ── The chosen view lives here; the accounts and income tables stay
-          mounted, while Expenditure and the departments' withdrawal queue
-          hand the space to their own desks. ── */}
+      {/* ── The chosen view lives here; the accounts table keeps the full
+          height, while Expenses and the departments' withdrawal queue hand
+          the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
           <WithdrawalRequestsPanel />
         ) : view === "expenditure" ? (
-          <ExpenditureManager embedded />
+          <ExpenditureManager search={expenseSearch} category={expenseCategory} />
         ) : (
-          <>
-        {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair.
-            Both stay mounted with the chosen one shown, so whichever is on screen
-            keeps the full height of the workspace instead of sharing it. */}
+        /* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */
         <RecordList
           rows={filteredAccounts}
           loading={loading}
@@ -913,162 +871,29 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
                     </td>
                   </tr>
                 )}
-          hidden={view !== "accounts"}
         />
-
-        <RecordList
-            rows={filteredTransactions}
-            loading={loading}
-            rowKey={(tx) => tx.id}
-            tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
-            tableClassName="w-full text-left text-sm"
-            headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm"
-            headRowClassName=""
-            headCellClassName=""
-            headers={[
-              { label: "Date", className: "px-4 py-3 text-left" },
-              { label: "Account", className: "px-4 py-3" },
-              { label: "Type", className: "px-4 py-3" },
-              { label: "Amount (KES)", className: "px-4 py-3 text-right" },
-              { label: "Description", className: "px-4 py-3" },
-              { label: "Ref", className: "px-4 py-3" },
-            ]}
-            loadingLabel="Loading account transactions..."
-            stateClassName="px-4 py-12 text-center text-moss"
-            tableEmptyClassName="px-4 py-12 text-center"
-            tableEmpty={
-              <>
-                <p className="text-sm font-semibold text-bark">No account transactions recorded yet.</p>
-                <p className="mt-1 text-xs text-moss">
-                  Credits, debits and transfers appear here the moment they are recorded.
-                </p>
-              </>
-            }
-            cardsStateClassName="py-12 text-center text-sm text-moss"
-            cardsEmpty={
-              <>
-                <ArrowRightLeft className="mx-auto h-10 w-10 text-moss" />
-                <p className="mt-3 text-sm font-semibold text-bark">No account transactions recorded yet.</p>
-                <p className="mt-1 text-xs text-moss">
-                  Credits, debits and transfers appear here the moment they are recorded.
-                </p>
-              </>
-            }
-            cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
-            renderCard={(tx) => {
-              const isCredit = isCreditMovement(tx);
-              return (
-                <div key={tx.id} className={`space-y-2 rounded-xl border border-sand-line bg-sand-linen text-xs ${"p-3.5"}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h4 className="truncate text-sm font-bold text-bark">{tx.account_name}</h4>
-                      <p className="text-[11px] text-moss">
-                        {dayFirstTime(tx.created_at)}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
-                        isCredit ? "bg-mist-select text-sage-strong" : "bg-alert-wash text-alert"
-                      }`}
-                    >
-                      {tx.transaction_type_display}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-moss">Amount</span>
-                    <span className={`text-sm font-bold ${isCredit ? "text-sage-strong" : "text-alert"}`}>
-                      {isCredit ? "+" : "−"}KES {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-moss">
-                    {tx.description}
-                    {tx.related_account_name && <span className="ml-1">({tx.related_account_name})</span>}
-                  </p>
-                  {tx.reference && <p className="font-mono text-[11px] text-moss">Ref {tx.reference}</p>}
-                </div>
-              );
-            }}
-            renderRow={(tx) => {
-              const isCredit = isCreditMovement(tx);
-              return (
-                <tr key={tx.id} className="hover:bg-sand-linen">
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>
-                    {dayFirstTime(tx.created_at)}
-                  </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} font-semibold text-bark`}>{tx.account_name}</td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad}`}>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                        isCredit ? "bg-mist-select text-sage-strong" : "bg-alert-wash text-alert"
-                      }`}
-                    >
-                      {tx.transaction_type_display}
-                    </span>
-                  </td>
-                  <td
-                    className={`whitespace-nowrap px-4 ${rowPad} text-right font-semibold ${
-                      isCredit ? "text-sage-strong" : "text-alert"
-                    }`}
-                  >
-                    {isCredit ? "+" : "−"}
-                    {Number(tx.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className={`max-w-[280px] truncate px-4 ${rowPad} text-xs text-bark`} title={tx.description || undefined}>
-                    {tx.description}
-                    {tx.related_account_name && <span className="ml-1 text-moss">({tx.related_account_name})</span>}
-                  </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-xs text-moss`}>
-                    {tx.reference || "—"}
-                  </td>
-                </tr>
-              );
-            }}
-            hidden={view !== "income"}
-        />
-          </>
         )}
       </div>
 
-      {/* ── Footer: one bar for the desk's own tables, in the shape the other
-          tables use. The metrics live down here so the row under the toggles
-          stays free for the views, search and dates; Expenditure brings its
-          own footer, so this bar steps aside for it. ── */}
-      {view !== "expenditure" && (
+      {/* ── Footer: the accounts desk's own bar, in the shape the other tables
+          use. The metrics live down here so the row under the toggles stays
+          free for the table and its search; Expenses brings its own footer, so
+          this bar steps aside for it. ── */}
+      {view === "accounts" && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
-            {view === "accounts" ? (
-              <>
-                <span>
-                  Total liquidity:{" "}
-                  <strong className="text-ember">
-                    KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </strong>
-                </span>
-                <span>
-                  Showing <strong className="text-bark">{filteredAccounts.length}</strong> of {accounts.length}{" "}
-                  {accounts.length === 1 ? "account" : "accounts"}
-                </span>
-              </>
-            ) : (
-              <>
-                <span>
-                  Showing <strong className="text-bark">{filteredTransactions.length}</strong> of {transactions.length} movement
-                  {transactions.length === 1 ? "" : "s"}
-                </span>
-                <span>
-                  In: <strong className="text-sage-strong">KES {moneyIn.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
-                </span>
-                <span>
-                  Out: <strong className="text-alert">KES {moneyOut.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
-                </span>
-                {transactions.length >= TRANSACTION_LOG_LIMIT && (
-                  <span>Only the most recent {TRANSACTION_LOG_LIMIT} movements are listed.</span>
-                )}
-              </>
-            )}
+            <span>
+              Total liquidity:{" "}
+              <strong className="text-ember">
+                KES {totalLiquidity.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+              </strong>
+            </span>
+            <span>
+              Showing <strong className="text-bark">{filteredAccounts.length}</strong> of {accounts.length}{" "}
+              {accounts.length === 1 ? "account" : "accounts"}
+            </span>
           </div>
-          {view === "accounts" && (
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
               {/* The congregation's statement is written from the same desk that
                   keeps the accounts: publishing it is what tells members what
                   the month's giving and spending came to. */}
@@ -1094,8 +919,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: "accoun
                 <Plus className="h-4 w-4" />
                 <span>Add Account</span>
               </button>
-            </div>
-          )}
+          </div>
         </div>
       )}
 

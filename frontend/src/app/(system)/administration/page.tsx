@@ -429,7 +429,7 @@ function AdministrationContent() {
               <div className="h-full min-h-0">
                 <TreasuryAccountsManager
                   initialView={
-                    (searchView as "accounts" | "income" | "expenditure" | "withdrawals") ||
+                    (searchView as "accounts" | "expenditure" | "withdrawals") ||
                     (searchTab === "expenditures" ? "expenditure" : undefined)
                   }
                 />

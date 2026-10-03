@@ -177,8 +177,8 @@ export default function ReconciliationPage() {
     );
   }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
 
-  // The treasury's six views, as one line. The ledger owns Individual Givings
-  // and Summary in place; the other four walk to the accounts desk, which is
+  // The treasury's views, as one line. The ledger owns Individual Givings and
+  // Summary in place; the other three walk to the accounts desk, which is
   // where those views live. The shell's header band draws it — one strip for
   // the whole treasury, never a second row under this page's own header.
   useEffect(() => {
@@ -194,8 +194,6 @@ export default function ReconciliationPage() {
             setViewMode("summary");
           } else if (view === "accounts") {
             router.push("/administration?tab=accounts&view=accounts");
-          } else if (view === "income") {
-            router.push("/administration?tab=accounts&view=income");
           } else if (view === "expenses") {
             router.push("/administration?tab=accounts&view=expenditure");
           } else {
