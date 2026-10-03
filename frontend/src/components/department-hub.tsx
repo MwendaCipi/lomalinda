@@ -138,6 +138,11 @@ type Holder = {
   assistant_roles?: string[];
   /** The office this holder fills, e.g. "Leader" or "Secretary". */
   position?: string;
+  /** Whether the holder was appointed to the seat ("leader") or beside it.
+      A department with two named offices (the deaconate's Head Deacon and
+      Head Deaconess) has two leader-kind rows, so the board reads the kind
+      to tell an office from an assistant. */
+  kind?: string;
 };
 
 /** One role in a department, as the directory returns it. */
@@ -1929,7 +1934,7 @@ function AssignRoleModal({
   onSaved,
 }: {
   department: DepartmentRow;
-  member: { id: number; name: string };
+  member: { id: number; name: string; sex?: string };
   /** The unit the roll was reading, for a department that runs as units. */
   unit: string | null;
   onClose: () => void;
@@ -1944,8 +1949,21 @@ function AssignRoleModal({
   const [saving, setSaving] = useState(false);
   const chosen = roles.find((r) => r.id === roleId) ?? null;
   const seated = chosen?.holders.filter((h) => h.kind === "leader") ?? [];
+  // The same sex rule the leadership modal and the server keep: the
+  // deaconate's Head Deacon is a man's office, its Head Deaconess a woman's.
+  // A profile that does not record a sex leaves the desk to know.
+  const seatSex = chosen ? SEAT_SEX_BY_OFFICE[chosen.name.toLowerCase()] : undefined;
+  const offSex = Boolean(seatSex && member.sex && member.sex.toLowerCase() !== seatSex);
 
   const save = async () => {
+    if (offSex) {
+      showAlert(
+        "Not this office's to hold",
+        `The ${chosen?.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
+        "warning"
+      );
+      return;
+    }
     setSaving(true);
     try {
       let targetId = roleId;
@@ -2009,16 +2027,23 @@ function AssignRoleModal({
         </div>
 
         <div className="mt-4 space-y-2">
-          {roles.map((role) => (
+          {roles.map((role) => {
+            const roleSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
+            const roleOffSex = Boolean(roleSex && member.sex && member.sex.toLowerCase() !== roleSex);
+            return (
             <button
               key={role.id}
               type="button"
+              disabled={roleOffSex}
+              title={roleOffSex ? `The ${role.name} is a ${roleSex === "male" ? "man" : "woman"}'s office.` : undefined}
               onClick={() => setRoleId(role.id)}
               aria-pressed={roleId === role.id}
               className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-xs transition ${
-                roleId === role.id
-                  ? "border-ember bg-sand"
-                  : "border-sand-line bg-white hover:border-ember"
+                roleOffSex
+                  ? "cursor-not-allowed border-sand-line bg-sand text-moss-faint"
+                  : roleId === role.id
+                    ? "border-ember bg-sand"
+                    : "border-sand-line bg-white hover:border-ember"
               }`}
             >
               <span className="min-w-0">
@@ -2031,7 +2056,8 @@ function AssignRoleModal({
               </span>
               {roleId === role.id && <span className="shrink-0 text-[11px] font-bold text-ember">Selected</span>}
             </button>
-          ))}
+            );
+          })}
 
           {/* A role the desk names on the spot — created by the same POST
               the leadership modal uses, then seated here. */}
@@ -2767,7 +2793,7 @@ function DepartmentDetail({
 
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
-  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setTogglesRightAction } = usePageHeader();
   useEffect(() => {
     const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
     if (subTab === "members") {
@@ -2795,6 +2821,24 @@ function DepartmentDetail({
     }
     return () => setHeaderRightAction(null);
   }, [subTab, rollSearch, eventSearch, setHeaderRightAction]);
+
+  // The deaconate's Team view rides the *section's* strip, not a strip of its
+  // own, so the roll's second Add Member takes that strip's right edge — a PC
+  // convenience beside the one in the footer, pointing at the same modal, and
+  // never the only way to reach it (a phone keeps the footer's).
+  useEffect(() => {
+    if (department.code !== "deaconate" || subTab !== "members" || !canManageRoll) return;
+    setTogglesRightAction(
+      <button
+        type="button"
+        onClick={() => setShowAddMember(true)}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep"
+      >
+        <UserPlus className="h-3.5 w-3.5" /> Add Member
+      </button>
+    );
+    return () => setTogglesRightAction(null);
+  }, [department.code, subTab, canManageRoll, setTogglesRightAction]);
 
   // The desk's own views — the roll (and its fellowships), the calendar, the
   // fund, the week — ride the shell's header band, exactly as the console's
@@ -3047,7 +3091,16 @@ function DepartmentDetail({
       ...(board.leader ? [{ holder: board.leader, office: board.leader.position || "Leader" }] : []),
       ...board.assistants.map((assistant) => ({
         holder: assistant,
-        office: assistant.position ? `${assistant.position} · Assistant` : "Assistant",
+        // A leader-kind row here is the department's second office (the
+        // deaconate's Head Deaconess beside its Head Deacon), not someone
+        // assisting one — so it keeps its own name rather than reading
+        // "Head Deaconess · Assistant" for a seat that takes no assistant.
+        office:
+          assistant.kind === "leader"
+            ? assistant.position || "Leader"
+            : assistant.position
+              ? `${assistant.position} · Assistant`
+              : "Assistant",
       })),
     ];
     for (const { holder, office } of boardPeople) {
@@ -3357,7 +3410,7 @@ function DepartmentDetail({
       {assignFor && (
         <AssignRoleModal
           department={department}
-          member={{ id: assignFor.id, name: assignFor.name }}
+          member={{ id: assignFor.id, name: assignFor.name, sex: assignFor.sex }}
           unit={unit}
           onClose={() => setAssignFor(null)}
           onSaved={() => {

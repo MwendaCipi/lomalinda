@@ -296,8 +296,15 @@
    v63 — Church Leadership's directory search takes its place beside the
    page's name with every other desk's: it used to stand alone above the
    table instead of in the shell's header row. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v63";
+   apps must take the new shell.
+
+   v64 — the deaconate's two offices read true: the Head Deaconess keeps her
+   own name on the board instead of reading "Head Deaconess · Assistant",
+   the Head Deacon seat refuses a woman in the roll's Assign role dialog as
+   it already did in the leadership editor, and the Team view carries a
+   second Add Member at the right of the section's toggles on a wide screen.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v64";
 const STATIC_ASSETS = [
   "/",
   "/about/",

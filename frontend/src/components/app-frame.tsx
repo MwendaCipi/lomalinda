@@ -19,6 +19,14 @@ type PageHeaderContextType = {
   setHeaderRightAction: (node: React.ReactNode) => void;
   setCustomToggles: (node: React.ReactNode) => void;
   /**
+   * An action that rides the right edge of the row of toggles, on a wide
+   * screen — the place a page puts a control that belongs with its views
+   * rather than with its heading (the deaconate's second Add Member, say).
+   * It is a convenience beside the control the page already carries, never
+   * the only way to reach the action: a phone never sees it.
+   */
+  setTogglesRightAction: (node: React.ReactNode) => void;
+  /**
    * Let a page name itself, overriding the heading its rail row would give it.
    * A desk that answers several views under one route (the treasury's six, say)
    * uses this so the heading follows the view the visitor chose rather than
@@ -31,6 +39,7 @@ type PageHeaderContextType = {
 const PageHeaderContext = createContext<PageHeaderContextType>({
   setHeaderRightAction: () => {},
   setCustomToggles: () => {},
+  setTogglesRightAction: () => {},
   setCustomHeader: () => {},
 });
 
@@ -62,6 +71,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
+  const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
 
   // The setters never change identity, so the context value must not either.
@@ -71,8 +81,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // `setHeaderRightAction` → shell re-render → new context → page re-render →
   // effect. One stable value breaks the loop for every desk at once.
   const pageHeaderSlots = useMemo(
-    () => ({ setHeaderRightAction, setCustomToggles, setCustomHeader }),
-    [setHeaderRightAction, setCustomToggles, setCustomHeader]
+    () => ({ setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader }),
+    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader]
   );
 
   // A page's header chrome belongs to the route it was drawn for, so it is
@@ -87,6 +97,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setRouteAtLastReset(pathname);
     setHeaderRightAction(null);
     setCustomToggles(null);
+    setTogglesRightAction(null);
     setCustomHeader(null);
   }
 
@@ -163,15 +174,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               {(customToggles || sectionPages.length > 1) && (
-                <div className="shrink-0 border-b border-sand-line bg-white px-3 sm:px-5">
-                  {customToggles ? (
-                    <div className="pt-2">{customToggles}</div>
-                  ) : (
-                    <SectionNav
-                      label={`${section?.label ?? ""} pages`}
-                      activeHref={here.href}
-                      items={sectionPages}
-                    />
+                <div className="flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    {customToggles ? (
+                      <div className="pt-2">{customToggles}</div>
+                    ) : (
+                      <SectionNav
+                        label={`${section?.label ?? ""} pages`}
+                        activeHref={here.href}
+                        items={sectionPages}
+                      />
+                    )}
+                  </div>
+                  {togglesRightAction && (
+                    <div className="hidden shrink-0 items-center lg:flex">{togglesRightAction}</div>
                   )}
                 </div>
               )}
