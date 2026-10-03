@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
-import { Check, Copy, IdCard, X } from "lucide-react";
+import { Check, Copy, IdCard, LogIn, X } from "lucide-react";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
@@ -61,9 +61,14 @@ const fmtKES = (value: number) => `KES ${Number(value || 0).toLocaleString("en-K
 
 export default function CampaignDetailClient() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const campaignId = params?.id;
   const refToken = searchParams?.get("ref");
+  // The page a visitor is sent to after signing in, so the drive they were
+  // invited to is the one they land back on — personal link and all.
+  const herePath = `/support/campaigns/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
+  const signInHref = `/login?next=${encodeURIComponent(herePath)}`;
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [cardAssignment, setCardAssignment] = useState<CardAssignment | null>(null);
@@ -90,9 +95,22 @@ export default function CampaignDetailClient() {
   // treasurer open the list; everyone else reads the count only.
   const [canSeeDonors, setCanSeeDonors] = useState(false);
 
-  // The personalised-link banner and my/invitees rows only mean something to a
-  // signed-in viewer; the API scopes the breakdown to the caller.
-  const isPersonal = Boolean(refToken);
+  /**
+   * Pledging and in-kind giving are kept to signed-in members: a pledge is a
+   * promise tied to an account, and an in-kind record is filed against one.
+   * A visitor who taps either is offered the sign-in door rather than a form
+   * that cannot be saved.
+   */
+  function requireSignIn(action: string): boolean {
+    if (signedIn) return false;
+    showAlert(
+      `${action} needs an account`,
+      `Sign in to ${action.toLowerCase()} to this fund drive. Giving money does not need an account.`,
+      "info"
+    );
+    router.push(signInHref);
+    return true;
+  }
 
   useEffect(() => {
     if (!campaignId) return;
@@ -170,8 +188,7 @@ export default function CampaignDetailClient() {
     setIsSubmitting(true);
     try {
       // A signed-in member's typed email is a change to the account — saved
-      // first so the receipt reads it. A visitor's typed address rides along
-      // on the gift itself; it is never verified and never stored as one.
+      // first so the receipt reads it.
       const typedEmail = donorEmail.trim();
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
       if (signedIn && token && typedEmail && typedEmail.toLowerCase() !== accountEmail.trim().toLowerCase()) {
@@ -191,13 +208,21 @@ export default function CampaignDetailClient() {
 
       const res = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // A signed-in member's gift is attributed by their token; a visitor
+          // gives anonymously and is matched to an account later by phone.
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           amount: numericAmount,
           giving_type: "financial",
           purpose: campaign.name,
           phone_number: phoneNumber,
           donor_name: donorName.trim(),
+          // Only a signed-in giver's account address is ever emailed; the API
+          // drops an address sent by a visitor (see receipt_email_for), so one
+          // is never offered to them — their receipt goes by SMS.
           donor_email: signedIn ? donorEmail : "",
           payment_method: "mpesa",
           referral_token: refToken || undefined,
@@ -220,14 +245,24 @@ export default function CampaignDetailClient() {
 
   function handleShareWhatsApp() {
     if (!campaign) return;
-    const shareUrl = window.location.href;
+    const shareUrl = shareLink();
     const memberGreeting = cardAssignment ? `\nFund drive link for *${cardAssignment.member_name}* (${cardAssignment.group_name})\n` : "";
     const text = `*SDA Loma Linda Fund Drive*${memberGreeting}\nJoin us in supporting *${campaign.title || campaign.name}*!\n\nTarget Goal: KES ${Number(campaign.target_amount).toLocaleString()}\nRaised so far: KES ${Number(campaign.total_raised).toLocaleString()} (${campaign.percentage_raised}%)\n\nGive online or via mobile money here:\n${shareUrl}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  /**
+   * The link worth sharing is the drive's public one — `/campaigns/<id>` — so
+   * whoever opens it is never asked to sign in first. A personal referral link
+   * keeps its `?ref=` so the gift still credits the member who shared it.
+   */
+  function shareLink() {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/campaigns/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
+  }
+
   function handleCopyLink() {
-    navigator.clipboard.writeText(window.location.href);
+    navigator.clipboard.writeText(shareLink());
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2500);
   }
@@ -249,8 +284,13 @@ export default function CampaignDetailClient() {
           <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-sand-line">
             <h1 className="text-2xl font-semibold">Fund Drive Not Found</h1>
             <p className="mt-2 text-sm text-moss">{error || "The requested fund drive could not be found."}</p>
-            <Link href="/support/campaigns" className="mt-6 inline-block rounded-full bg-sage px-6 py-2.5 font-medium text-white">
-              Return to Fund Drives
+            {/* A visitor is sent to the public giving page, not the members'
+                drives list — that list sits behind the sign-in. */}
+            <Link
+              href={signedIn ? "/support/campaigns" : "/give"}
+              className="mt-6 inline-block rounded-full bg-sage px-6 py-2.5 font-medium text-white"
+            >
+              {signedIn ? "Return to Fund Drives" : "Go to Giving"}
             </Link>
           </div>
         </div>
@@ -322,14 +362,18 @@ export default function CampaignDetailClient() {
               <div className="mt-5 grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setPledgeOpen(true)}
+                  onClick={() => {
+                    if (!requireSignIn("Pledging")) setPledgeOpen(true);
+                  }}
                   className="inline-flex items-center justify-center rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                 >
                   Pledge
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInKindOpen(true)}
+                  onClick={() => {
+                    if (!requireSignIn("In-kind giving")) setInKindOpen(true);
+                  }}
                   className="inline-flex items-center justify-center rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                 >
                   In-kind
@@ -525,6 +569,27 @@ export default function CampaignDetailClient() {
         </div>
       </div>
 
+      {/* A visitor is offered the sign-in door here, at the foot of the page,
+          without it ever standing between them and giving. */}
+      {!signedIn && (
+        <div className="px-4 pb-10 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-4xl flex-col items-start gap-3 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-sand-line sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div>
+              <p className="text-sm font-semibold text-bark">Want to keep a record of your giving?</p>
+              <p className="mt-0.5 text-xs text-moss">
+                Sign in to see your own contributions, pledge towards the drive, and share a personal invite link.
+              </p>
+            </div>
+            <Link
+              href={signInHref}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-bark px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-bark-deep sm:text-sm"
+            >
+              <LogIn size={14} aria-hidden="true" /> Sign in
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Pledge and in-kind giving open over the page, exactly as they do on
           the announcement cards. The drive owns the pledge record. */}
       <PledgeModal
@@ -630,11 +695,11 @@ export default function CampaignDetailClient() {
                 </label>
               ) : (
                 <p className="text-[11px] leading-relaxed text-moss">
-                  Your receipt is sent by SMS.{" "}
-                  <Link href={`/login?next=/support/campaigns/${campaignId}`} className="font-semibold text-ember hover:underline">
+                  No account needed — your receipt is sent by SMS to the number you give.{" "}
+                  <Link href={signInHref} className="font-semibold text-ember hover:underline">
                     Sign in
                   </Link>{" "}
-                  to get it by email too.
+                  to get it by email too and keep a record of your giving.
                 </p>
               )}
 

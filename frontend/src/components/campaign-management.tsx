@@ -461,6 +461,23 @@ export function CampaignManagement({
     }
   }
 
+  /**
+   * Copy the drive's public giving link.
+   *
+   * When personal invitations are off, this is the only link a drive shares:
+   * `/campaigns/<id>` opens for anyone — no account needed — and a gift made
+   * through it is still counted towards the drive.
+   */
+  async function handleCopyGeneralLink(campaign: Campaign) {
+    const url = `${window.location.origin}/campaigns/${campaign.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showAlert("Link Copied", `The public link for ${campaign.title || campaign.name} is on your clipboard.`, "success");
+    } catch {
+      showAlert("Copy the link", url, "info");
+    }
+  }
+
   function handleOpenIssueCards(campaign: Campaign) {
     setIssuingCampaign(campaign);
     setSelectedGroups([]);
@@ -1202,11 +1219,12 @@ export function CampaignManagement({
                                             type="button"
                                             onClick={() => {
                                               closeActionsMenu();
-                                              handleOpenIssueCards(c);
+                                              if (c.allow_personal_invitations) handleOpenIssueCards(c);
+                                              else void handleCopyGeneralLink(c);
                                             }}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
                                           >
-                                            <IdCard size={13} className="inline" aria-hidden="true" /> {c.allow_personal_invitations ? "+ Issue Invites" : "+ General Link"}
+                                            <IdCard size={13} className="inline" aria-hidden="true" /> {c.allow_personal_invitations ? "+ Issue Invites" : "Copy General Link"}
                                           </button>
 
                                           <button

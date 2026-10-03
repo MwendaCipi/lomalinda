@@ -1,14 +1,23 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import CampaignDetailClient from "@/components/campaign-detail-client";
 
-// Fund-drive pages live behind the app shell now — the drive detail needs the
-// sidebar and tab bar like every other member page. (generateStaticParams
-// keeps the static export happy; the ids are a formality, the redirect runs
-// client-side for whatever id arrives.)
+/**
+ * The public home of a fund drive, and the link the church shares.
+ *
+ * This is the same drive page the app shows at `/support/campaigns/<id>`; the
+ * component is imported directly rather than redirected to, so a shared link
+ * opens for someone who has never signed in. (A redirect to the app path used
+ * to strand visitors on the sign-in screen, because that path's layout gates
+ * on a token — the page now lives in the public route group instead.)
+ */
 export function generateStaticParams() {
-  return ["1"].map((id) => ({ id }));
+  return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].map((id) => ({ id }));
 }
 
-export default async function CampaignRedirectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  redirect(`/support/campaigns/${id}`);
+export default function PublicCampaignPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-moss">Loading fund drive...</div>}>
+      <CampaignDetailClient />
+    </Suspense>
+  );
 }
