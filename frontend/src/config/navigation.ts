@@ -905,6 +905,10 @@ const RAIL_AREA_CODES_MOVED = new Set([
   // and AWM desks (whose `units` field names them), not as rows of their own.
   "young_couples",
   "single_parents",
+  // Ambassadors is Adventist Youth Ministries' own fellowship: it belongs
+  // inside the youth desk, so the rail does not read "Young Adults" and
+  // "Ambassadors" as two places.
+  "ambassadors",
 ]);
 
 /**
@@ -912,7 +916,7 @@ const RAIL_AREA_CODES_MOVED = new Set([
  * their own — matched by name, so a desk the church created with the same
  * wording is filed the same way whatever code it was given.
  */
-const RAIL_UNIT_LABELS_MOVED = new Set(["young couples", "single parents"]);
+const RAIL_UNIT_LABELS_MOVED = new Set(["young couples", "single parents", "ambassadors"]);
 
 
 const RAIL_AREA_LABELS: Record<string, string> = {

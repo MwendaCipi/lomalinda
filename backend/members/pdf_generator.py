@@ -966,7 +966,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     member_count = total - friend_count
     disfellowshipped_count = sum(1 for m in members if m.get('is_disfellowshipped'))
     summary_data = [
-        ["Total Users", "Members", "Friends", "Disfellowshipped"],
+        ["Total Users", "Members", "Friends", "Ex-members"],
         [str(total), str(member_count), str(friend_count), str(disfellowshipped_count)],
     ]
     summary_table = Table(summary_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
@@ -995,7 +995,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     table_data = [header]
     for idx, m in enumerate(members, 1):
         if m.get('is_disfellowshipped'):
-            status_text = "Disfellowshipped"
+            status_text = "Ex-member"
         elif m.get('account_type') == 'friend':
             status_text = "Friend"
         else:
@@ -1029,7 +1029,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     # Alternating row shading
     for i in range(2, len(table_data), 2):
         style_cmds.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f7f4ee")))
-    # Disfellowshipped rows
+    # Ex-member rows
     for i, m in enumerate(members, 1):
         if m.get('is_disfellowshipped'):
             style_cmds.append(("TEXTCOLOR", (4, i), (4, i), colors.HexColor("#b91c1c")))

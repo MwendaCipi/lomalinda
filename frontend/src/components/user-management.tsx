@@ -23,7 +23,6 @@ import { ComboboxPopover } from "./combobox-popover";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { usePageHeader } from "@/components/app-frame";
 import { RecordList } from "./record-list";
-import { SubNav } from "./sub-nav";
 import { useDepartments } from "@/hooks/use-departments";
 import { DepartmentPicker, MinistriesPicker, type AreaOption } from "./area-pickers";
 
@@ -1224,26 +1223,20 @@ export function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const { setHeaderRightAction, setCustomToggles } = usePageHeader();
-  useEffect(() => {
-    setHeaderRightAction(
-      <div className="w-56 sm:w-64">
-        <input
-          type="text"
-          placeholder="Search by name, email, phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-        />
-      </div>
-    );
-    return () => setHeaderRightAction(null);
-  }, [search, setHeaderRightAction]);
-  // One tab strip drives the desk: All / Active / Inactive read the confirmed
-  // roster, Invites (pending) reads the invitation, transfer and awaiting
-  // lists. The filter here is which list is on show.
+  const { setHeaderRightAction } = usePageHeader();
+  // The record filter is a popover beside the search, never a strip of its
+  // own: the Clerk's Desk's one strip is its pages (User Management, Board,
+  // Business, Membership Requests), and a second row here both doubled it and
+  // hid those pages.
+  const [recordFilterOpen, setRecordFilterOpen] = useState(false);
+  const recordFilterRef = useRef<HTMLDivElement>(null);
+  // One filter drives the desk: All / Members / S. School / Friends read the
+  // confirmed roster, Invites (pending) reads the invitation, transfer and
+  // awaiting lists. The filter here is which list is on show.
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("confirmed");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const activeRecordLabel =
+    invitationFilter === "pending" ? "Invites (pending)" : TYPE_TABS.find((tab) => tab.key === typeFilter)?.label ?? "All";
   // The roster reads comfortable rows, always — the Compact toggle left this
   // desk so the strip and search can own the header.
   const cellPad = densityCellPad();
@@ -1966,38 +1959,86 @@ export function UserManagement() {
 
   const filteredMembers = rosterScoped.filter(matchesTypeFilter);
 
-  // The record filter rides the shell's header band, so the desk shows one
-  // line of toggles instead of the section strip plus a row of its own. The
-  // counts read what the search leaves, so a tab never looks busy then opens
-  // on an empty list.
+  // The desk's controls ride the shell's header: the record filter opens as a
+  // popover beside the search. The counts read what the search leaves, so a
+  // filter never looks busy then opens on an empty list.
   useEffect(() => {
-    setCustomToggles(
-      <SubNav
-        label="Record filter"
-        value={invitationFilter === "pending" ? "awaiting" : typeFilter}
-        onChange={(key) => {
-          if (key === "awaiting") {
-            setInvitationFilter("pending");
-            return;
-          }
-          setInvitationFilter("confirmed");
-          setTypeFilter(key as TypeFilter);
-        }}
-        items={TYPE_TABS.map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          help: tab.help,
-          count:
-            tab.key === "awaiting"
-              ? awaitingCount
-              : tab.key === "all"
-                ? rosterScoped.length
-                : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === tab.key).length,
-        }))}
-      />
+    const recordCount = (key: TypeFilter | "awaiting") =>
+      key === "awaiting"
+        ? awaitingCount
+        : key === "all"
+          ? rosterScoped.length
+          : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === key).length;
+    setHeaderRightAction(
+      <div className="flex items-center gap-2">
+        <div className="relative" ref={recordFilterRef}>
+          <button
+            type="button"
+            onClick={() => setRecordFilterOpen((open) => !open)}
+            aria-expanded={recordFilterOpen}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
+          >
+            {activeRecordLabel}
+            <ChevronDown className={`h-3.5 w-3.5 text-moss transition-transform ${recordFilterOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+          {recordFilterOpen && (
+            <div role="menu" className="absolute right-0 z-50 mt-2 w-60 rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
+              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show records</p>
+              {TYPE_TABS.map((tab) => {
+                const selected =
+                  tab.key === "awaiting" ? invitationFilter === "pending" : invitationFilter !== "pending" && typeFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    title={tab.help}
+                    onClick={() => {
+                      if (tab.key === "awaiting") {
+                        setInvitationFilter("pending");
+                      } else {
+                        setInvitationFilter("confirmed");
+                        setTypeFilter(tab.key as TypeFilter);
+                      }
+                      setRecordFilterOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition ${selected ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {selected && <Check className="h-3 w-3 text-ember" aria-hidden="true" />}
+                      <span className={selected ? "" : "pl-5"}>{tab.label}</span>
+                    </span>
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-moss">{recordCount(tab.key)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="w-56 sm:w-64">
+          <input
+            type="text"
+            placeholder="Search by name, email, phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+          />
+        </div>
+      </div>
     );
-    return () => setCustomToggles(null);
-  }, [setCustomToggles, invitationFilter, typeFilter, awaitingCount, rosterScoped]);
+    return () => setHeaderRightAction(null);
+  }, [search, setHeaderRightAction, recordFilterOpen, invitationFilter, typeFilter, activeRecordLabel, awaitingCount, rosterScoped]);
+
+  // Close the filter popover on an outside press.
+  useEffect(() => {
+    if (!recordFilterOpen) return;
+    function handleOutside(event: MouseEvent) {
+      if (!recordFilterRef.current?.contains(event.target as Node)) setRecordFilterOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [recordFilterOpen]);
 
   // ── Transfer handler ─────────────────────────────────────────────────────
   const handleTransferSubmit = async (e: React.FormEvent) => {
