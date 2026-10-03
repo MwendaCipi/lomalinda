@@ -15,9 +15,16 @@ export function localDate(now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: CHURCH_TZ }).format(now);
 }
 
-/** The first day of the current month, yyyy-mm-dd. */
+/**
+ * The first day of the current month, yyyy-mm-dd.
+ *
+ * Derived from `localDate` rather than the browser's own clock, so "this
+ * month" is the church's month: on the 1st in Meru the ledger must open on
+ * that day, not on the last day of the previous one for a browser sitting in
+ * a timezone behind.
+ */
 export function firstDayOfMonth(now: Date = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${localDate(now).slice(0, 8)}01`;
 }
 
 /** Anything a date can arrive as: an API string or a Date the page built. */

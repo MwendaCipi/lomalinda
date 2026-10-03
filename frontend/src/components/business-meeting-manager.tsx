@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Briefcase, CalendarDays, ChevronDown, ChevronUp, ClipboardList, FileText, Mail, MapPin, Paperclip, Plus, Trash2, X } from "lucide-react";
+import { dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -321,7 +322,7 @@ export function BusinessMeetingManager() {
                       <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-moss">
                         <div className="flex items-center gap-1.5">
                           <CalendarDays size={13} aria-hidden="true" />
-                          <span>{meeting.meeting_date}</span>
+                          <span>{dayFirst(meeting.meeting_date)}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <MapPin size={13} aria-hidden="true" />

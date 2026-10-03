@@ -368,7 +368,7 @@ export function BoardMeetingManager() {
                       <h3 className="text-base font-bold text-bark">{m.title}</h3>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-moss">
-                      <span className="inline-flex items-center gap-1"><Calendar size={13} aria-hidden="true" /> <strong>Date:</strong> {m.meeting_date}</span>
+                      <span className="inline-flex items-center gap-1"><Calendar size={13} aria-hidden="true" /> <strong>Date:</strong> {dayFirst(m.meeting_date)}</span>
                       <span>⏰ <strong>Time:</strong> {m.time_range || "—"}</span>
                       <span className="inline-flex items-center gap-1"><MapPin size={13} aria-hidden="true" /> <strong>Location:</strong> {m.location}</span>
                       <span className="inline-flex items-center gap-1"><ClipboardList size={13} aria-hidden="true" /> <strong>Agendas:</strong> {m.agendas?.length || 0}</span>

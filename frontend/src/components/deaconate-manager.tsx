@@ -426,7 +426,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
     setRota((prev) => [entry, ...prev]);
     setShowAddRotaModal(false);
     setNewRota(emptyRotaForm);
-    showAlert("Duty Rota Added", `"${entry.title}" scheduled for ${entry.date}.`, "success");
+    showAlert("Duty Rota Added", `"${entry.title}" scheduled for ${dayFirst(entry.date)}.`, "success");
   };
 
   const inventoryEmpty = inventory.length === 0
@@ -600,7 +600,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                     <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
                       {item.dutyType}
                     </span>
-                    <span className="text-[11px] font-bold text-bark">{item.date}</span>
+                    <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
                   </div>
                   <h3 className="font-bold text-sm text-bark">{item.title}</h3>
                   <p className="text-xs text-moss flex items-center gap-1">

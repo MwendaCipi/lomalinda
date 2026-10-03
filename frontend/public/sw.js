@@ -272,8 +272,15 @@
    401/403 as a denial, so a dropped connection no longer sends them to
    the sign-in page and back — the loop that kept them reloading; and the
    worker's one reload per generation is latched per tab and skipped while
-   offline. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v59";
+   offline. Chrome changed, so installed apps must take the new shell.
+
+   v60 — every date a person reads is day-first: the expenses date, the
+   board and business meetings' date, the deaconate rota, a department's
+   calendar events and a fund drive's dates went through the shared
+   dd/mm/yyyy helper instead of showing the API's yyyy-mm-dd, and the
+   ledger's opening date now follows the church's own month. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v60";
 const STATIC_ASSETS = [
   "/",
   "/about/",

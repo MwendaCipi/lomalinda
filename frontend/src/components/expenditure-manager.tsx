@@ -5,7 +5,7 @@ import { Plus, Receipt, Trash2, X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
-import { localDate } from "@/lib/dates";
+import { dayFirst, localDate } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -257,7 +257,7 @@ export function ExpenditureManager({
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h4 className="truncate text-sm font-bold text-bark" title={exp.title}>{exp.title}</h4>
-                <p className="text-[11px] text-moss">{exp.expenditure_date}</p>
+                <p className="text-[11px] text-moss">{dayFirst(exp.expenditure_date)}</p>
               </div>
               <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
                 {exp.category_display || exp.category}
@@ -288,7 +288,7 @@ export function ExpenditureManager({
         )}
         renderRow={(exp) => (
           <tr key={exp.id} className="hover:bg-sand-linen">
-            <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{exp.expenditure_date}</td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-xs text-moss`}>{dayFirst(exp.expenditure_date)}</td>
             <td className={`px-4 ${rowPad} min-w-[240px] font-semibold text-bark`}>
               {exp.title}
               {exp.notes && <p className="text-[11px] font-normal text-moss">{exp.notes}</p>}

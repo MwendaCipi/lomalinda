@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { localDate } from "@/lib/dates";
+import { dayFirst, localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
@@ -1115,10 +1115,10 @@ export function CampaignManagement({
                             </td>
                             <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap text-xs text-moss`}>
                               <div>
-                                <span className="font-medium text-bark">{c.start_date}</span>
+                                <span className="font-medium text-bark">{dayFirst(c.start_date)}</span>
                               </div>
                               <div className="text-[11px]">
-                                {c.end_date ? `to ${c.end_date}` : "(Ongoing)"}
+                                {c.end_date ? `to ${dayFirst(c.end_date)}` : "(Ongoing)"}
                               </div>
                             </td>
                             {isAdminMode && (
@@ -1267,7 +1267,7 @@ export function CampaignManagement({
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-moss">
                             <code className="font-mono font-bold text-ember">{c.account_name || c.name}</code>
                             <span>&bull;</span>
-                            <span>{c.start_date} {c.end_date ? `to ${c.end_date}` : "(Ongoing)"}</span>
+                            <span>{dayFirst(c.start_date)} {c.end_date ? `to ${dayFirst(c.end_date)}` : "(Ongoing)"}</span>
                           </div>
                         </div>
 

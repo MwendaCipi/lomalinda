@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { dayFirst } from "@/lib/dates";
 import {
   Plus,
   Search,
@@ -457,7 +458,7 @@ export function DepartmentManager({ deptKey, initialSubTab = "members" }: Depart
                   <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold text-white ${config.bgColor}`}>
                     {config.badge}
                   </span>
-                  <span className="text-[11px] font-bold text-bark">{ev.date}</span>
+                  <span className="text-[11px] font-bold text-bark">{dayFirst(ev.date)}</span>
                 </div>
                 <h3 className="font-bold text-sm text-bark">{ev.title}</h3>
                 <p className="text-xs text-moss flex items-center gap-1">

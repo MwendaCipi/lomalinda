@@ -3291,7 +3291,7 @@ function DepartmentDetail({
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-bark">{event.title}</p>
                     <p className="text-[11px] text-moss">
-                      {event.date}
+                      {dayFirst(event.date)}
                       {event.time ? ` · ${event.time}` : ""}
                       {event.location ? ` · ${event.location}` : ""}
                     </p>
