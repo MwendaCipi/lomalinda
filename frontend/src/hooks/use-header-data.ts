@@ -55,6 +55,9 @@ export type HeaderMe = {
   email: string;
   /** As stored — the giving form derives an M-Pesa number from it. */
   phone_number: string;
+  /** The member's recorded sex, where the profile carries one. The area pages
+      read it to keep the men's and women's fellowships apart. */
+  gender: string;
   announce_email: boolean;
   announce_push: boolean;
   /** The office flags the desk endpoints also accept — a treasurer alone is
@@ -126,6 +129,7 @@ async function fetchMe(token: string): Promise<MeResult> {
       name: fullName || data.username || "Member",
       email: data.email || "",
       phone_number: data.phone_number || "",
+      gender: data.gender || "",
       announce_email: !!data.announce_email,
       announce_push: !!data.announce_push,
       is_staff: !!data.is_staff,

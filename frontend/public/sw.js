@@ -303,8 +303,18 @@
    the Head Deacon seat refuses a woman in the roll's Assign role dialog as
    it already did in the leadership editor, and the Team view carries a
    second Add Member at the right of the section's toggles on a wide screen.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v64";
+   Chrome changed, so installed apps must take the new shell.
+
+   v65 — the phone's bar carries the church's people: My Areas takes the
+   office console's tab (and the Materials tab is gone — Materials is a page
+   of Fellowship now, read beside the news). My Areas is every member's page:
+   two sub-navs, Ministry and Department, over the areas they belong to and
+   the ones they could join, each card reading the area — leadership, roll
+   and calendar, read-only. Neither office desks nor the sex-only
+   fellowships are offered to the wrong member. Testimonies reads Testimonies
+   on a phone, not Stories. Chrome changed, so installed apps must take the
+   new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v65";
 const STATIC_ASSETS = [
   "/",
   "/about/",

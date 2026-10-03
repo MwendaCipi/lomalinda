@@ -118,7 +118,9 @@ export const destinations = {
     description: "Where the church family gathers — news, testimony and care.",
     icon: Megaphone,
     area: "fellowship",
-    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/community", "/enroll"],
+    // Materials rides this section now (it is a page of Fellowship, not a
+    // place of its own), so its tree belongs to the section's matchers too.
+    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/community", "/enroll", "/materials"],
   },
   announcements: {
     href: "/announcements",
@@ -144,7 +146,6 @@ export const destinations = {
   testimonies: {
     href: "/spiritual/testimonies",
     label: "Testimonies",
-    short: "Stories",
     description: "Read and share how God is at work among us.",
     icon: Sparkles,
     area: "fellowship",
@@ -325,6 +326,23 @@ export const destinations = {
     area: "office",
     audience: STAFF_ROLES,
     match: ["/administration"],
+  },
+  /**
+   * The member's own map of the church's areas, open to everyone: two sub-navs
+   * — Ministry and Department — over the areas they belong to and the ones
+   * they could join, each a card that opens the area read-only (its
+   * leadership, its roll and its calendar). The writing side stays in the
+   * office console, which is why this can be every member's while the console
+   * is the offices'.
+   */
+  myAreas: {
+    href: "/my-areas",
+    label: "My Areas",
+    short: "Areas",
+    description: "The ministries and departments you are part of — and the ones you could join.",
+    icon: HeartHandshake,
+    area: "fellowship",
+    match: ["/my-areas"],
   },
   /**
    * The member's Requests row — the forms: prayer and visitation, child
@@ -723,15 +741,19 @@ export const railEntries: RailEntry[] = [
   {
     label: "Fellowship",
     icon: Megaphone,
+    // Materials rides this row rather than standing alone: it is something
+    // the church shares, read beside the news and the calendar, and giving
+    // its slot back to the phone's bar frees the room the Ministries and
+    // Departments tabs need there.
     items: [
       page("announcements"),
       page("calendar"),
       page("moments"),
       page("testimonies"),
       page("ideas"),
+      page("materials"),
     ],
   },
-  { label: "Materials", icon: BookOpen, items: [page("materials")] },
   {
     label: "Giving",
     icon: HandHeart,
@@ -831,7 +853,6 @@ export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
-  "Materials": "my-church",
   "Giving": "my-church",
   "Requests": "my-church",
   "Elder's Desk": "ministry",
@@ -1102,18 +1123,19 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
   return bestLength >= 0 ? best : { group: null, href: null };
 }/**
  * The phone's tab bar: the places members move between all week. "requests"
- * is the member's own page for asking the church for something and "admin" is
- * the office console, the last tab, hidden from a member who serves in no
- * office — so their bar is Fellowship, Materials, Giving and Requests. Home
- * has no tab of its own: the topbar's church mark is the way back to the
- * dashboard, which is the floor of the back stack.
+ * is the member's own page for asking the church for something; the last is
+ * "My Areas" — the church's ministries and departments as the member's own
+ * map of them, which every member may read (the office console keeps the
+ * writing side). Home has no tab of its own: the topbar's church mark is the
+ * way back to the dashboard, which is the floor of the back stack. Materials
+ * has no tab either — it is a page of Fellowship now. Staff still reach the
+ * console from the account menu.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
-  { key: "materials" },
   { key: "give" },
   { key: "requests" },
-  "admin",
+  { key: "myAreas" },
 ];
 
 /**

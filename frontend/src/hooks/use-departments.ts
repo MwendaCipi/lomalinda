@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TTL = 60 * 1000;
 
 /** One person on a department's leadership table, and the office they hold. */
-export type DepartmentHolder = { username: string; kind: "leader" | "assistant"; role: string };
+export type DepartmentHolder = { username: string; name: string; kind: "leader" | "assistant"; role: string };
 
 /**
  * A department as the church records it, with the counts its desk reports.
@@ -18,6 +18,8 @@ export type DepartmentHolder = { username: string; kind: "leader" | "assistant";
  * the directory a second time.
  */
 export type DepartmentRow = DepartmentSummary & {
+  /** The area's own one-line description, as its desk keeps it. */
+  description: string;
   memberCount: number;
   eventCount: number;
   holders: DepartmentHolder[];
@@ -36,6 +38,42 @@ let cache: { rows: DepartmentRow[]; at: number } | null = null;
 let inflight: Promise<DepartmentRow[] | null> | null = null;
 const listeners = new Set<(rows: DepartmentRow[]) => void>();
 
+/** One directory payload's rows, whether they are the reader's own areas or
+    the church's whole record — the shape is the same either way. */
+function mapDepartmentRows(data: unknown): DepartmentRow[] {
+  const payload = data as { departments?: unknown[] } | null;
+  return ((payload?.departments ?? []) as {
+    code: string;
+    label: string;
+    description?: string;
+    group?: string;
+    member_count?: number;
+    event_count?: number;
+    roles?: { name?: string; holders?: { name?: string; username?: string; kind?: string }[] }[];
+  }[]).map((row) => ({
+    code: row.code,
+    label: row.label,
+    description: String(row.description ?? ""),
+    group: row.group === "ministry" || row.group === "office" ? row.group : "department",
+    memberCount: Number(row.member_count ?? 0),
+    eventCount: Number(row.event_count ?? 0),
+    // Everyone the leadership table carries — leader and assistant alike,
+    // because holding a row is what makes someone the area's leadership —
+    // with the office they hold, so a dashboard can say "Treasurer"
+    // rather than the generic leader/assistant pair.
+    holders: (row.roles ?? []).flatMap((role) =>
+      (role.holders ?? [])
+        .filter((holder) => Boolean(holder.username))
+        .map((holder) => ({
+          username: String(holder.username),
+          name: String((holder as { name?: string }).name ?? holder.username),
+          kind: holder.kind === "assistant" ? ("assistant" as const) : ("leader" as const),
+          role: String(role.name ?? ""),
+        })),
+    ),
+  }));
+}
+
 async function fetchDepartments(): Promise<DepartmentRow[] | null> {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   if (!token) return null;
@@ -44,36 +82,7 @@ async function fetchDepartments(): Promise<DepartmentRow[] | null> {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    const rows: DepartmentRow[] = (data?.departments ?? []).map(
-      (row: {
-        code: string;
-        label: string;
-        group?: string;
-        member_count?: number;
-        event_count?: number;
-        roles?: { name?: string; holders?: { username?: string; kind?: string }[] }[];
-      }) => ({
-        code: row.code,
-        label: row.label,
-        group: row.group === "ministry" || row.group === "office" ? row.group : "department",
-        memberCount: Number(row.member_count ?? 0),
-        eventCount: Number(row.event_count ?? 0),
-        // Everyone the leadership table carries — leader and assistant alike,
-        // because holding a row is what makes someone the area's leadership —
-        // with the office they hold, so a dashboard can say "Treasurer"
-        // rather than the generic leader/assistant pair.
-        holders: (row.roles ?? []).flatMap((role) =>
-          (role.holders ?? [])
-            .filter((holder) => Boolean(holder.username))
-            .map((holder) => ({
-              username: String(holder.username),
-              kind: holder.kind === "assistant" ? ("assistant" as const) : ("leader" as const),
-              role: String(role.name ?? ""),
-            })),
-        ),
-      }),
-    );
+    const rows = mapDepartmentRows(await res.json());
     cache = { rows, at: Date.now() };
     return rows;
   } catch {
@@ -84,6 +93,7 @@ async function fetchDepartments(): Promise<DepartmentRow[] | null> {
 /** Drop the cache — a desk that just added a ministry should see the row. */
 export function invalidateDepartments() {
   cache = null;
+  allCache = null;
   myDepartmentsCache = null;
 }
 
@@ -155,6 +165,65 @@ export function useMyDepartments(): string[] {
 /** Only the areas the member belongs to or serves in — the dashboard's. */
 export function useMyTies(): string[] {
   return useMyAreaSet().ties;
+}
+
+// The church's *whole* record of areas — every ministry and department, not
+// only the ones the reader belongs to. The Ministry and Departments pages
+// browse all of them, and the directory reads that way for any signed-in
+// member (`?all=true`). Cached apart from the member's own rows: the rail
+// still wants the short list.
+let allCache: { rows: DepartmentRow[]; at: number } | null = null;
+let allInflight: Promise<DepartmentRow[] | null> | null = null;
+const allListeners = new Set<(rows: DepartmentRow[]) => void>();
+
+async function fetchAllDepartments(): Promise<DepartmentRow[] | null> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_URL}/api/members/departments/?all=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const rows = mapDepartmentRows(await res.json());
+    allCache = { rows, at: Date.now() };
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The church's whole directory of areas, for the pages that browse them: the
+ * Ministry and Departments tabs, which every member may read. The rows are
+ * cached like the member's own, and a desk that just added a ministry calls
+ * `invalidateDepartments` to clear both caches.
+ */
+export function useAllDepartments(): DepartmentRow[] {
+  const [rows, setRows] = useState<DepartmentRow[]>(() => allCache?.rows ?? []);
+
+  useEffect(() => {
+    const fresh = allCache && Date.now() - allCache.at < TTL;
+    if (fresh) return;
+    let cancelled = false;
+    const listener = (next: DepartmentRow[]) => {
+      if (!cancelled) setRows(next);
+    };
+    allListeners.add(listener);
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      const next = await (allInflight ?? (allInflight = fetchAllDepartments().finally(() => {
+        allInflight = null;
+      })));
+      if (cancelled || !next) return;
+      allListeners.forEach((notify) => notify(next));
+    });
+    return () => {
+      cancelled = true;
+      allListeners.delete(listener);
+    };
+  }, []);
+
+  return rows;
 }
 
 export function useDepartments(): DepartmentRow[] {

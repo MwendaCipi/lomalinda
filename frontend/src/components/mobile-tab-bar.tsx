@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
-import { destinationOf, isActive, isStaffRole, tabKeys } from "@/config/navigation";
+import { destinationOf, isActive, tabKeys } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { atAppFloor, collapseToHome, trackAppHistory } from "@/lib/app-history";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -21,20 +21,18 @@ type TabItem = {
 /**
  * The phone's tab bar — the places a member moves between all week.
  *
- * Every tab navigates, and the last tab is ordinary navigation too: it opens
- * the office console, whose desks the page's own cards carry, exactly as a
- * section's tab opens the section's first page and the chip strip on it carries
- * the siblings. Only the church's offices are offered it, so the tab bar a
- * member who serves in no office sees is four places, not five.
+ * Every tab navigates: a section's tab opens the section's first page, and
+ * the chip strip on that page carries its siblings (AppFrame). The last tab
+ * is My Areas — the church's ministries and departments as the member's own
+ * map, which every member may read. The office console has no tab any more
+ * (the church's own areas matter more than the office's here); staff reach
+ * it from the account menu.
  */
 export function MobileTabBar() {
   const pathname = normalizePath(usePathname());
   const router = useRouter();
-  const { me, hasToken } = useHeaderData();
+  const { hasToken } = useHeaderData();
   const isLoggedIn = hasToken;
-  const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
-  /** The last tab is the office console's — the same offices it admits. */
-  const isStaff = isStaffRole(roles);
 
   // On the surfaces that are read by scrolling — the dashboard, the
   // announcements feed and the live balances board — the bar steps out of
@@ -96,23 +94,9 @@ export function MobileTabBar() {
   const items: TabItem[] = tabKeys.flatMap((entry): TabItem[] => {
     // "home" remains in the type for future chrome tabs; the bar carries no
     // Home tab — the topbar's church mark is the way back to the dashboard.
-    if (entry === "home") return [];
-    // The last tab is the office console — a link like the rest, whose desks
-    // are the cards the console's overview carries. A member who serves in no
-    // office is not offered it at all.
-    if (entry === "admin") {
-      if (!isStaff) return [];
-      const admin = destinationOf("administration");
-      return [
-        {
-          key: "admin",
-          href: admin.href,
-          label: admin.short ?? admin.label,
-          icon: admin.icon,
-          active: isActive(admin, pathname),
-        },
-      ];
-    }
+    // "admin" is kept in the type for the same reason: the console has no tab
+    // here any more, and its desks are reached from the account menu.
+    if (entry === "home" || entry === "admin") return [];
     const dest = destinationOf(entry.key);
     // Every tab navigates: a section's own pages ride the strip on the page
     // it opens (AppFrame), and the console's desks are the cards its overview
