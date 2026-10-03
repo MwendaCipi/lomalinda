@@ -279,8 +279,16 @@
    calendar events and a fund drive's dates went through the shared
    dd/mm/yyyy helper instead of showing the API's yyyy-mm-dd, and the
    ledger's opening date now follows the church's own month. Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v60";
+   changed, so installed apps must take the new shell.
+
+   v61 — a failed request stops being read as a lost session: the header
+   only drops to signed-out chrome when the server actually refuses the
+   token (401/403), so a 500 or a dropped link no longer makes the app look
+   logged out and no longer sends the dashboard to /login; the profile form
+   and the sign-in page say the connection is down instead of asking for a
+   password again. Chrome changed, so installed apps must take the new
+   shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v61";
 const STATIC_ASSETS = [
   "/",
   "/about/",

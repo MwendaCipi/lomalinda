@@ -205,6 +205,8 @@ export default function CompleteProfilePage() {
   const [disability, setDisability] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  /** The server could not be reached — distinct from a refused session. */
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -220,15 +222,30 @@ export default function CompleteProfilePage() {
     }
 
     Promise.all([
-      fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } }).then(async (res) => {
-        if (!res.ok) throw new Error();
-        return res.json();
-      }),
+      fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (res) => {
+          if (res.status === 401 || res.status === 403) return { kind: "unauthorized" as const };
+          if (!res.ok) return { kind: "error" as const };
+          return { kind: "ok" as const, me: await res.json() };
+        })
+        .catch(() => ({ kind: "error" as const })),
       fetch(`${API_URL}/api/members/departments/?all=1`, { headers: { Authorization: `Bearer ${token}` } })
         .then(async (res) => (res.ok ? res.json() : { departments: [] }))
         .catch(() => ({ departments: [] })),
     ])
-      .then(([me, deptsData]) => {
+      .then(([meResult, deptsData]) => {
+        // Only a token the server actually refused belongs on the sign-in page.
+        // An unreachable one — offline, or a restarting 500 — is not a lost
+        // session, and bouncing to /login over it is what made this page loop.
+        if (meResult.kind === "unauthorized") {
+          router.replace(`/login?next=${encodeURIComponent("/complete-profile")}`);
+          return;
+        }
+        if (meResult.kind === "error") {
+          setOffline(true);
+          return;
+        }
+        const me = meResult.me;
         const rows: AreaOption[] = (deptsData?.departments ?? []).map(
           (d: { code: string; label: string; group?: string; description?: string }) => ({
             code: d.code,
@@ -266,7 +283,7 @@ export default function CompleteProfilePage() {
           router.replace(destination);
         }
       })
-      .catch(() => router.replace(`/login?next=${encodeURIComponent("/complete-profile")}`))
+      .catch(() => setOffline(true))
       .finally(() => setChecking(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -324,6 +341,29 @@ export default function CompleteProfilePage() {
     return (
       <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 text-bark">
         <p className="text-sm text-moss">Loading…</p>
+      </main>
+    );
+  }
+
+  // Offline is its own screen: the member keeps their session, and nothing
+  // pretends their account is gone.
+  if (offline) {
+    return (
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 text-bark">
+        <section className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-sand-line sm:p-8">
+          <h1 className="text-xl font-semibold tracking-tight">You&apos;re offline</h1>
+          <p className="mt-2 text-sm leading-6 text-moss">
+            We couldn&apos;t reach the church&apos;s server, so your details could not be loaded. Nothing is lost — try again
+            once the connection is back.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark-900"
+          >
+            Try again
+          </button>
+        </section>
       </main>
     );
   }

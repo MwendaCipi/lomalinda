@@ -71,7 +71,7 @@ type CacheEntry<T> = { data: T; at: number };
 let meCache: CacheEntry<HeaderMe | null> | null = null;
 let announcementsCache: CacheEntry<AnnouncementItem[]> | null = null;
 let notificationsCache: CacheEntry<ChurchNotificationItem[]> | null = null;
-let meInflight: Promise<HeaderMe | null | undefined> | null = null;
+let meInflight: Promise<MeResult> | null = null;
 let announcementsInflight: Promise<AnnouncementItem[] | undefined> | null = null;
 let notificationsInflight: Promise<ChurchNotificationItem[] | undefined> | null = null;
 /** The token the caches were filled under; a different token means a different member. */
@@ -87,17 +87,39 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
-/** `undefined` = the request failed; the caller keeps its previous copy. */
-async function fetchMe(token: string): Promise<HeaderMe | null | undefined> {
+/**
+ * What a `/me` call came back as.
+ *
+ * The three cases must not be flattened into one, which is what the header
+ * used to do: an identity, a token the server refused (the session really is
+ * over), and a call that never landed or fell over (offline, a 5xx while the
+ * server restarts). Treating the last as the second painted the app as signed
+ * out at the worst possible moment and sent pages that watch `hasToken` to
+ * /login — the reload loop, from the other end.
+ */
+type MeResult =
+  | { kind: "ok"; me: HeaderMe }
+  | { kind: "unauthorized" }
+  | { kind: "error" };
+
+async function fetchMe(token: string): Promise<MeResult> {
+  let res: Response;
   try {
-    const res = await fetch(`${API_URL}/api/members/me/`, {
+    res = await fetch(`${API_URL}/api/members/me/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data) return null;
-    const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
-    return {
+  } catch {
+    // Never reached the server: offline, or the link dropped mid-flight.
+    return { kind: "error" };
+  }
+  if (res.status === 401 || res.status === 403) return { kind: "unauthorized" };
+  if (!res.ok) return { kind: "error" };
+  const data = await res.json().catch(() => null);
+  if (!data) return { kind: "error" };
+  const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
+  return {
+    kind: "ok",
+    me: {
       role: data.role || "member",
       roles: Array.isArray(data.roles) && data.roles.length > 0 ? data.roles : [data.role || "member"],
       username: data.username || "Member",
@@ -108,10 +130,8 @@ async function fetchMe(token: string): Promise<HeaderMe | null | undefined> {
       announce_push: !!data.announce_push,
       is_staff: !!data.is_staff,
       is_superuser: !!data.is_superuser,
-    };
-  } catch {
-    return undefined;
-  }
+    },
+  };
 }
 
 async function fetchAnnouncements(token: string | null): Promise<AnnouncementItem[] | undefined> {
@@ -253,14 +273,22 @@ export function useHeaderData() {
             meInflight = null;
           });
         }
-        const data = await meInflight;
-        if (!cancelled && data !== undefined) {
-          meCache = { data, at: Date.now() };
-          setMe(data);
-          // A profile that will not come back means the token is dead (expired
-          // or revoked): stop painting signed-in chrome, as the header always
-          // did after its fetch resolved.
-          setHasToken(data !== null);
+        const result = await meInflight;
+        if (!cancelled) {
+          if (result.kind === "ok") {
+            meCache = { data: result.me, at: Date.now() };
+            setMe(result.me);
+            setHasToken(true);
+          } else if (result.kind === "unauthorized") {
+            // The token really is dead (expired or revoked): stop painting
+            // signed-in chrome, as the header always did.
+            meCache = { data: null, at: Date.now() };
+            setMe(null);
+            setHasToken(false);
+          }
+          // "error": keep the last good identity and the session. A server
+          // that fell over, or a link that dropped, is not a sign-out — and a
+          // 500 flustered into one is what made the app look broken.
         }
       }
 

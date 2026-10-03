@@ -21,6 +21,8 @@ function LoginContent() {
   const [justCreated, setJustCreated] = useState(false);
   /** Set only while a stored session is being carried into the app. */
   const [takingYouIn, setTakingYouIn] = useState(false);
+  /** A stored session exists but the server could not be reached to check it. */
+  const [unreachable, setUnreachable] = useState(false);
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -45,10 +47,17 @@ function LoginContent() {
         if (active) router.replace(destinationAfterSession(me, next));
       })
       .catch((error: unknown) => {
+        if (!active) return;
         // Expired or revoked: clear it so the sign-in form is usable.
         const status = error instanceof Error ? error.message : "";
-        if (status === "401" || status === "403") clearSession();
-        if (active) setTakingYouIn(false);
+        if (status === "401" || status === "403") {
+          clearSession();
+          setTakingYouIn(false);
+          return;
+        }
+        // The server could not be reached — offline, or it is restarting. That
+        // is not grounds to ask for a password the member already gave.
+        setUnreachable(true);
       });
     return () => {
       active = false;
@@ -93,6 +102,27 @@ function LoginContent() {
 
   // A signed-in visit is on its way to the app, so the form is not shown — no
   // second sign-in prompt, and no half-drawn page while /me answers.
+  if (unreachable) {
+    return (
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-8 text-bark">
+        <section className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-sand-line sm:p-8">
+          <h1 className="text-xl font-semibold tracking-tight">You&apos;re offline</h1>
+          <p className="mt-2 text-sm leading-6 text-moss">
+            You are still signed in on this device — we just could not reach the church&apos;s server to confirm it. Try again
+            once the connection is back.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark-900"
+          >
+            Try again
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   if (takingYouIn) {
     return (
       <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-8 text-moss">
