@@ -4,8 +4,9 @@ import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Landmark, Printer, Receipt, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirstTime } from "@/lib/dates";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
+import { thankYouPath } from "@/lib/giving-thanks";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { stewardshipLinks } from "@/config/site-sections";
@@ -90,6 +91,7 @@ const statusBadge = (s: string) => {
 };
 
 function GivePageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawPurposeParam = searchParams.get("purpose");
   const linkedPurpose = (rawPurposeParam ?? "").trim();
@@ -504,27 +506,37 @@ function GivePageContent() {
       }
 
       if (methodOfGiving === "mpesa") {
-        const promptMessage = data.message ?? "M-Pesa prompt sent. Enter your PIN on your phone to complete the payment.";
         setShowGiveModal(false);
         setLoading(false);
-        // The toast carries it; printing the same sentence into the form as well
-        // left it waiting at the top of the next visit to the modal.
-        showAlert("M-Pesa prompt sent", promptMessage, "info", {
-          toast: true,
-          position: "top-end",
-          timer: 7000,
-          showConfirmButton: false,
-        });
-        loadMyGivings();
-        // The PIN usually lands within a minute or two; keep the record
-        // fresh until the pending entry shows up (or five minutes pass).
-        setPendingRefreshUntil(Date.now() + 5 * 60 * 1000);
+        if (signedIn) {
+          const promptMessage = data.message ?? "M-Pesa prompt sent. Enter your PIN on your phone to complete the payment.";
+          // The toast carries it; printing the same sentence into the form as
+          // well left it waiting at the top of the next visit to the modal.
+          showAlert("M-Pesa prompt sent", promptMessage, "info", {
+            toast: true,
+            position: "top-end",
+            timer: 7000,
+            showConfirmButton: false,
+          });
+          loadMyGivings();
+          // The PIN usually lands within a minute or two; keep the record
+          // fresh until the pending entry shows up (or five minutes pass).
+          setPendingRefreshUntil(Date.now() + 5 * 60 * 1000);
+        } else {
+          // A visitor has no record to poll; they land on the public
+          // confirmation page, which carries the drive context home.
+          router.push(thankYouPath({ kind: "money", method: "mpesa", title: allocations[0]?.purpose }));
+        }
       } else {
-        const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
-        showAlert("Contribution Received", successMsg, "success");
         setShowGiveModal(false);
-        loadMyGivings();
         setLoading(false);
+        if (signedIn) {
+          const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
+          showAlert("Contribution Received", successMsg, "success");
+          loadMyGivings();
+        } else {
+          router.push(thankYouPath({ kind: "money", method: "bank", title: allocations[0]?.purpose }));
+        }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unable to connect to the giving service.";

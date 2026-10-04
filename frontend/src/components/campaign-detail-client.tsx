@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
+import { thankYouPath } from "@/lib/giving-thanks";
 import { Check, Copy, IdCard, LogIn, X } from "lucide-react";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
@@ -69,6 +70,17 @@ export default function CampaignDetailClient() {
   // invited to is the one they land back on — personal link and all.
   const herePath = `/support/campaigns/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
   const signInHref = `/login?next=${encodeURIComponent(herePath)}`;
+
+  /** Where a visitor lands once their gift is on its way, so giving ends on a
+      page that thanks them rather than a modal that simply vanishes. */
+  function thanksPath(kind: "money" | "in-kind", method?: "mpesa" | "bank") {
+    return thankYouPath({
+      kind,
+      method,
+      campaignId: typeof campaignId === "string" ? campaignId : undefined,
+      title: campaign ? campaign.title || campaign.name : undefined,
+    });
+  }
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [cardAssignment, setCardAssignment] = useState<CardAssignment | null>(null);
@@ -232,9 +244,15 @@ export default function CampaignDetailClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Failed to initiate payment.");
 
-      showAlert("M-Pesa Prompt Sent", "Check your phone for the M-Pesa PIN prompt to complete your contribution.", "success");
       setAmount("");
       setShowSupportModal(false);
+      if (signedIn) {
+        showAlert("M-Pesa Prompt Sent", "Check your phone for the M-Pesa PIN prompt to complete your contribution.", "success");
+      } else {
+        // A visitor's giving ends on the public confirmation page, which also
+        // carries the way back to the drive and the door to a record.
+        router.push(thanksPath("money", "mpesa"));
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Payment error";
       showAlert("Payment Error", msg, "error");
@@ -606,6 +624,11 @@ export default function CampaignDetailClient() {
         onClose={() => setInKindOpen(false)}
         defaultPurpose={campaign.account_name || campaign.name}
         announcementTitle={campaign.title || campaign.name}
+        onRecorded={() => {
+          // A signed-in record keeps the modal's own toast; a visitor is sent
+          // to the public confirmation page instead.
+          if (!signedIn) router.push(thanksPath("in-kind"));
+        }}
       />
 
       {/* ── Support modal ── */}
