@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { DriveGiveModal } from "@/components/drive-give-modal";
+import { DriveThanksModal } from "@/components/drive-thanks-modal";
 import { useGivingRefresh } from "@/hooks/use-giving-refresh";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -45,6 +46,13 @@ export default function SupportCampaignsPage() {
   const [pledgeDrive, setPledgeDrive] = useState<DriveCard | null>(null);
   const [inKindDrive, setInKindDrive] = useState<DriveCard | null>(null);
   const [giveDrive, setGiveDrive] = useState<DriveCard | null>(null);
+  // A drive whose total just rose, and the drive to thank the giver for. Both
+  // are set by the post-gift refresh, not by the prompt.
+  const [raisedFlashId, setRaisedFlashId] = useState<number | null>(null);
+  const [thankDrive, setThankDrive] = useState<DriveCard | null>(null);
+  /** What each card last showed, so a rise on the next read is a gift landing. */
+  const seenTotalsRef = useRef<Map<number, number> | null>(null);
+  const watchingRef = useRef(false);
 
   const loadDrives = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -53,8 +61,27 @@ export default function SupportCampaignsPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const data = res.ok ? await res.json() : [];
-      const rows: DriveCard[] = Array.isArray(data) ? data : [];
-      setDrives(rows.filter((drive) => drive.is_active !== false));
+      const rows: DriveCard[] = (Array.isArray(data) ? data : []).filter(
+        (drive) => drive.is_active !== false
+      );
+      setDrives(rows);
+      // A gift only becomes real when Safaricom's callback lands, so a total
+      // that rises while we watch is that gift — flash it, then thank them.
+      const before = seenTotalsRef.current;
+      if (before && watchingRef.current) {
+        const risen = rows.find(
+          (drive) => Number(drive.total_raised) > (before.get(drive.id) ?? Number(drive.total_raised))
+        );
+        if (risen) {
+          setRaisedFlashId(risen.id);
+          setThankDrive(risen);
+          window.setTimeout(
+            () => setRaisedFlashId((current) => (current === risen.id ? null : current)),
+            1800
+          );
+        }
+      }
+      seenTotalsRef.current = new Map(rows.map((drive) => [drive.id, Number(drive.total_raised)]));
     } catch {
       // A transient poll failure must not empty a shelf already on screen.
       setDrives((current) => current ?? []);
@@ -64,7 +91,12 @@ export default function SupportCampaignsPage() {
   // An M-Pesa gift is only recorded when Safaricom's callback lands, seconds
   // after the prompt — so watch the shelf for a spell after a gift and let the
   // cards' progress move on their own.
-  const startGivingWatch = useGivingRefresh(loadDrives);
+  const { start: startGivingWatch, watching } = useGivingRefresh(loadDrives);
+
+  // The async loader reads the window's state, so mirror it into a ref.
+  useEffect(() => {
+    watchingRef.current = watching;
+  }, [watching]);
 
   useEffect(() => {
     // Deferred by a microtask so the fetch is not started in the effect's own
@@ -110,7 +142,11 @@ export default function SupportCampaignsPage() {
                   return (
                     <div
                       key={drive.id}
-                      className="group flex flex-col rounded-3xl bg-white p-5 shadow-sm ring-1 ring-sand-line transition hover:-translate-y-0.5 hover:ring-ember/50 sm:p-6"
+                      className={`group flex flex-col rounded-3xl bg-white p-5 shadow-sm transition hover:-translate-y-0.5 sm:p-6 ${
+                        raisedFlashId === drive.id
+                          ? "ring-2 ring-ember"
+                          : "ring-1 ring-sand-line hover:ring-ember/50"
+                      }`}
                     >
                       {/* The card's body opens the drive; the actions below act
                           on it in place. */}
@@ -138,7 +174,13 @@ export default function SupportCampaignsPage() {
                             />
                           </div>
                           <div className="mt-2 flex items-baseline justify-between gap-2">
-                            <span className="text-sm font-bold text-bark">{fmtKES(drive.total_raised)}</span>
+                            <span
+                              className={`text-sm font-bold text-bark ${
+                                raisedFlashId === drive.id ? "drive-rise" : ""
+                              }`}
+                            >
+                              {fmtKES(drive.total_raised)}
+                            </span>
                             <span className="text-[11px] text-moss">of {fmtKES(drive.target_amount)} goal</span>
                           </div>
                         </div>
@@ -206,6 +248,18 @@ export default function SupportCampaignsPage() {
           onClose={() => setGiveDrive(null)}
           drive={{ purpose: givingPurpose(giveDrive), title: giveDrive.title || giveDrive.name }}
           onSent={startGivingWatch}
+        />
+      )}
+
+      {/* The gift, confirmed and counted — a word of thanks with how much
+          closer the drive now is, opened by the refresh that caught it. */}
+      {thankDrive && (
+        <DriveThanksModal
+          title={thankDrive.title || thankDrive.name}
+          percentage={thankDrive.percentage_raised}
+          target={thankDrive.target_amount}
+          href={`/drives/${thankDrive.id}`}
+          onClose={() => setThankDrive(null)}
         />
       )}
     </main>

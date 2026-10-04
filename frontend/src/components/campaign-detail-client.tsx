@@ -10,6 +10,7 @@ import { ArrowLeft, Check, Copy, IdCard, LogIn, X } from "lucide-react";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { DonutChart } from "@/components/mini-charts";
+import { DriveThanksModal } from "@/components/drive-thanks-modal";
 import { pieColors } from "@/lib/brand";
 import { useGivingRefresh } from "@/hooks/use-giving-refresh";
 
@@ -134,6 +135,13 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
   /** Read the drive's current figures — the initial load and, after a gift,
       the poll that lets the progress catch up on its own. */
   const loadedOnceRef = useRef(false);
+  /** The total last shown, so a rise on the next read is a gift landing. */
+  const seenTotalRef = useRef<number | null>(null);
+  const watchingRef = useRef(false);
+  // Set by the post-gift refresh, never by the prompt: the money is only real
+  // once Safaricom's callback lands.
+  const [raisedFlash, setRaisedFlash] = useState(false);
+  const [thankOpen, setThankOpen] = useState(false);
   const loadCampaign = useCallback(async () => {
     if (!campaignId) return;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -142,7 +150,17 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!res.ok) throw new Error("Fund drive not found.");
-      setCampaign(await res.json());
+      const data: Campaign = await res.json();
+      // A total that rises while we watch is the gift we just sent — flash the
+      // figure and thank the giver for closing the gap.
+      const before = seenTotalRef.current;
+      if (before !== null && watchingRef.current && Number(data.total_raised) > before) {
+        setRaisedFlash(true);
+        setThankOpen(true);
+        window.setTimeout(() => setRaisedFlash(false), 1800);
+      }
+      seenTotalRef.current = Number(data.total_raised);
+      setCampaign(data);
       loadedOnceRef.current = true;
     } catch (err) {
       // A transient poll failure must not blank a drive already on screen.
@@ -152,12 +170,20 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
     } finally {
       setLoading(false);
     }
-  }, [campaignId]);
+    // The state setters ride along so the compiler's inferred dependencies
+    // match the manual ones; all are stable, so this never re-creates the
+    // callback and the poll is not restarted mid-watch.
+  }, [campaignId, setCampaign, setError, setLoading, setRaisedFlash, setThankOpen]);
 
   // An M-Pesa gift is only recorded when Safaricom's callback lands, seconds
   // after the prompt — so watch the drive for a spell after giving and let the
   // total, progress bar and department ring move on their own.
-  const startGivingWatch = useGivingRefresh(loadCampaign);
+  const { start: startGivingWatch, watching } = useGivingRefresh(loadCampaign);
+
+  // The async loader reads the window's state, so mirror it into a ref.
+  useEffect(() => {
+    watchingRef.current = watching;
+  }, [watching]);
 
   useEffect(() => {
     if (!campaignId) return;
@@ -452,12 +478,18 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
               lets each card fill the row's height. */}
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Progress rides beside the story on a PC, under it on a phone. */}
-            <div className="flex flex-col rounded-3xl bg-sand-card p-6 sm:p-8 ring-1 ring-sand-line">
+            <div
+              className={`flex flex-col rounded-3xl bg-sand-card p-6 transition sm:p-8 ${
+                raisedFlash ? "ring-2 ring-ember" : "ring-1 ring-sand-line"
+              }`}
+            >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-moss">Fund Drive Progress</span>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-bark sm:text-3xl">{fmtKES(campaign.total_raised)}</span>
+                  <span className={`text-2xl font-bold text-bark sm:text-3xl ${raisedFlash ? "drive-rise" : ""}`}>
+                    {fmtKES(campaign.total_raised)}
+                  </span>
                   <span className="text-sm text-moss">raised of {fmtKES(campaign.target_amount)} goal</span>
                 </div>
                 {deficit > 0 && (
@@ -790,12 +822,22 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
                 type="submit"
                 disabled={isSubmitting}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 font-medium text-white transition hover:bg-sage-deep disabled:opacity-60 text-sm"
-              >
-                {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
+              >                {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
               </button>
             </form>
           </div>
         </div>
+      )}
+
+      {/* The gift, confirmed and counted — the refresh that catches the money
+          is what opens it, naming how much closer the drive now is. */}
+      {thankOpen && (
+        <DriveThanksModal
+          title={campaign.title || campaign.name}
+          percentage={campaign.percentage_raised}
+          target={campaign.target_amount}
+          onClose={() => setThankOpen(false)}
+        />
       )}
 
         </div>

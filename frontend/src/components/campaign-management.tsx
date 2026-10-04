@@ -8,6 +8,7 @@ import {
   CreditCard,
   Crown,
   IdCard,
+  Link2,
   Megaphone,
   Music,
   Pause,
@@ -579,6 +580,27 @@ export function CampaignManagement({
     try {
       await navigator.clipboard.writeText(url);
       showAlert("Link Copied", `The public link for ${campaign.title || campaign.name} is on your clipboard.`, "success");
+    } catch {
+      showAlert("Copy the link", url, "info");
+    }
+  }
+
+  /**
+   * Copy a drive's direct giving link.
+   *
+   * `/drives/<id>/money` opens the drive and raises the M-Pesa prompt on
+   * arrival, so a link dropped into a WhatsApp group or a bulletin lands the
+   * giver in the act of giving rather than on a page they still have to act on.
+   */
+  async function handleCopyGivingLink(campaign: Campaign) {
+    const url = `${window.location.origin}/drives/${campaign.id}/money`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showAlert(
+        "Giving Link Copied",
+        `A giving link for ${campaign.title || campaign.name} is on your clipboard — opening it goes straight to the M-Pesa prompt.`,
+        "success"
+      );
     } catch {
       showAlert("Copy the link", url, "info");
     }
@@ -1401,6 +1423,17 @@ export function CampaignManagement({
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
                                           >
                                             <IdCard size={13} className="inline" aria-hidden="true" /> {c.allow_personal_invitations ? "+ Issue Invites" : "Copy General Link"}
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              closeActionsMenu();
+                                              void handleCopyGivingLink(c);
+                                            }}
+                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+                                          >
+                                            <Link2 size={13} className="inline" aria-hidden="true" /> Copy Giving Link
                                           </button>
 
                                           <button

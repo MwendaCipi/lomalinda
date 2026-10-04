@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Watch a drive just after a gift, so its progress catches up on its own.
@@ -11,6 +11,9 @@ import { useCallback, useEffect, useRef } from "react";
  * `refresh` on an interval and again whenever the page is looked at (the
  * moment they come back from entering their PIN, when the callback has most
  * likely landed), then stops. Calling `start()` again simply extends the watch.
+ *
+ * `watching` lets a caller tell a live change from the first load: only a
+ * refresh inside the window is a gift landing, and only that should celebrate.
  */
 export function useGivingRefresh(
   refresh: () => void,
@@ -24,6 +27,8 @@ export function useGivingRefresh(
   });
   const deadlineRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const stopTimerRef = useRef<number | null>(null);
+  const [watching, setWatching] = useState(false);
 
   const stop = useCallback(() => {
     deadlineRef.current = 0;
@@ -31,6 +36,11 @@ export function useGivingRefresh(
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    if (stopTimerRef.current !== null) {
+      window.clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    setWatching(false);
   }, []);
 
   const tick = useCallback(() => {
@@ -43,10 +53,15 @@ export function useGivingRefresh(
 
   const start = useCallback(() => {
     deadlineRef.current = Date.now() + windowMs;
+    setWatching(true);
     if (timerRef.current === null) {
       timerRef.current = window.setInterval(tick, everyMs);
     }
-  }, [tick, windowMs, everyMs]);
+    if (stopTimerRef.current !== null) {
+      window.clearTimeout(stopTimerRef.current);
+    }
+    stopTimerRef.current = window.setTimeout(stop, windowMs);
+  }, [tick, stop, windowMs, everyMs]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -61,5 +76,5 @@ export function useGivingRefresh(
     };
   }, [tick, stop]);
 
-  return start;
+  return { start, watching };
 }
