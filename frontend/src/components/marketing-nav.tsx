@@ -120,9 +120,10 @@ export function MarketingNav() {
         {/* Account action + mobile menu toggle */}
         <div className="flex items-center gap-3">
           <AccessibilityMenu buttonClassName="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors focus:outline-none" />
+          {/* The phone reaches its account from the hamburger sheet below; only the desktop bar carries the pill. */}
           <Link
             href={accountHref}
-            className="inline-flex items-center gap-1.5 rounded-full bg-gold px-3.5 py-2 text-xs font-bold text-bark transition-colors hover:bg-white sm:text-sm"
+            className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-gold px-3.5 py-2 text-xs font-bold text-bark transition-colors hover:bg-white sm:text-sm"
           >
             <AccountIcon className="h-3.5 w-3.5" />
             <span>{accountLabel}</span>

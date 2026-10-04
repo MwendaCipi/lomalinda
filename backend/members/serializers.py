@@ -1472,7 +1472,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         # rows are completed money by definition — they are entered after the
         # money is in hand — and they live in their own table, so they can
         # never overlap the M-Pesa set.
-        cash_total = CashContribution.objects.filter(self._purpose_query(obj)).aggregate(Sum('amount'))['amount__sum'] or 0
+        cash_total = self._drive_cash(obj).aggregate(Sum('amount'))['amount__sum'] or 0
         return float(mpesa_total + cash_total)
 
     def get_total_raised(self, obj):
@@ -1497,6 +1497,22 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             return float(account_inflows(account, since=obj.created_at))
         return self._ledger_totals(obj)
 
+    def _drive_begins_at(self, obj):
+        """The moment a drive's money starts to count, or None.
+
+        An account-backed drive reads its headline from the linked account,
+        which begins at zero against whatever the account already held. The
+        ledger-based counters that ride beside the headline — the donor count,
+        the ministry and department breakdowns, the gift pulse — share the
+        drive's own beginning, so a purpose-named gift older than the drive
+        (the account's opening money wearing a ledger row) is windowed out
+        everywhere at once. A drive with no matching account reads the whole
+        ledger union as before, so there is no window.
+        """
+        if self._linked_treasury_account(obj) is not None:
+            return obj.created_at
+        return None
+
     def get_percentage_raised(self, obj):
         total = self.get_total_raised(obj)
         target = float(obj.target_amount) if obj.target_amount else 0.0
@@ -1511,7 +1527,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         stays a ledger count, which no opening-balance row can inflate.
         """
         linked, extra = self._drive_mpesa(obj)
-        return linked.count() + extra.count() + CashContribution.objects.filter(self._purpose_query(obj)).count()
+        return linked.count() + extra.count() + self._drive_cash(obj).count()
 
     # -- Drive-page breakdown helpers -------------------------------------
 
@@ -1533,7 +1549,24 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         extra = Contribution.objects.filter(
             self._purpose_query(obj), status='completed'
         ).exclude(campaign=obj)
+        since = self._drive_begins_at(obj)
+        if since is not None:
+            linked = linked.filter(created_at__gte=since)
+            extra = extra.filter(created_at__gte=since)
         return linked, extra
+
+    def _drive_cash(self, obj):
+        """The manual receipts naming this drive, read on the drive's clock.
+
+        Same purpose match as ``_purpose_query``, narrowed by the drive's own
+        beginning when it is account-backed so a desk receipt entered before
+        the drive cannot inflate a counter the headline ignores.
+        """
+        rows = CashContribution.objects.filter(self._purpose_query(obj))
+        since = self._drive_begins_at(obj)
+        if since is not None:
+            rows = rows.filter(created_at__gte=since)
+        return rows
 
     def get_contribution_breakdown(self, obj):
         """Who gave what: the signed-in viewer, their invitees, everyone else.
@@ -1610,8 +1643,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         for gift in list(linked) + list(extra):
             label = self._ministry_label(gift.member)
             totals[label] = totals.get(label, 0.0) + float(gift.amount or 0)
-        cash_query = self._purpose_query(obj)
-        for row in CashContribution.objects.filter(cash_query).values('donor_name', 'giver_email', 'amount'):
+        for row in self._drive_cash(obj).values('donor_name', 'giver_email', 'amount'):
             label = self._ministry_label(self._cash_giver(row.get('giver_email')))
             totals[label] = totals.get(label, 0.0) + float(row['amount'] or 0)
         return [
@@ -1643,7 +1675,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         for gift in list(linked) + list(extra):
             label = self._department_label(gift.member)
             totals[label] = totals.get(label, 0.0) + float(gift.amount or 0)
-        for row in CashContribution.objects.filter(self._purpose_query(obj)).values('giver_email', 'amount'):
+        for row in self._drive_cash(obj).values('giver_email', 'amount'):
             label = self._department_label(self._cash_giver(row.get('giver_email')))
             totals[label] = totals.get(label, 0.0) + float(row['amount'] or 0)
         return [
@@ -1675,7 +1707,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
                 'ministry': self._ministry_label(gift.member),
                 'date': day_of(gift.paid_at or gift.created_at),
             })
-        for row in CashContribution.objects.filter(self._purpose_query(obj)):
+        for row in self._drive_cash(obj):
             entries.append({
                 'amount': round(float(row.amount or 0), 2),
                 'ministry': self._ministry_label(self._cash_giver(row.giver_email)),

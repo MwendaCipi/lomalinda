@@ -5938,6 +5938,34 @@ class FundDriveAccountBackedTotalTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['total_raised'], 1200.0)
 
+    def test_the_counters_ignore_a_gift_that_predates_the_drive(self):
+        """A purpose-named gift older than the drive is opening money: the
+        donor count, the breakdowns and the gift pulse window it out exactly
+        as the headline does, so an account-backed drive never reads a donor
+        and a gift beside a headline that counts neither."""
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        giver = User.objects.create_user('fd.early', 'fd.early@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        early = Contribution.objects.create(
+            member=giver, amount=Decimal('100.00'), giving_type='money',
+            purpose='Welfare', campaign=None, status='completed', payment_method='mpesa',
+        )
+        Contribution.objects.filter(pk=early.pk).update(created_at=timezone.now() - timedelta(days=3))
+        drive = self._drive()
+        # A gift after the drive opens is the drive's, and reads through every counter.
+        Contribution.objects.create(
+            member=giver, amount=Decimal('250.00'), giving_type='money',
+            purpose='Welfare', campaign=None, status='completed', payment_method='mpesa',
+        )
+        apply_credit(account=account, amount=Decimal('250.00'), description='Contribution — M-Pesa (Welfare)')
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_raised'], 250.0)
+        self.assertEqual(response.data['donor_count'], 1)
+        self.assertEqual([g['amount'] for g in response.data['recent_gifts']], [250.0])
+        self.assertEqual(response.data['ministry_breakdown'], [{'ministry': 'General', 'amount': 250.0}])
+
     def test_manual_receipts_and_prompt_money_read_identically(self):
         """A desk receipt credits the same account the prompt money credits,
         so both are simply money the drive has received."""

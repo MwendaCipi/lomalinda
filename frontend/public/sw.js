@@ -347,8 +347,13 @@
    department fund and the church's week gain one. Fund Drives opens on a
    shelf of cards — two to a row, even on a PC — instead of jumping straight
    into the first active drive, while a shared invite link still opens the
-   drive itself. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v69";
+   drive itself. Chrome changed, so installed apps must take the new shell.
+
+   v70 — the marketing header drops its gold account pill on the phone; the
+   way in and out is the hamburger sheet's full-width button, which the
+   header no longer duplicates at narrow widths. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v70";
 const STATIC_ASSETS = [
   "/",
   "/about/",
