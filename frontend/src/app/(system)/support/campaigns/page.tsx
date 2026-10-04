@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { DriveGiveModal } from "@/components/drive-give-modal";
+import { useGivingRefresh } from "@/hooks/use-giving-refresh";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -45,18 +46,37 @@ export default function SupportCampaignsPage() {
   const [inKindDrive, setInKindDrive] = useState<DriveCard | null>(null);
   const [giveDrive, setGiveDrive] = useState<DriveCard | null>(null);
 
-  useEffect(() => {
+  const loadDrives = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    fetch(`${API_URL}/api/members/campaigns/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        const rows: DriveCard[] = Array.isArray(data) ? data : [];
-        setDrives(rows.filter((drive) => drive.is_active !== false));
-      })
-      .catch(() => setDrives([]));
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const data = res.ok ? await res.json() : [];
+      const rows: DriveCard[] = Array.isArray(data) ? data : [];
+      setDrives(rows.filter((drive) => drive.is_active !== false));
+    } catch {
+      // A transient poll failure must not empty a shelf already on screen.
+      setDrives((current) => current ?? []);
+    }
   }, []);
+
+  // An M-Pesa gift is only recorded when Safaricom's callback lands, seconds
+  // after the prompt — so watch the shelf for a spell after a gift and let the
+  // cards' progress move on their own.
+  const startGivingWatch = useGivingRefresh(loadDrives);
+
+  useEffect(() => {
+    // Deferred by a microtask so the fetch is not started in the effect's own
+    // synchronous body; the state it settles lands after the first paint.
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadDrives();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDrives]);
 
   /** The drive's giving account, which the giving form answers to by name. */
   const givingPurpose = (drive: DriveCard) => drive.account_name || drive.name;
@@ -185,6 +205,7 @@ export default function SupportCampaignsPage() {
         <DriveGiveModal
           onClose={() => setGiveDrive(null)}
           drive={{ purpose: givingPurpose(giveDrive), title: giveDrive.title || giveDrive.name }}
+          onSent={startGivingWatch}
         />
       )}
     </main>

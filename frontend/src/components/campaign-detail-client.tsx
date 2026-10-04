@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { thankYouPath } from "@/lib/giving-thanks";
@@ -11,6 +11,7 @@ import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { DonutChart } from "@/components/mini-charts";
 import { pieColors } from "@/lib/brand";
+import { useGivingRefresh } from "@/hooks/use-giving-refresh";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -130,20 +131,41 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
     return true;
   }
 
+  /** Read the drive's current figures — the initial load and, after a gift,
+      the poll that lets the progress catch up on its own. */
+  const loadedOnceRef = useRef(false);
+  const loadCampaign = useCallback(async () => {
+    if (!campaignId) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/${campaignId}/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) throw new Error("Fund drive not found.");
+      setCampaign(await res.json());
+      loadedOnceRef.current = true;
+    } catch (err) {
+      // A transient poll failure must not blank a drive already on screen.
+      if (!loadedOnceRef.current) {
+        setError(err instanceof Error ? err.message : "Failed to load fund drive details.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [campaignId]);
+
+  // An M-Pesa gift is only recorded when Safaricom's callback lands, seconds
+  // after the prompt — so watch the drive for a spell after giving and let the
+  // total, progress bar and department ring move on their own.
+  const startGivingWatch = useGivingRefresh(loadCampaign);
+
   useEffect(() => {
     if (!campaignId) return;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-    fetch(`${API_URL}/api/members/campaigns/${campaignId}/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Fund drive not found.");
-        return res.json();
-      })
-      .then((data) => setCampaign(data))
-      .catch((err) => setError(err.message || "Failed to load fund drive details."))
-      .finally(() => setLoading(false));
+    // Deferred by a microtask so the fetch is not started in the effect's own
+    // synchronous body; the state it settles lands after the first paint.
+    void Promise.resolve().then(() => void loadCampaign());
 
     if (refToken) {
       fetch(`${API_URL}/api/members/campaign-cards/lookup/${refToken}/`)
@@ -252,6 +274,8 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
 
       setAmount("");
       setShowSupportModal(false);
+      // Let the drive's figures catch up once the callback records the gift.
+      startGivingWatch();
       if (signedIn) {
         showAlert("M-Pesa Prompt Sent", "Check your phone for the M-Pesa PIN prompt to complete your contribution.", "success");
       } else {
