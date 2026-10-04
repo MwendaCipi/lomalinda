@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Baby,
   Check,
@@ -13,6 +13,7 @@ import {
   Pause,
   Pencil,
   Play,
+  Plus,
   Receipt,
   User,
   Users,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, localDate } from "@/lib/dates";
+import { usePageHeader } from "./app-frame";
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
@@ -66,6 +68,15 @@ interface ChurchUser {
   role?: string;
 }
 
+/** A treasury account the office can turn into a drive. */
+interface DriveAccount {
+  id: number;
+  name: string;
+  description?: string;
+  account_type?: string;
+  balance?: number | string;
+}
+
 export const AVAILABLE_GROUPS = [
   { key: "all_members", label: "All Members (Entire Congregation)", icon: Users },
   { key: "choir", label: "Choir Ministry", icon: Music },
@@ -108,6 +119,7 @@ export function CampaignManagement({
   onClosed?: () => void;
 }) {
   const isAdminMode = mode === "admin";
+  const { setHeaderRightAction } = usePageHeader();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOfficial, setIsOfficial] = useState<boolean | null>(null);
@@ -140,6 +152,11 @@ export function CampaignManagement({
   const [showCreateModal, setShowCreateModal] = useState(false);
   // A flyer or poster that travels with the drive's announcement and emails.
   const [driveAttachment, setDriveAttachment] = useState<File | null>(null);
+  // The "Start fund drive" picker: the treasury accounts an office can promote
+  // into a drive without first walking to the accounts desk to find one.
+  const [startDriveOpen, setStartDriveOpen] = useState(false);
+  const [driveAccounts, setDriveAccounts] = useState<DriveAccount[]>([]);
+  const [accountSearch, setAccountSearch] = useState("");
 
   // Card Issuance Modal State
   const [issuingCampaign, setIssuingCampaign] = useState<Campaign | null>(null);
@@ -290,6 +307,80 @@ export function CampaignManagement({
     if (!needle) return true;
     return `${c.title || ""} ${c.name} ${c.account_name || ""}`.toLowerCase().includes(needle);
   });
+
+  /** The treasury accounts the "Start fund drive" search names. */
+  const filteredDriveAccounts = driveAccounts.filter((a) => {
+    const needle = accountSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return `${a.name} ${a.description || ""}`.toLowerCase().includes(needle);
+  });
+
+  /** Load the treasury accounts a drive can be started against. */
+  const fetchDriveAccounts = useCallback((token: string) => {
+    fetch(`${API_URL}/api/members/treasury/accounts/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setDriveAccounts(Array.isArray(data) ? data : []))
+      .catch(() => setDriveAccounts([]));
+  }, []);
+
+  /** Open the account picker, always with a fresh reading of the accounts. */
+  const openStartDrive = useCallback(() => {
+    setStartDriveOpen(true);
+    setAccountSearch("");
+    const token = localStorage.getItem("access_token");
+    if (token) fetchDriveAccounts(token);
+  }, [fetchDriveAccounts]);
+
+  /**
+   * Promote a picked account: open the creation form with that account
+   * answering for the drive. The account's short reference is what the M-Pesa
+   * prompt shows and what the drive's progress reads — promoting from here and
+   * promoting from the accounts desk are the same act.
+   */
+  function promoteAccountIntoDrive(account: DriveAccount) {
+    const label = (account.description || account.name).trim();
+    setEditingCampaign(null);
+    setForm((prev) => ({
+      ...prev,
+      account_name: account.name,
+      name: prev.name || label || account.name,
+      title: prev.title || label,
+    }));
+    setStartDriveOpen(false);
+    setAccountSearch("");
+    setShowCreateModal(true);
+  }
+
+  // The desk's search and its "Start fund drive" door ride the shell's header
+  // beside the page's own name, so the heading and its controls share one row
+  // and the treasury strip sits below both. The host desk that renders this
+  // form in place (`formOnly`) leaves the header alone — it already owns one.
+  useEffect(() => {
+    if (!isAdminMode || formOnly || !canEdit) return;
+    setHeaderRightAction(
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <input
+          type="text"
+          placeholder="Search by drive or account..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+          aria-label="Search fund drives"
+        />
+        <button
+          type="button"
+          onClick={openStartDrive}
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-sage px-3.5 py-2 text-xs font-bold text-white transition hover:bg-sage-deep"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Start fund drive
+        </button>
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [isAdminMode, formOnly, canEdit, search, openStartDrive, setHeaderRightAction]);
 
   function fetchUsers(token: string) {
     fetch(`${API_URL}/api/members/users/`, {
@@ -810,35 +901,89 @@ export function CampaignManagement({
             </Link>
           )}
 
-          {/* Top Banner / Header */}
-          <div className="border-b border-sand-line pb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Fund Drives {isAdminMode && "& Goal Management"}
-                </h1>
-                <p className="mt-2 text-sm text-moss">
-                  {isAdminMode
-                    ? "Drives are opened from a treasury account's Promote action; manage targets, dates and broadcasts here."
-                    : "Follow the church's active fund drives, see progress toward each goal, and support a cause."}
-                </p>
-              </div>
-              <div className="flex w-full items-center gap-2 sm:w-auto">
-                <input
-                  type="text"
-                  placeholder="Search by drive or account..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none sm:w-64"
-                  aria-label="Search fund drives"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* New Fund Drive Modal — the same hoisted form the treasury desk
               renders in place; see `createFormModal` above. */}
           {createFormModal}
+
+          {/* Start a fund drive: search the treasury accounts and promote one
+              into a drive, the same act the accounts desk's Promote performs
+              from the other side. */}
+          {isAdminMode && startDriveOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setStartDriveOpen(false);
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="start-drive-title"
+                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+              >
+                <div className="flex items-start justify-between gap-4 border-b border-sand-line pb-4">
+                  <div>
+                    <h2 id="start-drive-title" className="text-xl font-bold text-bark">
+                      Start a fund drive
+                    </h2>
+                    <p className="mt-1 text-xs text-moss">
+                      Pick the treasury account the drive runs on. Its reference answers for the
+                      M-Pesa prompt and the drive&apos;s progress reads that account.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStartDriveOpen(false)}
+                    className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
+                    aria-label="Close modal"
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Search accounts by name or wording..."
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  className="mt-4 w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                  aria-label="Search treasury accounts"
+                />
+
+                <div className="mt-3 max-h-80 space-y-1.5 overflow-y-auto custom-hover-scrollbar">
+                  {filteredDriveAccounts.length === 0 ? (
+                    <p className="py-10 text-center text-xs text-moss">
+                      {accountSearch.trim()
+                        ? `No account matches "${accountSearch.trim()}".`
+                        : "No treasury accounts yet — add one from the accounts desk."}
+                    </p>
+                  ) : (
+                    filteredDriveAccounts.map((account) => (
+                      <button
+                        key={account.id}
+                        type="button"
+                        onClick={() => promoteAccountIntoDrive(account)}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-sand-line bg-white px-4 py-3 text-left transition hover:border-ember hover:bg-sand-plate"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-bark">
+                            {account.description || account.name}
+                          </span>
+                          <span className="block truncate font-mono text-[11px] text-ember">
+                            {account.name}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-sage/10 px-2.5 py-1 text-[11px] font-bold text-sage-strong">
+                          Promote
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Issue Invites Popover Modal */}
           {isAdminMode && issuingCampaign && (

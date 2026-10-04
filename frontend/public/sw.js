@@ -352,8 +352,14 @@
    v70 — the marketing header drops its gold account pill on the phone; the
    way in and out is the hamburger sheet's full-width button, which the
    header no longer duplicates at narrow widths. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v70";
+   apps must take the new shell.
+
+   v71 — the Fund Drives desk drops its own heading and summary (the shell
+   already names the page) and moves its search into the header band, where a
+   Start fund drive button now searches the treasury accounts and promotes the
+   one picked straight into a drive. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v71";
 const STATIC_ASSETS = [
   "/",
   "/about/",
