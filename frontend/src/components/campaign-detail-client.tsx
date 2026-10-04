@@ -335,8 +335,8 @@ export default function CampaignDetailClient() {
     <main className="min-h-screen bg-sand text-bark">
       <div className="flex min-h-screen">
         <div className="min-w-0 flex-1">
-      <div className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div className="mx-auto max-w-4xl space-y-6">
+      <div className="px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-6">
+        <div className="mx-auto max-w-5xl space-y-5">
           {/* The way back, top left. A member returns to the drives shelf; a
               visitor — who reached this by a shared link — is sent to Giving,
               which opens for anyone. */}
@@ -350,7 +350,7 @@ export default function CampaignDetailClient() {
 
           {/* The drive, as one panel: the page can carry several drives, and
               each reads as its own card against the sand behind it. */}
-          <div className="space-y-6 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line sm:p-6 lg:p-8">
+          <div className="space-y-5 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line sm:p-5 lg:p-6">
           {/* Personalised link banner */}
           {cardAssignment && (
             <div className="flex items-center justify-between rounded-2xl bg-mist-soft p-4 text-sage-bright ring-1 ring-sage/30">
@@ -623,7 +623,7 @@ export default function CampaignDetailClient() {
           without it ever standing between them and giving. */}
       {!signedIn && (
         <div className="px-4 pb-10 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-4xl flex-col items-start gap-3 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-sand-line sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="mx-auto flex max-w-5xl flex-col items-start gap-3 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-sand-line sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div>
               <p className="text-sm font-semibold text-bark">Want to keep a record of your giving?</p>
               <p className="mt-0.5 text-xs text-moss">
