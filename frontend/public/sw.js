@@ -358,8 +358,14 @@
    already names the page) and moves its search into the header band, where a
    Start fund drive button now searches the treasury accounts and promotes the
    one picked straight into a drive. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v71";
+   take the new shell.
+
+   v72 — the Fund Drives shelf hands every card the giving trio — Pledge,
+   In-kind, Give Money — so a member can act on a drive without opening it,
+   and the drive's own page gains a way back to the shelf at its top left
+   plus a Contribution by Department ring under the progress. Chrome changed,
+   so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v72";
 const STATIC_ASSETS = [
   "/",
   "/about/",

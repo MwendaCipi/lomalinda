@@ -6,9 +6,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { thankYouPath } from "@/lib/giving-thanks";
-import { Check, Copy, IdCard, LogIn, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, IdCard, LogIn, X } from "lucide-react";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { DonutChart } from "@/components/mini-charts";
+import { pieColors } from "@/lib/brand";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -335,6 +337,17 @@ export default function CampaignDetailClient() {
         <div className="min-w-0 flex-1">
       <div className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-4xl space-y-6">
+          {/* The way back, top left. A member returns to the drives shelf; a
+              visitor — who reached this by a shared link — is sent to Giving,
+              which opens for anyone. */}
+          <Link
+            href={signedIn ? "/support/campaigns" : "/give"}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-ember transition hover:text-bark"
+          >
+            <ArrowLeft size={15} aria-hidden="true" />
+            {signedIn ? "Back to Fund Drives" : "Go to Giving"}
+          </Link>
+
           {/* The drive, as one panel: the page can carry several drives, and
               each reads as its own card against the sand behind it. */}
           <div className="space-y-6 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line sm:p-6 lg:p-8">
@@ -405,9 +418,8 @@ export default function CampaignDetailClient() {
             )}
           </div>
 
-          {/* 2. Progress. The per-viewer and per-department charts that used
-              to ride beside it are gone — the drive page reads as a poster,
-              not a ledger. */}
+          {/* 2. Progress, beside the viewer's own contribution breakdown. The
+              drive reads as a poster here; the department ring waits below. */}
           {/* The two cards level on a PC — `items-stretch` (the grid default)
               lets each card fill the row's height. */}
           <div className="grid gap-6 lg:grid-cols-2">
@@ -561,6 +573,28 @@ export default function CampaignDetailClient() {
                     : "Sign in to see your own contribution and invitees in this breakdown."}
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* Giving by the church's own age-based departments — the reporting
+              categories the office reads. The ring carries each department's
+              share; the legend beside it names them. */}
+          <div className="rounded-3xl bg-sand-card p-6 ring-1 ring-sand-line sm:p-8">
+            <h3 className="text-base font-bold text-bark">Contribution by Department</h3>
+            <p className="mt-1 text-xs text-moss">
+              Where the drive&apos;s giving comes from, grouped by each giver&apos;s department.
+            </p>
+            <div className="mt-5">
+              <DonutChart
+                items={(campaign.department_breakdown ?? []).map((row, index) => ({
+                  label: row.department,
+                  value: Number(row.amount) || 0,
+                  color: pieColors[index % pieColors.length],
+                }))}
+                centerLabel="raised"
+                centerValue={fmtKES(campaign.total_raised)}
+                emptyLabel="No gifts recorded on this drive yet."
+              />
             </div>
           </div>
 
