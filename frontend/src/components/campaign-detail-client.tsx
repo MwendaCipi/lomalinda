@@ -96,16 +96,16 @@ export default function CampaignDetailClient() {
   const [canSeeDonors, setCanSeeDonors] = useState(false);
 
   /**
-   * Pledging and in-kind giving are kept to signed-in members: a pledge is a
-   * promise tied to an account, and an in-kind record is filed against one.
-   * A visitor who taps either is offered the sign-in door rather than a form
-   * that cannot be saved.
+   * Pledging is kept to signed-in members: a pledge is a promise tied to an
+   * account, so a visitor who taps it is offered the sign-in door rather than
+   * a form that cannot be saved. In-kind giving needs no account — the endpoint
+   * records an anonymous gift — so visitors may hand over goods directly.
    */
   function requireSignIn(action: string): boolean {
     if (signedIn) return false;
     showAlert(
       `${action} needs an account`,
-      `Sign in to ${action.toLowerCase()} to this fund drive. Giving money does not need an account.`,
+      `Sign in to ${action.toLowerCase()} to this fund drive. Giving money and goods does not need an account.`,
       "info"
     );
     router.push(signInHref);
@@ -371,9 +371,7 @@ export default function CampaignDetailClient() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!requireSignIn("In-kind giving")) setInKindOpen(true);
-                  }}
+                  onClick={() => setInKindOpen(true)}
                   className="inline-flex items-center justify-center rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
                 >
                   In-kind
@@ -577,7 +575,7 @@ export default function CampaignDetailClient() {
             <div>
               <p className="text-sm font-semibold text-bark">Want to keep a record of your giving?</p>
               <p className="mt-0.5 text-xs text-moss">
-                Sign in to see your own contributions, pledge towards the drive, and share a personal invite link.
+                Sign in to see your own contributions, pledge towards the drive, and share a personal invite link. Giving money or goods needs no account.
               </p>
             </div>
             <Link
