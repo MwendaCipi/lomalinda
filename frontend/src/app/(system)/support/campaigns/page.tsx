@@ -201,15 +201,12 @@ export default function SupportCampaignsPage() {
         defaultPurpose={inKindDrive ? givingPurpose(inKindDrive) : undefined}
         announcementTitle={inKindDrive ? inKindDrive.title || inKindDrive.name : undefined}
       />
-      <DriveGiveModal
-        open={Boolean(giveDrive)}
-        onClose={() => setGiveDrive(null)}
-        drive={
-          giveDrive
-            ? { purpose: givingPurpose(giveDrive), title: giveDrive.title || giveDrive.name }
-            : null
-        }
-      />
+      {giveDrive && (
+        <DriveGiveModal
+          onClose={() => setGiveDrive(null)}
+          drive={{ purpose: givingPurpose(giveDrive), title: giveDrive.title || giveDrive.name }}
+        />
+      )}
     </main>
   );
 }

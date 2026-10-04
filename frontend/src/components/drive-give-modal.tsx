@@ -15,9 +15,8 @@ export type DriveGiveTarget = {
 };
 
 type DriveGiveModalProps = {
-  open: boolean;
   onClose: () => void;
-  drive: DriveGiveTarget | null;
+  drive: DriveGiveTarget;
   /** Called once the prompt is on its way, so a host can refresh its figures. */
   onSent?: () => void;
 };
@@ -29,20 +28,17 @@ type DriveGiveModalProps = {
  * number the prompt goes to (pre-filled from the member's account), and the
  * drive's giving account as the purpose — so the gift credits that account and
  * lands in the drive's total. A member is always signed in where this opens
- * (the shelf sits behind the gate), so the receipt rides their account.
+ * (the shelf sits behind the gate), so the receipt rides their account. The
+ * host mounts it only while a drive is chosen, so each opening starts clean.
  */
-export function DriveGiveModal({ open, onClose, drive, onSent }: DriveGiveModalProps) {
+export function DriveGiveModal({ onClose, drive, onSent }: DriveGiveModalProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [donorName, setDonorName] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Opening pre-fills the member's own phone and name, and never wears the
-  // previous attempt's figures.
+  // On open, pre-fill the member's own phone and name from their account.
   useEffect(() => {
-    if (!open) return;
-    setAmount("");
-    setIsSubmitting(false);
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
     let alive = true;
@@ -50,21 +46,18 @@ export function DriveGiveModal({ open, onClose, drive, onSent }: DriveGiveModalP
       .then((res) => (res.ok ? res.json() : null))
       .then((me) => {
         if (!alive || !me) return;
-        if (me.phone_number) setPhoneNumber((current) => current || me.phone_number);
+        if (me.phone_number) setPhoneNumber(me.phone_number);
         const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
-        if (full) setDonorName((current) => current || full);
+        if (full) setDonorName(full);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [open]);
-
-  if (!open || !drive) return null;
+  }, []);
 
   async function handleDonate(event: FormEvent) {
     event.preventDefault();
-    if (!drive) return;
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       showAlert("Invalid amount", "Please enter a valid amount.", "error");
