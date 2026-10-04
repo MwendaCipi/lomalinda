@@ -126,7 +126,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     .map((item) => ({
       key: item.href as string,
       href: item.href as string,
-      label: item.label,
+      // The strip may name a page differently from its rail row ("Money
+      // Giving" on the strip, "Giving" everywhere else).
+      label: item.stripLabel ?? item.label,
       short: item.short,
       icon: item.icon,
       help: item.label,

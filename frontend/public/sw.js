@@ -364,8 +364,16 @@
    In-kind, Give Money — so a member can act on a drive without opening it,
    and the drive's own page gains a way back to the shelf at its top left
    plus a Contribution by Department ring under the progress. Chrome changed,
-   so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v72";
+   so installed apps must take the new shell.
+
+   v73 — a drive lives at /fund-drives/<id> now (the old /campaigns/<id> and
+   /support/campaigns/<id> paths forward there, keeping their referral token),
+   with /fund-drives/<id>/give-money opening the M-Pesa modal on arrival, and
+   every card's Give Money now opens that modal in place instead of walking to
+   the giving page. The Giving section's strip reads Money Giving — the one
+   surface that says so; the rail row, heading and footer keep Giving. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v73";
 const STATIC_ASSETS = [
   "/",
   "/about/",

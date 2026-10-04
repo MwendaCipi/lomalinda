@@ -443,6 +443,12 @@ export type RailItem = {
   href: string;
   label: string;
   short?: string;
+  /**
+   * The name this page shows in a section's strip (`SectionNav`) when that
+   * differs from its rail row and page heading — the strip may read "Money
+   * Giving" while every other surface keeps "Giving".
+   */
+  stripLabel?: string;
   /** One-line description the shell shows under the page's name. */
   description?: string;
   icon: LucideIcon;
@@ -474,6 +480,8 @@ export type RailRow = {
   icon: LucideIcon;
   href?: string;
   short?: string;
+  /** The name a section's strip shows for this page, when it differs. */
+  stripLabel?: string;
   /** One-line description the shell shows under the page's name. */
   description?: string;
   match?: readonly string[];
@@ -757,11 +765,12 @@ export const railEntries: RailEntry[] = [
   {
     label: "Giving",
     icon: HandHeart,
-    // The rail's row reads Giving; `page` copies the registry label, so the
-    // one row is overridden here. The strip's phone chip reads Money: six
-    // chips share a phone's width, and the leading "Money" is what tells
-    // this row of the strip apart from In-Kind's.
-    items: [page("give", { label: "Giving", short: "Money" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
+    // The rail's row and the page heading read Giving; `page` copies the
+    // registry label, so the one row is overridden here. The strip names this
+    // page Money Giving — the one surface that says so — while its phone chip
+    // reads Money: six chips share a phone's width, and the leading "Money" is
+    // what tells this row of the strip apart from In-Kind's.
+    items: [page("give", { label: "Giving", short: "Money", stripLabel: "Money Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
   // Asking the church for something is its own place, not a page of Fellowship:
   // prayer and visitation, dedication, joining — the member's requests live

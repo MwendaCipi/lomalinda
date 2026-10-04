@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
@@ -62,15 +62,18 @@ interface CardAssignment {
 
 const fmtKES = (value: number) => `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-export default function CampaignDetailClient() {
+export default function CampaignDetailClient({ openGive = false }: { openGive?: boolean }) {
   const params = useParams();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const campaignId = params?.id;
   const refToken = searchParams?.get("ref");
   // The page a visitor is sent to after signing in, so the drive they were
-  // invited to is the one they land back on — personal link and all.
-  const herePath = `/support/campaigns/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
+  // invited to is the one they land back on — personal link and all. It is
+  // read off the path, so it lands on whichever of the drive's addresses they
+  // arrived by (`/fund-drives/<id>`, its `/give-money` door, or an older link).
+  const herePath = `${pathname}${refToken ? `?ref=${refToken}` : ""}`;
   const signInHref = `/login?next=${encodeURIComponent(herePath)}`;
 
   /** Where a visitor lands once their gift is on its way, so giving ends on a
@@ -90,7 +93,8 @@ export default function CampaignDetailClient() {
   const [error, setError] = useState("");
 
   // The support form lives in a modal now; the page itself reads as a report.
-  const [showSupportModal, setShowSupportModal] = useState(false);
+  // A `/give-money` deep link opens it on arrival.
+  const [showSupportModal, setShowSupportModal] = useState(openGive);
   // Pledge and in-kind giving open over the page, like the announcement cards.
   const [pledgeOpen, setPledgeOpen] = useState(false);
   const [inKindOpen, setInKindOpen] = useState(false);
@@ -272,13 +276,13 @@ export default function CampaignDetailClient() {
   }
 
   /**
-   * The link worth sharing is the drive's public one — `/campaigns/<id>` — so
+   * The link worth sharing is the drive's public one — `/fund-drives/<id>` — so
    * whoever opens it is never asked to sign in first. A personal referral link
    * keeps its `?ref=` so the gift still credits the member who shared it.
    */
   function shareLink() {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/campaigns/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
+    return `${origin}/fund-drives/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
   }
 
   function handleCopyLink() {

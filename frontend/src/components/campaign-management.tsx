@@ -571,11 +571,11 @@ export function CampaignManagement({
    * Copy the drive's public giving link.
    *
    * When personal invitations are off, this is the only link a drive shares:
-   * `/campaigns/<id>` opens for anyone — no account needed — and a gift made
+   * `/fund-drives/<id>` opens for anyone — no account needed — and a gift made
    * through it is still counted towards the drive.
    */
   async function handleCopyGeneralLink(campaign: Campaign) {
-    const url = `${window.location.origin}/campaigns/${campaign.id}`;
+    const url = `${window.location.origin}/fund-drives/${campaign.id}`;
     try {
       await navigator.clipboard.writeText(url);
       showAlert("Link Copied", `The public link for ${campaign.title || campaign.name} is on your clipboard.`, "success");
@@ -1272,7 +1272,7 @@ export function CampaignManagement({
                           <tr key={c.id} className="transition hover:bg-sand-plate">
                             <td className={`px-5 ${rowDrive} align-middle`}>
                               <Link
-                                href={`/support/campaigns/${c.id}`}
+                                href={`/fund-drives/${c.id}`}
                                 className="group block"
                               >
                                 <div className="font-bold text-bark group-hover:text-ember transition-colors text-sm">
@@ -1360,7 +1360,7 @@ export function CampaignManagement({
                                       }
                                     >
                                       <Link
-                                        href={`/support/campaigns/${c.id}`}
+                                        href={`/fund-drives/${c.id}`}
                                         onClick={closeActionsMenu}
                                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
                                       >
@@ -1443,7 +1443,7 @@ export function CampaignManagement({
                        Officers manage drives from the admin console. */
                     <Link
                       key={c.id}
-                      href={`/support/campaigns/${c.id}`}
+                      href={`/fund-drives/${c.id}`}
                       className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line transition hover:-translate-y-0.5 hover:ring-ember/50 space-y-3"
                     >
                       <div className="space-y-3">

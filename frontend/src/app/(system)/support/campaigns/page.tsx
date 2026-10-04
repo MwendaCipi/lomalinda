@@ -5,6 +5,7 @@ import Link from "next/link";
 import { localDate } from "@/lib/dates";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { DriveGiveModal } from "@/components/drive-give-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -45,16 +46,17 @@ function daysLeftLabel(endDate?: string | null): string | null {
  * given, how long is left. Every card carries the same giving trio the drive's
  * own page does — Pledge, In-kind, Give Money — so a member can act on a drive
  * without opening it first; the card's body still opens the drive's page, the
- * same page a shared invite link opens directly (`/campaigns/<id>?ref=…`).
+ * same page a shared invite link opens directly (`/fund-drives/<id>?ref=…`).
  * The shell draws the page's name and description above, as it does everywhere.
  */
 export default function SupportCampaignsPage() {
   const [drives, setDrives] = useState<DriveCard[] | null>(null);
-  // The drive a giving action was taken on. Pledge and in-kind open their own
-  // modals over the shelf; Give Money walks to the giving form with the drive's
-  // account already chosen.
+  // The drive a giving action was taken on. Pledge, in-kind and Give Money
+  // each open their own modal over the shelf, so a member gives without
+  // leaving the drive they were reading.
   const [pledgeDrive, setPledgeDrive] = useState<DriveCard | null>(null);
   const [inKindDrive, setInKindDrive] = useState<DriveCard | null>(null);
+  const [giveDrive, setGiveDrive] = useState<DriveCard | null>(null);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -106,7 +108,7 @@ export default function SupportCampaignsPage() {
                     >
                       {/* The card's body opens the drive; the actions below act
                           on it in place. */}
-                      <Link href={`/support/campaigns/${drive.id}`} className="flex flex-1 flex-col">
+                      <Link href={`/fund-drives/${drive.id}`} className="flex flex-1 flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <h2 className="text-base font-bold leading-snug text-bark transition group-hover:text-ember sm:text-lg">
                             {label}
@@ -159,12 +161,13 @@ export default function SupportCampaignsPage() {
                         >
                           In-kind
                         </button>
-                        <Link
-                          href={`/give?purpose=${encodeURIComponent(givingPurpose(drive))}`}
+                        <button
+                          type="button"
+                          onClick={() => setGiveDrive(drive)}
                           className="inline-flex items-center justify-center rounded-full bg-sage px-2 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep"
                         >
                           Give Money
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   );
@@ -197,6 +200,15 @@ export default function SupportCampaignsPage() {
         onClose={() => setInKindDrive(null)}
         defaultPurpose={inKindDrive ? givingPurpose(inKindDrive) : undefined}
         announcementTitle={inKindDrive ? inKindDrive.title || inKindDrive.name : undefined}
+      />
+      <DriveGiveModal
+        open={Boolean(giveDrive)}
+        onClose={() => setGiveDrive(null)}
+        drive={
+          giveDrive
+            ? { purpose: givingPurpose(giveDrive), title: giveDrive.title || giveDrive.name }
+            : null
+        }
       />
     </main>
   );

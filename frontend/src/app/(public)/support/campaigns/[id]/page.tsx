@@ -1,23 +1,20 @@
 import { Suspense } from "react";
-import CampaignDetailClient from "@/components/campaign-detail-client";
+import { DriveRedirect } from "@/components/drive-redirect";
 
-// The drive detail is fully client-driven (it fetches by id at runtime), so the
-// exported ids are a formality to satisfy `output: export`.
-//
-// It lives under the *public* route group, not the system one, because a drive
-// is shared as a link and must open for someone who has never signed in: the
-// system group's layout wraps every page in SystemGate, which bounces a visitor
-// to /login. Here a visitor gets the website header and the page itself; a
-// signed-in member still gets the app rail around it (AppFrame decides that),
-// and the URL is the same either way.
+/**
+ * The drive page's old in-app address: `/support/campaigns/<id>`.
+ *
+ * The drive is `/fund-drives/<id>` now. This path stays so older links keep
+ * working, and forwards to the new address with any `?ref=` intact.
+ */
 export function generateStaticParams() {
   return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].map((id) => ({ id }));
 }
 
-export default function CampaignDetailPage() {
+export default function LegacySupportCampaignPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-moss">Loading campaign...</div>}>
-      <CampaignDetailClient />
+    <Suspense fallback={<div className="p-8 text-center text-sm text-moss">Loading fund drive...</div>}>
+      <DriveRedirect />
     </Suspense>
   );
 }
