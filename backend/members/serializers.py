@@ -798,6 +798,8 @@ class ContributionInitiateSerializer(serializers.Serializer):
         # packed into an M-Pesa push, so the callback and the ledger agree.
         attrs['donor_email'] = receipt_email_for(getattr(self.context.get('request'), 'user', None))
 
+        from .treasury import account_reference_for
+
         submitted = attrs.get('allocations') or []
         cleaned = []
         seen = set()
@@ -811,9 +813,20 @@ class ContributionInitiateSerializer(serializers.Serializer):
                     {'allocations': f'"{purpose}" was chosen twice — each account appears once.'}
                 )
             seen.add(key)
+            # The wording a giver read (the account's description) names the
+            # account in the ledger, but Safaricom's prompt must show the short
+            # reference the church uses for the account itself ('AYM'), not the
+            # description run together ('ADVENTISTYOUTHMINISTRY'). Resolve it
+            # against the treasury accounts; an account the list does not know
+            # still prompts with whatever wording it was given.
+            shown = (
+                account_reference_for(row.get('account'))
+                or account_reference_for(purpose)
+                or (row.get('account') or purpose)
+            )
             cleaned.append({
                 'purpose': purpose,
-                'account': (row.get('account') or purpose)[:12],
+                'account': shown[:12],
                 'amount': row['amount'],
             })
 
@@ -824,7 +837,11 @@ class ContributionInitiateSerializer(serializers.Serializer):
             attrs['amount'] = sum(row['amount'] for row in cleaned)
             attrs['purpose'] = cleaned[0]['purpose'] if len(cleaned) == 1 else f"{len(cleaned)} accounts"
         else:
-            attrs['allocations'] = [{'purpose': attrs['purpose'], 'account': attrs['purpose'][:12], 'amount': attrs['amount']}]
+            attrs['allocations'] = [{
+                'purpose': attrs['purpose'],
+                'account': (account_reference_for(attrs['purpose']) or attrs['purpose'])[:12],
+                'amount': attrs['amount'],
+            }]
 
         if attrs['giving_type'] == 'financial':
             if attrs['amount'] < 1:

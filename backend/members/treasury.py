@@ -45,6 +45,20 @@ def account_for_purpose(purpose):
     return None
 
 
+def account_reference_for(purpose):
+    """The treasury account's short name for a giving purpose, or None.
+
+    Safaricom shows one short reference in the prompt; the giver may name the
+    account by its description ("Adventist Youth Ministry"), while the account
+    itself is known by its short name ("AYM"). Resolve the name back to the
+    treasury account and hand back the short name, so the prompt always reads
+    the reference the church uses for the account — not whatever wording the
+    form happened to carry.
+    """
+    account = account_for_purpose(purpose)
+    return account.name if account else None
+
+
 def _amount(value):
     try:
         amount = Decimal(str(value))

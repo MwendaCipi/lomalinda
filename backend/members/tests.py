@@ -266,6 +266,57 @@ class MpesaInitiationAPITests(APITestCase):
         )
 
     @patch('members.views.initiate_stk_push_for_context')
+    def test_the_prompt_shows_the_accounts_short_name_not_its_description(self, mock_stk):
+        """Giving names the account by the description the giver read, but the
+        prompt must show the treasury account's own short reference.
+
+        Giving to the Adventist Youth account used to prompt with the
+        description run together — 'ADVENTISTYOUTH' — instead of the account's
+        name, 'AYM', because the prompt took whatever wording the form carried.
+        """
+        from .models import TreasuryAccount
+
+        TreasuryAccount.objects.create(
+            name='AYM', description='Adventist Youth Ministry', account_type='bank',
+        )
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        response = self.client.post('/api/members/contributions/initiate/', {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'amount': '100.00',
+            'purpose': 'Adventist Youth Ministry',
+            'phone_number': '0712345678',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        kwargs = mock_stk.call_args.kwargs
+        # The prompt's one reference is the account's short name, not the
+        # description run together.
+        self.assertEqual(kwargs['purpose'], 'AYM')
+        self.assertEqual(account_reference_for_purpose(kwargs['purpose']), 'AYM')
+        # The ledger line keeps the wording the giver read, so the account is
+        # still credited from the description it names.
+        context = unpack_callback_context(kwargs['context_token'])
+        self.assertEqual(context['allocations'][0]['account'], 'AYM')
+        self.assertEqual(context['allocations'][0]['purpose'], 'Adventist Youth Ministry')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_an_unknown_purpose_still_prompts_with_its_own_wording(self, mock_stk):
+        """An account the treasury does not know is left alone, not mangled."""
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        response = self.client.post('/api/members/contributions/initiate/', {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'amount': '100.00',
+            'purpose': 'CAMP2026',
+            'phone_number': '0712345678',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertEqual(context['allocations'][0]['account'], 'CAMP2026')
+
+    @patch('members.views.initiate_stk_push_for_context')
     def test_stk_initiation_failure_creates_no_contribution_row(self, mock_stk):
         mock_stk.side_effect = RuntimeError('Safaricom unavailable')
         response = self.client.post('/api/members/contributions/initiate/', {
@@ -8955,4 +9006,83 @@ class ProfileAreaRefTests(APITestCase):
         self.assertEqual(res.data['department_label'], 'Primary')
         self.assertIn('Adventist Men', res.data['ministry_label'])
         self.assertIn('Single Parents', res.data['ministry_label'])
+
+
+class AnnouncementEmailTransportTests(TestCase):
+    """The announcement broadcast picks its mailbox from the environment.
+
+    A shared mailbox is policed by a sending-velocity rule (Zoho Mail's SMTP
+    550 5.4.6) that a transactional relay is not, so a ZeptoMail send token
+    moves the broadcast onto ZeptoMail while receipts and invitations keep the
+    main mailbox.
+    """
+
+    MAIN = {
+        'host': 'smtp.zoho.com',
+        'port': 587,
+        'user': 'info@sdalomalinda.or.ke',
+        'password': 'mailbox-password',
+        'use_tls': True,
+        'from_email': 'SDA Loma Linda Meru <info@sdalomalinda.or.ke>',
+    }
+
+    def test_without_a_token_or_override_the_broadcast_uses_the_main_mailbox(self):
+        from config.mail_settings import resolve_announcement_email
+
+        resolved = resolve_announcement_email({}, self.MAIN)
+        self.assertEqual(resolved['host'], 'smtp.zoho.com')
+        self.assertEqual(resolved['user'], 'info@sdalomalinda.or.ke')
+        self.assertEqual(resolved['password'], 'mailbox-password')
+        self.assertEqual(resolved['from_email'], self.MAIN['from_email'])
+
+    def test_a_zeptomail_token_moves_the_broadcast_onto_zeptomail(self):
+        from config.mail_settings import resolve_announcement_email
+
+        resolved = resolve_announcement_email({'ZEPTOMAIL_SEND_TOKEN': 'tok-123'}, self.MAIN)
+        self.assertEqual(resolved['host'], 'smtp.zeptomail.com')
+        self.assertEqual(resolved['port'], 587)
+        self.assertEqual(resolved['user'], 'emailapikey')
+        self.assertEqual(resolved['password'], 'tok-123')
+        self.assertTrue(resolved['use_tls'])
+        # The main mailbox's own password is never reused for the relay.
+        self.assertNotEqual(resolved['password'], self.MAIN['password'])
+
+    def test_zeptomail_from_email_names_the_broadcast_sender(self):
+        from config.mail_settings import resolve_announcement_email
+
+        resolved = resolve_announcement_email(
+            {
+                'ZEPTOMAIL_SEND_TOKEN': 'tok-123',
+                'ZEPTOMAIL_FROM_EMAIL': 'SDA Loma Linda <noreply@sdalomalinda.or.ke>',
+            },
+            self.MAIN,
+        )
+        self.assertEqual(resolved['from_email'], 'SDA Loma Linda <noreply@sdalomalinda.or.ke>')
+
+    def test_an_explicit_override_wins_over_the_token(self):
+        from config.mail_settings import resolve_announcement_email
+
+        resolved = resolve_announcement_email(
+            {
+                'ZEPTOMAIL_SEND_TOKEN': 'tok-123',
+                'ANNOUNCEMENT_EMAIL_HOST': 'smtp.example.com',
+                'ANNOUNCEMENT_EMAIL_HOST_USER': 'broadcast@example.com',
+                'ANNOUNCEMENT_EMAIL_HOST_PASSWORD': 'secret',
+                'ANNOUNCEMENT_FROM_EMAIL': 'Broadcast <broadcast@example.com>',
+            },
+            self.MAIN,
+        )
+        self.assertEqual(resolved['host'], 'smtp.example.com')
+        self.assertEqual(resolved['user'], 'broadcast@example.com')
+        self.assertEqual(resolved['password'], 'secret')
+        self.assertEqual(resolved['from_email'], 'Broadcast <broadcast@example.com>')
+
+    def test_a_false_tls_override_is_honoured(self):
+        from config.mail_settings import resolve_announcement_email
+
+        resolved = resolve_announcement_email(
+            {'ZEPTOMAIL_SEND_TOKEN': 'tok-123', 'ANNOUNCEMENT_EMAIL_USE_TLS': 'false'},
+            self.MAIN,
+        )
+        self.assertFalse(resolved['use_tls'])
 
