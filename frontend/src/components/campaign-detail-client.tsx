@@ -72,7 +72,7 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
   // The page a visitor is sent to after signing in, so the drive they were
   // invited to is the one they land back on — personal link and all. It is
   // read off the path, so it lands on whichever of the drive's addresses they
-  // arrived by (`/fund-drives/<id>`, its `/give-money` door, or an older link).
+  // arrived by (`/drives/<id>`, its `/money` door, or an older link).
   const herePath = `${pathname}${refToken ? `?ref=${refToken}` : ""}`;
   const signInHref = `/login?next=${encodeURIComponent(herePath)}`;
 
@@ -276,13 +276,13 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
   }
 
   /**
-   * The link worth sharing is the drive's public one — `/fund-drives/<id>` — so
+   * The link worth sharing is the drive's public one — `/drives/<id>` — so
    * whoever opens it is never asked to sign in first. A personal referral link
    * keeps its `?ref=` so the gift still credits the member who shared it.
    */
   function shareLink() {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/fund-drives/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
+    return `${origin}/drives/${campaignId}${refToken ? `?ref=${refToken}` : ""}`;
   }
 
   function handleCopyLink() {

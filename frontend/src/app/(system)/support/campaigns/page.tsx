@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { localDate } from "@/lib/dates";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { DriveGiveModal } from "@/components/drive-give-modal";
@@ -26,18 +25,6 @@ interface DriveCard {
 const fmtKES = (value: number) =>
   `KES ${Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-/** Whole days from today to the drive's last day, in the church's own day. */
-function daysLeftLabel(endDate?: string | null): string | null {
-  if (!endDate) return null;
-  const days = Math.round(
-    (new Date(`${endDate}T00:00:00`).getTime() - new Date(`${localDate()}T00:00:00`).getTime()) / 86_400_000
-  );
-  if (days > 1) return `${days} days left`;
-  if (days === 1) return "1 day left";
-  if (days === 0) return "Closes today";
-  return "Ended";
-}
-
 /**
  * Fund Drives, as a shelf of cards rather than the drive itself.
  *
@@ -46,7 +33,7 @@ function daysLeftLabel(endDate?: string | null): string | null {
  * given, how long is left. Every card carries the same giving trio the drive's
  * own page does — Pledge, In-kind, Give Money — so a member can act on a drive
  * without opening it first; the card's body still opens the drive's page, the
- * same page a shared invite link opens directly (`/fund-drives/<id>?ref=…`).
+ * same page a shared invite link opens directly (`/drives/<id>?ref=…`).
  * The shell draws the page's name and description above, as it does everywhere.
  */
 export default function SupportCampaignsPage() {
@@ -99,7 +86,6 @@ export default function SupportCampaignsPage() {
               // card, not a ledger, so it is never stretched across the page.
               <div className="grid gap-5 sm:grid-cols-2">
                 {drives.map((drive) => {
-                  const remaining = daysLeftLabel(drive.end_date);
                   const label = drive.title || drive.name;
                   return (
                     <div
@@ -108,7 +94,7 @@ export default function SupportCampaignsPage() {
                     >
                       {/* The card's body opens the drive; the actions below act
                           on it in place. */}
-                      <Link href={`/fund-drives/${drive.id}`} className="flex flex-1 flex-col">
+                      <Link href={`/drives/${drive.id}`} className="flex flex-1 flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <h2 className="text-base font-bold leading-snug text-bark transition group-hover:text-ember sm:text-lg">
                             {label}
@@ -134,12 +120,6 @@ export default function SupportCampaignsPage() {
                           <div className="mt-2 flex items-baseline justify-between gap-2">
                             <span className="text-sm font-bold text-bark">{fmtKES(drive.total_raised)}</span>
                             <span className="text-[11px] text-moss">of {fmtKES(drive.target_amount)} goal</span>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between border-t border-sand-line pt-3 text-[11px] text-moss">
-                            <span>
-                              {drive.donor_count} donor{drive.donor_count === 1 ? "" : "s"}
-                            </span>
-                            {remaining && <span className="font-semibold">{remaining}</span>}
                           </div>
                         </div>
                       </Link>

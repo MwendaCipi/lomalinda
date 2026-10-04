@@ -4,7 +4,7 @@ import { DriveRedirect } from "@/components/drive-redirect";
 /**
  * The drive page's old public address: `/campaigns/<id>`.
  *
- * A fund drive is `/fund-drives/<id>` now — the end point for giving names the
+ * A fund drive is `/drives/<id>` now — the end point for giving names the
  * drive, not the old campaign wording. This path is kept so links already in
  * the world still open; it forwards to the new address, referral token and all.
  */

@@ -4,7 +4,7 @@ import { DriveRedirect } from "@/components/drive-redirect";
 /**
  * The drive page's old in-app address: `/support/campaigns/<id>`.
  *
- * The drive is `/fund-drives/<id>` now. This path stays so older links keep
+ * The drive is `/drives/<id>` now. This path stays so older links keep
  * working, and forwards to the new address with any `?ref=` intact.
  */
 export function generateStaticParams() {

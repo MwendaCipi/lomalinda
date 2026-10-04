@@ -42,7 +42,7 @@ function ThankYouContent() {
   const signedIn = useSignedIn();
 
   const pendingMpesa = kind === "money" && method === "mpesa";
-  const drivePath = campaignId ? `/fund-drives/${encodeURIComponent(campaignId)}` : "";
+  const drivePath = campaignId ? `/drives/${encodeURIComponent(campaignId)}` : "";
   const forDrive = title ? ` for ${title}` : "";
 
   const heading = pendingMpesa ? "Almost there" : kind === "in-kind" ? "Thank you for your gift" : "Thank you for your giving";

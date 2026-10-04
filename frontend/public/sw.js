@@ -372,8 +372,14 @@
    every card's Give Money now opens that modal in place instead of walking to
    the giving page. The Giving section's strip reads Money Giving — the one
    surface that says so; the rail row, heading and footer keep Giving. Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v73";
+   changed, so installed apps must take the new shell.
+
+   v74 — the drive address is short: /drives/<id>, with /drives/<id>/money
+   landing straight in the M-Pesa prompt. The older /fund-drives/<id>,
+   /fund-drives/<id>/give-money, /campaigns/<id> and /support/campaigns/<id>
+   paths all forward there, keeping any referral token. Chrome changed, so
+   installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v74";
 const STATIC_ASSETS = [
   "/",
   "/about/",
