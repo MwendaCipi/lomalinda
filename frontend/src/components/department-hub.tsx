@@ -1075,10 +1075,13 @@ function SingingGroupsPanel({
   departmentCode,
   departmentLabel,
   onChanged,
+  search,
 }: {
   departmentCode: string;
   departmentLabel: string;
   onChanged: () => void;
+  /** The register's search, owned by the desk so it rides the header band. */
+  search: string;
 }) {
   const [groups, setGroups] = useState<SingingGroupRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1087,7 +1090,6 @@ function SingingGroupsPanel({
   // Members without the desk's keys can still ask: the proposal lands in the
   // requests queue and registers the group when the desk approves it.
   const [showPropose, setShowPropose] = useState(false);
-  const [search, setSearch] = useState("");
   // Which group's add-singer modal is open.
   const [addingFor, setAddingFor] = useState<SingingGroupRow | null>(null);
   // Which group's singer list is expanded.
@@ -1220,17 +1222,6 @@ function SingingGroupsPanel({
           </button>
         )}
       </div>
-      {groups.length > 0 && (
-        <div className="border-b border-sand-line px-4 py-2.5">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search groups by name, leader or singer…"
-            className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
-          />
-        </div>
-      )}
       <div className="px-4 py-3">
         {loading ? (
           <p className="py-8 text-center text-xs text-moss">Loading the register…</p>
@@ -1355,12 +1346,21 @@ type ChoirMember = {
  * it. Adding follows the server's own guard (officers and the choir's own
  * leadership), and the button rides the flag the read carries.
  */
-function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; onChanged: () => void }) {
+function ChoirPanel({
+  departmentLabel,
+  onChanged,
+  search,
+}: {
+  departmentLabel: string;
+  onChanged: () => void;
+  /** The roll's search, owned by the desk so it can ride the shell's header
+      band beside the page's name, as every other view's search does. */
+  search: string;
+}) {
   const [members, setMembers] = useState<ChoirMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [canManage, setCanManage] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [search, setSearch] = useState("");
   const rowPad = densityCellPad();
 
   const loadChoir = useCallback(() => {
@@ -1443,15 +1443,6 @@ function ChoirPanel({ departmentLabel, onChanged }: { departmentLabel: string; o
             <UserPlus className="h-3.5 w-3.5" /> Add singer
           </button>
         )}
-      </div>
-      <div className="border-b border-sand-line px-4 py-2.5">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search the ensemble by name, phone or email…"
-          className="w-full rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs focus:border-ember focus:outline-none"
-        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
         {loading ? (
@@ -2165,7 +2156,7 @@ const BLANK_MEETING: MeetingDraft = {
  * Retiring is offered beside removing because a meeting a church pauses for a
  * season is not a meeting it never held — the row stays, out of the week.
  */
-function WeeklyMeetingsPanel() {
+function WeeklyMeetingsPanel({ search }: { search: string }) {
   const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [draft, setDraft] = useState<MeetingDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -2271,6 +2262,17 @@ function WeeklyMeetingsPanel() {
       showAlert("Not removed", err instanceof Error ? err.message : "Try again.", "error");
     }
   }
+
+  // The strip's search reads the live week: a meeting keeps matching on its
+  // name, its place, whether it is online, and the day it keeps.
+  const needle = search.trim().toLowerCase();
+  const visibleMeetings = (meetings ?? []).filter((meeting) =>
+    needle
+      ? `${meeting.title} ${meeting.place} ${meeting.online ? "online" : ""} ${meetingDay(meeting)}`
+          .toLowerCase()
+          .includes(needle)
+      : true
+  );
 
   const field =
     "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember";
@@ -2403,9 +2405,11 @@ function WeeklyMeetingsPanel() {
         <p className="py-8 text-center text-xs text-moss">
           No weekly meetings yet. Add the ones the church keeps — midweek vespers, Friday vespers, the Sabbath.
         </p>
+      ) : visibleMeetings.length === 0 ? (
+        <p className="py-8 text-center text-xs text-moss">No meeting matches that search.</p>
       ) : (
         <div className="mt-3 divide-y divide-sand-soft">
-          {meetings.map((meeting) => (
+          {visibleMeetings.map((meeting) => (
             <div key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
               <div className="min-w-0">
                 <p className={`text-xs font-semibold ${meeting.is_active ? "text-bark" : "text-moss-faint line-through"}`}>
@@ -2497,7 +2501,16 @@ type FundWithdrawal = {
  * desk may not do is move the money: the leader requests a withdrawal, the
  * request goes to the treasurer, and the answer comes back to this view.
  */
-function DepartmentAccountsPanel({ department, onChanged }: { department: DepartmentRow; onChanged: () => void }) {
+function DepartmentAccountsPanel({
+  department,
+  onChanged,
+  search,
+}: {
+  department: DepartmentRow;
+  onChanged: () => void;
+  /** The fund ledger's search, owned by the desk so it rides the header band. */
+  search: string;
+}) {
   const [account, setAccount] = useState<{ name: string; description: string; balance: string | number } | null>(null);
   const [movements, setMovements] = useState<FundMovement[]>([]);
   const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
@@ -2565,6 +2578,16 @@ function DepartmentAccountsPanel({ department, onChanged }: { department: Depart
   };
 
   const balance = Number(account?.balance ?? 0);
+  // The ledger's search reads the movement's wording, its reference and the
+  // kind of movement it was; the count line says how many of the whole it is.
+  const movementQuery = search.trim().toLowerCase();
+  const visibleMovements = movementQuery
+    ? movements.filter((movement) =>
+        `${movement.description} ${movement.reference} ${movement.transaction_type_display}`
+          .toLowerCase()
+          .includes(movementQuery)
+      )
+    : movements;
 
   return (
     <div className="space-y-4">
@@ -2638,13 +2661,18 @@ function DepartmentAccountsPanel({ department, onChanged }: { department: Depart
           <div className="rounded-2xl border border-sand-line bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-sand-line px-4 py-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-moss">Contributions &amp; movements</h3>
-              <span className="text-[11px] text-moss-faint">{movements.length} line{movements.length === 1 ? "" : "s"}</span>
+              <span className="text-[11px] text-moss-faint">
+                {visibleMovements.length} line{visibleMovements.length === 1 ? "" : "s"}
+                {movementQuery ? ` of ${movements.length}` : ""}
+              </span>
             </div>
             {movements.length === 0 ? (
               <p className="px-4 py-8 text-center text-xs text-moss">Nothing has moved in this fund yet.</p>
+            ) : visibleMovements.length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-moss">No movement matches that search.</p>
             ) : (
               <div className="divide-y divide-sand-soft">
-                {movements.map((movement) => (
+                {visibleMovements.map((movement) => (
                   <div key={movement.id} className={`flex flex-wrap items-center justify-between gap-2 px-4 ${rowPad}`}>
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-bark">{movement.description}</p>
@@ -2794,6 +2822,10 @@ function DepartmentDetail({
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
   const [requestSearch, setRequestSearch] = useState("");
+  const [choirSearch, setChoirSearch] = useState("");
+  const [groupsSearch, setGroupsSearch] = useState("");
+  const [accountsSearch, setAccountsSearch] = useState("");
+  const [meetingsSearch, setMeetingsSearch] = useState("");
   const rowPad = densityCellPad();
 
   const [canManageRoll, setCanManageRoll] = useState(false);
@@ -2833,11 +2865,63 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
+    } else if (subTab === "choir") {
+      // The ensemble's roll searches from the same place every other view's
+      // does — the shell's header band, beside the page's name.
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={choirSearch}
+          onChange={(e) => setChoirSearch(e.target.value)}
+          placeholder="Search the ensemble…"
+          className={inputCls}
+        />
+      );
+    } else if (subTab === "singing_groups") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={groupsSearch}
+          onChange={(e) => setGroupsSearch(e.target.value)}
+          placeholder="Search groups…"
+          className={inputCls}
+        />
+      );
+    } else if (subTab === "accounts") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={accountsSearch}
+          onChange={(e) => setAccountsSearch(e.target.value)}
+          placeholder="Search the fund…"
+          className={inputCls}
+        />
+      );
+    } else if (subTab === "meetings") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={meetingsSearch}
+          onChange={(e) => setMeetingsSearch(e.target.value)}
+          placeholder="Search meetings…"
+          className={inputCls}
+        />
+      );
     } else {
       setHeaderRightAction(null);
     }
     return () => setHeaderRightAction(null);
-  }, [subTab, rollSearch, eventSearch, requestSearch, setHeaderRightAction]);
+  }, [
+    subTab,
+    rollSearch,
+    eventSearch,
+    requestSearch,
+    choirSearch,
+    groupsSearch,
+    accountsSearch,
+    meetingsSearch,
+    setHeaderRightAction,
+  ]);
 
   // The deaconate's Team view rides the *section's* strip, not a strip of its
   // own, so the roll's second Add Member takes that strip's right edge — a PC
@@ -3357,7 +3441,9 @@ function DepartmentDetail({
       )}
 
       {/* Calendar tab */}
-      {subTab === "accounts" && <DepartmentAccountsPanel department={department} onChanged={onChanged} />}
+      {subTab === "accounts" && (
+        <DepartmentAccountsPanel department={department} onChanged={onChanged} search={accountsSearch} />
+      )}
       {subTab === "calendar" && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
@@ -3406,19 +3492,20 @@ function DepartmentDetail({
       {/* Singing groups — the music register: groups registered under the
           department, each with the singers who make it up. */}
       {subTab === "choir" && isMusic && (
-        <ChoirPanel departmentLabel={department.label} onChanged={onChanged} />
+        <ChoirPanel departmentLabel={department.label} onChanged={onChanged} search={choirSearch} />
       )}
       {subTab === "singing_groups" && isMusic && (
         <SingingGroupsPanel
           departmentCode={department.code}
           departmentLabel={department.label}
           onChanged={onChanged}
+          search={groupsSearch}
         />
       )}
 
       {/* Weekly meetings — the church's own week, on the ministry that keeps
           it. Church-wide, so it is its own view rather than a calendar entry. */}
-      {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel />}
+      {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel search={meetingsSearch} />}
 
       {/* Join requests — the asks raised from the rail, answered here by the
           desk's own leadership or the office. Approving puts the member on

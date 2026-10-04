@@ -5919,6 +5919,25 @@ class FundDriveAccountBackedTotalTests(APITestCase):
         self.assertEqual(response.data['total_raised'], 1200.0)
         self.assertEqual(response.data['percentage_raised'], 12.0)
 
+    def test_a_drive_begins_at_zero_against_an_account_that_already_held_money(self):
+        """A promoted account's own money is not the drive's. The headline
+        counts only what lands after the drive is opened, so a drive born
+        against a funded account starts at zero rather than showing the
+        balance it inherited."""
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare Fund', balance=Decimal('0.00'))
+        # Money the account already held — an opening balance, older than the drive.
+        apply_credit(
+            account=account, amount=Decimal('5000.00'),
+            description='Opening balance', at=timezone.now() - timedelta(days=10),
+        )
+        drive = self._drive()
+        # Only this gift, given after the drive was opened, is the drive's.
+        apply_credit(account=account, amount=Decimal('1200.00'), description='Contribution — M-Pesa (Welfare)')
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_raised'], 1200.0)
+
     def test_manual_receipts_and_prompt_money_read_identically(self):
         """A desk receipt credits the same account the prompt money credits,
         so both are simply money the drive has received."""

@@ -60,19 +60,25 @@ def _amount(value):
 INFLOW_TYPES = ('credit', 'transfer_in')
 
 
-def account_inflows(account):
+def account_inflows(account, since=None):
     """Every shilling that has entered the account, from any door.
 
     The sum of the account's own credit and transfer-in rows: prompt money
     credited on Safaricom's word, desk receipts keyed in by the treasurer,
     and any opening balance the church seeded — all equal residents of the
     one transaction log, so all count alike.
+
+    ``since`` narrows the reading to rows dated at or after that moment. A
+    fund drive born against an account that already held money reads from its
+    own beginning, so a promoted account starts the drive at zero and only
+    what lands afterwards is the drive's.
     """
     from django.db.models import Sum
 
-    total = account.transactions.filter(
-        transaction_type__in=INFLOW_TYPES,
-    ).aggregate(total=Sum('amount'))['total']
+    rows = account.transactions.filter(transaction_type__in=INFLOW_TYPES)
+    if since is not None:
+        rows = rows.filter(created_at__gte=since)
+    total = rows.aggregate(total=Sum('amount'))['total']
     return total or Decimal('0')
 
 

@@ -84,6 +84,9 @@ export function CampaignManagement({
   presetAccount = "",
   presetAccountLabel = "",
   skipList = false,
+  formOnly = false,
+  onCreated,
+  onClosed,
 }: {
   mode?: CampaignMode;
   /** Open the creation form as soon as the officer is allowed to see it. */
@@ -95,6 +98,14 @@ export function CampaignManagement({
   /** While the Fund Drives entry page picks the drive to open, the list holds
       back so the redirect never flashes a page we are leaving anyway. */
   skipList?: boolean;
+  /** The creation form alone, over whatever page asked for it — the treasury
+      accounts desk opens it in place, so promoting an account never leaves
+      the page it was started from. The drives console renders as usual. */
+  formOnly?: boolean;
+  /** The drive just created, so a host page can move on once it exists. */
+  onCreated?: (campaign: Campaign) => void;
+  /** The form was dismissed without creating a drive. */
+  onClosed?: () => void;
 }) {
   const isAdminMode = mode === "admin";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -308,6 +319,7 @@ export function CampaignManagement({
     setDriveAttachment(null);
     setEditingCampaign(null);
     setShowCreateModal(false);
+    onClosed?.();
   }
 
   /** Open the create modal prefilled with a drive's details (edit mode). */
@@ -451,6 +463,9 @@ export function CampaignManagement({
         `Fund drive "${data.name}" (Account: ${data.account_name || data.name}) was created successfully.`,
         "success"
       );
+      // A host page (the treasury accounts desk) learns of the new drive here,
+      // so promoting an account can move on the moment the drive exists.
+      onCreated?.(data);
       resetAndCloseModal();
       fetchCampaigns(token);
     } catch (err) {
@@ -576,6 +591,9 @@ export function CampaignManagement({
   }
 
   if (loading) {
+    // A host page (formOnly) already has its own chrome; it wants only the
+    // form, so it renders nothing until the officer is known to be allowed it.
+    if (formOnly) return null;
     return (
       <main className="min-h-screen md:h-full md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
@@ -588,6 +606,7 @@ export function CampaignManagement({
   }
 
   if (isOfficial === false) {
+    if (formOnly) return null;
     return (
       <main className="min-h-screen md:h-full md:min-h-0 bg-white text-bark md:overflow-hidden">
         <div className="flex h-full md:overflow-hidden">
@@ -602,6 +621,178 @@ export function CampaignManagement({
         </div>
       </main>
     );
+  }
+
+  // The creation form, hoisted out of the page so a host desk (the treasury
+  // accounts page) can render it in place — `formOnly` — and create a drive
+  // without ever leaving where the account lives. The drives console renders
+  // the very same modal in place below.
+  const createFormModal =
+    isAdminMode && showCreateModal ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !isSubmitting) resetAndCloseModal();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-campaign-title"
+          className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+        >
+          <div className="flex items-center justify-between border-b border-sand-line pb-4">
+            <div>
+              <h2 id="create-campaign-title" className="text-xl font-bold text-bark">
+                {editingCampaign ? "Edit Fund Drive" : "New Fund Drive"}
+              </h2>
+              <p className="mt-1 text-xs text-moss">
+                {editingCampaign
+                  ? "Update the drive's details, account reference, target goal, and dates."
+                  : "Set fund drive details, account reference, target goal, and member broadcast options."}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={resetAndCloseModal}
+              className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
+              aria-label="Close modal"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+
+          <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="mt-6 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-bark">
+                Fund Drive Name *
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. 2026 Church Building Expansion"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-bark">
+                Account Reference / Title
+                <input
+                  type="text"
+                  placeholder="e.g. BUILDING FUND (Default: Drive Name)"
+                  value={form.account_name}
+                  onChange={(e) => setForm({ ...form, account_name: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="block text-xs font-semibold text-bark">
+                Target Goal (KES) *
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="any"
+                  placeholder="e.g. 500000"
+                  value={form.target_amount}
+                  onChange={(e) => setForm({ ...form, target_amount: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-bark">
+                Start Date *
+                <input
+                  required
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-bark">
+                End Date <span className="font-normal text-moss">(Optional)</span>
+                <input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+            </div>
+
+            {/* The description members read on the drive's page. */}
+            <label className="block text-xs font-semibold text-bark">
+              Description
+              <textarea
+                rows={3}
+                placeholder="Tell members what the drive is for and why it matters…"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+              />
+            </label>
+
+            {/* Attachment (flyer / poster) */}
+            <label className="block text-xs font-semibold text-bark">
+              Attachment <span className="font-normal text-moss">(Optional — shown with the drive's announcement and attached to its emails)</span>
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={(e) => setDriveAttachment(e.target.files?.[0] ?? null)}
+                className="mt-1 block w-full cursor-pointer rounded-xl border border-sand-line bg-sand-plate px-3 py-2 text-xs text-bark file:mr-3 file:rounded-lg file:border-0 file:bg-bark file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
+              />
+            </label>
+
+            {/* Personal invitations: when off, members share only the drive's
+                general link; when on, the office can issue personal ones. */}
+            <label className="flex items-start gap-2.5 text-xs font-medium text-bark cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.allow_personal_invitations}
+                onChange={(e) => setForm({ ...form, allow_personal_invitations: e.target.checked })}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
+              />
+              <span>
+                Allow personal invitations
+                <span className="block text-[11px] font-normal text-moss">
+                  Members get personal invite links they can share, and the drive tracks who gave through each invite. Leave unchecked to share one general link only.
+                </span>
+              </span>
+            </label>
+
+            {/* No broadcast block: the description above is what the drive
+                broadcasts, when the office asks it to. */}
+
+            <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={resetAndCloseModal}
+                className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep disabled:opacity-60 shadow-sm"
+              >
+                {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : "Create Drive"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    ) : null;
+
+  if (formOnly) {
+    return <>{createFormModal}</>;
   }
 
   return (
@@ -645,169 +836,9 @@ export function CampaignManagement({
             </div>
           </div>
 
-          {/* New Fund Drive Modal */}
-          {isAdminMode && showCreateModal && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-              onClick={(e) => {
-                if (e.target === e.currentTarget && !isSubmitting) resetAndCloseModal();
-              }}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="create-campaign-title"
-                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
-              >
-                <div className="flex items-center justify-between border-b border-sand-line pb-4">
-                  <div>
-                    <h2 id="create-campaign-title" className="text-xl font-bold text-bark">
-                      {editingCampaign ? "Edit Fund Drive" : "New Fund Drive"}
-                    </h2>
-                    <p className="mt-1 text-xs text-moss">
-                      {editingCampaign
-                        ? "Update the drive's details, account reference, target goal, and dates."
-                        : "Set fund drive details, account reference, target goal, and member broadcast options."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={resetAndCloseModal}
-                    className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
-                    aria-label="Close modal"
-                  >
-                    <X size={18} aria-hidden="true" />
-                  </button>
-                </div>
-
-                <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="mt-6 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block text-xs font-semibold text-bark">
-                      Fund Drive Name *
-                      <input
-                        required
-                        type="text"
-                        placeholder="e.g. 2026 Church Building Expansion"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
-                      />
-                    </label>
-
-                    <label className="block text-xs font-semibold text-bark">
-                      Account Reference / Title
-                      <input
-                        type="text"
-                        placeholder="e.g. BUILDING FUND (Default: Drive Name)"
-                        value={form.account_name}
-                        onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <label className="block text-xs font-semibold text-bark">
-                      Target Goal (KES) *
-                      <input
-                        required
-                        type="number"
-                        min="1"
-                        step="any"
-                        placeholder="e.g. 500000"
-                        value={form.target_amount}
-                        onChange={(e) => setForm({ ...form, target_amount: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember focus:bg-white"
-                      />
-                    </label>
-
-                    <label className="block text-xs font-semibold text-bark">
-                      Start Date *
-                      <input
-                        required
-                        type="date"
-                        value={form.start_date}
-                        onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
-                      />
-                    </label>
-
-                    <label className="block text-xs font-semibold text-bark">
-                      End Date <span className="font-normal text-moss">(Optional)</span>
-                      <input
-                        type="date"
-                        value={form.end_date}
-                        onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
-                      />
-                    </label>
-                  </div>
-
-                  {/* The description members read on the drive's page. */}
-                  <label className="block text-xs font-semibold text-bark">
-                    Description
-                    <textarea
-                      rows={3}
-                      placeholder="Tell members what the drive is for and why it matters…"
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
-                    />
-                  </label>
-
-                  {/* Attachment (flyer / poster) */}
-                  <label className="block text-xs font-semibold text-bark">
-                    Attachment <span className="font-normal text-moss">(Optional — shown with the drive's announcement and attached to its emails)</span>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf,.doc,.docx"
-                      onChange={(e) => setDriveAttachment(e.target.files?.[0] ?? null)}
-                      className="mt-1 block w-full cursor-pointer rounded-xl border border-sand-line bg-sand-plate px-3 py-2 text-xs text-bark file:mr-3 file:rounded-lg file:border-0 file:bg-bark file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-white"
-                    />
-                  </label>
-
-                  {/* Personal invitations: when off, members share only the drive's
-                      general link; when on, the office can issue personal ones. */}
-                  <label className="flex items-start gap-2.5 text-xs font-medium text-bark cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.allow_personal_invitations}
-                      onChange={(e) => setForm({ ...form, allow_personal_invitations: e.target.checked })}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
-                    />
-                    <span>
-                      Allow personal invitations
-                      <span className="block text-[11px] font-normal text-moss">
-                        Members get personal invite links they can share, and the drive tracks who gave through each invite. Leave unchecked to share one general link only.
-                      </span>
-                    </span>
-                  </label>
-
-                  {/* No broadcast block: the description above is what the
-                      drive broadcasts, when the office asks it to. */}
-
-                  <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={resetAndCloseModal}
-                      className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep disabled:opacity-60 shadow-sm"
-                    >
-                      {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : "Create Drive"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+          {/* New Fund Drive Modal — the same hoisted form the treasury desk
+              renders in place; see `createFormModal` above. */}
+          {createFormModal}
 
           {/* Issue Invites Popover Modal */}
           {isAdminMode && issuingCampaign && (

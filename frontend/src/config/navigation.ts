@@ -226,7 +226,7 @@ export const destinations = {
   },
   give: {
     href: "/give",
-    label: "Money Giving",
+    label: "Giving",
     short: "Giving",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
@@ -1211,7 +1211,7 @@ export const footerColumns: { heading: string; links: FooterLink[] }[] = [
     ],
   },
   {
-    heading: "Money Giving",
+    heading: "Giving",
     links: [{ key: "give" }, { key: "fundDrives" }, { key: "inKind" }],
   },
   {

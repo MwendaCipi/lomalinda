@@ -334,8 +334,21 @@
    (AYM, Ambassadors, Children) rather than only the member's own, with the
    offices never offered. The men's and women's fellowships show to their own
    sex. The choir reads Ensemble throughout. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v68";
+   apps must take the new shell.
+
+   v69 — the giving row reads Giving everywhere it is named, not only on the
+   rail and the phone's short chips: the dashboard tile, the section strip's
+   first chip and the page's own heading all drop "Money". The row is Giving;
+   its In-Kind Giving neighbour says the rest. The treasury's strip gains a
+   Fund Drives tab beside Church Accounts, and that same strip now rides the
+   drives page with the tab marked, so a drive is reached and tracked without
+   leaving the desk. Every desk view's search now rides the header band — the
+   ensemble and the singing groups leave their own bars behind, and the
+   department fund and the church's week gain one. Fund Drives opens on a
+   shelf of cards — two to a row, even on a PC — instead of jumping straight
+   into the first active drive, while a shared invite link still opens the
+   drive itself. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v69";
 const STATIC_ASSETS = [
   "/",
   "/about/",

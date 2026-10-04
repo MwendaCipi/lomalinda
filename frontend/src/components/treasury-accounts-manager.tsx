@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
@@ -236,6 +237,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
           else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
           else if (next === "accounts") setView("accounts");
+          else if (next === "drives") router.push("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
           else setView("withdrawals");
         }}
@@ -294,6 +296,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   const [showTransferModal, setShowTransferModal] = useState(false);
   // The account whose support link is being shared with the congregation.
   const [supportAccount, setSupportAccount] = useState<TreasuryAccount | null>(null);
+  // The account being promoted into a fund drive. The creation form opens over
+  // this desk so promoting never leaves the page; the drive is born here, and
+  // only then does the officer move on to the drives console to manage it.
+  const [promoteAccount, setPromoteAccount] = useState<TreasuryAccount | null>(null);
 
   // Forms
   const [addForm, setAddForm] = useState({
@@ -619,12 +625,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
    * The drive's account reference is the account's short name, which is exactly
    * what the M-Pesa prompt shows and what the drive's progress reads — so a
    * promoted account's money and its drive's totals are the same money.
+   *
+   * The form opens over this desk rather than navigating to the drives console;
+   * the officer stays here until the drive actually exists.
    */
   const openPromoteForAccount = (account: TreasuryAccount) => {
-    const params = new URLSearchParams({ new: "1", account: account.name });
-    const label = (account.description || account.name).trim();
-    if (label) params.set("label", label);
-    router.push(`/administration/fund-drives?${params.toString()}`);
+    setOpenMenuAccountId(null);
+    setPromoteAccount(account);
   };
 
   const openEditForAccount = (account: TreasuryAccount) => {
@@ -1020,6 +1027,25 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             </div>
           </div>
         </div>
+      )}
+
+      {/* Promote: the fund-drive form opens in place, so an account turns into
+          a drive without this desk ever leaving the page. Only once the drive
+          exists does the officer move on to the drives console. */}
+      {promoteAccount && (
+        <CampaignManagement
+          key={promoteAccount.id}
+          mode="admin"
+          formOnly
+          openCreate
+          presetAccount={promoteAccount.name}
+          presetAccountLabel={(promoteAccount.description || promoteAccount.name).trim()}
+          onCreated={() => {
+            setPromoteAccount(null);
+            router.push("/administration/fund-drives");
+          }}
+          onClosed={() => setPromoteAccount(null)}
+        />
       )}
 
       {/* Modal 1: Add Account */}

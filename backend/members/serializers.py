@@ -1476,22 +1476,25 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
         return float(mpesa_total + cash_total)
 
     def get_total_raised(self, obj):
-        """Every shilling the drive has received, read from its account.
+        """Every shilling the drive has received since it opened.
 
         The drive is linked to a treasury account by its account reference;
-        that account's credit rows ARE the drive's money — manual desk
-        receipts and M-Pesa prompt money were already credited through the
-        same door, so reading the account makes the two indistinguishable in
-        the figure. A transfer in counts (money moved into the fund); a
-        debit does not (spending a fund does not un-raise what was given).
-        When the drive has no matching account, the giving ledgers are summed
-        by purpose instead, as before.
+        that account's credit rows from the drive's own beginning onward are
+        the drive's money — manual desk receipts and M-Pesa prompt money were
+        already credited through the same door, so reading the account makes
+        the two indistinguishable in the figure. A transfer in counts (money
+        moved into the fund); a debit does not (spending a fund does not
+        un-raise what was given). Money the account already held when the
+        drive was opened is NOT the drive's: a promoted account begins at
+        zero and only what lands afterwards is raised. When the drive has no
+        matching account, the giving ledgers are summed by purpose instead,
+        as before.
         """
         from .treasury import account_inflows
 
         account = self._linked_treasury_account(obj)
         if account is not None:
-            return float(account_inflows(account))
+            return float(account_inflows(account, since=obj.created_at))
         return self._ledger_totals(obj)
 
     def get_percentage_raised(self, obj):

@@ -194,6 +194,8 @@ export default function ReconciliationPage() {
             setViewMode("summary");
           } else if (view === "accounts") {
             router.push("/administration?tab=accounts&view=accounts");
+          } else if (view === "drives") {
+            router.push("/administration/fund-drives");
           } else if (view === "expenses") {
             router.push("/administration?tab=accounts&view=expenditure");
           } else {
