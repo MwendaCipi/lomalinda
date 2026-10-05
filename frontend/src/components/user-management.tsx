@@ -3005,8 +3005,15 @@ export function UserManagement() {
                 <div>
                   <label className="block text-xs font-semibold text-bark">Access / Roles</label>
                   <p className="mt-1 rounded-xl border border-sand-line bg-white px-3 py-2.5 text-[11px] text-moss">
-                    Roles are given in Departments &amp; Ministries — each area fills its own offices.
+                    Choose every office this member holds. Assistants are added later on the
+                    leadership desk.
                   </p>
+                  <RolesCombobox
+                    selected={inviteFormData.roles}
+                    onChange={(roles, assistants) => setInviteFormData((prev) => ({ ...prev, roles, assistants }))}
+                    hiddenRoles={["admin", "member"]}
+                    fill
+                  />
                 </div>
               </div>
 
