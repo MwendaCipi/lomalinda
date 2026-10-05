@@ -87,27 +87,32 @@ export function LiveReportsPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      {/* The heading, the church's liquidity and the search share one band:
+          the total keeps its place and the search takes the right end, the
+          way the other desks read. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 className="text-base font-semibold">Account Liquidity</h2>
-        {!loading && accounts.length > 0 && (
-          <p className="text-sm font-bold text-bark">
-            Total across accounts: <span className="text-ember">{money(liquidityTotal)}</span>
-          </p>
-        )}
-      </div>
-      <div className="relative sm:max-w-xs">
-        <Search
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss-faint2"
-          aria-hidden="true"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search accounts…"
-          aria-label="Search treasury accounts"
-          className="w-full rounded-xl border border-sand-mute bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-ember"
-        />
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:w-auto sm:justify-end">
+          {!loading && accounts.length > 0 && (
+            <p className="text-sm font-bold text-bark">
+              Total across accounts: <span className="text-ember">{money(liquidityTotal)}</span>
+            </p>
+          )}
+          <div className="relative w-full sm:w-56 lg:w-64">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss-faint2"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search accounts…"
+              aria-label="Search treasury accounts"
+              className="w-full rounded-xl border border-sand-mute bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-ember"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">

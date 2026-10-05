@@ -504,6 +504,56 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     return delivery
 
 
+def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
+    """One receipt for a desk entry spread over several giving purposes.
+
+    A giver who handed over one sum for several purposes — say part tithe,
+    part welfare — is written as one row per purpose sharing a payment group,
+    exactly as a digital split gift is. The receipt is one letter too: the
+    configurable split template carries the whole sum with the purpose-by-
+    purpose distribution beneath it, instead of one letter per line.
+    """
+    rows = list(rows)
+    if not rows or any(row.receipt_sent_at for row in rows):
+        return {
+            'email_sent': False, 'sms_sent': False,
+            'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', '')),
+        }
+    first = rows[0]
+    settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
+    donor_name = giver_display_name(
+        first.donor_name, email=first.giver_email, phone=first.giver_phone,
+    ) or 'friend'
+    amount_display = f"KES {sum(row.amount for row in rows):,.2f}"
+    distribution = '\n'.join(f"{row.purpose}: KES {row.amount:,.2f}" for row in rows)
+    message = render_receipt_message(
+        settings_obj.split_receipt_message or settings_obj.default_receipt_message,
+        donor_name,
+        amount_display,
+        first.purpose,
+        extra={'distribution': distribution},
+    )
+    account_list = ' / '.join(row.purpose for row in rows)
+    body = (
+        f"{message}\n\n"
+        f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=first.receipt_number or f'CASH-{first.id}', date_display=first.received_on)}\n\n"
+        f"{receipt_email_signature()}"
+    )
+    delivery = _deliver_receipt_message(
+        subject=f"Giving receipt — {account_list}",
+        body=body,
+        email=first.giver_email if send_email else '',
+        phone=first.giver_phone if send_sms else '',
+        mark_sent=lambda: None,
+    )
+    if delivery['email_sent'] or delivery['sms_sent']:
+        sent_at = timezone.now()
+        CashContribution.objects.filter(pk__in=[row.pk for row in rows]).update(receipt_sent_at=sent_at)
+        for row in rows:
+            row.receipt_sent_at = sent_at
+    return delivery
+
+
 def cash_receipt_delivery_message(delivery, *, email_requested, sms_requested, has_email, has_phone):
     """One honest line about where a cash receipt actually went.
 
@@ -2839,24 +2889,40 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         return queryset
 
     def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        if hasattr(self, 'receipt_delivery_message') and isinstance(response.data, dict):
-            response.data['receipt_delivery_message'] = self.receipt_delivery_message
-        return response
-
-    def perform_create(self, serializer):
         self._require_finance_manager()
-        cash = serializer.save(received_by=self.request.user)
-        if not cash.receipt_number:
-            cash.receipt_number = f"REC-{timezone.localdate().strftime('%Y%m')}-{cash.id:04d}"
-            cash.save(update_fields=['receipt_number'])
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        allocations = serializer.validated_data.get('allocations')
+        send_sms = str(request.data.get('send_sms', 'true')).lower() in ('true', '1')
+        send_email = str(request.data.get('send_email', 'true')).lower() in ('true', '1')
+
+        if allocations:
+            rows, delivery_message = self._record_split(
+                serializer.validated_data, allocations, send_sms=send_sms, send_email=send_email,
+            )
+        else:
+            cash = serializer.save(received_by=request.user)
+            delivery_message = self._finish_receipt(cash, send_sms=send_sms, send_email=send_email)
+            rows = [cash]
+
+        payload = self.get_serializer(rows[0]).data
+        payload['receipt_delivery_message'] = delivery_message
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+    def _number_receipt(self, row):
+        if not row.receipt_number:
+            row.receipt_number = f"REC-{timezone.localdate().strftime('%Y%m')}-{row.id:04d}"
+            row.save(update_fields=['receipt_number'])
+
+    def _finish_receipt(self, cash, *, send_sms, send_email):
+        """Number, deliver and credit one desk receipt; say where it went."""
+        self._number_receipt(cash)
+        delivery_message = ''
         if cash.entry_type == 'individual':
             if cash.donor_name or cash.giver_phone or cash.giver_email:
                 ensure_giver_profile(cash.donor_name, cash.giver_phone, cash.giver_email)
-            send_sms = str(self.request.data.get('send_sms', 'true')).lower() in ('true', '1')
-            send_email = str(self.request.data.get('send_email', 'true')).lower() in ('true', '1')
             delivery = send_cash_receipt(cash, send_sms=send_sms, send_email=send_email)
-            self.receipt_delivery_message = cash_receipt_delivery_message(
+            delivery_message = cash_receipt_delivery_message(
                 delivery,
                 email_requested=send_email,
                 sms_requested=send_sms,
@@ -2878,6 +2944,59 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
             reference=cash.receipt_number or f'CASH-{cash.id}',
             created_by=self.request.user,
         )
+        return delivery_message
+
+    def _record_split(self, validated_data, allocations, *, send_sms, send_email):
+        """One desk entry written as one row per giving purpose, receipted once.
+
+        The rows share a payment group and a single receipt number, so the
+        ledger reads the same sum the treasurer took in, every named account
+        is credited its own part, and the giver gets one letter listing the
+        split rather than one per purpose.
+        """
+        shared = {key: value for key, value in validated_data.items() if key not in ('amount', 'purpose', 'allocations')}
+        entry_type = shared.pop('entry_type', 'individual')
+        is_anonymous = entry_type == 'anonymous'
+        group = uuid.uuid4()
+        rows = [
+            CashContribution.objects.create(
+                payment_group=group,
+                purpose=allocation['purpose'].strip(),
+                amount=allocation['amount'],
+                entry_type=entry_type,
+                donor_name='Anonymous Giver' if is_anonymous and not (shared.get('donor_name') or '').strip() else shared.get('donor_name', ''),
+                received_by=self.request.user,
+                **{key: value for key, value in shared.items() if key != 'donor_name'},
+            )
+            for allocation in allocations
+        ]
+        receipt_number = f"REC-{timezone.localdate().strftime('%Y%m')}-{rows[0].id:04d}"
+        CashContribution.objects.filter(pk__in=[row.pk for row in rows]).update(receipt_number=receipt_number)
+        for row in rows:
+            row.receipt_number = receipt_number
+
+        first = rows[0]
+        delivery_message = ''
+        if entry_type == 'individual':
+            if first.donor_name or first.giver_phone or first.giver_email:
+                ensure_giver_profile(first.donor_name, first.giver_phone, first.giver_email)
+            delivery = send_grouped_cash_receipt(rows, send_sms=send_sms, send_email=send_email)
+            delivery_message = cash_receipt_delivery_message(
+                delivery,
+                email_requested=send_email,
+                sms_requested=send_sms,
+                has_email=bool(first.giver_email),
+                has_phone=bool(first.giver_phone),
+            )
+        for row in rows:
+            credit_account(
+                purpose=row.purpose,
+                amount=row.amount,
+                description=f"Contribution — {row.get_payment_method_display()} ({row.purpose})",
+                reference=receipt_number,
+                created_by=self.request.user,
+            )
+        return rows, delivery_message
 
 
 class ContributionReconciliationView(APIView):

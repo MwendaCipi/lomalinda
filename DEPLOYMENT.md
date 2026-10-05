@@ -34,6 +34,27 @@ For local development, run `docker compose up -d db`, or use an existing Postgre
 
 The frontend and API should use separate subdomains, for example `www.example.com` and `api.example.com`. Keep the API origin HTTPS-only and expose only ports 80/443 through Nginx.
 
+## Uploads: the API's request-size ceiling
+
+Nginx's default request body limit is **1 MB**. Any larger upload is refused with `413 Request Entity Too Large` — and because Nginx drops the connection while the browser is still sending, the browser reports the opaque `Failed to fetch` instead of the 413. Photo albums (Moments) and every attachment door hit this, since a phone photo alone is several MB.
+
+Raise it in the API's Nginx server block (it applies to the whole server, including the `/api/` proxy):
+
+```nginx
+client_max_body_size 50m;
+```
+
+then `nginx -t && systemctl reload nginx`. Verify the ceiling rather than assume it:
+
+```bash
+head -c 3000000 /dev/urandom > /tmp/probe.bin
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  -F 'media_files=@/tmp/probe.bin;filename=probe.jpg' \
+  https://api.example.com/api/members/church-events/
+```
+
+A `401` means the body reached Django (correct — the endpoint needs a bearer token); a `413` means the ceiling is still too low.
+
 ## Email: the announcement broadcast
 
 Transactional mail (receipts, invitations, pledge reminders) sends through the main mailbox set by `EMAIL_HOST`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`. The congregation-wide **announcement broadcast** should not: a shared mailbox is policed by a sending-velocity rule — Zoho Mail blocks it mid-broadcast with `SMTP 550 5.4.6` — while a transactional relay is built for that volume.

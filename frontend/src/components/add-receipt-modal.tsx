@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { ChevronDown, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 
@@ -16,13 +16,17 @@ const fallbackPurposes = [
   "Local Church Budget",
   "Farewell",
   "Welfare",
-  "Other",
 ];
+
+// The one non-account entry: a purpose outside the configured list, named by
+// the treasurer. It behaves like an account — ticked, given an amount, and
+// listed in the split — with its name typed instead of chosen.
+const OTHER_PURPOSE = "__other__";
 
 export type AddReceiptModalProps = {
   open: boolean;
   onClose: () => void;
-  /** Preselects the Giving Purpose dropdown — a fund drive passes its name. */
+  /** Preselects a giving purpose — a fund drive passes its account name. */
   presetPurpose?: string;
   /** Called after the receipt is saved; carries the honest delivery line and
    * the date the receipt was entered under. */
@@ -34,12 +38,24 @@ export type AddReceiptModalProps = {
  * drives console can receipt money that arrived outside the platform. The
  * purpose may be preset by the caller; everything else matches the ledger's
  * modal field-for-field.
+ *
+ * A giver who handed over one sum for more than one thing is receipted once:
+ * the purposes are ticked — the same account picker the give-money form uses —
+ * each takes its own slice of the amount, and the whole entry is submitted as
+ * one split so the ledger credits every account and the giver receives a
+ * single letter listing the distribution.
  */
 export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddReceiptModalProps) {
   const [saving, setSaving] = useState(false);
   const [purposes, setPurposes] = useState<string[]>([]);
-  const [otherPurposes, setOtherPurposes] = useState(false);
-  const [cashForm, setCashForm] = useState({ amount: "", purpose: presetPurpose || "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
+  const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
+  const [purposeAmounts, setPurposeAmounts] = useState<Record<string, string>>({});
+  const [showPurposePicker, setShowPurposePicker] = useState(false);
+  const purposePickerRef = useRef<HTMLDivElement | null>(null);
+  // The default purpose is chosen once per opening, so a treasurer who
+  // unticks everything is not handed a choice back.
+  const defaultPurposeApplied = useRef(false);
+  const [cashForm, setCashForm] = useState({ donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [customPurpose, setCustomPurpose] = useState("");
   const [sendSms, setSendSms] = useState(true);
@@ -63,7 +79,8 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
       .then((data: { label?: string; account?: string }[]) => {
         const labels = data
           .map((item) => (item.label || item.account || "").trim())
-          .filter(Boolean);
+          // "Other" is offered by the picker itself, typed rather than chosen.
+          .filter((label) => Boolean(label) && label !== "Other");
         setPurposes(labels.length ? Array.from(new Set(labels)) : fallbackPurposes);
       })
       .catch(() => setPurposes(fallbackPurposes));
@@ -78,17 +95,49 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
       .catch(() => undefined);
   }, [open]);
 
-  // Adopt the caller's preset purpose when the modal opens (a fund drive's
-  // account name) — after the purposes list settles.
+  // Each opening starts from the caller's preset purpose — a fund drive's
+  // account — and an empty split; amounts belong to the entry being written.
   useEffect(() => {
     if (!open) return;
-    if (presetPurpose) {
-      setOtherPurposes(false);
-      setCashForm((prev) => ({ ...prev, purpose: presetPurpose }));
-    } else {
-      setOtherPurposes(false);
-    }
+    setSelectedPurposes(presetPurpose ? [presetPurpose] : []);
+    setPurposeAmounts({});
+    setCustomPurpose("");
+    setShowPurposePicker(false);
   }, [open, presetPurpose]);
+
+  // Until the purposes list arrives there is nothing to preselect; once it
+  // has, an entry with no preset starts on Combined Offering (or the first
+  // account the church configured), chosen once per opening.
+  useEffect(() => {
+    if (!open) {
+      defaultPurposeApplied.current = false;
+      return;
+    }
+    if (defaultPurposeApplied.current || purposes.length === 0) return;
+    defaultPurposeApplied.current = true;
+    setSelectedPurposes((current) =>
+      current.length ? current : [purposes.includes("Combined Offering") ? "Combined Offering" : purposes[0]]
+    );
+  }, [open, purposes]);
+
+  // The purpose list behaves like a dropdown: tapping anywhere outside it —
+  // the amount rows it opens over, the backdrop — closes it, and so does
+  // Escape. The trigger sits inside the ref, so its own tap still toggles.
+  useEffect(() => {
+    if (!open || !showPurposePicker) return;
+    const closeOnOutsideTap = (event: PointerEvent) => {
+      if (!purposePickerRef.current?.contains(event.target as Node)) setShowPurposePicker(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowPurposePicker(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideTap);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideTap);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, showPurposePicker]);
 
   // The delivery channel as one choice: the two switches behind a combo.
   const receiptChannel: "both" | "email" | "sms" | "none" =
@@ -142,47 +191,86 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
     };
   }, [open, cashForm.giver_phone, cashForm.giver_email]);
 
-  const formatReceiptDefaultMsg = (name: string, amt: string, purp: string, custPurp: string) => {
-    const nameVal = name.trim() || "{name}";
-    const amountVal = amt.trim() ? `kes ${amt.trim()}` : "kes {amount}";
-    const purposeVal = otherPurposes ? (custPurp.trim() || "{purpose}") : (purp || "{purpose}");
-    return settingsReceiptTemplate
-      .replace("{name}", nameVal)
-      .replace("{amount}", amountVal)
-      .replace("{purpose}", purposeVal);
+  // The name a purpose goes by: its account label, or the typed custom name.
+  const purposeName = (key: string) =>
+    key === OTHER_PURPOSE ? customPurpose.trim() || "Other" : key;
+
+  const allocationTotal = selectedPurposes.reduce(
+    (sum, key) => sum + (Number(purposeAmounts[key]) || 0),
+    0
+  );
+
+  const togglePurpose = (key: string) => {
+    setSelectedPurposes((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    );
   };
 
+  const purposeKey = selectedPurposes.join("|");
   useEffect(() => {
-    if (open && !isCustomMessage) {
-      setReceiptMessage(formatReceiptDefaultMsg(cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose));
-    }
-  }, [open, isCustomMessage, cashForm.donor_name, cashForm.amount, cashForm.purpose, customPurpose, otherPurposes]);
+    if (!open || isCustomMessage) return;
+    const nameVal = cashForm.donor_name.trim() || "{name}";
+    const amountVal = allocationTotal > 0 ? `kes ${allocationTotal}` : "kes {amount}";
+    const purposeVal =
+      selectedPurposes
+        .map((key) => (key === OTHER_PURPOSE ? customPurpose.trim() || "Other" : key))
+        .join(", ") || "{purpose}";
+    setReceiptMessage(
+      settingsReceiptTemplate
+        .replace("{name}", nameVal)
+        .replace("{amount}", amountVal)
+        // The shipped template names the purpose {account} — the app's own
+        // word for it — while older wording uses {purpose}; fill both.
+        .replace("{account}", purposeVal)
+        .replace("{purpose}", purposeVal)
+    );
+  }, [open, isCustomMessage, cashForm.donor_name, allocationTotal, purposeKey, customPurpose, settingsReceiptTemplate]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setSaving(true);
 
-    const finalPurpose = otherPurposes && customPurpose.trim() ? customPurpose.trim() : cashForm.purpose;
-    if (otherPurposes && customPurpose.trim()) {
-      const words = customPurpose.trim().split(/\s+/);
-      if (words.length > 2) {
-        showAlert("Too Many Words", "Custom giving purpose must be at most 2 words (e.g. 'Youth' or 'Camp Goal').", "error");
-        setSaving(false);
+    if (selectedPurposes.length === 0) {
+      showAlert("Choose a Purpose", "Select at least one giving purpose.", "warning");
+      return;
+    }
+    const customName = customPurpose.trim();
+    if (selectedPurposes.includes(OTHER_PURPOSE)) {
+      if (!customName) {
+        showAlert("Name the Purpose", "Type the custom giving purpose, or untick it.", "warning");
         return;
       }
-      if (customPurpose.trim().length > 20) {
+      if (customName.split(/\s+/).length > 2) {
+        showAlert("Too Many Words", "Custom giving purpose must be at most 2 words (e.g. 'Youth' or 'Camp Goal').", "error");
+        return;
+      }
+      if (customName.length > 20) {
         showAlert("Too Long", "Custom giving purpose must be at most 20 characters.", "error");
-        setSaving(false);
         return;
       }
     }
 
+    // The whole receipt, split per ticked purpose. The header amount is the
+    // sum of the parts so the ledger reads the one sum the giver handed over.
+    const allocations = selectedPurposes.map((key) => ({
+      purpose: key === OTHER_PURPOSE ? customName : key,
+      amount: Number(purposeAmounts[key]) || 0,
+    }));
+    const short = allocations.find((row) => row.amount < 0.01);
+    if (short) {
+      showAlert("Amount Needed", `Enter an amount of at least KES 0.01 for ${short.purpose}.`, "warning");
+      return;
+    }
+    const total = allocations.reduce((sum, row) => sum + row.amount, 0);
+
+    setSaving(true);
     const response = await fetch(`${API_URL}/api/members/treasury/cash-contributions/`, {
       method: "POST",
       headers: headers(),
       body: JSON.stringify({
         ...cashForm,
-        purpose: finalPurpose,
+        amount: total,
+        purpose: allocations[0].purpose,
+        allocations,
         notes: receiptMessage,
         entry_type: "individual",
         payment_method: paymentMethod,
@@ -191,20 +279,28 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
         send_email: sendEmail,
       }),
     });
-
     setSaving(false);
+
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      showAlert("Could Not Save Receipt", body.amount?.[0] || body.detail || "Please check the details and try again.", "error");
+      const allocationProblem = typeof body.allocations?.[0] === "string" ? body.allocations[0] : undefined;
+      showAlert(
+        "Could Not Save Receipt",
+        allocationProblem || body.amount?.[0] || body.detail || "Please check the details and try again.",
+        "error"
+      );
       return;
     }
 
-    const deliveryMessage = (await response.clone().json().catch(() => ({}))).receipt_delivery_message || "Receipt saved successfully.";
+    const data = await response.json().catch(() => ({}));
+    const deliveryMessage = data.receipt_delivery_message || "Receipt saved successfully.";
     onSaved?.(deliveryMessage, { received_on: cashForm.received_on });
-    setCashForm({ amount: "", purpose: presetPurpose || "Combined Offering", donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
+    setCashForm({ donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
     setPaymentMethod("cash");
+    setSelectedPurposes([]);
+    setPurposeAmounts({});
     setCustomPurpose("");
-    setOtherPurposes(false);
+    setShowPurposePicker(false);
     setReceiptMessage("");
     setIsCustomMessage(false);
     setSendSms(true);
@@ -262,10 +358,80 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
             />
           </label>
 
-          {/* Giving Purpose */}
-          <label className="text-sm font-medium text-bark">
-            Giving Purpose
-            {otherPurposes ? (
+          {/* Giving Purposes — ticked like the give-money form's account
+              picker, so one receipt may carry several purposes. */}
+          <div className="sm:col-span-2" ref={purposePickerRef}>
+            <span className="text-sm font-medium text-bark">Giving Purposes</span>
+            <div className="relative mt-1">
+              <button
+                type="button"
+                onClick={() => setShowPurposePicker((open) => !open)}
+                aria-expanded={showPurposePicker}
+                aria-label="Choose giving purposes"
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-mute bg-white px-3 py-2 text-left text-sm outline-none transition hover:border-ember focus:border-ember"
+              >
+                <span className={`min-w-0 truncate ${selectedPurposes.length ? "text-bark" : "text-moss"}`}>
+                  {selectedPurposes.length === 0
+                    ? "-- select --"
+                    : selectedPurposes.length === 1
+                      ? purposeName(selectedPurposes[0])
+                      : `${purposeName(selectedPurposes[0])} +${selectedPurposes.length - 1} more`}
+                </span>
+                <ChevronDown size={14} className="shrink-0 text-moss" aria-hidden="true" />
+              </button>
+
+              {showPurposePicker && (
+                <div className="mt-1.5 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+                  <div className="max-h-52 overflow-y-auto p-2">
+                    {purposes.map((item) => {
+                      const checked = selectedPurposes.includes(item);
+                      return (
+                        <label
+                          key={item}
+                          className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-sand ${checked ? "bg-mist-select font-semibold text-bark" : "text-moss-dark"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => togglePurpose(item)}
+                            className="h-4 w-4 shrink-0 rounded border-sand-mute text-sage-strong focus:ring-sage-strong"
+                          />
+                          <span className="min-w-0 flex-1 truncate pr-1">{item}</span>
+                        </label>
+                      );
+                    })}
+                    <label
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition hover:bg-sand ${selectedPurposes.includes(OTHER_PURPOSE) ? "bg-mist-select font-semibold text-bark" : "text-moss-dark"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPurposes.includes(OTHER_PURPOSE)}
+                        onChange={() => togglePurpose(OTHER_PURPOSE)}
+                        className="h-4 w-4 shrink-0 rounded border-sand-mute text-sage-strong focus:ring-sage-strong"
+                      />
+                      <span className="min-w-0 flex-1 truncate pr-1">Other…</span>
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-sand-line bg-white px-2.5 py-1.5">
+                    <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ember">
+                      Tick each purpose the giver gave for
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPurposePicker(false)}
+                      className="shrink-0 rounded-lg bg-bark px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-bark-900"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selectedPurposes.includes(OTHER_PURPOSE) && (
+            <label className="text-sm font-medium text-bark sm:col-span-2">
+              Custom Purpose
               <input
                 required
                 placeholder="Enter custom purpose..."
@@ -273,45 +439,51 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
                 onChange={(e) => setCustomPurpose(e.target.value)}
                 className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
               />
-            ) : (
-            <select
-              required
-              value={cashForm.purpose}
-              onChange={(e) => {
-                if (e.target.value === "__other__") {
-                  setOtherPurposes(true);
-                  setCustomPurpose("");
-                } else {
-                  setOtherPurposes(false);
-                  setCashForm({ ...cashForm, purpose: e.target.value });
-                }
-              }}
-              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-            >
-                {purposes.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-                <option value="__other__">Other…</option>
-              </select>
-            )}
-          </label>
+              <span className="mt-1 block text-[11px] font-normal text-moss">
+                At most 2 words (e.g. &apos;Youth&apos; or &apos;Camp Goal&apos;), up to 20 characters.
+              </span>
+            </label>
+          )}
 
-          {/* Amount */}
-          <label className="text-sm font-medium text-bark">
-            Amount (KES)
-            <input
-              required
-              min="0.01"
-              step="0.01"
-              type="number"
-              value={cashForm.amount}
-              onChange={(e) => setCashForm({ ...cashForm, amount: e.target.value })}
-              className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2 text-sm outline-none focus:border-ember"
-              placeholder="0.00"
-            />
-          </label>
+          {/* One amount per ticked purpose — the total is the sum the giver
+              handed over, and the backend splits the credit to match. */}
+          {selectedPurposes.length > 0 && (
+            <div className="space-y-2 sm:col-span-2">
+              <p className="text-sm font-medium text-bark">Amount per purpose (KES)</p>
+              {selectedPurposes.map((key) => (
+                <div key={key} className="flex items-center gap-2 rounded-xl border border-sand-line bg-sand/60 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => togglePurpose(key)}
+                    aria-label={`Remove ${purposeName(key)}`}
+                    title={`Remove ${purposeName(key)}`}
+                    className="shrink-0 rounded-full p-1 text-moss-faint2 transition hover:bg-sand-light hover:text-ember-deep"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-bark sm:text-sm">
+                    {purposeName(key)}
+                  </span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    required
+                    placeholder="Amount"
+                    aria-label={`Amount for ${purposeName(key)}`}
+                    value={purposeAmounts[key] ?? ""}
+                    onChange={(e) => setPurposeAmounts((current) => ({ ...current, [key]: e.target.value }))}
+                    className="w-24 shrink-0 rounded-lg border border-sand-mute bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-ember sm:w-32"
+                  />
+                </div>
+              ))}
+              <div className="flex items-center justify-between px-1 pt-1 text-sm">
+                <span className="font-medium text-moss">Total</span>
+                <span className="font-bold text-bark">KES {allocationTotal.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
 
           <label className="text-sm font-medium text-bark">
             Giver Full Name

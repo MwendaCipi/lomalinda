@@ -2676,6 +2676,96 @@ class ReceiptDeliveryFeedbackTests(APITestCase):
         self.assertEqual(message, 'The receipt was not sent because no delivery channel was selected.')
 
 
+class SplitDeskReceiptTests(APITestCase):
+    """One desk receipt may cover several giving purposes at once.
+
+    A giver who handed over one sum for more than one thing is written as one
+    ledger row per purpose, sharing a payment group and a receipt number — the
+    same split the give-money form writes digitally — and receives one letter
+    listing the distribution, never one letter per purpose.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('split.treasurer', 'split.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(self.treasurer)
+        self.tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', balance=Decimal('0.00'))
+        self.welfare = TreasuryAccount.objects.create(name='Welfare', description='Welfare', balance=Decimal('0.00'))
+        from django.core import mail
+        mail.outbox.clear()
+
+    def _split(self, **overrides):
+        payload = {
+            'received_on': timezone.localdate().isoformat(),
+            'donor_name': 'Alice Mwangi',
+            'giver_email': 'alice@example.com',
+            'entry_type': 'individual',
+            'payment_method': 'cash',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '1500.00'},
+                {'purpose': 'Welfare', 'amount': '500.00'},
+            ],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/treasury/cash-contributions/', payload, format='json')
+
+    def test_one_receipt_writes_one_row_per_purpose_sharing_a_group(self):
+        response = self._split()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        rows = list(CashContribution.objects.order_by('id'))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row.purpose for row in rows}, {'Tithe', 'Welfare'})
+        self.assertEqual(sum(row.amount for row in rows), Decimal('2000.00'))
+        self.assertEqual(len({row.payment_group for row in rows}), 1)
+        self.assertIsNotNone(rows[0].payment_group)
+        self.assertEqual(len({row.receipt_number for row in rows}), 1)
+        self.assertIn('Email sent', response.data['receipt_delivery_message'])
+
+    def test_each_purpose_credits_its_own_account(self):
+        self._split()
+
+        self.tithe.refresh_from_db()
+        self.welfare.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1500.00'))
+        self.assertEqual(self.welfare.balance, Decimal('500.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 2)
+
+    def test_the_giver_gets_one_letter_listing_the_split(self):
+        from django.core import mail
+
+        self._split()
+
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn('Tithe: KES 1,500.00', body)
+        self.assertIn('Welfare: KES 500.00', body)
+        self.assertIn('KES 2,000.00', body)
+
+    def test_a_purpose_may_not_appear_twice(self):
+        response = self._split(allocations=[
+            {'purpose': 'Tithe', 'amount': '100.00'},
+            {'purpose': 'Tithe', 'amount': '200.00'},
+        ])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('allocations', response.data)
+        self.assertEqual(CashContribution.objects.count(), 0)
+
+    def test_each_allocation_needs_a_positive_amount(self):
+        response = self._split(allocations=[{'purpose': 'Tithe', 'amount': '0.00'}])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(CashContribution.objects.count(), 0)
+
+    def test_a_single_purpose_split_is_still_one_row(self):
+        response = self._split(allocations=[{'purpose': 'Tithe', 'amount': '700.00'}])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(CashContribution.objects.count(), 1)
+        self.assertEqual(CashContribution.objects.get().amount, Decimal('700.00'))
+
+
 class InvitationExpiryTests(APITestCase):
     """A pending invitation past its expiry reads as expired, not pending."""
 

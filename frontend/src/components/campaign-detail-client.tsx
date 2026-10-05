@@ -303,7 +303,14 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
       // Let the drive's figures catch up once the callback records the gift.
       startGivingWatch();
       if (signedIn) {
-        showAlert("M-Pesa Prompt Sent", "Check your phone for the M-Pesa PIN prompt to complete your contribution.", "success");
+        // A prompt is not a receipt: a toast says so without stopping the
+        // member behind a dialog while they wait on their phone for the PIN.
+        showAlert("M-Pesa Prompt Sent", "Check your phone for the M-Pesa PIN prompt to complete your contribution.", "info", {
+          toast: true,
+          position: "top-end",
+          timer: 7000,
+          showConfirmButton: false,
+        });
       } else {
         // A visitor's giving ends on the public confirmation page, which also
         // carries the way back to the drive and the door to a record.

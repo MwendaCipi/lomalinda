@@ -1136,6 +1136,11 @@ class CashContribution(models.Model):
     giver_email = models.EmailField(blank=True)
     receipt_number = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
+    # One receipt split over several giving purposes writes one row per
+    # purpose, exactly as a digital split gift does (Contribution.payment_group).
+    # The rows share this id, so the whole desk entry is one receipt, one
+    # credit per account, and one thing to resend.
+    payment_group = models.UUIDField(null=True, blank=True, db_index=True)
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='cash_contributions_entered')
     receipt_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

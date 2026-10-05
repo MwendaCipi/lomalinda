@@ -676,19 +676,44 @@ class MpesaRefundSerializer(serializers.ModelSerializer):
         return data
 
 
+class CashContributionAllocationSerializer(serializers.Serializer):
+    """One giving purpose and how much of a desk receipt goes to it."""
+    purpose = serializers.CharField(max_length=120)
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal('0.01'),
+        error_messages={'min_value': 'Each giving purpose needs at least KES 0.01.'},
+    )
+
+
 class CashContributionSerializer(serializers.ModelSerializer):
     received_by_name = serializers.CharField(source='received_by.get_full_name', read_only=True)
+    # One receipt may cover several giving purposes — the same split, one
+    # amount per account, that the give-money form posts as `allocations`.
+    # Absent for an ordinary single-purpose receipt, which is unchanged.
+    allocations = CashContributionAllocationSerializer(many=True, required=False, write_only=True)
 
     class Meta:
         model = CashContribution
         fields = (
             'id', 'received_on', 'amount', 'purpose', 'entry_type', 'payment_method',
             'item_description', 'donor_name', 'giver_phone', 'giver_email', 'receipt_number',
-            'notes', 'received_by_name', 'created_at', 'receipt_sent_at'
+            'notes', 'received_by_name', 'created_at', 'receipt_sent_at', 'allocations'
         )
         read_only_fields = ('id', 'received_by_name', 'created_at')
 
     def validate(self, data):
+        allocations = data.get('allocations')
+        if allocations:
+            purposes = [row['purpose'].strip() for row in allocations if row['purpose'].strip()]
+            if len(purposes) != len(allocations):
+                raise serializers.ValidationError({'allocations': 'Each giving purpose needs a name.'})
+            if len(set(purposes)) != len(purposes):
+                raise serializers.ValidationError({'allocations': 'Each giving purpose may appear only once.'})
+            # The gift's total is the sum of its parts; the header amount and
+            # purpose are derived from them so every reader sees one payment.
+            data['amount'] = sum((row['amount'] for row in allocations), Decimal('0'))
+            data['purpose'] = purposes[0]
+            return data
         amount = data.get('amount', getattr(self.instance, 'amount', Decimal('0')))
         if amount <= 0:
             raise serializers.ValidationError({'amount': 'Amount must be greater than zero for monetary givings.'})

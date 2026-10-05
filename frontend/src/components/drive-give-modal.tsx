@@ -93,10 +93,13 @@ export function DriveGiveModal({ onClose, drive, onSent }: DriveGiveModalProps) 
       }
 
       onClose();
+      // A prompt is not a receipt: a toast says so without stopping the giver
+      // behind a dialog while they wait on their phone for the PIN.
       showAlert(
         "M-Pesa Prompt Sent",
         "Check your phone for the M-Pesa PIN prompt to complete your contribution.",
-        "success"
+        "info",
+        { toast: true, position: "top-end", timer: 7000, showConfirmButton: false }
       );
       onSent?.();
     } catch (err) {
