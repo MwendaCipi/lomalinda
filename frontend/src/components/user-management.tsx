@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
+import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, MessageSquare, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, Whatsapp, X } from "lucide-react";
+import {
+  openConversation,
+  type ChatConversation,
+} from "@/lib/chat";
+import { showAlert } from "@/lib/alerts";
 import {
   accountTypeOf,
   accountTypeLabel,
@@ -25,6 +30,8 @@ import { usePageHeader } from "@/components/app-frame";
 import { RecordList } from "./record-list";
 import { useDepartments } from "@/hooks/use-departments";
 import { DepartmentPicker, MinistriesPicker, type AreaOption } from "./area-pickers";
+import { openConversation } from "@/lib/chat";
+import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -1229,6 +1236,7 @@ export function UserManagement() {
   // Business, Membership Requests), and a second row here both doubled it and
   // hid those pages.
   const [recordFilterOpen, setRecordFilterOpen] = useState(false);
+  const [contactMember, setContactMember] = useState<MemberUser | null>(null);
   const recordFilterRef = useRef<HTMLDivElement>(null);
   // One filter drives the desk: All / Members / S. School / Friends read the
   // confirmed roster, Invites (pending) reads the invitation, transfer and
@@ -2211,11 +2219,34 @@ export function UserManagement() {
     }
   };
 
-  const handleContactMember = (member: MemberUser) => {
+  const openContactModal = (member: MemberUser) => void setContactMember(member);
+
+  const handleChatHere = async (member: MemberUser) => {
+    setContactMember(null);
+    try {
+      await openConversation({ kind: "dm", member_id: member.id });
+    } catch (error) {
+      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  const handleCallMember = (member: MemberUser) => {
+    setContactMember(null);
     if (member.phone_number) {
       window.location.href = `tel:${member.phone_number}`;
-      return;
     }
+  };
+
+  const handleWhatsappMember = (member: MemberUser) => {
+    setContactMember(null);
+    const number = member.whatsapp_number || member.phone_number;
+    if (number) {
+      window.location.href = `https://wa.me/${number.replace(/\D/g, "")}`;
+    }
+  };
+
+  const handleEmailMember = (member: MemberUser) => {
+    setContactMember(null);
     if (member.email) {
       window.location.href = `mailto:${member.email}`;
     }
@@ -2403,10 +2434,10 @@ export function UserManagement() {
                               <User size={12} aria-hidden="true" /> See Profile
                             </button>
                             <button
-                              onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
+                              onClick={() => { openContactModal(m); setOpenActionMenuId(null); }}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
-                              <Phone size={12} aria-hidden="true" /> Contact Member
+                              <Phone size={12} aria-hidden="true" /> Contact
                             </button>
                             <button
                               onClick={() => { setTransferMember(m); setOpenActionMenuId(null); }}
@@ -2503,7 +2534,7 @@ export function UserManagement() {
                             onClick={() => { handleContactMember(m); setOpenActionMenuId(null); }}
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            <Phone size={12} aria-hidden="true" /> Contact Member
+                            <Phone size={12} aria-hidden="true" /> Contact
                           </button>
                           <button
                             onClick={() => { setTransferMember(m); setOpenActionMenuId(null); }}
