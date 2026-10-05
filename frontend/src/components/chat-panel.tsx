@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send, Users } from "lucide-react";
+import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send, type LucideIcon, Users } from "lucide-react";
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
@@ -93,12 +93,6 @@ export function ChatPanel() {
   // and the church family, where everyone on the roll talks — and the inbox,
   // the member's own direct messages and their thread with the office.
   const [tab, setTab] = useState<"inbox" | "groups">("inbox");
-
-  /** All rooms in one flat list: groups and inbox together.
-   */
-  const flatRooms = rooms.filter((room) =>
-    tab === "groups" ? room.kind === "group" : room.kind !== "group"
-  );
 
   const TAB_ORDER: { key: "groups" | "inbox"; label: string; icon: LucideIcon }[] = [
     { key: "groups", label: "Group", icon: Users },
