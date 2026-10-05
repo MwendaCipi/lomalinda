@@ -1,9 +1,8 @@
 """Chat: the church talking to itself.
 
-Four kinds of room, one shape. A **direct message** is two members; an area's
-**group** is everyone on its roll together with its leaders; an **office
-thread** is a member raising something with the church office; an area's
-**channel** is announcement-shaped — its leaders post, the area reads.
+Three kinds of room, one shape. A **direct message** is two members; an area's
+**group** is everyone on its roll together with its leaders, all talking; an
+**office thread** is a member raising something with the church office.
 
 A room owns ``Message`` rows and ``Participant`` rows. A participant's
 ``last_read_at`` is what makes an unread count possible, so unread is a
@@ -21,18 +20,16 @@ class Conversation(models.Model):
     KIND_DM = 'dm'
     KIND_GROUP = 'group'
     KIND_OFFICE = 'office'
-    KIND_CHANNEL = 'channel'
     KIND_CHOICES = [
         (KIND_DM, 'Direct message'),
         (KIND_GROUP, 'Area group'),
         (KIND_OFFICE, 'Office thread'),
-        (KIND_CHANNEL, 'Announcement channel'),
     ]
 
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)
     title = models.CharField(max_length=120, blank=True)
-    #: The area a group or channel belongs to; null for a direct message and
-    #: for an office thread.
+    #: The area a group belongs to; null for a direct message and for an
+    #: office thread.
     department = models.ForeignKey(
         'members.Department',
         null=True, blank=True,
@@ -40,10 +37,10 @@ class Conversation(models.Model):
         related_name='chat_conversations',
     )
     #: A stable name for the rooms the church owns rather than a member
-    #: opening: an area's group (``dept:<code>``), its channel
-    #: (``dept:<code>:announce``), a member's office thread (``office:<id>``)
-    #: and the unordered pair of a direct message (``dm:<lo>:<hi>``). Blank for
-    #: a room that has no key, which nothing here creates.
+    #: opening: an area's group (``dept:<code>``), a member's office thread
+    #: (``office:<id>``) and the unordered pair of a direct message
+    #: (``dm:<lo>:<hi>``). Blank for a room that has no key, which nothing
+    #: here creates.
     key = models.CharField(max_length=120, blank=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -74,8 +71,8 @@ class Participant(models.Model):
 
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='participants')
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_participations')
-    #: Whether this member may post to a channel — the area's leaders are
-    #: moderators, the roll reads. Groups ignore it (everyone may post).
+    #: Kept for the history of the old announcement channels, whose leaders
+    #: carried this flag; flat groups ignore it (everyone may post).
     is_moderator = models.BooleanField(default=False)
     joined_at = models.DateTimeField(default=timezone.now)
     #: The moment this member last read the room; the unread count is the

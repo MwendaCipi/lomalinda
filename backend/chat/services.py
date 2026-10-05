@@ -127,58 +127,51 @@ def sync_area_room(conversation):
 
 
 def ensure_area_rooms(department):
-    """The area's group and channel, made if they do not exist yet.
+    """The area's group, made if it does not exist yet.
 
-    Every area the church keeps gets both rooms the moment anything asks for
-    them: a group where the area talks, and a channel its leaders post to.
+    Every area the church keeps gets one room the moment anything asks for
+    it: a flat group where everyone on the roll talks. (There are no
+    announcement channels anymore: a single flat group per area.)
     """
-    rooms = []
-    for kind, key, title in (
-        (Conversation.KIND_GROUP, f'dept:{department.code}', department.name),
-        (Conversation.KIND_CHANNEL, f'dept:{department.code}:announce', f'{department.name} announcements'),
-    ):
-        conversation, _created = Conversation.objects.get_or_create(
-            kind=kind,
-            key=key,
-            defaults={'department': department, 'title': title},
-        )
-        changed = []
-        if conversation.department_id != department.id:
-            conversation.department = department
-            changed.append('department')
-        if conversation.title != title:
-            conversation.title = title
-            changed.append('title')
-        if changed:
-            conversation.save(update_fields=changed)
-        sync_area_room(conversation)
-        rooms.append(conversation)
-    return rooms
+    kind, key, title = Conversation.KIND_GROUP, f'dept:{department.code}', department.name
+    conversation, _created = Conversation.objects.get_or_create(
+        kind=kind,
+        key=key,
+        defaults={'department': department, 'title': title},
+    )
+    changed = []
+    if conversation.department_id != department.id:
+        conversation.department = department
+        changed.append('department')
+    if conversation.title != title:
+        conversation.title = title
+        changed.append('title')
+    if changed:
+        conversation.save(update_fields=changed)
+    sync_area_room(conversation)
+    return [conversation]
 
 
-def area_room(department, kind):
-    """One of an area's rooms, by kind — made and synced on the way."""
-    for room in ensure_area_rooms(department):
-        if room.kind == kind:
-            return room
-    return None
+def area_room(department, kind=None):
+    """The area's group — made and synced on the way.
+
+    A single flat group per area: that is what now carries every message.
+    """
+    return ensure_area_rooms(department)[0]
 
 
-#: The church's own two rooms, shared by every member: a family group where
-#: the whole church talks and an announcement channel its office posts to.
-#: They carry a stable key rather than a department, and every member is given
-#: a participant row, so the same list, unread and read-mark rules that serve
-#: an area room serve them too.
+#: The church's own room, shared by every member: a family group where the
+#: whole church talks. It carries a stable key rather than a department, and
+#: every member is given a participant row, so the same list, unread and
+#: read-mark rules that serve an area group serve it too.
 CHURCH_GROUP_KEY = 'church:family'
-CHURCH_CHANNEL_KEY = 'church:announce'
 CHURCH_ROOMS = (
     (Conversation.KIND_GROUP, CHURCH_GROUP_KEY, 'Church Family'),
-    (Conversation.KIND_CHANNEL, CHURCH_CHANNEL_KEY, 'Church Announcements'),
 )
 
 
 def ensure_church_rooms():
-    """The church's own rooms, made if they do not exist yet."""
+    """The church's own room, made if it does not exist yet."""
     rooms = []
     for kind, key, title in CHURCH_ROOMS:
         conversation, _created = Conversation.objects.get_or_create(
@@ -214,10 +207,10 @@ def member_area_codes(user):
 def ensure_member_rooms(user):
     """Give a member the rooms they read by default.
 
-    The church's family group and announcement channel first — every member
-    shares them — then the group and channel of each department and ministry
-    the member belongs to. A room a member opens themselves (a direct message,
-    their office thread) is made on the way and is untouched here.
+    The church's family group first — every member shares it — then the group
+    of each department and ministry the member belongs to. A room a member
+    opens themselves (a direct message, their office thread) is made on the
+    way and is untouched here.
     """
     rooms = list(ensure_church_rooms())
     for room in rooms:
@@ -287,23 +280,14 @@ def access_to(user, conversation):
     """May this account read the room?"""
     if conversation.kind == Conversation.KIND_OFFICE:
         return is_office_holder(user) or is_participant(user, conversation)
-    if conversation.kind == Conversation.KIND_CHANNEL:
-        return is_participant(user, conversation) or is_office_holder(user)
     return is_participant(user, conversation)
 
 
 def can_post(user, conversation):
     """May this account write to the room?
 
-    A channel is announcement-shaped: its leaders and the office post, the area
-    reads. Every other room is a conversation, and a participant may speak.
-    """
-    if not access_to(user, conversation):
-        return False
-    if conversation.kind == Conversation.KIND_CHANNEL:
-        participant = conversation.participants.filter(member=user).first()
-        return bool((participant and participant.is_moderator) or is_office_holder(user))
-    return True
+    Every room is a conversation, and a participant may speak.    """
+    return access_to(user, conversation)
 
 
 def conversations_for(user):

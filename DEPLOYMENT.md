@@ -124,7 +124,7 @@ Wants=redis-server.service
 User=www-data
 WorkingDirectory=/var/www/loma_linda/backend
 EnvironmentFile=/var/www/loma_linda/backend/.env
-ExecStart=/var/www/loma_linda/backend/venv/bin/daphne -b 127.0.0.1 -p 8006 config.asgi:application
+ExecStart=/var/www/loma_linda/backend/venv/bin/daphne -b 127.0.0.1 -p 8007 config.asgi:application
 Restart=always
 RestartSec=3
 

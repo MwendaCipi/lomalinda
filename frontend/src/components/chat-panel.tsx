@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send } from "lucide-react";
+import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send, Users } from "lucide-react";
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
@@ -37,10 +37,7 @@ const THREAD_POLL_LIVE_MS = 60_000;
 function roomSubtitle(room: ChatConversation): string {
   if (room.kind === "dm") return "Direct message";
   if (room.kind === "office") return "Message the church office";
-  if (room.kind === "channel") {
-    return room.department_label ? `${room.department_label} · announcements` : "Announcements";
-  }
-  return room.department_label ? `${room.department_label} · group` : "Area group";
+  return room.department_label ? `${room.department_label} · group` : "Group";
 }
 
 /** The round mark every room and message wears — initials, or the office's seal. */
@@ -91,6 +88,22 @@ export function ChatPanel() {
   const [showNew, setShowNew] = useState(false);
   const [contacts, setContacts] = useState<ChatPerson[]>([]);
   const [contactSearch, setContactSearch] = useState("");
+
+  // The list is split in two: the church's groups — one flat group per area
+  // and the church family, where everyone on the roll talks — and the inbox,
+  // the member's own direct messages and their thread with the office.
+  const [tab, setTab] = useState<"inbox" | "groups">("inbox");
+
+  /** All rooms in one flat list: groups and inbox together.
+   */
+  const flatRooms = rooms.filter((room) =>
+    tab === "groups" ? room.kind === "group" : room.kind !== "group"
+  );
+
+  const TAB_ORDER: { key: "groups" | "inbox"; label: string; icon: LucideIcon }[] = [
+    { key: "groups", label: "Group", icon: Users },
+    { key: "inbox", label: "Inbox", icon: MessageSquarePlus },
+  ];
 
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -277,6 +290,13 @@ export function ChatPanel() {
   };
 
   const totalUnread = rooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
+  // Each tab counts its own rooms: the badge on Groups is the areas talking,
+  // the one on Inbox is a member's private threads.
+  const inboxRooms = rooms.filter((room) => room.kind === "dm" || room.kind === "office");
+  const groupRooms = rooms.filter((room) => room.kind === "group");
+  const inboxUnread = inboxRooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
+  const groupsUnread = groupRooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
+  const visibleRooms = tab === "inbox" ? inboxRooms : groupRooms;
 
   // ── The rooms pane ─────────────────────────────────────────────────────
   const roomsPane = (
@@ -289,7 +309,7 @@ export function ChatPanel() {
         <div className="min-w-0">
           <h2 className="truncate text-sm font-bold text-bark">Chat</h2>
           <p className="truncate text-[11px] text-moss">
-            {totalUnread > 0 ? `${totalUnread} unread` : "Your rooms and messages"}
+            {totalUnread > 0 ? `${totalUnread} unread` : tab === "groups" ? "Your groups" : "Your rooms and messages"}
           </p>
         </div>
         <button
@@ -303,23 +323,58 @@ export function ChatPanel() {
         </button>
       </div>
 
+      {/* The two lists: the church's groups, and the member's own threads.
+          Each carries its own unread badge. */}
+      <div className="flex shrink-0 gap-1 border-b border-sand-line px-3 py-2">
+        {([
+          { key: "inbox" as const, label: "Inbox", unread: inboxUnread, icon: MessagesSquare },
+          { key: "groups" as const, label: "Groups", unread: groupsUnread, icon: Users },
+        ]).map(({ key, label, unread, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            aria-pressed={tab === key}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+              tab === key ? "bg-bark text-white" : "text-moss hover:bg-sand"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            {label}
+            {unread > 0 && (
+              <span
+                className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none ${
+                  tab === key ? "bg-white text-bark" : "bg-ember text-white"
+                }`}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="border-b border-sand-line px-4 py-2.5">
+        <div className="flex gap-6">
+          {TAB_ORDER.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={
+                `flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold transition ${tab === key ? "bg-bark text-white" : "text-bark/70 hover:bg-sand hover:text-bark"}`
+              }
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
         {showNew ? (
           <div className="space-y-3 p-3">
-            <button
-              type="button"
-              onClick={openOffice}
-              className="flex w-full items-center gap-3 rounded-2xl border border-sand-line bg-sand-linen px-3.5 py-3 text-left transition hover:border-ember"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bark text-white">
-                <Building2 className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-bark">Church Office</span>
-                <span className="block truncate text-[11px] text-moss">A direct line to the office</span>
-              </span>
-            </button>
-
             <input
               type="search"
               value={contactSearch}
@@ -350,21 +405,35 @@ export function ChatPanel() {
               )}
             </div>
           </div>
-        ) : rooms.length === 0 ? (
+        ) : visibleRooms.length === 0 ? (
           <div className="mx-auto max-w-xs px-4 py-12 text-center">
-            <MessagesSquare className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-bark">
-              {roomsLoaded ? "No conversations yet" : "Loading your conversations…"}
-            </p>
-            {roomsLoaded && (
-              <p className="mt-1 text-xs text-moss">
-                Start one with the office or a member, or wait for your area&apos;s groups to appear.
-              </p>
+            {tab === "groups" ? (
+              <>
+                <Users className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold text-bark">
+                  {roomsLoaded ? "No groups yet" : "Loading your groups…"}
+                </p>
+                {roomsLoaded && (
+                  <p className="mt-1 text-xs text-moss">
+                    Your areas and the church family read here.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <MessagesSquare className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold text-bark">
+                  {roomsLoaded ? "No conversations yet" : "Loading your conversations…"}
+                </p>
+                {roomsLoaded && (
+                  <p className="mt-1 text-xs text-moss">Start one with a member.</p>
+                )}
+              </>
             )}
           </div>
         ) : (
           <ul>
-            {rooms.map((room) => (
+            {visibleRooms.map((room) => (
               <li key={room.id}>
                 <button
                   type="button"
@@ -494,7 +563,7 @@ export function ChatPanel() {
               </div>
             ) : (
               <p className="py-1.5 text-center text-xs text-moss">
-                Only this area&apos;s leaders may post here. You can read along.
+                You can read along in this conversation.
               </p>
             )}
           </div>

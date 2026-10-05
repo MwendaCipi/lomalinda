@@ -8978,11 +8978,14 @@ def department_account(user, code):
     A department's money is any treasury account pointed at the department
     (``TreasuryAccount.department``). Reading is for the department's own
     leadership — the same ``can_manage_department`` gate the rest of the
-    desk answers to — and for the treasurer's office, which keeps every
-    fund the church holds. ``None`` means there is nothing to show: the
-    department has no fund yet, and the desk says so.
+    desk answers to — for the members on its roll, who may see the state of
+    their own area's fund even though only the leadership may ask money of
+    it, and for the treasurer's office, which keeps every fund the church
+    holds. ``None`` means there is nothing to show: the department has no
+    fund yet, and the desk says so.
     """
-    if not can_manage_department(user, code) and not is_treasurer_or_admin(user):
+    on_roll = DepartmentMembership.objects.filter(member=user, department=code).exists()
+    if not can_manage_department(user, code) and not on_roll and not is_treasurer_or_admin(user):
         return None
     return TreasuryAccount.objects.filter(
         department__code=code, department__is_active=True,

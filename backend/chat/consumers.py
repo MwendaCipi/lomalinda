@@ -123,7 +123,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 return False
             # An area room reads the church's record afresh, so a member added
             # to the roll since their last visit is here when they arrive.
-            if conversation.kind in (Conversation.KIND_GROUP, Conversation.KIND_CHANNEL):
+            if conversation.kind == Conversation.KIND_GROUP:
                 services.sync_area_room(conversation)
             return True
 

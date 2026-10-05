@@ -22,7 +22,7 @@ export type ChatMessage = {
   deleted: boolean;
 };
 
-export type ChatConversationKind = "dm" | "group" | "office" | "channel";
+export type ChatConversationKind = "dm" | "group" | "office";
 
 /** One room, read for the member who asked for it. */
 export type ChatConversation = {
@@ -132,10 +132,7 @@ export function whenLabel(value: string): string {
 /** The preview line under a room's name in the list. */
 export function previewOf(conversation: ChatConversation, meName: string): string {
   const message = conversation.last_message;
-  if (!message) {
-    if (conversation.kind === "channel") return "No announcements yet";
-    return "No messages yet";
-  }
+  if (!message) return "No messages yet";
   const body = message.deleted ? "Message removed" : message.body;
   const mine = !!message.sender && message.sender.name === meName;
   const who = message.sender && !mine ? `${message.sender.name.split(" ")[0]}: ` : "";

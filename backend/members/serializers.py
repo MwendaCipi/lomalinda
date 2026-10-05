@@ -1839,11 +1839,36 @@ class BusinessMeetingSerializer(serializers.ModelSerializer):
 
 class TreasuryAccountSerializer(serializers.ModelSerializer):
     account_type_display = serializers.CharField(source='get_account_type_display', read_only=True)
+    # The department this fund belongs to, addressed by its code — the same
+    # handle every department path and audience code already uses. A connected
+    # account is the department's own money: its desk reads the balance and
+    # the movements, and its leadership requests withdrawals of it. Empty is
+    # the church's own money, which no department desk reads.
+    department = serializers.SlugRelatedField(
+        slug_field='code',
+        queryset=Department.objects.filter(is_active=True),
+        allow_null=True, required=False,
+    )
+    department_name = serializers.CharField(source='department.name', read_only=True, default='')
 
     class Meta:
         model = TreasuryAccount
-        fields = ('id', 'name', 'account_number', 'account_type', 'account_type_display', 'balance', 'description', 'created_at', 'updated_at')
+        fields = ('id', 'name', 'account_number', 'account_type', 'account_type_display', 'balance', 'description', 'department', 'department_name', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def validate_department(self, value):
+        # One fund per department: the desks read a single account (the first
+        # by id), so a second connection would sit unseen beside the first.
+        if value is None:
+            return value
+        taken = TreasuryAccount.objects.filter(department=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError(
+                f'{value.name} already has an account connected to it.'
+            )
+        return value
 
     def validate_name(self, value):
         # Safaricom's AccountReference caps at 12 characters; the name IS what

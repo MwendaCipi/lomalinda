@@ -26,9 +26,9 @@ class ChatConversationListView(APIView):
 
     def get(self, request):
         # The member's default rooms are made and joined on the way: the
-        # church's own two, and the group and channel of every area they
-        # belong to. Reading the list is what gives a member their rooms, so a
-        # new area or a new member arrives without the office doing anything.
+        # church's own family group and the flat group of every area they
+        # belong to. Reading the list is what gives a member their rooms, so
+        # a new area or a new member arrives without the office doing anything.
         services.ensure_member_rooms(request.user)
         rooms = services.conversations_for(request.user)
         data = ChatConversationSerializer(rooms, many=True, context={'request': request}).data
@@ -46,12 +46,12 @@ class ChatConversationListView(APIView):
             conversation = services.open_dm(request.user, member)
         elif kind == Conversation.KIND_OFFICE:
             conversation = services.open_office_thread(request.user)
-        elif kind in (Conversation.KIND_GROUP, Conversation.KIND_CHANNEL):
+        elif kind in (Conversation.KIND_GROUP, 'channel'):
+            # 'channel' is what the old announcement rooms asked for; the
+            # church now keeps one flat group per area, so the ask lands on it.
             code = (request.data.get('department') or '').strip()
             department = get_object_or_404(Department, code=code, is_active=True)
-            conversation = services.area_room(department, kind)
-            if conversation is None:
-                return Response({'detail': 'That area cannot be opened.'}, status=status.HTTP_400_BAD_REQUEST)
+            conversation = services.area_room(department)
         else:
             return Response({'detail': 'Unknown conversation kind.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
@@ -79,9 +79,9 @@ class ChatMessageListView(APIView):
         conversation, refusal = self._readable(request, conversation_id)
         if refusal:
             return refusal
-        # An area room reads the church's record afresh, so a member added to
+        # An area group reads the church's record afresh, so a member added to
         # the roll since their last visit is here when they arrive.
-        if conversation.kind in (Conversation.KIND_GROUP, Conversation.KIND_CHANNEL):
+        if conversation.kind == Conversation.KIND_GROUP:
             services.sync_area_room(conversation)
         messages = conversation.messages.select_related('sender').filter(deleted=False)
         before = request.query_params.get('before')
@@ -97,7 +97,7 @@ class ChatMessageListView(APIView):
             return refusal
         if not services.can_post(request.user, conversation):
             return Response(
-                {'detail': 'Only the area\u2019s leaders may post here.'},
+                {'detail': 'You are not part of that conversation.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         body = (request.data.get('body') or '').strip()

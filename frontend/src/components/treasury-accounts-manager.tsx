@@ -25,6 +25,9 @@ type TreasuryAccount = {
   account_type_display: string;
   balance: string | number;
   description: string;
+  /** The department the fund belongs to, by code; null is the church's own money. */
+  department: string | null;
+  department_name: string;
   created_at: string;
 };
 
@@ -308,9 +311,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     account_type: "bank",
     balance: "",
     description: "",
+    department: "",
   });
 
-  const [editForm, setEditForm] = useState({ name: "", description: "", account_number: "", account_type: "bank" as TreasuryAccount["account_type"] });
+  const [editForm, setEditForm] = useState({ name: "", description: "", account_number: "", account_type: "bank" as TreasuryAccount["account_type"], department: "" });
 
   const [creditDebitForm, setCreditDebitForm] = useState({
     account_id: "",
@@ -372,15 +376,36 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The church's departments and ministries, for connecting a fund to its
+  // desk. One read on mount of the whole directory (`?all=true` is the same
+  // record the Departments page browses); a connected account is what lets
+  // the department's own desk read its balance and ask for withdrawals.
+  const [departments, setDepartments] = useState<{ code: string; label: string }[]>([]);
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch(`${API_URL}/api/members/departments/?all=true`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const rows = ((data?.departments ?? []) as { code: string; label: string }[]).map((d) => ({
+          code: d.code,
+          label: d.label,
+        }));
+        setDepartments(rows);
+      })
+      .catch(() => setDepartments([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const totalLiquidity = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
-  // The desk searches by description, the short prompt name, or the account
-  // number — the same three wordings the table itself shows.
+  // The desk searches by description, the short prompt name, the account
+  // number, or the connected department — the wordings the table itself shows.
   const [accountSearch, setAccountSearch] = useState("");
   const filteredAccounts = accounts.filter((a) => {
     const needle = accountSearch.trim().toLowerCase();
     if (!needle) return true;
-    return `${a.description || ""} ${a.name} ${a.account_number || ""}`.toLowerCase().includes(needle);
+    return `${a.description || ""} ${a.name} ${a.account_number || ""} ${a.department_name || ""}`.toLowerCase().includes(needle);
   });
   // Expenses has a search and a category of its own; the desk holds them so
   // they ride the same header slot as the accounts' search, one row for both.
@@ -505,11 +530,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
         body: JSON.stringify({
           ...addForm,
           balance: addForm.balance || "0",
+          // Empty string is "no department" — the church's own money.
+          department: addForm.department || null,
         }),
       });
       if (res.ok) {
         setShowAddAccountModal(false);
-        setAddForm({ name: "", account_number: "", account_type: "bank", balance: "", description: "" });
+        setAddForm({ name: "", account_number: "", account_type: "bank", balance: "", description: "", department: "" });
         // Account information is announced by a toast, the same way every
         // other desk's saved detail is — the banner is left for movements.
         showAlert("Account created", `${addForm.description || addForm.name} is on the desk.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
@@ -640,6 +667,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       description: account.description || "",
       account_number: account.account_number || "",
       account_type: account.account_type,
+      department: account.department || "",
     });
     setEditAccount(account);
     setOpenMenuAccountId(null);
@@ -654,7 +682,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       const res = await fetch(`${API_URL}/api/members/treasury/accounts/${editAccount.id}/`, {
         method: "PUT",
         headers: authHeaders(),
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({
+          ...editForm,
+          // Empty string is "no department" — the church's own money.
+          department: editForm.department || null,
+        }),
       });
       if (res.ok) {
         setEditAccount(null);
@@ -807,6 +839,9 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                   </span>
                 </div>
                 {acc.description && <p className="text-[11px] leading-relaxed text-moss">{acc.description}</p>}
+                {acc.department_name && (
+                  <p className="text-[11px] font-semibold text-sage-strong">Connected to {acc.department_name}</p>
+                )}
                 <div className="mt-2 rounded-2xl border border-sand-line bg-white p-1.5" data-action-menu>
                   <button
                     onClick={() => setOpenMenuAccountId(openMenuAccountId === acc.id ? null : acc.id)}
@@ -849,9 +884,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                     <td className={`px-4 ${rowPad}`}>
                       <div className="flex items-center gap-2.5">
                         <div className="shrink-0 rounded-lg bg-sand p-1.5">{getAccountIcon(acc.account_type)}</div>
-                        <span className="font-semibold text-bark" title={acc.description || acc.name}>
-                          {acc.description || acc.name}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="block truncate font-semibold text-bark" title={acc.description || acc.name}>
+                            {acc.description || acc.name}
+                          </span>
+                          {acc.department_name && (
+                            <span className="block truncate text-[11px] text-sage-strong">
+                              {acc.department_name}&apos;s fund
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className={`px-4 ${rowPad} font-mono text-xs font-semibold text-moss`} title="Shown in the M-Pesa prompt (max 12 characters)">
@@ -1105,6 +1147,25 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
               </div>
 
               <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Connected Department</label>
+                <select
+                  value={addForm.department}
+                  onChange={(e) => setAddForm({ ...addForm, department: e.target.value })}
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
+                >
+                  <option value="">None — the church&apos;s own money</option>
+                  {departments.map((d) => (
+                    <option key={d.code} value={d.code}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-moss">
+                  The department whose desk may read this fund and request withdrawals from it — the choir&apos;s Ensemble, the youth ministries&apos; AYM fund, and so on. One fund per department.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Description / Notes</label>
                 <textarea
                   rows={2}
@@ -1197,6 +1258,25 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                     className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-moss">Connected Department</label>
+                <select
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
+                >
+                  <option value="">None — the church&apos;s own money</option>
+                  {departments.map((d) => (
+                    <option key={d.code} value={d.code}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-moss">
+                  The department whose desk may read this fund and request withdrawals from it. One fund per department.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">

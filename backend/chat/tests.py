@@ -121,12 +121,11 @@ class ChatAreaRoomTests(APITestCase):
         DepartmentAssignment.objects.create(department=self.department, role=self.role, member=self.leader)
         self.outsider = make_member('outsider')
 
-    def test_asking_for_an_area_room_creates_its_group_and_channel(self):
+    def test_asking_for_an_area_room_creates_its_group(self):
         self.client.force_authenticate(self.leader)
         self.client.post('/api/members/chat/conversations/', {'kind': 'group', 'department': self.code}, format='json')
-        self.assertEqual(Conversation.objects.filter(department=self.department).count(), 2)
+        self.assertEqual(Conversation.objects.filter(department=self.department).count(), 1)
         self.assertTrue(Conversation.objects.filter(kind='group', key=f'dept:{self.code}').exists())
-        self.assertTrue(Conversation.objects.filter(kind='channel', key=f'dept:{self.code}:announce').exists())
 
     def test_a_member_on_the_roll_is_in_the_area_group(self):
         self.client.force_authenticate(self.member)
@@ -134,25 +133,6 @@ class ChatAreaRoomTests(APITestCase):
         self.assertEqual(services.access_to(self.member, Conversation.objects.get(pk=group_id)), True)
         self.client.post(f'/api/members/chat/conversations/{group_id}/messages/', {'body': 'See you all on Sabbath.'}, format='json')
         self.assertEqual(Message.objects.filter(conversation_id=group_id).count(), 1)
-
-    def test_the_channel_is_read_by_the_area_but_posted_by_its_leaders(self):
-        self.client.force_authenticate(self.leader)
-        channel_id = self.client.post('/api/members/chat/conversations/', {'kind': 'channel', 'department': self.code}, format='json').data['id']
-
-        # The roll reads it.
-        self.client.force_authenticate(self.member)
-        self.assertEqual(self.client.get(f'/api/members/chat/conversations/{channel_id}/messages/').status_code, status.HTTP_200_OK)
-        # But may not post.
-        self.assertEqual(
-            self.client.post(f'/api/members/chat/conversations/{channel_id}/messages/', {'body': 'Hello'}, format='json').status_code,
-            status.HTTP_403_FORBIDDEN,
-        )
-        # The leader may.
-        self.client.force_authenticate(self.leader)
-        self.assertEqual(
-            self.client.post(f'/api/members/chat/conversations/{channel_id}/messages/', {'body': 'Choir practice moved.'}, format='json').status_code,
-            status.HTTP_201_CREATED,
-        )
 
     def test_a_member_outside_the_area_is_not_in_its_group(self):
         self.client.force_authenticate(self.leader)
@@ -175,36 +155,12 @@ class ChatDefaultRoomTests(APITestCase):
     def test_the_list_gives_a_member_the_church_rooms_and_their_areas(self):
         rooms = self._rooms(self.member)
         seen = {(room['kind'], room['title']) for room in rooms}
+        # The church has one family group, no announcement channels.
         self.assertIn(('group', 'Church Family'), seen)
-        self.assertIn(('channel', 'Church Announcements'), seen)
-        # The area the member is on the roll of gets both of its rooms too.
+        self.assertNotIn(('channel', 'Church Announcements'), seen)
+        # The area the member is on the roll of gets its group too.
         self.assertIn(('group', 'Default Area'), seen)
-        self.assertIn(('channel', 'Default Area announcements'), seen)
-
-    def test_the_church_channel_is_read_by_all_but_posted_by_the_office(self):
-        channel = next(
-            room for room in self._rooms(self.member)
-            if room['kind'] == 'channel' and room['title'] == 'Church Announcements'
-        )
-        self.assertFalse(channel['can_post'])
-        self.assertEqual(
-            self.client.post(
-                f"/api/members/chat/conversations/{channel['id']}/messages/",
-                {'body': 'Hello'},
-                format='json',
-            ).status_code,
-            status.HTTP_403_FORBIDDEN,
-        )
-        elder = make_member('elder', role='elder')
-        self._rooms(elder)
-        self.assertEqual(
-            self.client.post(
-                f"/api/members/chat/conversations/{channel['id']}/messages/",
-                {'body': 'Vespers at six.'},
-                format='json',
-            ).status_code,
-            status.HTTP_201_CREATED,
-        )
+        self.assertNotIn(('channel', 'Default Area announcements'), seen)
 
     def test_the_church_group_is_open_to_every_member(self):
         group = next(
@@ -224,11 +180,42 @@ class ChatDefaultRoomTests(APITestCase):
     def test_reading_the_list_twice_does_not_duplicate_the_rooms(self):
         self._rooms(self.member)
         self._rooms(self.member)
-        self.assertEqual(Conversation.objects.filter(key__startswith='church:').count(), 2)
+        # One church room now: the family group. The announcement channel is
+        # gone, and the member holds a single seat in the room that remains.
+        self.assertEqual(Conversation.objects.filter(key__startswith='church:').count(), 1)
         self.assertEqual(
             Participant.objects.filter(conversation__key='church:family', member=self.member).count(),
             1,
         )
+
+
+class ChatLegacyChannelAskTests(APITestCase):
+    """Older clients still ask for a 'channel'; the flat group answers.
+
+    The announcement rooms are gone, but a request that predates the change
+    must still open the room the member means — the area's one flat group —
+    rather than fail or conjure a second room.
+    """
+
+    def setUp(self):
+        self.code = 'test_legacy'
+        self.department = Department.objects.create(code=self.code, name='Legacy Area', group='ministry')
+        self.member = make_member('member')
+        DepartmentMembership.objects.create(member=self.member, department=self.code)
+
+    def test_asking_for_a_channel_opens_the_flat_group(self):
+        self.client.force_authenticate(self.member)
+        opened = self.client.post(
+            '/api/members/chat/conversations/',
+            {'kind': 'channel', 'department': self.code},
+            format='json',
+        )
+        self.assertEqual(opened.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(opened.data['kind'], 'group')
+        self.assertEqual(opened.data['title'], 'Legacy Area')
+        # No channel room was conjured; the area has exactly one room.
+        self.assertEqual(Conversation.objects.filter(department=self.department).count(), 1)
+        self.assertFalse(Conversation.objects.filter(kind='channel').exists())
 
 
 #: A handshake as a browser sends it: an Origin the church allows (the
