@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send, type LucideIcon, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  MessageSquarePlus,
+  MessagesSquare,
+  Send,
+  Users,
+} from "lucide-react";
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
@@ -93,11 +100,6 @@ export function ChatPanel() {
   // and the church family, where everyone on the roll talks — and the inbox,
   // the member's own direct messages and their thread with the office.
   const [tab, setTab] = useState<"inbox" | "groups">("inbox");
-
-  const TAB_ORDER: { key: "groups" | "inbox"; label: string; icon: LucideIcon }[] = [
-    { key: "groups", label: "Group", icon: Users },
-    { key: "inbox", label: "Inbox", icon: MessageSquarePlus },
-  ];
 
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -340,24 +342,6 @@ export function ChatPanel() {
         ))}
       </div>
 
-      <div className="border-b border-sand-line px-4 py-2.5">
-        <div className="flex gap-6">
-          {TAB_ORDER.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={
-                `flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold transition ${tab === key ? "bg-bark text-white" : "text-bark/70 hover:bg-sand hover:text-bark"}`
-              }
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
         {showNew ? (
           <div className="space-y-3 p-3">
@@ -549,7 +533,7 @@ export function ChatPanel() {
               </div>
             ) : (
               <p className="py-1.5 text-center text-xs text-moss">
-                You can read along in this conversation.
+                Only this area&apos;s leaders may post here. You can read along.
               </p>
             )}
           </div>
