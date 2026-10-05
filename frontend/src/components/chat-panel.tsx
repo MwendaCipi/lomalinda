@@ -245,14 +245,6 @@ export function ChatPanel() {
     setMessages([]);
   };
 
-  const openOffice = async () => {
-    try {
-      enterRoom(await openConversation({ kind: "office" }));
-    } catch (error) {
-      showAlert("Could not open the office", error instanceof Error ? error.message : "Try again.", "error");
-    }
-  };
-
   const openDirect = async (person: ChatPerson) => {
     try {
       enterRoom(await openConversation({ kind: "dm", member_id: person.id }));
