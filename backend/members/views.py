@@ -945,29 +945,44 @@ class EnrollmentRequestView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         privacy_accepted = serializer.validated_data.pop('privacy_accepted', False)
         terms_accepted = serializer.validated_data.pop('terms_accepted', False)
-        validated_data = dict(serializer.validated_data)
+        email = serializer.validated_data['email'].lower().strip()
+        validated_data = {k: v for k, v in serializer.validated_data.items() if k != 'email'}
         if privacy_accepted:
             validated_data['privacy_accepted_at'] = timezone.now()
             validated_data['privacy_policy_version'] = CURRENT_PRIVACY_POLICY_VERSION
         if terms_accepted:
             validated_data['terms_accepted_at'] = timezone.now()
             validated_data['terms_of_use_version'] = CURRENT_TERMS_OF_USE_VERSION
-        email = validated_data['email'].lower().strip()
         if User.objects.filter(email__iexact=email).exists():
             return Response(
                 {'email': 'An account already exists for this email address. Try signing in or resetting your password instead.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Check for existing enrollment requests for this email
+        now = timezone.now()
+        existing = EnrollmentRequest.objects.filter(email=email).first()
+        if existing:
+            # If there's an active verification_pending request, reject the new one
+            if existing.status == 'verification_pending' and existing.expires_at > now:
+                return Response(
+                    {'email': 'An enrollment request with this email is already pending verification. Check your email for the verification code, or wait for it to expire before trying again.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # If the existing request was approved but no user account was created,
+            # and it has expired, delete it so a fresh enrollment can be started
+            if existing.status == 'approved' and existing.expires_at <= now and not existing.user_id:
+                existing.delete()
+            # If the existing request has expired (any status except completed),
+            # delete it to allow a fresh start
+            elif existing.expires_at <= now and existing.status != 'completed':
+                existing.delete()
         token = uuid.uuid4()
-        enrollment, _ = EnrollmentRequest.objects.update_or_create(
+        enrollment = EnrollmentRequest.objects.create(
             email=email,
-            defaults={
-                **validated_data,
-                'email': email,
-                'token': token,
-                'status': 'verification_pending',
-                'expires_at': timezone.now() + timedelta(hours=48),
-            }
+            token=token,
+            status='verification_pending',
+            expires_at=now + timedelta(hours=48),
+            **validated_data,
         )
         enrollment.set_code()
         enrollment.save(update_fields=['code'])

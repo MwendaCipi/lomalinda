@@ -153,10 +153,10 @@ admin.site.register(SabbathEvent)
 admin.site.register(Profession)
 @admin.register(EnrollmentRequest)
 class EnrollmentRequestAdmin(admin.ModelAdmin):
-    list_display = ('email', 'first_name', 'last_name', 'joining_mode', 'status', 'created_at')
-    list_filter = ('joining_mode', 'status', 'created_at')
+    list_display = ('email', 'first_name', 'last_name', 'joining_mode', 'status', 'created_at', 'expires_at')
+    list_filter = ('joining_mode', 'status', 'created_at', 'expires_at')
     search_fields = ('email', 'first_name', 'last_name', 'phone_number')
-    actions = ['approve_requests', 'reject_requests']
+    actions = ['approve_requests', 'reject_requests', 'cleanup_expired_requests']
 
     @admin.action(description='Approve requests and send account emails')
     def approve_requests(self, request, queryset):
@@ -180,6 +180,110 @@ class EnrollmentRequestAdmin(admin.ModelAdmin):
     @admin.action(description='Reject selected requests')
     def reject_requests(self, request, queryset):
         queryset.filter(status='pending').update(status='rejected')
+
+    @admin.action(description='Delete expired requests older than...')
+    def cleanup_expired_requests(self, request, queryset):
+        """Delete expired enrollment requests that are older than 30 days.
+        
+        This is a convenience action that calls the management command logic.
+        Only expired requests in non-completed statuses are affected.
+        """
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=30)
+        expired = queryset.filter(
+            expires_at__lt=cutoff,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        )
+        count = expired.count()
+        if count == 0:
+            self.message_user(request, 'No expired enrollment requests found to clean up.')
+            return
+        deleted, _ = expired.delete()
+        self.message_user(request, f'Deleted {deleted} expired enrollment request(s) older than 30 days.')
+
+    @admin.display(description='Days until expiry')
+    def days_until_expiry(self, obj):
+        if obj.expires_at:
+            delta = obj.expires_at - timezone.now()
+            if delta.days < 0:
+                return format_html('<span style="color:red">Expired {} days ago</span>', abs(delta.days))
+            elif delta.days == 0:
+                return format_html('<span style="color:orange">Expires today</span>')
+            else:
+                return f'{delta.days} days'
+        return '-'
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Add a custom action that processes all expired requests, not just selected
+        actions['cleanup_all_expired'] = (
+            self._cleanup_all_expired,
+            'cleanup_all_expired',
+            'Delete ALL expired enrollment requests older than 30 days'
+        )
+        return actions
+
+    def _cleanup_all_expired(self, request, queryset):
+        """Delete ALL expired enrollment requests in the database older than 30 days."""
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=30)
+        expired = EnrollmentRequest.objects.filter(
+            expires_at__lt=cutoff,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        )
+        count = expired.count()
+        if count == 0:
+            self.message_user(request, 'No expired enrollment requests found to clean up.')
+            return
+        deleted, _ = expired.delete()
+        self.message_user(request, f'Deleted {deleted} expired enrollment request(s) older than 30 days from the entire database.')
+
+    @admin.action(description='Delete expired requests (last 7 days)')
+    def cleanup_expired_requests_7days(self, request, queryset):
+        """Delete expired enrollment requests older than 7 days."""
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=7)
+        expired = queryset.filter(
+            expires_at__lt=cutoff,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        )
+        count = expired.count()
+        if count == 0:
+            self.message_user(request, 'No expired enrollment requests found to clean up.')
+            return
+        deleted, _ = expired.delete()
+        self.message_user(request, f'Deleted {deleted} expired enrollment request(s) older than 7 days.')
+
+    @admin.action(description='Delete expired requests (last 14 days)')
+    def cleanup_expired_requests_14days(self, request, queryset):
+        """Delete expired enrollment requests older than 14 days."""
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=14)
+        expired = queryset.filter(
+            expires_at__lt=cutoff,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        )
+        count = expired.count()
+        if count == 0:
+            self.message_user(request, 'No expired enrollment requests found to clean up.')
+            return
+        deleted, _ = expired.delete()
+        self.message_user(request, f'Deleted {deleted} expired enrollment request(s) older than 14 days.')
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        from datetime import timedelta
+        cutoff_7 = timezone.now() - timedelta(days=7)
+        cutoff_30 = timezone.now() - timedelta(days=30)
+        extra_context['expired_7_days'] = EnrollmentRequest.objects.filter(
+            expires_at__lt=cutoff_7,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        ).count()
+        extra_context['expired_30_days'] = EnrollmentRequest.objects.filter(
+            expires_at__lt=cutoff_30,
+            status__in=('verification_pending', 'pending', 'approved', 'rejected', 'expired'),
+        ).count()
+        return super().changelist_view(request, extra_context=extra_context)
 admin.site.register(ExternalResourceLink)
 admin.site.register(Friend)
 admin.site.register(MembershipTransferRequest)
