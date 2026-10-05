@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from members.models import Department
 
-from . import services
+from . import realtime, services
 from .models import Conversation
 from .serializers import ChatConversationSerializer, ChatMessageSerializer, ChatPersonSerializer
 
@@ -25,6 +25,11 @@ class ChatConversationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # The member's default rooms are made and joined on the way: the
+        # church's own two, and the group and channel of every area they
+        # belong to. Reading the list is what gives a member their rooms, so a
+        # new area or a new member arrives without the office doing anything.
+        services.ensure_member_rooms(request.user)
         rooms = services.conversations_for(request.user)
         data = ChatConversationSerializer(rooms, many=True, context={'request': request}).data
         return Response({'conversations': data})
@@ -103,6 +108,9 @@ class ChatMessageListView(APIView):
         message = services.post_message(conversation, request.user, body)
         # The sender has by definition read what they just wrote.
         services.mark_read(conversation, request.user)
+        # A post through the API is as live as one through the socket: everyone
+        # watching the room hears it at once, not on their next poll.
+        realtime.broadcast_message(conversation, message)
         return Response(ChatMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
 

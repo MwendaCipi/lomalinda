@@ -89,6 +89,26 @@ crontab -l 2>/dev/null | grep -F 'send_pledge_reminders' > /dev/null \
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 
+# The chat socket server, when this box has one. Its unit is set up once by
+# hand (DEPLOYMENT.md); a deploy that restarted only gunicorn would leave the
+# previous consumer code answering every live socket. Absent unit: skipped, so
+# a deploy still works before the socket server is installed.
+WS_SERVICE="${SERVICE}_ws"
+if systemctl cat "$WS_SERVICE" > /dev/null 2>&1; then
+  echo "🔄 Restarting ${WS_SERVICE} systemd service..."
+  systemctl restart "$WS_SERVICE"
+  for _ in $(seq 1 15); do
+    if systemctl is-active --quiet "$WS_SERVICE"; then break; fi
+    sleep 1
+  done
+  systemctl is-active --quiet "$WS_SERVICE" || {
+    journalctl -u "$WS_SERVICE" -n 15 --no-pager
+    fail "$WS_SERVICE is not running after the restart (last log lines above)."
+  }
+else
+  echo "ℹ️ ${WS_SERVICE} is not installed - skipping the socket server restart."
+fi
+
 echo
 echo "🔎 Verifying the deployment..."
 

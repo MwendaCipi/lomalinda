@@ -5,6 +5,12 @@ django-cors-headers>=4.7,<5.0
 psycopg[binary]>=3.2,<4.0
 psycopg2-binary>=2.9,<3.0
 django-tenants>=3.7,<4.0
+# Chat's live transport: one ASGI server beside gunicorn (daphne), the
+# Channels layer that gives it rooms, and Redis as the bus between them, so a
+# message written in one worker reaches the socket held by another.
+channels>=4.1,<5.0
+channels-redis>=4.2,<5.0
+daphne>=4.1,<5.0
 requests>=2.32,<3.0
 python-dotenv>=1.1,<2.0
 dj-database-url>=2.3,<3.0

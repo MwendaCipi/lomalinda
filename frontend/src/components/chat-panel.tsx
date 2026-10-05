@@ -5,6 +5,7 @@ import { ArrowLeft, Building2, MessageSquarePlus, MessagesSquare, Send } from "l
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
+import { useConversationSocket } from "@/lib/chat-socket";
 import {
   fetchContacts,
   fetchConversations,
@@ -21,8 +22,16 @@ import {
   type ChatPerson,
 } from "@/lib/chat";
 
-/** How long the open room waits before asking for anything new. */
+/**
+ * How long the open room waits before asking for anything new.
+ *
+ * With no socket this is the only way a reply arrives, so it is short. Once
+ * the socket is up, live messages come down it and the poll drops back to a
+ * slow safety net — a missed frame, a proxy that dropped a connection without
+ * telling anyone, a server that restarted mid-conversation.
+ */
 const THREAD_POLL_MS = 12_000;
+const THREAD_POLL_LIVE_MS = 60_000;
 
 /** The one-line role a room's header reads under its name. */
 function roomSubtitle(room: ChatConversation): string {
@@ -87,6 +96,9 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
   const lastMessageIdRef = useRef<number | null>(null);
+  // Whether the room's socket is up right now; read by the poller to decide
+  // how long it may wait, without the connection itself re-running the effect.
+  const socketLiveRef = useRef(false);
 
   const active = activeId !== null ? rooms.find((room) => room.id === activeId) ?? null : null;
 
@@ -140,12 +152,46 @@ export function ChatPanel() {
       return read(true);
     });
 
-    const timer = window.setInterval(() => void read(false), THREAD_POLL_MS);
+    // A self-scheduling poll rather than a fixed interval: the wait between
+    // asks depends on whether the socket is carrying the room right now, and
+    // that can change from one ask to the next.
+    let timer: number | null = null;
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        await read(false);
+        if (alive) schedule();
+      }, socketLiveRef.current ? THREAD_POLL_LIVE_MS : THREAD_POLL_MS);
+    };
+    schedule();
+
     return () => {
       alive = false;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
     };
   }, [activeId]);
+
+  // The room's live transport. A message arrives the moment it is written;
+  // the poll above only has to cover the gaps when the socket is down.
+  useConversationSocket(activeId, {
+    onConnectedChange: (connected) => {
+      socketLiveRef.current = connected;
+    },
+    onMessage: (message) => {
+      if (message.conversation !== activeId) return;
+      setMessages((prev) => (prev.some((entry) => entry.id === message.id) ? prev : [...prev, message]));
+      setRooms((prev) =>
+        prev.map((room) =>
+          room.id === message.conversation
+            ? { ...room, last_message: message, last_message_at: message.created_at, unread_count: 0 }
+            : room
+        )
+      );
+      lastMessageIdRef.current = message.id;
+      // It is on screen, so by definition it is read.
+      void markConversationRead(message.conversation).then(() => void pollChatUnread());
+    },
+    onActivity: () => void pollChatUnread(),
+  });
 
   // Follow the conversation: keep the newest message in view unless the member
   // has scrolled up to read, in which case the poll leaves them where they are.

@@ -394,8 +394,13 @@
    direct messages and a line to the church office, and the chrome gains the
    ways in — a Chat tab on the phone's bottom bar and a Chat button on a PC's
    top bar, each wearing the unread count. Chrome changed, so installed apps
-   must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v76";
+   must take the new shell.
+
+   v77 — chat moves to the tail of the phone's tab bar: Fellowship, Giving,
+   Requests and My Areas keep their places and Chat follows them, so the
+   church's own map reads first and the talking sits last. Chrome changed, so
+   installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v77";
 const STATIC_ASSETS = [
   "/",
   "/about/",

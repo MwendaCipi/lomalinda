@@ -164,6 +164,81 @@ def area_room(department, kind):
     return None
 
 
+#: The church's own two rooms, shared by every member: a family group where
+#: the whole church talks and an announcement channel its office posts to.
+#: They carry a stable key rather than a department, and every member is given
+#: a participant row, so the same list, unread and read-mark rules that serve
+#: an area room serve them too.
+CHURCH_GROUP_KEY = 'church:family'
+CHURCH_CHANNEL_KEY = 'church:announce'
+CHURCH_ROOMS = (
+    (Conversation.KIND_GROUP, CHURCH_GROUP_KEY, 'Church Family'),
+    (Conversation.KIND_CHANNEL, CHURCH_CHANNEL_KEY, 'Church Announcements'),
+)
+
+
+def ensure_church_rooms():
+    """The church's own rooms, made if they do not exist yet."""
+    rooms = []
+    for kind, key, title in CHURCH_ROOMS:
+        conversation, _created = Conversation.objects.get_or_create(
+            kind=kind,
+            key=key,
+            defaults={'title': title},
+        )
+        if conversation.title != title:
+            conversation.title = title
+            conversation.save(update_fields=['title'])
+        rooms.append(conversation)
+    return rooms
+
+
+def member_area_codes(user):
+    """The areas an account genuinely belongs to or serves in, as codes.
+
+    The same set the dashboard's "Your areas" reads — the profile's named
+    groups, the places on a roll and the leadership rows — so the rooms a
+    member is given by default are exactly the areas that are theirs. An
+    office account's wider every-area view is deliberately not used here: the
+    church's two rooms are everyone's, and beyond those a member chats where
+    they belong.
+    """
+    # Imported here, not at module load: the tie rules live beside the areas
+    # they describe, and reading them lazily keeps one source of truth without
+    # a views module in this one's import graph.
+    from members.views import member_tie_codes
+
+    return member_tie_codes(user)
+
+
+def ensure_member_rooms(user):
+    """Give a member the rooms they read by default.
+
+    The church's family group and announcement channel first — every member
+    shares them — then the group and channel of each department and ministry
+    the member belongs to. A room a member opens themselves (a direct message,
+    their office thread) is made on the way and is untouched here.
+    """
+    rooms = list(ensure_church_rooms())
+    for room in rooms:
+        participant, created = Participant.objects.get_or_create(
+            conversation=room,
+            member=user,
+            defaults={'is_moderator': is_office_holder(user)},
+        )
+        # An office holder appointed since the room was made still posts there.
+        if not created:
+            moderator = is_office_holder(user)
+            if participant.is_moderator != moderator:
+                participant.is_moderator = moderator
+                participant.save(update_fields=['is_moderator'])
+    codes = member_area_codes(user)
+    if codes:
+        for department in Department.objects.filter(code__in=codes, is_active=True):
+            rooms.extend(ensure_area_rooms(department))
+    return rooms
+
+
 def open_dm(member_a, member_b):
     """The direct message between two members, made if this is the first."""
     if member_a.id == member_b.id:

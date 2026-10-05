@@ -709,8 +709,8 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   health: "The church's health ministry — wholeness of body, mind and spirit.",
   sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
-  music: "The church's music — its ensemble and the singing groups it keeps.",
-  choir: "The church's singing — its ensemble and the groups that sing in it.",
+  music: "The church's music — its singing groups and the seasons they sing.",
+  choir: "The church's singing — its own ministry, not a department.",
 };
 
 /**
@@ -1016,8 +1016,8 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   awm: "AWM",
   aym: "AYM",
   apm: "APM",
-  // Loma Linda calls the choir the Ensemble.
-  choir: "Ensemble",
+  // Loma Linda calls the choir the Church Choir.
+  choir: "Church Choir",
   chaplaincy: "Chaplaincy",
   children: "Children",
   personal_ministries: "PM",
@@ -1246,23 +1246,24 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
 
   return bestLength >= 0 ? best : { group: null, href: null };
 }/**
- * The phone's tab bar: the places members move between all week. "chat" is
- * the church talking — the area rooms, direct messages and the office line —
- * and rides this bar on a phone because a PC reaches the same page from the
- * top bar's own button instead. "requests" is the member's own page for asking
- * the church for something; the last is "My Areas" — the church's ministries
- * and departments as the member's own map of them, which every member may
- * read (the office console keeps the writing side). Home has no tab of its
- * own: the topbar's church mark is the way back to the dashboard, which is
- * the floor of the back stack. Materials has no tab either — it is a page of
- * Fellowship now. Staff still reach the console from the account menu.
+ * The phone's tab bar: the places members move between all week. The last
+ * tab is "chat" — the church talking (the area rooms, direct messages and the
+ * office line) — which rides the bar's tail on a phone because a PC reaches
+ * the same page from the top bar's own button instead. "requests" is the
+ * member's own page for asking the church for something, and "My Areas" is
+ * the church's ministries and departments as the member's own map of them,
+ * which every member may read (the office console keeps the writing side).
+ * Home has no tab of its own: the topbar's church mark is the way back to the
+ * dashboard, which is the floor of the back stack. Materials has no tab
+ * either — it is a page of Fellowship now. Staff still reach the console from
+ * the account menu.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
-  { key: "chat" },
   { key: "give" },
   { key: "requests" },
   { key: "myAreas" },
+  { key: "chat" },
 ];
 
 /**

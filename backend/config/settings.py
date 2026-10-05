@@ -41,6 +41,9 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'loc
 
 SHARED_APPS = (
     'django_tenants',
+    # daphne first, as Channels asks: it has to precede staticfiles so its
+    # runserver replacement takes the ASGI path.
+    'daphne',
     'tenants',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -50,6 +53,9 @@ SHARED_APPS = (
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    # The chat transport's rooms. Shared rather than tenant-scoped: it holds no
+    # models, and every church's socket server runs from the same process.
+    'channels',
 )
 
 TENANT_APPS = (
@@ -94,6 +100,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 # Database
@@ -126,6 +133,27 @@ else:
     }
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',') if origin.strip()]
+
+# The chat transport's bus.
+# ---------------------------------------------------------------------------
+# A message written by one process has to reach a socket held by another, so
+# the channel layer is Redis when one is configured and the in-process layer
+# otherwise — enough for a single daphne worker, a test run, or development,
+# and the reason `CHAT_REDIS_URL` is the one variable that turns realtime on in
+# production. It reads its own variable so a Redis shared with something else
+# is still addressable by database number.
+CHANNEL_REDIS_URL = os.getenv('CHAT_REDIS_URL', os.getenv('REDIS_URL', ''))
+if CHANNEL_REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [CHANNEL_REDIS_URL]},
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}
+    }
 
 # Required when Django is served behind Nginx/Cloudflare over HTTPS.
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', os.getenv('FRONTEND_URL', 'http://localhost:3000')).split(',') if origin.strip()]

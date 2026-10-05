@@ -82,3 +82,96 @@ venv/bin/python manage.py send_test_email --to you@example.com --announcement  #
 ```
 
 The command prints which host answered, so a mistyped token or an unverified sender is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
+
+## Chat: the live transport
+
+Chat's messages have two doors. The REST endpoints under `/api/members/chat/` write and read them, and a WebSocket on `/ws/chat/<conversation_id>/` carries them the moment they are written. Both doors end in the same service layer, and a REST write broadcasts to every open socket, so nothing is only live if it was sent over the socket.
+
+Three pieces have to be in place on the VPS. Without them the app still works — the frontend falls back to polling and the channel layer falls back to memory — but replies then arrive on the poll's delay instead of at once, and a restart loses any in-flight broadcast.
+
+### 1. Redis: the bus between processes
+
+Gunicorn serves HTTP from several worker processes, and the socket server is a separate process again. A message written in one of them has to reach a socket held by another, which is what Redis is for.
+
+```bash
+apt-get install -y redis-server
+sed -i 's/^bind .*/bind 127.0.0.1 ::1/' /etc/redis/redis.conf
+sed -i 's/^# *maxmemory .*/maxmemory 256mb\nmaxmemory-policy allkeys-lru/' /etc/redis/redis.conf
+systemctl enable --now redis-server
+redis-cli ping   # PONG
+```
+
+Bind it to loopback and give it an eviction policy: the channel layer's keys are short-lived and disposable, so Redis must never let them push the box out of memory. Then point the backend at it in `backend/.env`:
+
+```text
+CHAT_REDIS_URL=redis://127.0.0.1:6379/1
+```
+
+`REDIS_URL` is read as a fallback, and with neither set the channel layer is the in-process one (fine for development, and for tests).
+
+### 2. daphne: the socket server
+
+Gunicorn speaks WSGI and cannot hold a WebSocket open, so the same code runs a second time under daphne:
+
+```ini
+# /etc/systemd/system/loma_linda_ws.service
+[Unit]
+Description=Loma Linda chat socket server (daphne)
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/loma_linda/backend
+EnvironmentFile=/var/www/loma_linda/backend/.env
+ExecStart=/var/www/loma_linda/backend/venv/bin/daphne -b 127.0.0.1 -p 8006 config.asgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable --now loma_linda_ws
+```
+
+daphne is bound to loopback: only Nginx talks to it. `deploy.sh` restarts this unit on every deploy when it exists, and skips it (with a note) when it does not.
+
+### 3. Nginx: hand `/ws/` to daphne
+
+Inside the site's `server` block, beside the `/api/` proxy, on the **same hostname** the app is built against — the socket URL is derived from `NEXT_PUBLIC_API_URL`, so a socket on a different host would be sent to the wrong place:
+
+```nginx
+location /ws/ {
+    proxy_pass http://127.0.0.1:8006;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+}
+```
+
+`Host` is not decoration: the consumer reads it to pick the church's schema, exactly as `django_tenants`' HTTP middleware does. `proxy_read_timeout` is long because an idle room's socket is idle — Cloudflare passes WebSockets through on a proxied hostname, so no Cloudflare-side work is needed.
+
+Then `nginx -t && systemctl reload nginx`.
+
+### Verifying it
+
+```bash
+systemctl is-active loma_linda loma_linda_ws redis-server
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8006/health/   # 200, daphne answers HTTP too
+```
+
+A socket handshake with a bad token must be refused, and with a live one must open. From the browser console on the signed-in app:
+
+```javascript
+const t = new WebSocket(`wss://sdalomalinda.or.ke/ws/chat/1/?token=${localStorage.access_token}`);
+t.onmessage = (e) => console.log(e.data);   // {"type":"ready",...} on connect
+```
+
+`ready` means the token and the tenant both resolved. A close with code `4401` is a token to refresh; `4403` is an account that may not read that room.
