@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -110,6 +111,44 @@ export function ChatPanel() {
   const socketLiveRef = useRef(false);
 
   const active = activeId !== null ? rooms.find((room) => room.id === activeId) ?? null : null;
+  const searchParams = useSearchParams();
+  const openDmId = searchParams.get("dm");
+
+  /** Put a freshly opened room at the top of the list and step into it. */
+  const enterRoom = (room: ChatConversation) => {
+    setRooms((prev) => {
+      const without = prev.filter((entry) => entry.id !== room.id);
+      return [room, ...without];
+    });
+    setShowNew(false);
+    setContactSearch("");
+    setActiveId(room.id);
+    setMessages([]);
+  };
+
+  // When the URL carries ?dm=<member_id> (e.g. from the roster's "Chat here"),
+  // open that direct message as soon as the contacts and conversations are
+  // available — the officer lands inside the thread, not at the inbox.
+  useEffect(() => {
+    if (!openDmId) return;
+    const memberId = Number(openDmId);
+    if (!Number.isFinite(memberId)) return;
+    let alive = true;
+    void Promise.resolve().then(async () => {
+      if (!alive) return;
+      try {
+        const contacts = await fetchContacts("");
+        const person = contacts.find((p) => p.id === memberId);
+        if (!person) return;
+        enterRoom(await openConversation({ kind: "dm", member_id: memberId }));
+      } catch (error) {
+        showAlert("Could not open the message", error instanceof Error ? error.message : "Try again.", "error");
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openDmId]);
 
   const loadRooms = useCallback(async () => {
     try {
@@ -233,18 +272,6 @@ export function ChatPanel() {
       setRooms((prev) => prev.map((entry) => (entry.id === room.id ? { ...entry, unread_count: 0 } : entry)));
     }
     void markConversationRead(room.id).then(() => void pollChatUnread());
-  };
-
-  /** Put a freshly opened room at the top of the list and step into it. */
-  const enterRoom = (room: ChatConversation) => {
-    setRooms((prev) => {
-      const without = prev.filter((entry) => entry.id !== room.id);
-      return [room, ...without];
-    });
-    setShowNew(false);
-    setContactSearch("");
-    setActiveId(room.id);
-    setMessages([]);
   };
 
   const openDirect = async (person: ChatPerson) => {
