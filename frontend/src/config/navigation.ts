@@ -866,7 +866,8 @@ export type RailSection =
   | "my-church"
   | "my-department"
   | "my-ministry"
-  | "other-ministry";
+  | "other-ministry"
+  | "other-department";
 
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
@@ -902,7 +903,6 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
     list.push(entry);
     grouped.set(key, list);
   }
-  const has = (key: RailSection) => (grouped.get(key)?.length ?? 0) > 0;
   const groups: RailSectionGroup[] = [];
   const push = (key: RailSection, label: string, collapsed: boolean) => {
     const rows = grouped.get(key);
@@ -912,10 +912,18 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   push("my-church", "My church", false);
   push("my-department", "My Department", false);
   push("my-ministry", "My Ministry", false);
-  // A member serving in no ministry still sees the church's ministries — the
-  // ones they could join — so the heading drops the possessive and opens by
-  // default; with their own ministries above it, the rest ride folded.
-  push("other-ministry", has("my-ministry") ? "Other Ministries" : "Ministries", has("my-ministry"));
+  // The departments the member belongs to outside their own read as
+  // "My Department": the rest fold under a folded "Other Departments".
+  const otherDepartments = grouped.get("other-department") ?? [];
+  if (otherDepartments.length > 0) {
+    push("other-department", "Other Departments", true);
+  }
+  // The ministries the member belongs to read as "My Ministry": the rest
+  // fold under a folded "Other Ministries".
+  const otherMinistries = grouped.get("other-ministry") ?? [];
+  if (otherMinistries.length > 0) {
+    push("other-ministry", "Other Ministries", true);
+  }
   return groups;
 }
 
@@ -1054,11 +1062,22 @@ export function railFor(
     // viewer's own when they sing in it, folded with the joinable ministries
     // when they do not.
     if (entry.railMinistry) {
-      const belongs = entry.railAreaCode
-        ? tieCodes.includes(entry.railAreaCode)
+      // A ministry with its own row (Music) is the church's open door: any
+      // signed-in member may read it, but it reads as their ministry only
+      // when they sit on its roll. A leadership desk (Elder's, Clerk's,
+      // Treasury, Deaconate) is held by office: a member with a system role
+      // reaches it, but it reads as their own ministry only when they hold
+      // the desk's specific role.
+      const isVisible = entry.railAreaCode
+        ? true
         : canSee(entry, roles);
-      if (belongs) return [{ ...entry, sectionKey: "my-ministry" }];
-      return entry.railAreaCode ? [{ ...entry, sectionKey: "other-ministry" }] : [];
+      const isOwned = entry.railAreaCode
+        ? tieCodes.includes(entry.railAreaCode)
+        : (entry.roles ?? []).some((role) => roles.includes(role) && role !== "admin");
+      if (!isVisible) return [];
+      return isOwned
+        ? [{ ...entry, sectionKey: "my-ministry" }]
+        : [{ ...entry, sectionKey: "other-ministry" }];
     }
     if (!entry.fromDepartments && !canSee(entry, roles)) return [];
     // A heading of the church's own areas: it expands into one row per
@@ -1086,12 +1105,12 @@ export function railFor(
         // rest they could still join; an appointed ministry they are not on
         // is not offered at all.
         .filter((department) => {
-          if (group === "department") return areaCodes.includes(department.code);
+          if (group === "department") return tieCodes.includes(department.code);
           return tieCodes.includes(department.code) || !NON_JOINABLE_MINISTRY_CODES.has(department.code);
         });
       return rows.map((department) => {
-        const mine = group === "department" || tieCodes.includes(department.code);
-        const sectionKey: RailSection = mine
+        const isMine = tieCodes.includes(department.code);
+        const sectionKey: RailSection = isMine
           ? group === "department"
             ? "my-department"
             : "my-ministry"
