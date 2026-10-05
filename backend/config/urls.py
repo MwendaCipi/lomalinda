@@ -30,6 +30,7 @@ urlpatterns = [
     path('health/', health_check, name='health-check'),
     path('admin/', admin.site.urls),
     path('api/members/', include('members.urls')),
+    path('api/members/chat/', include('chat.urls')),
     path('api/auth/token/', TokenObtainPairView.as_view(serializer_class=ChurchTokenObtainPairSerializer), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

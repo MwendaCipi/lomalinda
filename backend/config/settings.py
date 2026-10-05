@@ -55,6 +55,7 @@ SHARED_APPS = (
 TENANT_APPS = (
     'django.contrib.contenttypes',
     'members',
+    'chat',
 )
 
 INSTALLED_APPS = list(dict.fromkeys(list(SHARED_APPS) + list(TENANT_APPS)))
