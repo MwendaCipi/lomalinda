@@ -9,7 +9,7 @@ import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
 import { pageHeaderFor, railFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
-import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
+import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
 
@@ -103,8 +103,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const myDepartments = useMyDepartments();
-  const departments = useDepartments();
-  const entries = railFor({ roles, departmentCodes: myDepartments, sex: me?.gender }, departments);
+  const myTies = useMyTies();
+  const departments = useAllDepartments();
+  const entries = railFor(
+    { roles, departmentCodes: myDepartments, tieCodes: myTies, sex: me?.gender },
+    departments
+  );
   const here = useRailHere(pathname, entries);
 
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;

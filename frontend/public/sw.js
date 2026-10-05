@@ -378,8 +378,18 @@
    landing straight in the M-Pesa prompt. The older /fund-drives/<id>,
    /fund-drives/<id>/give-money, /campaigns/<id> and /support/campaigns/<id>
    paths all forward there, keeping any referral token. Chrome changed, so
+   installed apps must take the new shell.
+
+   v75 — the rail's headings are the member's own. Departments becomes My
+   Department, right after My church, and holds only the departments the
+   member belongs to or serves (every department for the office). Ministry
+   becomes My Ministry, holding the ministries the member serves in, with the
+   rest of the ministries they could join folded under Other Ministries — a
+   plain, open Ministries when they serve in none. The leadership desks ride
+   My Ministry when the member holds one and leave the rail otherwise, and the
+   appointed Personal Ministries is never offered to join. Chrome changed, so
    installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v74";
+const CACHE_NAME = "sda-loma-linda-meru-v75";
 const STATIC_ASSETS = [
   "/",
   "/about/",

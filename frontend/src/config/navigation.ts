@@ -503,6 +503,16 @@ export type RailRow = {
   fromDepartments?: DepartmentGroup;
   /** The heading a generated row belongs under, carried through expansion. */
   sectionKey?: RailSection;
+  /**
+   * A row that is one of the church's offices or ministries — a leadership
+   * desk, or the music ministry. The rail files it under My Ministry when the
+   * viewer belongs to it (holds the desk's office, or sits on the music roll)
+   * and folds it under the other ministries when they do not, so a heading
+   * never hides a desk the church keeps.
+   */
+  railMinistry?: true;
+  /** The area code whose membership makes a `railMinistry` row the viewer's own. */
+  railAreaCode?: string;
 };
 
 /**
@@ -796,15 +806,16 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The register and the meetings'
   // minutes are the clerk's row, so they are back on a desk of their own
   // own rather than folded into the elders' strip.
-  { label: "Elder's Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES },
-  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES },
-  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"] },
-  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES },
+  { label: "Elder's Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true },
+  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true },
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true },
+  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.
-  // The choir keeps its own desk under the Ministries heading, next to the
-  // other ministries, where its area code is no longer held out. Every member
-  // reads the desk — what it does is the office's to change.
+  // The choir keeps its own desk among the ministries, where its area code is
+  // no longer held out. Every member reads the desk — what it does is the
+  // office's to change. It counts as the member's own ministry when they sit
+  // on the music roll; otherwise it folds in with the other ministries.
   {
     label: "Music",
     icon: Music,
@@ -819,7 +830,8 @@ export const railEntries: RailEntry[] = [
         description: DEPARTMENT_BLURBS.music,
       },
     ],
-    sectionKey: "ministry",
+    railMinistry: true,
+    railAreaCode: "music",
   },
   // The church's own areas, each one its own row under its own heading.
   // These two placeholders carry no pages of their own: `railFor` swaps each
@@ -830,54 +842,58 @@ export const railEntries: RailEntry[] = [
     icon: HeartHandshake,
     fromDepartments: "ministry",
     roles: STAFF_ROLES,
-    sectionKey: "ministry",
+    sectionKey: "my-ministry",
   },
   {
     label: "Departments",
     icon: Users,
     fromDepartments: "department",
     roles: STAFF_ROLES,
-    sectionKey: "departments",
+    sectionKey: "my-department",
   },
 ];
 
 /**
  * How the rail groups its rows. A heading is a reading aid, not a click
  * target — every row under it is a place, exactly as it was flat. The
- * member's own page reads first under a Dashboard heading of its own, the
- * church's life as one My church list, the church's service — its offices'
- * desks and its ministries — as one Service list, and the departments as a
- * Departments list of their own.
+ * member's own page reads first under a Dashboard heading of its own; the
+ * church's life comes next as one My church list; then the areas the member
+ * belongs to — their departments, then their ministries — and, folded away,
+ * the ministries they could still join.
  */
-export type RailSection = "dashboard" | "my-church" | "ministry" | "departments";
-
-/** The heading each section goes by, on the rail. */
-export const RAIL_SECTIONS: { key: RailSection; label: string }[] = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "my-church", label: "My church" },
-  { key: "ministry", label: "Ministry" },
-  { key: "departments", label: "Departments" },
-];
+export type RailSection =
+  | "dashboard"
+  | "my-church"
+  | "my-department"
+  | "my-ministry"
+  | "other-ministry";
 
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
   "Giving": "my-church",
   "Requests": "my-church",
-  "Elder's Desk": "ministry",
-  "Clerk's Desk": "ministry",
-  "Treasury": "ministry",
-  "Deaconate": "ministry",
+};
+
+/** One heading in the rail, with the rows filed under it. */
+export type RailSectionGroup = {
+  key: RailSection;
+  label: string;
+  /**
+   * Whether the heading starts folded. The ministries the member has not
+   * joined ride a folded heading: they are one tap away without spending the
+   * rail's height on areas the member rarely opens.
+   */
+  collapsed: boolean;
+  entries: RailEntry[];
 };
 
 /**
  * The rail, read as headings with the rows under each: the member's own page
- * first, alone, then the church's life, then the desks — which are the
- * leadership's side of the app.
+ * first, alone; the church's life; the areas they belong to; and, folded, the
+ * ministries they could join. A group with no rows is left out entirely.
  */
-export function railSectionsFor(
-  entries: RailEntry[]
-): { key: RailSection; label: string; entries: RailEntry[] }[] {
+export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   const grouped = new Map<RailSection, RailEntry[]>();
   for (const entry of entries) {
     // Anything unmapped falls to My church rather than vanishing from the rail.
@@ -886,11 +902,21 @@ export function railSectionsFor(
     list.push(entry);
     grouped.set(key, list);
   }
-  return RAIL_SECTIONS.map(({ key, label }) => ({
-    key,
-    label,
-    entries: grouped.get(key) ?? [],
-  })).filter((section) => section.entries.length > 0);
+  const has = (key: RailSection) => (grouped.get(key)?.length ?? 0) > 0;
+  const groups: RailSectionGroup[] = [];
+  const push = (key: RailSection, label: string, collapsed: boolean) => {
+    const rows = grouped.get(key);
+    if (rows && rows.length > 0) groups.push({ key, label, collapsed, entries: rows });
+  };
+  push("dashboard", "Dashboard", false);
+  push("my-church", "My church", false);
+  push("my-department", "My Department", false);
+  push("my-ministry", "My Ministry", false);
+  // A member serving in no ministry still sees the church's ministries — the
+  // ones they could join — so the heading drops the possessive and opens by
+  // default; with their own ministries above it, the rest ride folded.
+  push("other-ministry", has("my-ministry") ? "Other Ministries" : "Ministries", has("my-ministry"));
+  return groups;
 }
 
 /**
@@ -949,6 +975,15 @@ const RAIL_UNIT_LABELS_MOVED = new Set(["young couples", "single parents"]);
  *  by the desk's own hand, but the row is not offered them to join. */
 const SEX_ONLY_RAIL = new Set(["amm", "awm"]);
 
+/**
+ * The ministries the church appoints rather than opens. Personal Ministries is
+ * led by the office's own hand, so a member who is not already on it is not
+ * offered it to join. (The leadership desks — Elders', Clerk's, Treasury,
+ * Deaconate — are the same: they are held by office, never joined, so a member
+ * who does not hold one never sees it on the rail at all.)
+ */
+const NON_JOINABLE_MINISTRY_CODES = new Set(["personal_ministries"]);
+
 
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "AMM",
@@ -973,78 +1008,107 @@ const RAIL_AREA_LABELS: Record<string, string> = {
 export type RailMember = {
   /** The roles on the account; empty for a member with no office. */
   roles: readonly string[];
-  /** The codes of the departments the member belongs to or serves. */
-  departmentCodes: readonly string[];
+  /** Every area the member may open — for an office account, the whole church.
+   *  The department rows read this: the member's own department group, and
+   *  every department for the church's offices. Defaults to `tieCodes`. */
+  departmentCodes?: readonly string[];
+  /** Only the areas the member genuinely belongs to or serves in. The ministry
+   *  rows read this. Defaults to `departmentCodes` when absent. */
+  tieCodes?: readonly string[];
   /** The member's recorded sex, for the two fellowships that are one sex's
    *  own. A blank field offers both, the desk's own hand deciding. */
   sex?: string;
 };
 
+/**
+ * The rail as the signed-in member sees it.
+ *
+ * The church's own areas are the interesting part. **My Department** holds
+ * only what the member may open — their age- and gender-based group and any
+ * department they serve, or every department for an office account. **My
+ * Ministry** holds the ministries they serve in; every other ministry they
+ * could join rides the folded **Other Ministries** heading (or a plain
+ * **Ministries** one, when they serve in none yet). The leadership desks and
+ * the appointed ministries are held by office, never joined, so a member who
+ * does not hold one never sees it at all.
+ */
 export function railFor(
   member: RailMember,
   departments: readonly DepartmentSummary[] = []
 ): RailEntry[] {
-  const { roles, departmentCodes: myCodes } = member;
+  const { roles } = member;
+  // Every area the member may open — for the church's offices, the whole
+  // church. This is what My Department reads.
+  const areaCodes = member.departmentCodes ?? member.tieCodes ?? [];
+  // Only the areas they genuinely belong to or serve in — My Ministry.
+  const tieCodes = member.tieCodes ?? areaCodes;
   const sex = (member.sex || "").trim().toLowerCase();
   const isStaff = roles.some((role) => STAFF_ROLES.includes(role));
   const memberRowRoles: readonly string[] = isStaff ? STAFF_ROLES : ["member"];
   return railEntries.flatMap((entry): RailEntry[] => {
     // The static config never carries a join entry — those are minted below.
     if ("memberJoin" in entry) return [];
-    // A heading of the church's own areas is everyone's to read: the
-    // expansion below decides which rows a viewer gets (the office reads
-    // every row, a member reads their own plus the open doors, and a member
-    // with nothing gets the invitation), so the heading's `roles` — written
-    // for the office — never walls a member out of their own area.
+    // A leadership desk, or the music ministry. A desk is held by office,
+    // never joined: one the viewer holds reads under My Ministry, and one they
+    // do not hold is not offered at all. Music is the church's open door — the
+    // viewer's own when they sing in it, folded with the joinable ministries
+    // when they do not.
+    if (entry.railMinistry) {
+      const belongs = entry.railAreaCode
+        ? tieCodes.includes(entry.railAreaCode)
+        : canSee(entry, roles);
+      if (belongs) return [{ ...entry, sectionKey: "my-ministry" }];
+      return entry.railAreaCode ? [{ ...entry, sectionKey: "other-ministry" }] : [];
+    }
     if (!entry.fromDepartments && !canSee(entry, roles)) return [];
     // A heading of the church's own areas: it expands into one row per
-    // ministry (or department), each row opening that area's desk directly
-    // and keeping the heading its group names. A group the desk has not
-    // filled yet contributes nothing, so the heading vanishes with it.
+    // ministry (or department), each opening that area's desk directly.
     if (entry.fromDepartments) {
       const group = entry.fromDepartments;
-      // A member reads their own areas — the age- and gender-based group
-      // their profile names, and any area they serve or hold a place on.
-      // `myCodes` is that set, all of it for the church's offices (the /me
-      // payload answers the same question the directory does, so the rail
-      // never shows a row the member cannot open). The ministries stay the
-      // church's open doors, and a member with nothing yet keeps the
-      // invitation. Belonging is a different thing from seeing; the ask to
-      // join lives inside the area's own page, not on the rail.
-      const visible = departments
+      const rows = departments
         .filter((department) => department.group === group)
-        // Music and choir stand outside the heading — music has a row of
-        // its own, and the choir lives in the Music desk. The AMM/AWM
-        // sub-units (Young Couples, Single Parents) read inside those desks.
+        // Music and choir stand outside the headings — music has a row of its
+        // own, and the choir lives in the Music desk. The AMM/AWM sub-units
+        // (Young Couples, Single Parents) read inside those desks.
         .filter((department) => !RAIL_AREA_CODES_MOVED.has(department.code))
         .filter((department) => !RAIL_UNIT_LABELS_MOVED.has(department.label.trim().toLowerCase()))
-        // Every joinable area is a row: the ministries are the church's open
-        // doors, and the departments are shown whether or not the member is
-        // already in them — a member should see the ones they could join, not
-        // only the ones they belong to. The offices never appear here: they
-        // are filed under the `office` group, which has no heading of its
-        // own, so a normal member is never offered Treasury, Eldership or
-        // Clerkship. The wrong-sex fellowship is filtered out by its code.
         .filter((department) => {
           if (!SEX_ONLY_RAIL.has(department.code)) return true;
           // The member's own fellowship always shows; the other sex's is
           // hidden unless the desk has already put them on its roll.
-          if (myCodes.includes(department.code)) return true;
+          if (areaCodes.includes(department.code)) return true;
           if (!sex) return true;
           return (department.code === "amm" ? "male" : "female") === sex;
+        })
+        // The departments are the member's own — the one they belong to and
+        // any they serve (every department for an office account) — and are
+        // never folded. The ministries split: the ones they serve in, and the
+        // rest they could still join; an appointed ministry they are not on
+        // is not offered at all.
+        .filter((department) => {
+          if (group === "department") return areaCodes.includes(department.code);
+          return tieCodes.includes(department.code) || !NON_JOINABLE_MINISTRY_CODES.has(department.code);
         });
-      return visible.map((department) => ({
-        label: RAIL_AREA_LABELS[department.code] ?? department.label,
-        icon: DEPARTMENT_ICONS[department.code] ?? Users,
-        href: `/administration?tab=leaders&dept=${department.code}`,
-        match: ["/administration"],
-        tab: "leaders",
-        dept: department.code,
-        // The desk's own blurb, so its page heading has a line under it too.
-        description: DEPARTMENT_BLURBS[department.code],
-        roles: memberRowRoles,
-        sectionKey: entry.sectionKey,
-      }));
+      return rows.map((department) => {
+        const mine = group === "department" || tieCodes.includes(department.code);
+        const sectionKey: RailSection = mine
+          ? group === "department"
+            ? "my-department"
+            : "my-ministry"
+          : "other-ministry";
+        return {
+          label: RAIL_AREA_LABELS[department.code] ?? department.label,
+          icon: DEPARTMENT_ICONS[department.code] ?? Users,
+          href: `/administration?tab=leaders&dept=${department.code}`,
+          match: ["/administration"],
+          tab: "leaders",
+          dept: department.code,
+          // The desk's own blurb, so its page heading has a line under it too.
+          description: DEPARTMENT_BLURBS[department.code],
+          roles: memberRowRoles,
+          sectionKey,
+        };
+      });
     }
     if (!entry.href && entry.items) {
       const items = entry.items.filter((item) => canSee(item, roles));

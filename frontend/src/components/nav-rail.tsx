@@ -4,11 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Mail, UserPlus } from "lucide-react";
+import { ChevronDown, Mail, UserPlus } from "lucide-react";
 
 import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
-import { useDepartments, useMyDepartments } from "@/hooks/use-departments";
+import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
 import { AreaJoinModal, AreaContactModal } from "./area-modals";
@@ -32,14 +32,31 @@ export function NavRail() {
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
-  const departments = useDepartments();
+  // The whole directory, not just the member's own areas: the rail needs the
+  // ministries they could still join for the folded heading, and the rows are
+  // cached beside the member's own.
+  const departments = useAllDepartments();
   const myDepartments = useMyDepartments();
-  const entries = railFor({ roles, departmentCodes: myDepartments, sex: me?.gender }, departments);
+  const myTies = useMyTies();
+  const entries = railFor(
+    { roles, departmentCodes: myDepartments, tieCodes: myTies, sex: me?.gender },
+    departments
+  );
   const here = useRailHere(pathname, entries);
 
   // The join and contact affordances: which heading's modal is open.
   const [joinArea, setJoinArea] = useState<string | null>(null);
   const [contactArea, setContactArea] = useState<string | null>(null);
+  // The headings the member has folded open; the rest of the folded headings
+  // (Other Ministries) start closed.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleSection = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   return (
     <aside
@@ -67,11 +84,29 @@ export function NavRail() {
           the desks — not a click target and not a group to expand. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
         <nav>
-          {railSectionsFor(entries).map((section, index) => (
+          {railSectionsFor(entries).map((section, index) => {
+            const collapsed = section.collapsed && !expanded.has(section.key);
+            return (
             <div key={section.key} className={index === 0 ? "" : "mt-4"}>
-              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
-                {section.label}
-              </p>
+              {section.collapsed ? (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.key)}
+                  aria-expanded={!collapsed}
+                  className="flex w-full items-center justify-between rounded-md px-3 pb-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-moss transition hover:text-ember"
+                >
+                  <span>{section.label}</span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform ${collapsed ? "" : "rotate-180"}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              ) : (
+                <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
+                  {section.label}
+                </p>
+              )}
+              {!collapsed && (
               <div className="space-y-0.5">
                 {section.entries.map((entry) => {
                   const href = entryHref(entry);
@@ -122,8 +157,10 @@ export function NavRail() {
                   );
                 })}
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </nav>
       </div>
 

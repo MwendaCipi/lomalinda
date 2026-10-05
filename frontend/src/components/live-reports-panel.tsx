@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { HandHeart, Search } from "lucide-react";
 import { brand } from "@/lib/brand";
+import { usePageHeader } from "@/components/app-frame";
 import { GiveNowModal } from "@/components/give-now-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -39,6 +40,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
  * it holds, and the way to give to it.
  */
 export function LiveReportsPanel() {
+  const { setHeaderRightAction } = usePageHeader();
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -71,6 +73,30 @@ export function LiveReportsPanel() {
     };
   }, []);
 
+  // The accounts search sits where every desk's search sits: at the right end
+  // of the page's own heading band — "Live Balances", with its description —
+  // rather than floating inside the panel. The band serves the whole page, so
+  // the box is published there and cleared when this panel goes away.
+  useEffect(() => {
+    setHeaderRightAction(
+      <div className="relative w-full sm:w-56 lg:w-64">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search accounts…"
+          aria-label="Search treasury accounts"
+          className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+        />
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [search, setHeaderRightAction]);
+
   const liquidityTotal = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
 
   // The search reads what members read: the account's description (the label
@@ -87,32 +113,16 @@ export function LiveReportsPanel() {
 
   return (
     <div className="space-y-3">
-      {/* The heading, the church's liquidity and the search share one band:
-          the total keeps its place and the search takes the right end, the
-          way the other desks read. */}
+      {/* The heading and the church's liquidity share one band. The accounts
+          search is not here: it rides the page's own heading band, published
+          by the effect above, the way every other desk's search reads. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 className="text-base font-semibold">Account Liquidity</h2>
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:w-auto sm:justify-end">
-          {!loading && accounts.length > 0 && (
-            <p className="text-sm font-bold text-bark">
-              Total across accounts: <span className="text-ember">{money(liquidityTotal)}</span>
-            </p>
-          )}
-          <div className="relative w-full sm:w-56 lg:w-64">
-            <Search
-              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-moss-faint2"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search accounts…"
-              aria-label="Search treasury accounts"
-              className="w-full rounded-xl border border-sand-mute bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-ember"
-            />
-          </div>
-        </div>
+        {!loading && accounts.length > 0 && (
+          <p className="text-sm font-bold text-bark">
+            Total across accounts: <span className="text-ember">{money(liquidityTotal)}</span>
+          </p>
+        )}
       </div>
 
       <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">

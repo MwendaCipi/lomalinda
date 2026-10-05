@@ -52,9 +52,6 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
   const [purposeAmounts, setPurposeAmounts] = useState<Record<string, string>>({});
   const [showPurposePicker, setShowPurposePicker] = useState(false);
   const purposePickerRef = useRef<HTMLDivElement | null>(null);
-  // The default purpose is chosen once per opening, so a treasurer who
-  // unticks everything is not handed a choice back.
-  const defaultPurposeApplied = useRef(false);
   const [cashForm, setCashForm] = useState({ donor_name: "", giver_phone: "", giver_email: "", received_on: localDate() });
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "cheque">("cash");
   const [customPurpose, setCustomPurpose] = useState("");
@@ -95,8 +92,10 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
       .catch(() => undefined);
   }, [open]);
 
-  // Each opening starts from the caller's preset purpose — a fund drive's
-  // account — and an empty split; amounts belong to the entry being written.
+  // Each opening starts empty — the treasurer ticks what the giver actually
+  // gave for — with one exception: a purpose the caller names (a fund drive's
+  // account) arrives already ticked, so keyed-in money lands in the drive.
+  // Nothing else is ever presumed; amounts belong to the entry being written.
   useEffect(() => {
     if (!open) return;
     setSelectedPurposes(presetPurpose ? [presetPurpose] : []);
@@ -104,21 +103,6 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
     setCustomPurpose("");
     setShowPurposePicker(false);
   }, [open, presetPurpose]);
-
-  // Until the purposes list arrives there is nothing to preselect; once it
-  // has, an entry with no preset starts on Combined Offering (or the first
-  // account the church configured), chosen once per opening.
-  useEffect(() => {
-    if (!open) {
-      defaultPurposeApplied.current = false;
-      return;
-    }
-    if (defaultPurposeApplied.current || purposes.length === 0) return;
-    defaultPurposeApplied.current = true;
-    setSelectedPurposes((current) =>
-      current.length ? current : [purposes.includes("Combined Offering") ? "Combined Offering" : purposes[0]]
-    );
-  }, [open, purposes]);
 
   // The purpose list behaves like a dropdown: tapping anywhere outside it —
   // the amount rows it opens over, the backdrop — closes it, and so does
