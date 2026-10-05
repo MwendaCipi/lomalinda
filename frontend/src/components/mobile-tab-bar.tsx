@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
 import { destinationOf, isActive, tabKeys } from "@/config/navigation";
+import { useChatUnread } from "@/lib/chat";
 import { normalizePath } from "@/lib/paths";
 import { atAppFloor, collapseToHome, trackAppHistory } from "@/lib/app-history";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -33,6 +34,9 @@ export function MobileTabBar() {
   const router = useRouter();
   const { hasToken } = useHeaderData();
   const isLoggedIn = hasToken;
+  // The unread count the chat tab wears. Shared with the top bar's own chat
+  // button: one poller feeds both badges.
+  const chatUnread = useChatUnread();
 
   // On the surfaces that are read by scrolling — the dashboard, the
   // announcements feed and the live balances board — the bar steps out of
@@ -132,6 +136,11 @@ export function MobileTabBar() {
           >
             <Icon className={`mb-0.5 h-5 w-5 ${item.active ? "text-gold" : "text-white/80"}`} />
             <span className="max-w-[52px] truncate text-[10px] leading-none tracking-tight">{item.label}</span>
+            {item.key === "chat" && chatUnread > 0 && (
+              <span className="absolute right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
+                {chatUnread > 9 ? "9+" : chatUnread}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -388,8 +388,14 @@
    plain, open Ministries when they serve in none. The leadership desks ride
    My Ministry when the member holds one and leave the rail otherwise, and the
    appointed Personal Ministries is never offered to join. Chrome changed, so
-   installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v75";
+   installed apps must take the new shell.
+
+   v76 — the church can talk: a Chat page carries the member's area rooms,
+   direct messages and a line to the church office, and the chrome gains the
+   ways in — a Chat tab on the phone's bottom bar and a Chat button on a PC's
+   top bar, each wearing the unread count. Chrome changed, so installed apps
+   must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v76";
 const STATIC_ASSETS = [
   "/",
   "/about/",

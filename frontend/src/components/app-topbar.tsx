@@ -3,8 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { MessagesSquare } from "lucide-react";
 
 import { nextMeeting, type WeeklyMeeting } from "@/lib/gathering";
+import { useChatUnread } from "@/lib/chat";
+import { useHeaderData } from "@/hooks/use-header-data";
 import { NavIdentity } from "./nav-identity";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -41,6 +44,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 export function AppTopBar() {
   const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const { hasToken } = useHeaderData();
+  // Chat lives in the bottom bar on a phone; a PC has the room here, so the
+  // bar itself carries the way in — with the same unread badge the tab wears.
+  const chatUnread = useChatUnread();
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/weekly-meetings/`)
@@ -99,6 +106,21 @@ export function AppTopBar() {
           <span className="block truncate text-[11px] leading-tight text-white/70">Loma Linda</span>
         </span>
       </Link>
+      {hasToken && (
+        <Link
+          href="/chat"
+          aria-label={chatUnread > 0 ? `Chat — ${chatUnread} unread` : "Chat"}
+          title="Chat"
+          className="relative mr-1.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 lg:flex"
+        >
+          <MessagesSquare className="h-4 w-4" />
+          {chatUnread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white ring-2 ring-bark">
+              {chatUnread > 9 ? "9+" : chatUnread}
+            </span>
+          )}
+        </Link>
+      )}
       <NavIdentity />
     </header>
   );
