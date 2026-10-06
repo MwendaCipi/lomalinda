@@ -3218,7 +3218,11 @@ function DepartmentDetail({
   // place. The band draws it instead of the section's pages.
   const unitsKey = units.join("|");
   const stripItems = useMemo(() => {
-    const names = unitsKey ? unitsKey.split("|") : [];
+    // Ambassadors is its own separate department; remove it from the AYM
+    // unit strip so it no longer appears as a sub-section of AYM.
+    const names = (unitsKey ? unitsKey.split("|") : []).filter(
+      (n) => n.toLowerCase() !== "ambassadors"
+    );
     return [
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside

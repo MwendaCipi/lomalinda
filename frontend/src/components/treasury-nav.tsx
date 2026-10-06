@@ -1,5 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+const fundAuthHeaders = (): Record<string, string> => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 /**
  * The treasury's views, as one line of toggles.
  *
@@ -10,11 +19,6 @@
  * the shell's header band
  * (`usePageHeader().setCustomToggles`), which is what keeps it a single line:
  * the band shows either this strip or the section's own pages, never both.
- *
- * The strip is purely presentational. Which view is active, and what a press
- * does (swap the page in place, or walk to the sibling page that owns the
- * view), is the page's to decide — the two desks read the same names but
- * answer them with different state.
  */
 export type TreasuryView = "givings" | "summary" | "accounts" | "drives" | "expenses" | "requests";
 
@@ -32,11 +36,39 @@ const TREASURY_VIEWS: { key: TreasuryView; label: string }[] = [
 export function TreasuryNav({
   active,
   onSelect,
+  requestsCount,
 }: {
   /** Which of the treasury's views the page is showing. */
   active: TreasuryView;
   onSelect: (view: TreasuryView) => void;
+  /** Optional override for the badge count. */
+  requestsCount?: number;
 }) {
+  // Track only the count fetched from the API; when the prop is provided the
+  // parent's value wins and no fetch is needed.
+  const [fetchedCount, setFetchedCount] = useState<number>(0);
+  const displayCount = typeof requestsCount === "number" ? requestsCount : fetchedCount;
+
+  useEffect(() => {
+    // If the parent supplies a count there is nothing to fetch.
+    if (typeof requestsCount === "number") return;
+    let alive = true;
+    fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && Array.isArray(data?.requests)) {
+          const waiting = data.requests.filter(
+            (r: { status: string }) => r.status === "pending" || r.status === "elder_approved"
+          ).length;
+          setFetchedCount(waiting);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [requestsCount]);
+
   // The same underline tabs the rest of the app uses — a label over the band's
   // rule rather than a pill button.
   const tabClass = (isActive: boolean) =>
@@ -54,7 +86,12 @@ export function TreasuryNav({
           aria-pressed={active === view.key}
           className={tabClass(active === view.key)}
         >
-          {view.label}
+          <span>{view.label}</span>
+          {view.key === "requests" && displayCount > 0 && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
+              {displayCount}
+            </span>
+          )}
         </button>
       ))}
     </div>
