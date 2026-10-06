@@ -1138,6 +1138,10 @@ export function railFor(
             if (isStaffRole(roles)) return true;
             return tieCodes.includes(department.code) || JOINABLE_DEPARTMENT_CODES.has(department.code);
           }
+          // Staff and admins see every ministry (including appointed ones like
+          // PM) — they oversee all areas. The non-joinable gate only hides an
+          // area from regular members who are not already on its roll.
+          if (isStaffRole(roles)) return true;
           return tieCodes.includes(department.code) || !NON_JOINABLE_MINISTRY_CODES.has(department.code);
         });
       return rows.map((department) => {

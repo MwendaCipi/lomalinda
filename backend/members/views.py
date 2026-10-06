@@ -9109,6 +9109,11 @@ class DepartmentAccountView(APIView):
                 raise ValueError()
         except (ValueError, TypeError):
             return Response({'detail': 'Say how much the request is for.'}, status=status.HTTP_400_BAD_REQUEST)
+        if amount > account.balance:
+            return Response(
+                {'detail': f'The requested amount (KES {amount:,.2f}) exceeds the available balance (KES {account.balance:,.2f}).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         reason = str(request.data.get('reason') or '').strip()
         if not reason:
             return Response({'reason': 'Tell the treasurer what the money is for.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -2582,15 +2582,23 @@ export function DepartmentAccountsPanel({
     }
   };
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+
   const balance = Number(account?.balance ?? 0);
   const movementQuery = search.trim().toLowerCase();
-  const visibleMovements = movementQuery
+  const filteredMovements = movementQuery
     ? movements.filter((movement) =>
         `${movement.description} ${movement.reference} ${movement.transaction_type_display}`
           .toLowerCase()
           .includes(movementQuery)
       )
     : movements;
+
+  const totalPages = Math.max(1, Math.ceil(filteredMovements.length / PAGE_SIZE));
+  const safePageNum = Math.min(page, totalPages);
+  const visibleMovements = filteredMovements.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
@@ -2692,34 +2700,71 @@ export function DepartmentAccountsPanel({
             )}
           </div>
 
-          {/* Bottom Action & Balance Footer Bar (Matches Treasury Accounts Desk) */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
+          {/* Bottom Action & Balance Footer Bar */}
+          <div className="flex shrink-0 items-center gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+            {/* Left: balance */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-moss">
               <span>
-                Total fund balance:{" "}
+                Balance:{" "}
                 <strong className="text-ember text-sm font-bold">
                   KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                 </strong>
               </span>
               {isDeaconate && (
                 <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
-                  LCB Allocation
+                  LCB
                 </span>
               )}
-              <span>
-                Showing <strong className="text-bark">{visibleMovements.length}</strong> of {movements.length}{" "}
-                {movements.length === 1 ? "transaction" : "transactions"}
-              </span>
             </div>
+
+            {/* Centre: page navigation */}
+            {totalPages > 1 && (
+              <div className="flex shrink-0 items-center gap-1 text-xs text-moss">
+                <button
+                  type="button"
+                  disabled={safePageNum <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg border border-sand-line px-2 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <span className="px-1">
+                  {safePageNum} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePageNum >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="rounded-lg border border-sand-line px-2 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+            {totalPages <= 1 && filteredMovements.length > 0 && (
+              <span className="shrink-0 text-xs text-moss-faint">
+                {filteredMovements.length} {filteredMovements.length === 1 ? "transaction" : "transactions"}
+              </span>
+            )}
+
+            {/* Right: action button */}
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowWithdrawModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-              >
-                {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-                {isDeaconate ? "Request funding" : "Request withdrawal"}
-              </button>
+              {canRequest ? (
+                <button
+                  type="button"
+                  onClick={() => setShowWithdrawModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
+                >
+                  {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
+                  {isDeaconate ? "Request funding" : "Request withdrawal"}
+                </button>
+              ) : (
+                <span className="text-[11px] italic text-moss-faint">
+                  Only {department.label} leaders can request {isDeaconate ? "funding" : "withdrawals"}
+                </span>
+              )}
             </div>
           </div>
         </>
@@ -2751,6 +2796,7 @@ export function DepartmentAccountsPanel({
                   type="number"
                   required
                   min="1"
+                  max={balance > 0 ? balance : undefined}
                   step="0.01"
                   inputMode="decimal"
                   value={amount}
@@ -2759,6 +2805,9 @@ export function DepartmentAccountsPanel({
                   className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
                   autoFocus
                 />
+                <span className="mt-1 block text-xs text-moss">
+                  Available: KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </span>
               </label>
               <label className="block text-sm font-medium text-bark">
                 What is it for? *
