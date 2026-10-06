@@ -2700,31 +2700,51 @@ export function DepartmentAccountsPanel({
             )}
           </div>
 
-          {/* Bottom Action & Balance Footer Bar */}
-          <div className="flex shrink-0 items-center gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
-            {/* Left: balance */}
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-moss">
-              <span>
-                Balance:{" "}
-                <strong className="text-ember text-sm font-bold">
-                  KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                </strong>
-              </span>
-              {isDeaconate && (
-                <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
-                  LCB
+          {/* Bottom footer — two rows so mobile never loses the button:
+               row 1: balance (left) + request button (right), always visible.
+               row 2: page navigation centred below, only when > 1 page. */}
+          <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+            {/* Row 1 — balance + action */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-moss">
+                <span>
+                  Balance:{" "}
+                  <strong className="text-ember font-bold">
+                    KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </strong>
                 </span>
-              )}
+                {isDeaconate && (
+                  <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
+                    LCB
+                  </span>
+                )}
+              </div>
+              <div className="shrink-0">
+                {canRequest ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowWithdrawModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep sm:px-4"
+                  >
+                    {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
+                    {/* Shorter label on phones, full label on larger screens */}
+                    <span className="sm:hidden">{isDeaconate ? "Request" : "Withdraw"}</span>
+                    <span className="hidden sm:inline">{isDeaconate ? "Request funding" : "Request withdrawal"}</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] italic text-moss-faint">Leaders only</span>
+                )}
+              </div>
             </div>
 
-            {/* Centre: page navigation */}
+            {/* Row 2 — pagination, only when there is more than one page */}
             {totalPages > 1 && (
-              <div className="flex shrink-0 items-center gap-1 text-xs text-moss">
+              <div className="mt-2 flex items-center justify-center gap-1 text-xs text-moss">
                 <button
                   type="button"
                   disabled={safePageNum <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg border border-sand-line px-2 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                  className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
                   aria-label="Previous page"
                 >
                   ‹
@@ -2736,7 +2756,7 @@ export function DepartmentAccountsPanel({
                   type="button"
                   disabled={safePageNum >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="rounded-lg border border-sand-line px-2 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                  className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
                   aria-label="Next page"
                 >
                   ›
@@ -2744,28 +2764,10 @@ export function DepartmentAccountsPanel({
               </div>
             )}
             {totalPages <= 1 && filteredMovements.length > 0 && (
-              <span className="shrink-0 text-xs text-moss-faint">
+              <p className="mt-0.5 text-center text-[11px] text-moss-faint">
                 {filteredMovements.length} {filteredMovements.length === 1 ? "transaction" : "transactions"}
-              </span>
+              </p>
             )}
-
-            {/* Right: action button */}
-            <div className="flex shrink-0 items-center gap-2">
-              {canRequest ? (
-                <button
-                  type="button"
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-                >
-                  {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-                  {isDeaconate ? "Request funding" : "Request withdrawal"}
-                </button>
-              ) : (
-                <span className="text-[11px] italic text-moss-faint">
-                  Only {department.label} leaders can request {isDeaconate ? "funding" : "withdrawals"}
-                </span>
-              )}
-            </div>
           </div>
         </>
       )}
