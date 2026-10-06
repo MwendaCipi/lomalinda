@@ -75,6 +75,10 @@ echo "🐍 Executing database schema migrations..."
 backend/venv/bin/python backend/manage.py migrate_schemas
 
 echo "🏗️ Building Next.js production web app..."
+# Remove the incremental TS build cache before building. It can be owned by
+# www-data (written during a previous service-context run) while this deploy
+# runs as root, causing an EACCES error even though --noEmit is passed.
+rm -f frontend/tsconfig.tsbuildinfo
 (cd frontend && npm run build)
 
 echo "⏰ Ensuring the daily pledge-reminder cron is installed..."
