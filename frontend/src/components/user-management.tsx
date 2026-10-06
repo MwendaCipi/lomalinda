@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, MessageCircle, MessageSquare, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
-import { WhatsAppIcon } from "@/components/whatsapp-icon";
-import { openConversation } from "@/lib/chat";
+import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
+import { ContactMemberModal } from "@/components/contact-modal";
 import {
   accountTypeOf,
   accountTypeLabel,
@@ -2216,43 +2215,6 @@ export function UserManagement() {
 
   const openContactModal = (member: MemberUser) => void setContactMember(member);
 
-  const handleChatHere = async (member: MemberUser) => {
-    setContactMember(null);
-    try {
-      await openConversation({ kind: "dm", member_id: member.id });
-      // Land the officer directly in the new DM thread rather than leaving them
-      // on the roster with a room they still have to find and click.
-      window.location.href = `/chat?dm=${member.id}`;
-    } catch (error) {
-      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
-    }
-    // Land the officer directly in the new DM thread rather than leaving them
-    // on the roster with a room they still have to find and click.
-    window.location.href = `/chat?dm=${member.id}`;
-  };
-
-  const handleCallMember = (member: MemberUser) => {
-    setContactMember(null);
-    if (member.phone_number) {
-      window.location.href = `tel:${member.phone_number}`;
-    }
-  };
-
-  const handleWhatsappMember = (member: MemberUser) => {
-    setContactMember(null);
-    const number = member.whatsapp_number || member.phone_number;
-    if (number) {
-      window.location.href = `https://wa.me/${number.replace(/\D/g, "")}`;
-    }
-  };
-
-  const handleEmailMember = (member: MemberUser) => {
-    setContactMember(null);
-    if (member.email) {
-      window.location.href = `mailto:${member.email}`;
-    }
-  };
-
   // ── Print handler ────────────────────────────────────────────────────────────
   const handlePrintMemberList = () => {
     const token = localStorage.getItem("access_token");
@@ -3541,97 +3503,7 @@ export function UserManagement() {
 
       {/* ══ Contact member — how should the office reach them? ══ */}
       {contactMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="contact-member-title"
-            className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line sm:px-8">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
-              <div>
-                <h3 id="contact-member-title" className="text-base font-bold text-bark">
-                  Contact {contactMember.first_name || contactMember.last_name
-                    ? `${contactMember.first_name || ""} ${contactMember.last_name || ""}`.trim()
-                    : contactMember.username}
-                </h3>
-                <p className="mt-0.5 text-[11px] text-moss">@{contactMember.username}</p>
-              </div>
-              <button type="button" onClick={() => setContactMember(null)}
-                className="text-moss hover:text-bark text-xl leading-none" aria-label="Close">
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Each choice is only offered when the detail exists, and the one
-                line under it says which number it will use — WhatsApp falls
-                back to the phone number, so the officer knows before tapping. */}
-            <div className="mt-4 space-y-2">
-              <button
-                type="button"
-                onClick={() => handleCallMember(contactMember)}
-                disabled={!contactMember.phone_number}
-                className="flex w-full items-center gap-3 rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-left text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-sand-line disabled:hover:bg-white"
-              >
-                <Phone size={14} className="shrink-0 text-ember" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">Call</span>
-                  <span className="block text-[11px] font-normal text-moss">
-                    {contactMember.phone_number || "No phone number on file"}
-                  </span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleChatHere(contactMember)}
-                className="flex w-full items-center gap-3 rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-left text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
-              >
-                <MessageSquare size={14} className="shrink-0 text-ember" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">Chat here</span>
-                  <span className="block text-[11px] font-normal text-moss">
-                    Open a direct message in this app
-                  </span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleWhatsappMember(contactMember)}
-                disabled={!(contactMember.whatsapp_number || contactMember.phone_number)}
-                className="flex w-full items-center gap-3 rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-left text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-sand-line disabled:hover:bg-white"
-              >
-                <WhatsAppIcon className="shrink-0 text-ember" />
-                <span className="min-w-0">
-                  <span className="block">WhatsApp</span>
-                  <span className="block text-[11px] font-normal text-moss">
-                    {contactMember.whatsapp_number || contactMember.phone_number || "No number on file"}
-                    {contactMember.whatsapp_number ? "" : contactMember.phone_number ? " (phone number)" : ""}
-                  </span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleEmailMember(contactMember)}
-                disabled={!contactMember.email}
-                className="flex w-full items-center gap-3 rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-left text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-sand-line disabled:hover:bg-white"
-              >
-                <Mail size={14} className="shrink-0 text-ember" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">Email</span>
-                  <span className="block text-[11px] font-normal text-moss">
-                    {contactMember.email || "No email on file"}
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button type="button" onClick={() => setContactMember(null)}
-                className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <ContactMemberModal member={contactMember} onClose={() => setContactMember(null)} />
       )}
 
     </section>

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, X, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { ContactModal } from "@/components/contact-modal";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
@@ -1229,86 +1230,51 @@ export default function ReconciliationPage() {
         </div>
       </div>
 
-      {/* Contact Giver Quick Action Modal */}
+      {/* Contact Giver Quick Action Modal — the shared contact shell with the
+          receipt as context; a giver isn't an app member, so no Chat here. */}
       {contactModalGiver && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={() => setContactModalGiver(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3 mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-bark">Contact Giver</h3>
-                <p className="text-xs text-moss mt-0.5">{contactModalGiver.donor_name}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setContactModalGiver(null)}
-                className="rounded-lg p-1 text-moss hover:bg-sand"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <ContactModal
+          onClose={() => setContactModalGiver(null)}
+          title="Contact Giver"
+          subtitle={contactModalGiver.donor_name}
+          context={
+            <div className="rounded-xl bg-sand p-3 text-xs space-y-1">
+              <p className="font-semibold text-bark">{contactModalGiver.purpose}</p>
+              <p className="text-moss">
+                Amount: <span className="font-bold text-bark">{money(contactModalGiver.amount)}</span>
+              </p>
+              <p className="text-moss">Ref: {contactModalGiver.receipt_number}</p>
             </div>
-
-            <div className="space-y-3">
-              <div className="rounded-xl bg-sand p-3 text-xs space-y-1">
-                <p className="font-semibold text-bark">{contactModalGiver.purpose}</p>
-                <p className="text-moss">Amount: <span className="font-bold text-bark">{money(contactModalGiver.amount)}</span></p>
-                <p className="text-moss">Ref: {contactModalGiver.receipt_number}</p>
-              </div>
-
-              {contactModalGiver.giver_phone ? (
-                <div className="grid gap-2 pt-2">
-                  <a
-                    href={`tel:${contactModalGiver.giver_phone}`}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-sage py-2.5 text-sm font-semibold text-white hover:bg-sage-deep transition"
-                  >
-                    <Phone className="h-4 w-4" />
-                    <span>Call ({contactModalGiver.giver_phone})</span>
-                  </a>
-                  <a
-                    href={`sms:${contactModalGiver.giver_phone}`}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-sand-mute py-2.5 text-sm font-semibold text-bark hover:bg-sand transition"
-                  >
-                    <MessageSquare className="h-4 w-4 text-ember" />
-                    <span>Send SMS</span>
-                  </a>
-                </div>
-              ) : (
-                <p className="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl">
-                  No phone number recorded for this giver.
-                </p>
-              )}
-
-              {contactModalGiver.giver_email ? (
-                <a
-                  href={`mailto:${contactModalGiver.giver_email}?subject=Giving%20Receipt%20-%20${encodeURIComponent(contactModalGiver.purpose)}`}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-sand-mute py-2.5 text-sm font-semibold text-bark hover:bg-sand transition"
-                >
-                  <Mail className="h-4 w-4 text-ember" />
-                  <span>Email ({contactModalGiver.giver_email})</span>
-                </a>
-              ) : (
-                <p className="text-xs text-moss bg-sand p-3 rounded-xl">
-                  No email address recorded for this giver.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-5 pt-3 border-t border-sand-line">
-              <button
-                type="button"
-                onClick={() => setContactModalGiver(null)}
-                className="w-full rounded-xl border border-sand-mute py-2 text-xs font-semibold text-moss hover:bg-sand"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+          }
+          actions={[
+            {
+              key: "call",
+              icon: <Phone size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+              label: "Call",
+              detail: contactModalGiver.giver_phone || "No phone number recorded for this giver.",
+              href: contactModalGiver.giver_phone ? `tel:${contactModalGiver.giver_phone}` : undefined,
+              disabled: !contactModalGiver.giver_phone,
+            },
+            {
+              key: "sms",
+              icon: <MessageSquare size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+              label: "Send SMS",
+              detail: contactModalGiver.giver_phone || "No phone number recorded for this giver.",
+              href: contactModalGiver.giver_phone ? `sms:${contactModalGiver.giver_phone}` : undefined,
+              disabled: !contactModalGiver.giver_phone,
+            },
+            {
+              key: "email",
+              icon: <Mail size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+              label: "Email",
+              detail: contactModalGiver.giver_email || "No email address recorded for this giver.",
+              href: contactModalGiver.giver_email
+                ? `mailto:${contactModalGiver.giver_email}?subject=Giving%20Receipt%20-%20${encodeURIComponent(contactModalGiver.purpose)}`
+                : undefined,
+              disabled: !contactModalGiver.giver_email,
+            },
+          ]}
+        />
       )}
 
       {/* Add Receipt Modal — the same modal the contributions ledger uses,
