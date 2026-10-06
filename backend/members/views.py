@@ -9065,8 +9065,7 @@ class DepartmentAccountView(APIView):
             for movement in account.transactions.all().order_by('-created_at')[:100]
         ]
 
-        is_treasurer = is_treasurer_or_admin(request.user)
-        withdrawals = [] if is_treasurer else [
+        withdrawals = [
             {
                 'id': row.id,
                 'amount': str(row.amount),
@@ -9085,7 +9084,7 @@ class DepartmentAccountView(APIView):
         is_deaconate = target.code == 'deaconate'
         return Response({
             'account': TreasuryAccountSerializer(account).data,
-            'can_request_withdrawal': can_manage_department(request.user, department) and not is_treasurer,
+            'can_request_withdrawal': can_manage_department(request.user, department),
             'is_deaconate': is_deaconate,
             'movements': movements,
             'withdrawals': withdrawals,

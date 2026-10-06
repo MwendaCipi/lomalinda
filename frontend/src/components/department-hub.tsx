@@ -2593,11 +2593,11 @@ export function DepartmentAccountsPanel({
     : movements;
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
       {loading ? (
         <p className="py-8 text-center text-xs text-moss">Loading the fund…</p>
       ) : !account ? (
-        <div className="rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
           <p className="text-sm font-semibold text-bark">No account connected yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
             The treasurer has not linked a church treasury account for {department.label} yet. Accounts can be linked at the Treasury Accounts desk.
@@ -2605,158 +2605,121 @@ export function DepartmentAccountsPanel({
         </div>
       ) : (
         <>
-          {/* Fund Header Banner */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-moss">
-                  {account.description || account.name} — balance
-                </span>
-                {isDeaconate && (
-                  <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
-                    Church Budget (LCB)
-                  </span>
-                )}
-              </div>
-              <p className="mt-0.5 text-2xl font-bold text-bark">
-                KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            {canRequest && (
-              <button
-                type="button"
-                onClick={() => setShowWithdrawModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep"
-              >
-                {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-                {isDeaconate ? "Request funding" : "Request withdrawal"}
-              </button>
-            )}
-          </div>
-
-          {/* Pending or Past Withdrawal / Funding Requests */}
+          {/* Pending or Past Withdrawal / Funding Requests (compact top strip if any) */}
           {withdrawals.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">
-                {isDeaconate ? "Funding requests" : "Withdrawal requests"}
-              </h3>
-              <div className="space-y-2">
+            <div className="shrink-0 border-b border-sand-line bg-sand-linen/40 px-4 py-2.5 max-h-36 overflow-y-auto custom-table-scrollbar space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-moss">
+                  {isDeaconate ? "Funding requests" : "Withdrawal requests"}
+                </h4>
+                <span className="text-[10px] font-semibold text-moss-faint">
+                  {withdrawals.filter((w) => w.status === "pending").length} pending
+                </span>
+              </div>
+              <div className="space-y-1.5">
                 {withdrawals.map((row) => (
-                  <div key={row.id} className="rounded-xl border border-sand-line bg-white p-3 shadow-xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-bark">
-                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} — {row.reason}
-                      </p>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                          row.status === "approved"
-                            ? "bg-green-50 text-green-800"
-                            : row.status === "declined"
-                              ? "bg-red-50 text-red-800"
-                              : "bg-mist-select text-bark"
-                        }`}
-                      >
-                        {row.status}
+                  <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs shadow-2xs">
+                    <div className="min-w-0">
+                      <span className="font-bold text-bark">
+                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                       </span>
+                      <span className="text-moss"> — {row.reason}</span>
+                      <span className="text-[10px] text-moss-faint ml-2">({row.requested_by} · {dayFirst(row.created_at)})</span>
                     </div>
-                    <p className="mt-1 text-[11px] text-moss-faint">
-                      Asked by {row.requested_by} · {dayFirst(row.created_at)}
-                    </p>
-                    {row.reply && row.status !== "pending" && (
-                      <p className="mt-1.5 rounded-lg bg-sand px-2.5 py-1.5 text-[11px] text-moss">{row.reply}</p>
-                    )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        row.status === "approved"
+                          ? "bg-green-50 text-green-800"
+                          : row.status === "declined"
+                            ? "bg-red-50 text-red-800"
+                            : "bg-mist-select text-bark"
+                      }`}
+                    >
+                      {row.status}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Scrollable Transactions Table */}
-          <div className="rounded-2xl border border-sand-line bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-moss">
-                  Transactions &amp; Ledger Movements
-                </h3>
-                <p className="text-[11px] text-moss-faint">
-                  All credits, contributions and debited disbursements for this account.
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold text-moss">
-                {visibleMovements.length} {visibleMovements.length === 1 ? "transaction" : "transactions"}
-                {movementQuery ? ` of ${movements.length}` : ""}
-              </span>
-            </div>
-
+          {/* Contained Scrollable Transactions Table: Only Rows Scroll */}
+          <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
             {movements.length === 0 ? (
-              <p className="px-4 py-12 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
+              <p className="px-4 py-16 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
             ) : visibleMovements.length === 0 ? (
-              <p className="px-4 py-12 text-center text-xs text-moss">No transaction matches that search.</p>
+              <p className="px-4 py-16 text-center text-xs text-moss">No transaction matches that search.</p>
             ) : (
-              <div className="max-h-[380px] sm:max-h-[440px] overflow-y-auto custom-table-scrollbar">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
-                    <tr>
-                      <th className="px-4 py-2.5">Date</th>
-                      <th className="px-4 py-2.5">Description</th>
-                      <th className="px-4 py-2.5">Reference / Type</th>
-                      <th className="px-4 py-2.5 text-right">Amount (KES)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-sand-soft bg-white">
-                    {visibleMovements.map((movement) => {
-                      const isOutflow = movement.transaction_type === "debit" || movement.transaction_type === "transfer_out";
-                      return (
-                        <tr key={movement.id} className="transition hover:bg-sand-linen/60">
-                          <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
-                            {dayFirstTime(movement.created_at)}
-                          </td>
-                          <td className={`px-4 ${rowPad} font-medium text-bark`}>
-                            <div className="flex items-center gap-1.5">
-                              {isOutflow ? (
-                                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
-                              ) : (
-                                <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
-                              )}
-                              <span className="truncate">{movement.description}</span>
-                            </div>
-                          </td>
-                          <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
-                            <span className="font-mono">{movement.reference || movement.transaction_type_display}</span>
-                          </td>
-                          <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${isOutflow ? "text-ember" : "text-moss-dark"}`}>
-                            {isOutflow ? "−" : "+"}KES{" "}
-                            {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Reference / Type</th>
+                    <th className="px-4 py-3 text-right">Amount (KES)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand-soft bg-white">
+                  {visibleMovements.map((movement) => {
+                    const isOutflow = movement.transaction_type === "debit" || movement.transaction_type === "transfer_out";
+                    return (
+                      <tr key={movement.id} className="transition hover:bg-sand-linen/60">
+                        <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                          {dayFirstTime(movement.created_at)}
+                        </td>
+                        <td className={`px-4 ${rowPad} font-medium text-bark`}>
+                          <div className="flex items-center gap-1.5">
+                            {isOutflow ? (
+                              <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
+                            ) : (
+                              <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
+                            )}
+                            <span className="truncate">{movement.description}</span>
+                          </div>
+                        </td>
+                        <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
+                          <span className="font-mono">{movement.reference || movement.transaction_type_display}</span>
+                        </td>
+                        <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${isOutflow ? "text-ember" : "text-moss-dark"}`}>
+                          {isOutflow ? "−" : "+"}KES{" "}
+                          {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
+          </div>
 
-            {/* Bottom Action Footer Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand-linen/50 px-4 py-3">
-              <p className="text-[11px] text-moss">
-                {isDeaconate
-                  ? "Deaconate funding requests are reviewed and disbursed by the church treasurer from LCB."
-                  : "Withdrawals from this fund are requested by department leadership and disbursed by the treasurer."}
-              </p>
-              {canRequest ? (
-                <button
-                  type="button"
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-                >
-                  {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-                  {isDeaconate ? "Request funding" : "Request withdrawal"}
-                </button>
-              ) : (
-                <span className="text-[11px] italic text-moss-faint">
-                  (Only leaders of {department.label} can request {isDeaconate ? "funding" : "withdrawals"})
+          {/* Bottom Action & Balance Footer Bar (Matches Treasury Accounts Desk) */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
+              <span>
+                Total fund balance:{" "}
+                <strong className="text-ember text-sm font-bold">
+                  KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </strong>
+              </span>
+              {isDeaconate && (
+                <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
+                  LCB Allocation
                 </span>
               )}
+              <span>
+                Showing <strong className="text-bark">{visibleMovements.length}</strong> of {movements.length}{" "}
+                {movements.length === 1 ? "transaction" : "transactions"}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowWithdrawModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
+              >
+                {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
+                {isDeaconate ? "Request funding" : "Request withdrawal"}
+              </button>
             </div>
           </div>
         </>
