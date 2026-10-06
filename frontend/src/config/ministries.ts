@@ -110,6 +110,30 @@ export const MINISTRIES: Ministry[] = [
       { title: "Hope and dignity", text: "Every person deserves care, respect, and the freedom to be heard. Chaplaincy points to hope while honouring each person's story." },
     ],
   },
+  {
+    slug: "welfare",
+    title: "Welfare Ministry",
+    givingPurpose: "Msamaria Mwema",
+    description: "Reaching out to members and neighbours in need with practical support, compassion, and the love of Christ.",
+    department: "Welfare Ministry",
+    sections: [
+      { title: "Member Assistance", text: "Walking alongside church members through illness, bereavement, financial hardship, and other life challenges." },
+      { title: "Community Outreach", text: "Extending practical care — food, clothing, and essential support — to vulnerable people in the surrounding community." },
+      { title: "Hospital & Home Visits", text: "Bringing encouragement, prayer, and a listening ear to the sick, elderly, and those unable to attend church." },
+    ],
+  },
+  {
+    slug: "dorcas",
+    title: "Dorcas Ministry",
+    givingPurpose: "Msamaria Mwema",
+    description: "A ministry of compassionate service, providing food, clothing, and care to the poor and vulnerable in the spirit of Acts 9:36.",
+    department: "Dorcas Ministry",
+    sections: [
+      { title: "Clothing & Food Relief", text: "Collecting, sorting, and distributing clothing and food parcels to families and individuals in need." },
+      { title: "Compassionate Service", text: "Organising regular outreach visits, practical help, and donations to the less privileged in our community." },
+      { title: "Acts of Kindness", text: "Embodying the example of Dorcas — faithful, generous service that makes Christ's love tangible and real." },
+    ],
+  },
 ];
 
 export type CalendarEvent = { date: string; name: string; department?: string };

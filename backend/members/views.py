@@ -9037,23 +9037,38 @@ class DepartmentJoinRequestReviewView(APIView):
 
 
 def department_account(user, code):
-    """The department's fund, for the desk that may read it — or None.
+    """The department's primary fund, for the desk that may read it — or None."""
+    accounts = department_accounts(user, code)
+    return accounts[0] if accounts else None
 
-    A department's money is any treasury account pointed at the department
-    (``TreasuryAccount.department``). Reading is for the department's own
-    leadership — the same ``can_manage_department`` gate the rest of the
-    desk answers to — for the members on its roll, who may see the state of
-    their own area's fund even though only the leadership may ask money of
-    it, and for the treasurer's office, which keeps every fund the church
-    holds. ``None`` means there is nothing to show: the department has no
-    fund yet, and the desk says so.
+
+def department_accounts(user, code):
+    """The treasury accounts accessible for this department desk:
+    - The department's own fund (e.g. AWM, AMO, AYM).
+    - If the user is leadership (can_manage_department) or treasurer/admin, also LCB (Local Church Budget).
+    - Regular roll members only see the department's own fund.
     """
+    can_manage = can_manage_department(user, code) or is_treasurer_or_admin(user)
     on_roll = DepartmentMembership.objects.filter(member=user, department=code).exists()
-    if not can_manage_department(user, code) and not on_roll and not is_treasurer_or_admin(user):
-        return None
-    return TreasuryAccount.objects.filter(
+    if not can_manage and not on_roll:
+        return []
+
+    dept_account = TreasuryAccount.objects.filter(
         department__code=code, department__is_active=True,
     ).order_by('id').first()
+
+    accounts = []
+    if dept_account:
+        accounts.append(dept_account)
+
+    if can_manage:
+        lcb_account = TreasuryAccount.objects.filter(
+            Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
+        ).order_by('id').first()
+        if lcb_account and lcb_account not in accounts:
+            accounts.append(lcb_account)
+
+    return accounts
 
 
 class DepartmentAccountView(APIView):
@@ -9072,18 +9087,32 @@ class DepartmentAccountView(APIView):
         target = Department.objects.filter(code=department, is_active=True).first()
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        account = department_account(request.user, department)
-        if account is None:
+        accounts = department_accounts(request.user, department)
+        if not accounts:
             return Response({
                 'account': None,
+                'accounts': [],
                 'can_request_withdrawal': False,
                 'movements': [],
                 'withdrawals': [],
             })
 
+        account_id_param = request.query_params.get('account_id')
+        if account_id_param and account_id_param != 'all':
+            active_accounts = [a for a in accounts if str(a.id) == str(account_id_param)]
+            if not active_accounts:
+                active_accounts = accounts
+        else:
+            active_accounts = accounts
+
+        primary_account = accounts[0]
+
         movements = [
             {
                 'id': movement.id,
+                'account_id': movement.account_id,
+                'account_name': movement.account.name,
+                'account_description': movement.account.description or movement.account.name,
                 'transaction_type': movement.transaction_type,
                 'transaction_type_display': movement.get_transaction_type_display(),
                 'amount': str(movement.amount),
@@ -9091,12 +9120,17 @@ class DepartmentAccountView(APIView):
                 'reference': movement.reference,
                 'created_at': movement.created_at,
             }
-            for movement in account.transactions.all().order_by('-created_at')[:100]
+            for movement in TreasuryAccountTransaction.objects.filter(
+                account__in=active_accounts
+            ).select_related('account').order_by('-created_at')[:150]
         ]
 
         withdrawals = [
             {
                 'id': row.id,
+                'account_id': row.account_id,
+                'account_name': row.account.name,
+                'account_description': row.account.description or row.account.name,
                 'amount': str(row.amount),
                 'reason': row.reason,
                 'status': row.status,
@@ -9107,13 +9141,22 @@ class DepartmentAccountView(APIView):
             }
             for row in DepartmentWithdrawalRequest.objects.filter(
                 department=target,
-            ).select_related('requested_by', 'decided_by').order_by('-created_at')[:50]
+                account__in=active_accounts,
+            ).select_related('requested_by', 'decided_by', 'account').order_by('-created_at')[:50]
         ]
 
         is_deaconate = target.code == 'deaconate'
         return Response({
-            'account': TreasuryAccountSerializer(account).data,
-            'can_request_withdrawal': can_manage_department(request.user, department),
+            'account': TreasuryAccountSerializer(primary_account).data,
+            'accounts': [
+                {
+                    **TreasuryAccountSerializer(acc).data,
+                    'is_primary': (acc.department_id == target.id if target else False),
+                    'is_lcb': (acc.name.upper() == 'LCB' or 'LOCAL CHURCH BUDGET' in (acc.description or '').upper()),
+                }
+                for acc in accounts
+            ],
+            'can_request_withdrawal': can_manage_department(request.user, department) or is_treasurer_or_admin(request.user),
             'is_deaconate': is_deaconate,
             'movements': movements,
             'withdrawals': withdrawals,
@@ -9124,13 +9167,19 @@ class DepartmentAccountView(APIView):
         target = Department.objects.filter(code=department, is_active=True).first()
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
+        if not can_manage_department(request.user, department) and not is_treasurer_or_admin(request.user):
             return Response({'detail': "Only this department's leadership can request a withdrawal or funding."}, status=status.HTTP_403_FORBIDDEN)
-        account = TreasuryAccount.objects.filter(
-            department__code=department, department__is_active=True,
-        ).order_by('id').first()
-        if account is None:
+        accounts = department_accounts(request.user, department)
+        if not accounts:
             return Response({'detail': 'This department has no account to withdraw from yet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        account_id = request.data.get('account_id')
+        if account_id:
+            account = next((a for a in accounts if str(a.id) == str(account_id)), None)
+            if account is None:
+                return Response({'detail': 'Invalid or inaccessible treasury account selected.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            account = accounts[0]
 
         try:
             amount = Decimal(str(request.data.get('amount')))
@@ -9140,7 +9189,7 @@ class DepartmentAccountView(APIView):
             return Response({'detail': 'Say how much the request is for.'}, status=status.HTTP_400_BAD_REQUEST)
         if amount > account.balance:
             return Response(
-                {'detail': f'The requested amount (KES {amount:,.2f}) exceeds the available balance (KES {account.balance:,.2f}).'},
+                {'detail': f'The requested amount (KES {amount:,.2f}) exceeds the available balance in {account.description or account.name} (KES {account.balance:,.2f}).'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         reason = str(request.data.get('reason') or '').strip()

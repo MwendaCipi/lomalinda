@@ -2477,8 +2477,22 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
 
 /** One ledger line on a department fund: money in, or money the treasurer
  *  paid out. */
+type DepartmentAccountInfo = {
+  id: number;
+  name: string;
+  description: string;
+  balance: string | number;
+  is_primary?: boolean;
+  is_lcb?: boolean;
+};
+
+/** One ledger line on a department fund: money in, or money the treasurer
+ *  paid out. */
 type FundMovement = {
   id: number;
+  account_id?: number;
+  account_name?: string;
+  account_description?: string;
   transaction_type: string;
   transaction_type_display: string;
   amount: string;
@@ -2490,9 +2504,12 @@ type FundMovement = {
 /** A withdrawal ask the desk has raised, and the treasurer's answer. */
 type FundWithdrawal = {
   id: number;
+  account_id?: number;
+  account_name?: string;
+  account_description?: string;
   amount: string;
   reason: string;
-  status: "pending" | "approved" | "declined";
+  status: "pending" | "elder_approved" | "approved" | "declined" | "reversed";
   reply: string;
   requested_by: string;
   created_at: string;
@@ -2590,6 +2607,9 @@ type UnifiedAccountItem = {
   isOutflow: boolean;
   category: "contribution" | "withdrawal";
   status: "completed" | "pending" | "elder_approved" | "approved" | "declined" | "reversed";
+  accountId?: number;
+  accountName?: string;
+  accountDescription?: string;
   requestedBy?: string;
   reply?: string;
 };
@@ -2614,12 +2634,14 @@ export function DepartmentAccountsPanel({
   typeFilter?: "all" | "contributions" | "withdrawals";
 }) {
   const isDeaconate = department.code === "deaconate";
-  const [account, setAccount] = useState<{ name: string; description: string; balance: string | number } | null>(null);
+  const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
+  const [accountFilter, setAccountFilter] = useState<string>("all");
   const [movements, setMovements] = useState<FundMovement[]>([]);
   const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
   const [canRequest, setCanRequest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAccountId, setWithdrawAccountId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -2630,13 +2652,30 @@ export function DepartmentAccountsPanel({
     fetch(`${API_URL}/api/members/departments/${department.code}/account/`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setAccount(data?.account ?? null);
+        const accList: DepartmentAccountInfo[] = Array.isArray(data?.accounts)
+          ? data.accounts
+          : data?.account
+            ? [data.account]
+            : [];
+        setAccounts(accList);
         setMovements(Array.isArray(data?.movements) ? data.movements : []);
         setWithdrawals(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
         setCanRequest(Boolean(data?.can_request_withdrawal));
+
+        // Initial default account filter:
+        // For AWM, both accounts are selected by default ("all").
+        // For other departments, their primary account is selected by default, or "all".
+        if (department.code === "awm") {
+          setAccountFilter("all");
+        } else if (accList.length > 0) {
+          const primary = accList.find((a) => a.is_primary) ?? accList[0];
+          setAccountFilter(String(primary.id));
+        } else {
+          setAccountFilter("all");
+        }
       })
       .catch(() => {
-        setAccount(null);
+        setAccounts([]);
         setMovements([]);
         setWithdrawals([]);
         setCanRequest(false);
@@ -2654,14 +2693,33 @@ export function DepartmentAccountsPanel({
     };
   }, [load]);
 
+  const selectedWithdrawAccount = useMemo(() => {
+    if (withdrawAccountId !== null) {
+      const match = accounts.find((a) => a.id === withdrawAccountId);
+      if (match) return match;
+    }
+    if (accountFilter !== "all") {
+      const match = accounts.find((a) => String(a.id) === String(accountFilter));
+      if (match) return match;
+    }
+    return accounts.find((a) => a.is_primary) ?? accounts[0] ?? null;
+  }, [accounts, withdrawAccountId, accountFilter]);
+
+  const withdrawBalance = Number(selectedWithdrawAccount?.balance ?? 0);
+
   const requestWithdrawal = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     try {
+      const chosenAccountId = withdrawAccountId ?? selectedWithdrawAccount?.id;
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/account/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, reason: reason.trim() }),
+        body: JSON.stringify({
+          amount,
+          reason: reason.trim(),
+          account_id: chosenAccountId,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || data.reason || "Could not send the request.");
@@ -2684,7 +2742,6 @@ export function DepartmentAccountsPanel({
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
-  const balance = Number(account?.balance ?? 0);
   const movementQuery = search.trim().toLowerCase();
 
   const unifiedItems = useMemo(() => {
@@ -2724,6 +2781,9 @@ export function DepartmentAccountsPanel({
         isOutflow,
         category,
         status,
+        accountId: mov.account_id,
+        accountName: mov.account_name,
+        accountDescription: mov.account_description,
         requestedBy,
         reply,
       });
@@ -2740,6 +2800,9 @@ export function DepartmentAccountsPanel({
           isOutflow: true,
           category: "withdrawal",
           status: (wd.status as UnifiedAccountItem["status"]) || "pending",
+          accountId: wd.account_id,
+          accountName: wd.account_name,
+          accountDescription: wd.account_description,
           requestedBy: wd.requested_by,
           reply: wd.reply,
         });
@@ -2752,6 +2815,9 @@ export function DepartmentAccountsPanel({
 
   const filteredItems = useMemo(() => {
     let list = unifiedItems;
+    if (accountFilter !== "all") {
+      list = list.filter((item) => String(item.accountId) === String(accountFilter));
+    }
     if (typeFilter === "contributions") {
       list = list.filter((item) => item.category === "contribution");
     } else if (typeFilter === "withdrawals") {
@@ -2760,17 +2826,28 @@ export function DepartmentAccountsPanel({
 
     if (movementQuery) {
       list = list.filter((item) =>
-        `${item.description} ${item.reference} ${item.status} ${item.requestedBy || ""} ${item.reply || ""}`
+        `${item.description} ${item.reference} ${item.status} ${item.accountName || ""} ${item.requestedBy || ""} ${item.reply || ""}`
           .toLowerCase()
           .includes(movementQuery)
       );
     }
     return list;
-  }, [unifiedItems, typeFilter, movementQuery]);
+  }, [unifiedItems, accountFilter, typeFilter, movementQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePageNum = Math.min(page, totalPages);
   const visibleItems = filteredItems.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
+
+  const selectedAccountInfo = useMemo(() => {
+    if (accountFilter === "all") return null;
+    return accounts.find((a) => String(a.id) === String(accountFilter)) ?? null;
+  }, [accounts, accountFilter]);
+
+  const totalBalance = useMemo(() => {
+    return accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  }, [accounts]);
+
+  const displayedBalance = selectedAccountInfo ? Number(selectedAccountInfo.balance) : totalBalance;
 
   const statusBadge = (status: UnifiedAccountItem["status"]) => {
     const map: Record<string, string> = {
@@ -2804,7 +2881,7 @@ export function DepartmentAccountsPanel({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
       {loading ? (
         <p className="py-8 text-center text-xs text-moss">Loading the fund…</p>
-      ) : !account ? (
+      ) : accounts.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
           <p className="text-sm font-semibold text-bark">No account connected yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
@@ -2813,6 +2890,49 @@ export function DepartmentAccountsPanel({
         </div>
       ) : (
         <>
+          {/* Account Filter Switcher Tabs: when more than 1 account is accessible */}
+          {accounts.length > 1 && (
+            <div className="flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-moss mr-1 shrink-0">
+                Account:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountFilter("all");
+                  setPage(1);
+                }}
+                className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  accountFilter === "all"
+                    ? "bg-ember text-white shadow-2xs"
+                    : "bg-white text-bark border border-sand-line hover:bg-sand"
+                }`}
+              >
+                All Accounts
+              </button>
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  type="button"
+                  onClick={() => {
+                    setAccountFilter(String(acc.id));
+                    setPage(1);
+                  }}
+                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                    accountFilter === String(acc.id)
+                      ? "bg-ember text-white shadow-2xs"
+                      : "bg-white text-bark border border-sand-line hover:bg-sand"
+                  }`}
+                >
+                  {acc.description || acc.name}{" "}
+                  <span className={accountFilter === String(acc.id) ? "text-white/80 font-normal" : "text-moss font-normal"}>
+                    (KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 0 })})
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll */}
           <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
             {unifiedItems.length === 0 ? (
@@ -2857,7 +2977,14 @@ export function DepartmentAccountsPanel({
                         </div>
                       </td>
                       <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
-                        <span className="font-mono">{item.reference}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono">{item.reference}</span>
+                          {accounts.length > 1 && item.accountName && (
+                            <span className="inline-block w-fit rounded-sm bg-sand px-1.5 py-0.5 text-[10px] font-bold uppercase text-moss">
+                              {item.accountName}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${item.isOutflow ? "text-ember" : "text-moss-dark"}`}>
                         {item.isOutflow ? "−" : "+"}KES{" "}
@@ -2879,11 +3006,16 @@ export function DepartmentAccountsPanel({
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-moss">
                 <span>
-                  Balance:{" "}
+                  {selectedAccountInfo ? `${selectedAccountInfo.description || selectedAccountInfo.name} Balance:` : "Total Balance:"}{" "}
                   <strong className="text-ember font-bold">
-                    KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                    KES {displayedBalance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </strong>
                 </span>
+                {accounts.length > 1 && accountFilter === "all" && (
+                  <span className="hidden sm:inline text-[11px] text-moss-faint">
+                    ({accounts.map((a) => `${a.name}: KES ${Number(a.balance).toLocaleString("en-KE", { minimumFractionDigits: 0 })}`).join(" · ")})
+                  </span>
+                )}
                 {isDeaconate && (
                   <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
                     LCB
@@ -2894,7 +3026,13 @@ export function DepartmentAccountsPanel({
                 {canRequest ? (
                   <button
                     type="button"
-                    onClick={() => setShowWithdrawModal(true)}
+                    onClick={() => {
+                      if (withdrawAccountId === null && accounts.length > 0) {
+                        const primary = accounts.find((a) => a.is_primary) ?? accounts[0];
+                        setWithdrawAccountId(primary.id);
+                      }
+                      setShowWithdrawModal(true);
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep sm:px-4"
                   >
                     {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
@@ -2962,13 +3100,30 @@ export function DepartmentAccountsPanel({
               </button>
             </div>
             <form onSubmit={requestWithdrawal} className="mt-4 space-y-4">
+              {/* Account selection combo if multiple accounts are accessible */}
+              {accounts.length > 1 && (
+                <label className="block text-sm font-medium text-bark">
+                  Withdraw from Account *
+                  <select
+                    value={selectedWithdrawAccount?.id ?? ""}
+                    onChange={(e) => setWithdrawAccountId(Number(e.target.value))}
+                    className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.description || acc.name} — KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block text-sm font-medium text-bark">
                 Amount (KES) *
                 <input
                   type="number"
                   required
                   min="1"
-                  max={balance > 0 ? balance : undefined}
+                  max={withdrawBalance > 0 ? withdrawBalance : undefined}
                   step="0.01"
                   inputMode="decimal"
                   value={amount}
@@ -2978,7 +3133,8 @@ export function DepartmentAccountsPanel({
                   autoFocus
                 />
                 <span className="mt-1 block text-xs text-moss">
-                  Available: KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  Available in {selectedWithdrawAccount?.description || selectedWithdrawAccount?.name || "account"}: KES{" "}
+                  {withdrawBalance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                 </span>
               </label>
               <label className="block text-sm font-medium text-bark">
