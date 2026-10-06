@@ -7252,7 +7252,9 @@ class EnrollmentCodeFlowTests(APITestCase):
         # The raw code is only ever in the letter: read it out of the email
         # the sign-up just sent, exactly as the person receiving it would.
         body = mail.outbox[-1].body
-        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip().replace('-', '')
+        # The emailed code is a six-digit number with no separators, so read the
+        # first non-blank line after the prompt — the same shape a person types.
+        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
 
         verify = self.client.get(f'/api/members/auth/enrollment/verify/?code={raw}')
         self.assertEqual(verify.status_code, status.HTTP_200_OK, verify.data)
@@ -7281,7 +7283,8 @@ class EnrollmentCodeFlowTests(APITestCase):
         response = self._signup()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         body = mail.outbox[-1].body
-        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip().replace('-', '')
+        # The emailed code is a six-digit number with no separators.
+        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
         complete = self.client.post('/api/members/auth/enrollment/complete/', {
             'code': raw,
             'username': 'code.flow.user2',

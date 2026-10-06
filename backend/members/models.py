@@ -37,15 +37,18 @@ def invitation_token_hash(raw_token):
     would need the secret too. The digest keeps only the token out of the
     database — the raw value still travels in the emailed link, exactly as before.
     """
-    return hashlib.sha256(f'{settings.SECRET_KEY}:invitation:{raw_token}'.encode()).hexdigest()
-
-
-# The letter shapes a person can read off a screen and type back without
-# mistaking one for another: no I/1, no O/0. Codes are eight characters long
-# (~1.1e12 of them), which is far too many to be worth guessing and still short
-# enough to read down a phone line.
+    return hashlib.sha256(f'{settings.SECRET_KEY}:invitation:{raw_token}'.encode()).hexdigest()    # The letter shapes a person can read off a screen and type back without
+    # mistaking one for another: no I/1, no O/0. Codes are eight characters long
+    # (~1.1e12 of them), which is far too many to be worth guessing and still short
+    # enough to read down a phone line.
 INVITATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 INVITATION_CODE_LENGTH = 8
+
+# Numeric codes (what is emailed to a person verifying their own enrollment)
+# use a separate constant so they stay readable down a phone line: six digits
+# with leading zeros preserved as a string, so 000123 is a real code, not 123.
+VERIFICATION_CODE_DIGITS = 6
+VERIFICATION_CODE_ALPHABET = '0123456789'
 
 
 def normalize_invitation_code(raw_code):
@@ -736,7 +739,10 @@ class EnrollmentRequest(models.Model):
 
     @staticmethod
     def _new_code():
-        return ''.join(secrets.choice(INVITATION_CODE_ALPHABET) for _ in range(INVITATION_CODE_LENGTH))
+        # Six-digit numeric code for enrollment verification emails. Built from
+        # secrets.choice on the digit alphabet so leading zeros are real (the code
+        # is kept as a string, never coerced to an int).
+        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_DIGITS))
 
     @classmethod
     def from_code(cls, raw_code):

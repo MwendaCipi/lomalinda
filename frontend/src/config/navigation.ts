@@ -690,7 +690,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   eldership: "The church's elders — its spiritual leadership and the programmes it keeps.",
   clerkship: "The church's records — the membership register, the minutes and the letters.",
   deaconate: "The church's property, its duty rota, and the ordinances it serves.",
-  amm: "Men growing in faith and friendship, and serving the church and the community.",
+  amm: "The Adventist Men's ministry — connected to the AMO account for men's ministries work.",
   awm: "Women encouraging one another through fellowship, discipleship and care.",
   aym: "Young people growing in faith,  friendship, leadership and service.",
   children: "Nurturing children into a loving, lifelong relationship with Jesus.",
@@ -703,7 +703,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
   // own page and the rail both label it Church Choir.
   music: "The church's music — its singing groups and the seasons they sing.",
-  choir: "The church's singing — its own ministry, not a department.",
+  choir: "The church's singing — a ministry of its own, kept apart from the departments.",
 };
 
 /**
@@ -921,13 +921,13 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   push("dashboard", "Dashboard", false);
   push("my-church", "My church", false);
   push("my-department", "My Department", false);
-  push("my-ministry", "My Ministry", false);
   // The departments the member belongs to outside their own read as
   // "My Department": the rest fold under a folded "Other Departments".
   const otherDepartments = grouped.get("other-department") ?? [];
   if (otherDepartments.length > 0) {
     push("other-department", "Other Departments", true);
   }
+  push("my-ministry", "My Ministry", false);
   // The ministries the member belongs to read as "My Ministry": the rest
   // fold under a folded "Other Ministries".
   const otherMinistries = grouped.get("other-ministry") ?? [];
@@ -1124,8 +1124,12 @@ export function railFor(
         // office account) — and, folded, the age- and gender-based
         // fellowships the church opens to joining. The offices' desks are
         // held by appointment, never joined, so they are not offered.
+        // Admins (and other staff) see every department in other departments,
+        // not just the joinable ones, because they are the ones who appoint
+        // and oversee all of them.
         .filter((department) => {
           if (group === "department") {
+            if (isStaffRole(roles)) return true;
             return tieCodes.includes(department.code) || JOINABLE_DEPARTMENT_CODES.has(department.code);
           }
           return tieCodes.includes(department.code) || !NON_JOINABLE_MINISTRY_CODES.has(department.code);
@@ -1142,10 +1146,10 @@ export function railFor(
         return {
           label: RAIL_AREA_LABELS[department.code] ?? department.label,
           icon: DEPARTMENT_ICONS[department.code] ?? Users,
-          href: `/administration?tab=leaders&dept=${department.code}`,
+          href: `/administration?tab=leaders&dept=${department.code === "amm" ? "amo" : department.code}`,
           match: ["/administration"],
           tab: "leaders",
-          dept: department.code,
+          dept: department.code === "amm" ? "amo" : department.code,
           // The desk's own blurb, so its page heading has a line under it too.
           description: DEPARTMENT_BLURBS[department.code],
           roles: memberRowRoles,

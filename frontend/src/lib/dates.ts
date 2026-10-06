@@ -50,16 +50,23 @@ function parseDateish(value: Dateish): { date: Date; dateOnly: boolean } | null 
  * date-only string ("2026-10-03", parsed by hand so no timezone can walk it
  * a day), a full timestamp ("2026-10-03T14:05:00Z", rendered in the church's
  * timezone), or an already-built Date. Undated or unparseable is the fallback.
+ *
+ * Uses `formatToParts` so the output is strictly day-first: a 2-digit day,
+ * a 2-digit month, and a 4-digit year, joined by slashes. This avoids
+ * relying on the `en-GB` locale, which some browsers and OSes ignore and
+ * fall back to a month-first order.
  */
 export function dayFirst(value?: Dateish, fallback = "—"): string {
   const parsed = parseDateish(value);
   if (!parsed) return fallback;
-  return new Intl.DateTimeFormat("en-GB", {
+  const parts = new Intl.DateTimeFormat(undefined, {
     timeZone: parsed.dateOnly ? undefined : CHURCH_TZ,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  }).format(parsed.date);
+  }).formatToParts(parsed.date);
+  const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${find("day")}/${find("month")}/${find("year")}`;
 }
 
 /** The day's name — Monday … Sunday — without dragging in a date library. */
@@ -76,7 +83,7 @@ export function weekdayOf(value: Dateish): string {
 export function dayFirstTime(value?: Dateish, fallback = "—"): string {
   const parsed = parseDateish(value);
   if (!parsed) return fallback;
-  return new Intl.DateTimeFormat("en-GB", {
+  const parts = new Intl.DateTimeFormat(undefined, {
     timeZone: CHURCH_TZ,
     day: "2-digit",
     month: "2-digit",
@@ -84,5 +91,7 @@ export function dayFirstTime(value?: Dateish, fallback = "—"): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).format(parsed.date);
+  }).formatToParts(parsed.date);
+  const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${find("day")}/${find("month")}/${find("year")} ${find("hour")}:${find("minute")}`;
 }
