@@ -20,6 +20,10 @@ export type ChatMessage = {
   created_at: string;
   edited_at: string | null;
   deleted: boolean;
+  /** A photo or document the message carries; a message may be words, a file, or both. */
+  attachment?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
 };
 
 export type ChatConversationKind = "dm" | "group" | "office";
@@ -66,11 +70,20 @@ export async function fetchMessages(conversationId: number, before?: number): Pr
   return Array.isArray(data?.messages) ? data.messages : [];
 }
 
-export async function sendMessage(conversationId: number, body: string): Promise<ChatMessage> {
+export async function sendMessage(
+  conversationId: number,
+  body: string,
+  file?: File | null,
+): Promise<ChatMessage> {
+  // A file rides as multipart — the browser sets the boundary header itself,
+  // so the JSON content-type is left off; plain words stay JSON.
+  const form = new FormData();
+  form.append("body", body);
+  if (file) form.append("attachment", file);
   const res = await fetch(`${API_URL}/api/members/chat/conversations/${conversationId}/messages/`, {
     method: "POST",
-    headers: authHeaders(true),
-    body: JSON.stringify({ body }),
+    headers: authHeaders(),
+    body: form,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.detail || "Your message could not be sent.");
@@ -133,11 +146,16 @@ export function whenLabel(value: string): string {
 export function previewOf(conversation: ChatConversation, meName: string): string {
   const message = conversation.last_message;
   if (!message) return "No messages yet";
-  const body = message.deleted ? "Message removed" : message.body;
   const mine = !!message.sender && message.sender.name === meName;
   const who = message.sender && !mine ? `${message.sender.name.split(" ")[0]}: ` : "";
   const prefix = mine ? "You: " : who;
-  return `${prefix}${body}`;
+  if (message.deleted) return `${prefix}Message removed`;
+  // A file may speak for itself: a photo-only or document-only message
+  // previews as its file, not as an empty line.
+  if (!message.body && message.attachment) {
+    return `${prefix}📎 ${message.attachment_name || "an attachment"}`;
+  }
+  return `${prefix}${message.body}`;
 }
 
 // ── The unread badge the rail wears ─────────────────────────────────────────

@@ -102,6 +102,9 @@ class Message(models.Model):
         related_name='chat_messages',
     )
     body = models.TextField()
+    #: A photo or document the message carries. A message may be words, a
+    #: file, or both — the rota, a receipt photo, the minutes.
+    attachment = models.FileField(upload_to='chat/%Y/%m/', null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     #: A deleted message keeps its row so a room's history does not silently

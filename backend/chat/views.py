@@ -18,6 +18,10 @@ PAGE_SIZE = 50
 #: The longest a single message may be — a thought, not an essay.
 MAX_MESSAGE_LENGTH = 4000
 
+#: The largest file a message may carry — a receipt photo, the rota, the
+#: minutes. 10 MB covers the documents a church passes around.
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
 
 class ChatConversationListView(APIView):
     """The member's rooms, and the way to open one that does not exist yet."""
@@ -101,11 +105,18 @@ class ChatMessageListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         body = (request.data.get('body') or '').strip()
-        if not body:
+        attachment = request.FILES.get('attachment')
+        # A message is words, a file, or both — but never nothing.
+        if not body and not attachment:
             return Response({'detail': 'Type a message first.'}, status=status.HTTP_400_BAD_REQUEST)
         if len(body) > MAX_MESSAGE_LENGTH:
             return Response({'detail': 'That message is too long.'}, status=status.HTTP_400_BAD_REQUEST)
-        message = services.post_message(conversation, request.user, body)
+        if attachment and attachment.size > MAX_ATTACHMENT_BYTES:
+            return Response(
+                {'detail': 'That file is too large — the limit is 10 MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        message = services.post_message(conversation, request.user, body, attachment=attachment)
         # The sender has by definition read what they just wrote.
         services.mark_read(conversation, request.user)
         # A post through the API is as live as one through the socket: everyone

@@ -319,9 +319,11 @@ def unread_count(conversation, user):
     return messages.count()
 
 
-def post_message(conversation, user, body):
+def post_message(conversation, user, body, attachment=None):
     """Write a message and stamp the room's last-message time."""
-    message = Message.objects.create(conversation=conversation, sender=user, body=body.strip())
+    message = Message.objects.create(
+        conversation=conversation, sender=user, body=body.strip(), attachment=attachment,
+    )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=['last_message_at'])
     return message

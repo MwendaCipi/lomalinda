@@ -23,10 +23,30 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     sender = ChatPersonSerializer(read_only=True)
     sender_id = serializers.IntegerField(read_only=True)
+    attachment_name = serializers.SerializerMethodField()
+    attachment_size = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ('id', 'conversation', 'sender', 'sender_id', 'body', 'created_at', 'edited_at', 'deleted')
+        fields = (
+            'id', 'conversation', 'sender', 'sender_id', 'body', 'created_at',
+            'edited_at', 'deleted', 'attachment', 'attachment_name', 'attachment_size',
+        )
+
+    def get_attachment_name(self, obj):
+        """Original file name, so the UI can label an attachment without guessing from the URL."""
+        if not obj.attachment:
+            return None
+        return obj.attachment.name.rsplit('/', 1)[-1]
+
+    def get_attachment_size(self, obj):
+        """File size in bytes for display (e.g. 'PDF · 1.4 MB'); None when the file is missing on disk."""
+        if not obj.attachment:
+            return None
+        try:
+            return obj.attachment.size
+        except (FileNotFoundError, OSError, ValueError):
+            return None
 
 
 class ChatConversationSerializer(serializers.ModelSerializer):

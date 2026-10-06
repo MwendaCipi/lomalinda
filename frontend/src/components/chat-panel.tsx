@@ -5,11 +5,18 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
+  FileText,
   MessageSquarePlus,
   MessagesSquare,
+  Paperclip,
   Send,
+  Smile,
   Users,
+  X,
 } from "lucide-react";
+
+import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { EmojiPicker } from "@/components/emoji-picker";
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
@@ -92,6 +99,10 @@ export function ChatPanel() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // The file waiting to ride with the next message, and whether the emoji
+  // card is open above the compose box.
+  const [file, setFile] = useState<File | null>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const [showNew, setShowNew] = useState(false);
   const [contacts, setContacts] = useState<ChatPerson[]>([]);
@@ -103,6 +114,8 @@ export function ChatPanel() {
   const [tab, setTab] = useState<"inbox" | "groups">("inbox");
 
   const listRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
   const lastMessageIdRef = useRef<number | null>(null);
@@ -282,13 +295,36 @@ export function ChatPanel() {
     }
   };
 
+  /** Splice an emoji into the draft at the caret, leaving the caret on it. */
+  const insertEmoji = (emoji: string) => {
+    const el = draftRef.current;
+    if (!el) {
+      setDraft((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? draft.length;
+    const end = el.selectionEnd ?? draft.length;
+    setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+    const caret = start + emoji.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const submit = async () => {
     const body = draft.trim();
-    if (!body || activeId === null || sending) return;
+    if ((!body && !file) || activeId === null || sending) return;
     setSending(true);
     try {
-      const message = await sendMessage(activeId, body);
+      const message = await sendMessage(activeId, body, file);
       setDraft("");
+      clearFile();
       forceScrollRef.current = true;
       setMessages((prev) => [...prev, message]);
       setRooms((prev) =>
@@ -512,13 +548,32 @@ export function ChatPanel() {
                             {message.sender.name}
                           </span>
                         )}
-                        <div
-                          className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
-                            mine ? "bg-ember text-white" : "border border-sand-line bg-white text-bark"
-                          } ${message.deleted ? "italic opacity-70" : ""}`}
-                        >
-                          {message.deleted ? "This message was removed." : message.body}
-                        </div>
+                        {message.deleted ? (
+                          <div className="whitespace-pre-wrap break-words rounded-2xl border border-sand-line bg-white px-3.5 py-2 text-sm italic text-moss opacity-70 shadow-sm">
+                            This message was removed.
+                          </div>
+                        ) : (
+                          <>
+                            {message.body && (
+                              <div
+                                className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                                  mine ? "bg-ember text-white" : "border border-sand-line bg-white text-bark"
+                                }`}
+                              >
+                                {message.body}
+                              </div>
+                            )}
+                            {message.attachment && (
+                              <AnnouncementAttachment
+                                attachment={message.attachment}
+                                name={message.attachment_name}
+                                size={message.attachment_size}
+                                mediaHeight="sm"
+                                className={`max-w-[16rem] ${message.body ? "mt-1.5" : ""}`}
+                              />
+                            )}
+                          </>
+                        )}
                         <span className="mt-0.5 px-1 text-[10px] text-moss">
                           {whenLabel(message.created_at)}
                           {message.edited_at ? " · edited" : ""}
@@ -534,29 +589,76 @@ export function ChatPanel() {
 
           <div className="shrink-0 border-t border-sand-line bg-white px-3 py-2.5 sm:px-4">
             {active.can_post ? (
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      void submit();
-                    }
-                  }}
-                  rows={1}
-                  placeholder={`Message ${active.title}`}
-                  className="max-h-32 min-h-[42px] flex-1 resize-none rounded-2xl border border-sand-line bg-sand-linen px-3.5 py-2.5 text-sm text-bark outline-none focus:border-ember"
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 />
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  disabled={sending || draft.trim().length === 0}
-                  aria-label="Send"
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-ember text-white transition hover:bg-ember-deep disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach a file"
+                    title="Attach a file"
+                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border border-sand-line text-moss transition hover:border-ember hover:text-ember"
+                  >
+                    <Paperclip className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <div className="relative flex-1">
+                    {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
+                    <textarea
+                      ref={draftRef}
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          void submit();
+                        }
+                      }}
+                      rows={1}
+                      placeholder={`Message ${active.title}`}
+                      className="max-h-32 min-h-[42px] w-full resize-none rounded-2xl border border-sand-line bg-sand-linen py-2.5 pl-3.5 pr-10 text-sm text-bark outline-none focus:border-ember"
+                    />
+                    <button
+                      data-emoji-trigger
+                      type="button"
+                      onClick={() => setShowEmoji((open) => !open)}
+                      aria-label="Emoji"
+                      title="Emoji"
+                      className="absolute bottom-2.5 right-2.5 text-moss transition hover:text-ember"
+                    >
+                      <Smile className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={sending || (draft.trim().length === 0 && !file)}
+                    aria-label="Send"
+                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-ember text-white transition hover:bg-ember-deep disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+                {file && (
+                  <div className="mt-2 flex items-center gap-2 rounded-xl bg-sand px-2.5 py-1.5 text-xs text-bark">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-ember" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={clearFile}
+                      aria-label="Remove the attachment"
+                      className="shrink-0 text-moss transition hover:text-bark"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="py-1.5 text-center text-xs text-moss">
