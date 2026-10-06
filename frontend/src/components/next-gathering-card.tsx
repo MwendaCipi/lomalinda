@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { nextMeeting, gatheringLabel, type WeeklyMeeting } from "@/lib/gathering";
+import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -81,6 +81,8 @@ export function NextGatheringCard() {
   }, []);
 
   const gathering = useMemo(() => nextMeeting(meetings, now), [meetings, now]);
+  // The hour the gathering begins, for the join button's countdown.
+  const countdown = gathering ? gatheringCountdown(gathering, now) : null;
 
   // Slide 0 is always the gathering; the announcements follow it.
   const slideCount = 1 + announcements.length;
@@ -97,8 +99,6 @@ export function NextGatheringCard() {
   const mapsUrl = settings?.latitude && settings.longitude
     ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
     : null;
-  const actionHref = gathering?.online ? gathering.link : mapsUrl;
-  const joinOpen = Boolean(gathering?.online && gathering.active && actionHref);
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
 
@@ -318,8 +318,17 @@ export function NextGatheringCard() {
           <div className="border-t border-sage-line pt-6">
             <p className="text-sm text-moss">{weekdayOf(gathering.date)} · {dayFirst(gathering.date)}</p>
             {gathering.online ? (
-              joinOpen ? (
-                <Link href={actionHref!} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-semibold text-ember hover:underline">Join meeting &rarr;</Link>
+              gathering.link ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {/* The hour it begins, then the way in — the same pair the
+                      dashboard's card carries. */}
+                  {countdown && (
+                    <span className="text-sm font-semibold text-sage-gray" aria-live="polite">{countdown}</span>
+                  )}
+                  <Link href={gathering.link} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-ember hover:underline">
+                    {platformLabel(gathering.link)}
+                  </Link>
+                </div>
               ) : (
                 <span className="mt-4 inline-block text-sm font-semibold text-sage-slate">Join meeting <span className="font-normal">(opens at start time)</span></span>
               )

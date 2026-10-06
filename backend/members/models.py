@@ -290,6 +290,7 @@ SEED_DEPARTMENTS = (
     ('primary', 'Primary', 22),
     ('junior', 'Junior', 23),
     ('teens', 'Teens', 24),
+    ('pathfinders', 'Pathfinders', 25),
     # The fellowships that used to ride AMM and AWM as sub-units, now rows of
     # their own; the frontend groups them back under the men's and women's
     # desks for ease of management.

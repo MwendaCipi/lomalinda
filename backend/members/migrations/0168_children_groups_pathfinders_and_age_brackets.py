@@ -13,12 +13,8 @@ DEFAULT_CHILDREN_GROUPS = (
     ('pathfinders', 'Pathfinders', 10, 15, 6, "Pathfinder Club (10–15 yrs)"),
 )
 
-CHILDREN_UNITS = "Beginners, Kindergarten, Primary, Teens, Pathfinders"
-
-
 def seed_children_groups(apps, schema_editor):
     ChildrenGroup = apps.get_model('members', 'ChildrenGroup')
-    Department = apps.get_model('members', 'Department')
 
     for code, name, min_age, max_age, sort, desc in DEFAULT_CHILDREN_GROUPS:
         ChildrenGroup.objects.get_or_create(
@@ -33,8 +29,13 @@ def seed_children_groups(apps, schema_editor):
             },
         )
 
-    # Set Children's Ministry sub-units to encompass all divisions
-    Department.objects.filter(code='children').update(units=CHILDREN_UNITS)
+    # This migration once also wrote the band list into Children's ``units``.
+    # That was wrong: 0167 had already made the bands (Beginners,
+    # Kindergarten, Primary, Junior, Teens) departments of their own and taken
+    # them off Children's units, leaving only the Pathfinders — the one band
+    # with no desk of its own. Re-listing them made every band show twice, as
+    # a department and as a sub-unit. It is not re-added here, and 0177 takes
+    # the duplicated bands back off the desks that already got them.
 
 
 def unseed_children_groups(apps, schema_editor):

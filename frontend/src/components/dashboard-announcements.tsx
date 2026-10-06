@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { nextMeeting, gatheringLabel, type WeeklyMeeting } from "@/lib/gathering";
+import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
@@ -23,29 +23,14 @@ type Announcement = {
   event_date_to?: string | null;
 };
 
-/** The join button names the platform the link points at *and* says what
-    tapping it does — "Open on Google Meet", "Open on Zoom" — so the button
-    reads as an action rather than as a bare product name. Every platform gets
-    the same verb; a lone "Zoom" beside "Open on Google Meet" would read as a
-    different kind of control. `Join online` stays the fallback when the link
-    points somewhere unrecognised. */
-function platformLabel(href: string | null | undefined) {
-  if (!href) return "Join online";
-  const url = href.toLowerCase();
-  if (url.includes("meet.google.com")) return "Open on Google Meet";
-  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open on Zoom";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open on YouTube";
-  if (url.includes("teams.microsoft.com")) return "Open on Teams";
-  return "Join online";
-}
-
 /**
  * The dashboard's announcement rail: the week's announcements slide by at the
  * top of the page. The whole card opens the full feed in Fellowship, and each
  * announcement carries its own action — Support for a giving call, Give input
- * for an opinion question, the named platform for a web conference. When
- * nothing is published, the next gathering stands in, so the rail never goes
- * empty.
+ * for an opinion question, the named platform for a web conference. The next
+ * gathering stands in only when nothing is published: while the church has a
+ * notice to make, the week's meeting does not compete with it for the glance,
+ * and the rail never goes empty either way.
  */
 export function DashboardAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -79,13 +64,18 @@ export function DashboardAnnouncements() {
   }, []);
 
   const gathering = useMemo(() => nextMeeting(meetings, now), [meetings, now]);
+  // How long until the meeting the conference button opens begins. The clock
+  // is the gathering's: an announcement carries only its event's day, while
+  // the week's meeting carries the hour it starts at.
+  const countdown = gathering ? gatheringCountdown(gathering, now) : null;
 
-  // Announcements lead; the gathering is the fallback slide — and it is also
-  // what shows when the church has published nothing.
-  const slideCount = 1 + announcements.length;
+  // Announcements lead; the gathering stands in only when the church has
+  // published nothing else.
+  const hasAnnouncements = announcements.length > 0;
+  const slideCount = hasAnnouncements ? announcements.length : 1;
   const index = Math.min(slide, slideCount - 1);
-  const current = index > 0 ? announcements[index - 1] : undefined;
-  const canRotate = slideCount > 1;
+  const current = hasAnnouncements ? announcements[index] : undefined;
+  const canRotate = announcements.length > 1;
 
   // A modal over the rail holds the slides still — nothing should turn behind
   // a form the member is filling in.
@@ -138,7 +128,7 @@ export function DashboardAnnouncements() {
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-ember">
             {current ? "Announcement" : "Next gathering"}
-            {announcements.length > 1 ? ` · ${index} of ${announcements.length}` : ""}
+            {current && announcements.length > 1 ? ` · ${index + 1} of ${announcements.length}` : ""}
           </p>
           {slideCount > 1 && (
             <div className="flex items-center gap-2">
@@ -156,7 +146,7 @@ export function DashboardAnnouncements() {
                     key={dot}
                     type="button"
                     onClick={() => setSlide(dot)}
-                    aria-label={dot === 0 ? "Next gathering" : `Announcement ${dot}`}
+                    aria-label={hasAnnouncements ? `Announcement ${dot + 1}` : "Next gathering"}
                     className={`h-1.5 rounded-full transition-all ${dot === index ? "w-4 bg-ember" : "w-1.5 bg-sand-line"}`}
                   />
                 ))}
@@ -233,14 +223,42 @@ export function DashboardAnnouncements() {
             </Link>
           )}
           {isConference && current?.href && (
-            <a
-              href={current.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
-            >
-              {platformLabel(current.href)}
-            </a>
+            <div className="ml-auto flex items-center gap-3">
+              {/* The countdown sits to the left of the join button, so the
+                  hour the meeting begins is read before the tap. */}
+              {countdown && (
+                <span className="text-xs font-semibold text-moss" aria-live="polite">
+                  {countdown}
+                </span>
+              )}
+              <a
+                href={current.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+              >
+                {platformLabel(current.href)}
+              </a>
+            </div>
+          )}
+          {/* The next gathering is online: the same way in the conference
+              slide carries — the hour it begins, then the join button. */}
+          {!current && gathering?.online && gathering.link && (
+            <div className="ml-auto flex items-center gap-3">
+              {countdown && (
+                <span className="text-xs font-semibold text-moss" aria-live="polite">
+                  {countdown}
+                </span>
+              )}
+              <a
+                href={gathering.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+              >
+                {platformLabel(gathering.link)}
+              </a>
+            </div>
           )}
           {!current && (
             <Link

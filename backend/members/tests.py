@@ -4592,6 +4592,12 @@ class GivingAccountsFromTreasuryTests(APITestCase):
 
     URL = '/api/members/giving-accounts/'
 
+    def setUp(self):
+        # The seeded department funds (AYM, AWM, Deaconate) are on the table
+        # before this class runs; it tests the priority order and the wording
+        # over the accounts it creates, so it starts from an empty table.
+        TreasuryAccount.objects.all().delete()
+
     def test_priority_order_leads_with_tithe_offering_budget_then_camp(self):
         TreasuryAccount.objects.create(name='Choir', description='Choir Fund')
         TreasuryAccount.objects.create(name='Camporee', description='Camporee 2026')
@@ -6853,7 +6859,7 @@ class DepartmentApiTests(APITestCase):
     def test_create_department_seeds_default_roles(self):
         self._auth(self.elder)
         res = self.client.post('/api/members/departments/create/', {
-            'name': 'Pathfinders',
+            'name': 'Stewardship',
         }, format='json')
         self.assertEqual(res.status_code, 201)
         department = Department.objects.get(code=res.data['code'])
@@ -6862,7 +6868,7 @@ class DepartmentApiTests(APITestCase):
             ['Leader', 'Assistant'],
         )
         # Duplicate names are refused.
-        res = self.client.post('/api/members/departments/create/', {'name': 'pathfinders'}, format='json')
+        res = self.client.post('/api/members/departments/create/', {'name': 'stewardship'}, format='json')
         self.assertEqual(res.status_code, 400)
 
 
@@ -8023,6 +8029,72 @@ class FinancialReportSuggestionsTests(APITestCase):
         self.assertEqual([row['total'] for row in listed.data], ['0.00'])
 
 
+class ChildrenUnitsMigrationTests(APITestCase):
+    """0177 takes the duplicated band sub-units back off Children.
+
+    0168 had written the band list into Children's ``units``, so every band
+    that 0167 made a department of its own read twice — as a department and as
+    Children's sub-unit. Now that Pathfinders is a department too (0176), no
+    band belongs to Children's units at all.
+    """
+
+    def _repair(self):
+        import importlib
+        module = importlib.import_module('members.migrations.0177_children_units_drop_bands')
+        return module.drop_department_units
+
+    def test_the_duplicated_bands_come_off(self):
+        children = Department.objects.get(code='children')
+        children.units = 'Beginners, Kindergarten, Primary, Teens, Pathfinders'
+        children.save(update_fields=['units'])
+
+        repair = self._repair()
+        repair(apps=django_apps, schema_editor=None)
+
+        children.refresh_from_db()
+        self.assertEqual(children.units, '')
+        # Running again changes nothing.
+        repair(apps=django_apps, schema_editor=None)
+        children.refresh_from_db()
+        self.assertEqual(children.units, '')
+
+    def test_a_unit_with_no_desk_of_its_own_is_kept(self):
+        children = Department.objects.get(code='children')
+        children.units = 'Kindergarten, Pathfinders, Memory Verse'
+        children.save(update_fields=['units'])
+
+        self._repair()(apps=django_apps, schema_editor=None)
+
+        children.refresh_from_db()
+        self.assertEqual(children.units, 'Memory Verse')
+
+
+class PathfindersDepartmentTests(APITestCase):
+    """Pathfinders is a department of its own, filed with the children's bands.
+
+    It was the last band without a desk; 0176 gives it one so its leadership,
+    roll and calendar live where every other area's do.
+    """
+
+    def test_the_department_exists_with_a_leader_role(self):
+        pathfinders = Department.objects.filter(code='pathfinders', is_active=True).first()
+        self.assertIsNotNone(pathfinders, 'Pathfinders should be a seeded department')
+        self.assertEqual(pathfinders.name, 'Pathfinders')
+        self.assertEqual(pathfinders.group, 'department')
+        self.assertTrue(
+            DepartmentRole.objects.filter(department=pathfinders, name='Leader').exists(),
+            'Pathfinders should start with a Leader role',
+        )
+
+    def test_the_desk_lists_it_under_the_department_heading(self):
+        elder = User.objects.create_user('pf.elder', 'pf.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder,member')
+        self.client.force_authenticate(elder)
+        rows = {row['code']: row for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertEqual(rows['pathfinders']['group'], 'department')
+        self.assertEqual(rows['pathfinders']['label'], 'Pathfinders')
+
+
 class DepartmentGroupAndUnitTests(APITestCase):
     """Where a department is filed, and the sub-units one of them runs.
 
@@ -8041,8 +8113,8 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.two = User.objects.create_user('grp.two', 'grp.two@example.com', 'StrongPass#2026', first_name='Two', last_name='Member')
         MemberProfile.objects.create(user=self.two, role='member', roles='member')
         # A department that runs as units, for the unit tests to work in. The
-        # children's bands are departments of their own now, so Children keeps
-        # no units and the mechanism is exercised on one made for the test.
+        # children's bands are all departments of their own now, so Children
+        # keeps no units and the mechanism is exercised on one made for the test.
         self.club = Department.objects.create(
             code='club', name='Club Ministry', group='department',
             units='Adventurers, Pathfinders',
@@ -8066,11 +8138,12 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['deaconate']['group'], 'office')
         # The AYM is the Young Adults under the name the church uses.
         self.assertEqual(rows['aym']['label'], 'Young Adults')
-        # The children's bands are departments of their own now; Kindergarten
-        # left Children's sub-units (Pathfinders stays), and the grouping is
-        # the frontend's job.
-        self.assertEqual(rows['children']['units'], ['Pathfinders'])
+        # The children's bands are departments of their own now — Pathfinders
+        # included — so Children keeps no sub-units; the grouping is the
+        # frontend's job.
+        self.assertEqual(rows['children']['units'], [])
         self.assertEqual(rows['kindergarten']['group'], 'department')
+        self.assertEqual(rows['pathfinders']['group'], 'department')
 
     def test_the_desk_adds_a_ministry_and_names_its_units(self):
         created = self.client.post('/api/members/departments/create/', {
@@ -8879,6 +8952,176 @@ class DepartmentFundTests(APITestCase):
         )
 
 
+class SeededDepartmentFundTests(APITestCase):
+    """Every seeded department's desk resolves the fund the seed opened.
+
+    Migration 0173 gives the age- and gender-based departments a treasury
+    account, and the desk reads a fund through ``TreasuryAccount.department``
+    (views.department_account). A seed that only *filtered* on
+    ``department__code`` left the link unset, so the desk still said no
+    account existed; these tests replay the seed and read the link the desk
+    actually follows.
+    """
+
+    SEEDS = (('aym', 'AYM'), ('awm', 'AWM'), ('deaconate', 'Deaconate'))
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'seed.treasurer', 'seed.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tess', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+
+    def _seed(self):
+        import importlib
+        module = importlib.import_module('members.migrations.0173_seed_treasury_accounts')
+        return module.seed_treasury_accounts
+
+    def _bare_desks(self):
+        """Start from the pre-seed shape: no fund linked to any seeded dept."""
+        TreasuryAccount.objects.filter(
+            department__code__in=[code for code, _ in self.SEEDS],
+        ).delete()
+
+    def test_each_seeded_department_owns_its_fund(self):
+        self._bare_desks()
+        self._seed()(apps=django_apps, schema_editor=None)
+
+        for code, name in self.SEEDS:
+            department = Department.objects.get(code=code)
+            fund = department.treasury_accounts.first()
+            self.assertIsNotNone(fund, f'{code} was seeded with no fund')
+            self.assertEqual(fund.name, name)
+
+    def test_each_seeded_department_desk_reads_its_fund(self):
+        self._bare_desks()
+        self._seed()(apps=django_apps, schema_editor=None)
+
+        self.client.force_authenticate(self.treasurer)
+        for code, name in self.SEEDS:
+            response = self.client.get(f'/api/members/departments/{code}/account/')
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            account = response.data['account']
+            self.assertIsNotNone(account, f'{code} has no fund at its desk')
+            self.assertEqual(account['name'], name)
+            # The desk follows the department link, not the account's name.
+            self.assertEqual(account['department'], code)
+            self.assertEqual(account['department_name'], Department.objects.get(code=code).name)
+
+    def test_a_second_seed_opens_no_second_fund(self):
+        self._bare_desks()
+        seed = self._seed()
+        seed(apps=django_apps, schema_editor=None)
+        first = list(
+            TreasuryAccount.objects.filter(
+                department__code__in=[code for code, _ in self.SEEDS],
+            ).values_list('id', 'department__code', 'name'),
+        )
+        seed(apps=django_apps, schema_editor=None)
+        second = list(
+            TreasuryAccount.objects.filter(
+                department__code__in=[code for code, _ in self.SEEDS],
+            ).values_list('id', 'department__code', 'name'),
+        )
+        self.assertEqual(first, second)
+
+
+class DepartmentFundLinkMigrationTests(APITestCase):
+    """0174 attaches the church's real fund instead of opening a duplicate.
+
+    The production shape: the treasurer had already opened a fund and money
+    was in it, the broken seed then created a second empty account beside it,
+    and neither was linked. The repair links the fund that holds the money and
+    removes the untouched duplicate, so the desk reads the real fund.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'link.treasurer', 'link.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tess', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+
+    def _repair(self):
+        import importlib
+        module = importlib.import_module('members.migrations.0174_link_department_treasury_accounts')
+        return module.link_department_accounts
+
+    def _bare_desk(self, code):
+        """Start from the pre-seed shape: no fund linked to the department."""
+        TreasuryAccount.objects.filter(department__code=code).delete()
+
+    def test_attaches_the_fund_that_holds_the_money(self):
+        self._bare_desk('aym')
+        real = TreasuryAccount.objects.create(
+            name='AYM', description='Adventist Youth Ministry', balance=Decimal('7167.00'),
+        )
+        leftover = TreasuryAccount.objects.create(name='AYM', balance=Decimal('0.00'))
+
+        self._repair()(apps=django_apps, schema_editor=None)
+
+        real.refresh_from_db()
+        self.assertEqual(real.department_id, Department.objects.get(code='aym').id)
+        self.assertFalse(TreasuryAccount.objects.filter(pk=leftover.pk).exists())
+
+    def test_the_desk_reads_the_real_fund_after_the_repair(self):
+        self._bare_desk('aym')
+        TreasuryAccount.objects.create(
+            name='AYM', description='Adventist Youth Ministry', balance=Decimal('7167.00'),
+        )
+        TreasuryAccount.objects.create(name='AYM', balance=Decimal('0.00'))
+
+        self._repair()(apps=django_apps, schema_editor=None)
+
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/departments/aym/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.data['account'])
+        self.assertEqual(response.data['account']['balance'], '7167.00')
+        # The empty duplicate is gone, so the same fund is not offered twice.
+        self.assertEqual(TreasuryAccount.objects.filter(name='AYM').count(), 1)
+
+    def test_a_second_fund_holding_money_is_never_removed(self):
+        self._bare_desk('aym')
+        first = TreasuryAccount.objects.create(name='AYM', balance=Decimal('100.00'))
+        second = TreasuryAccount.objects.create(name='AYM', balance=Decimal('50.00'))
+
+        self._repair()(apps=django_apps, schema_editor=None)
+
+        # Only one fund may belong to a department; the other stays untouched.
+        self.assertEqual(TreasuryAccount.objects.filter(name='AYM').count(), 2)
+        linked = TreasuryAccount.objects.filter(department__code='aym')
+        self.assertEqual(linked.count(), 1)
+        self.assertIn(linked.get().pk, (first.pk, second.pk))
+
+    def test_a_duplicate_that_carries_a_request_is_left_alone(self):
+        from .models import DepartmentWithdrawalRequest
+        self._bare_desk('aym')
+        TreasuryAccount.objects.create(name='AYM', balance=Decimal('100.00'))
+        requested = TreasuryAccount.objects.create(name='AYM', balance=Decimal('0.00'))
+        DepartmentWithdrawalRequest.objects.create(
+            department=Department.objects.get(code='aym'), account=requested,
+            amount=Decimal('10.00'), reason='Already asked of this row',
+            requested_by=self.treasurer,
+        )
+
+        self._repair()(apps=django_apps, schema_editor=None)
+
+        self.assertTrue(TreasuryAccount.objects.filter(pk=requested.pk).exists())
+
+    def test_running_it_again_changes_nothing(self):
+        self._bare_desk('aym')
+        TreasuryAccount.objects.create(name='AYM', balance=Decimal('7167.00'))
+        TreasuryAccount.objects.create(name='AYM', balance=Decimal('0.00'))
+
+        repair = self._repair()
+        repair(apps=django_apps, schema_editor=None)
+        before = list(TreasuryAccount.objects.filter(name='AYM').values_list('id', 'department_id', 'balance'))
+        repair(apps=django_apps, schema_editor=None)
+        after = list(TreasuryAccount.objects.filter(name='AYM').values_list('id', 'department_id', 'balance'))
+        self.assertEqual(before, after)
+
+
 class DepartmentVisibilityTests(APITestCase):
     """The church's areas are the member's own map.
 
@@ -9029,7 +9272,7 @@ class ProfileAreaRefTests(APITestCase):
         MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
 
     def test_the_bands_and_fellowships_are_seeded_areas(self):
-        for code in ('beginners', 'kindergarten', 'primary', 'junior', 'teens', 'young_couples', 'single_parents'):
+        for code in ('beginners', 'kindergarten', 'primary', 'junior', 'teens', 'pathfinders', 'young_couples', 'single_parents'):
             department = Department.objects.filter(code=code, is_active=True).first()
             self.assertIsNotNone(department, f"{code} should be seeded")
             self.assertTrue(

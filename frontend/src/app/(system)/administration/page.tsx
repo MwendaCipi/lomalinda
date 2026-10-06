@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Handshake, Heart, Landmark, Megaphone, Package, Scale, Settings, Undo2, Users } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -314,13 +314,27 @@ function AdministrationContent() {
   // why the whole page is hidden from `lg`.
   const overviewDesks: OverviewDesk[] = (
     [
+    // Administration — the console's own pages, and all the section is: the
+    // church's members and the roles they hold, and the church's own settings.
+    // A ministry or department is administered from Areas (its own desk), and
+    // the desks keep their pages below, so nothing is stranded on a phone.
+    isClerk || isElder || isAdmin
+      ? {
+          label: "Administration",
+          icon: <ShieldCheck size={16} aria-hidden="true" />,
+          description: "The church's members, their roles and the church's own settings.",
+          cards: [
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register — every member, the roles they hold and their standing.", href: "/administration?tab=users" },
+            { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
+          ],
+        }
+      : null,
     hasClerkship
       ? {
           label: "Clerkship",
           icon: <ClipboardList size={16} aria-hidden="true" />,
-          description: "The register, the meetings' minutes and the membership transfers.",
+          description: "The meetings' minutes and the membership transfers.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: every member, their roles and their details.", href: "/administration?tab=users" },
             { icon: <Armchair size={20} aria-hidden="true" />, label: "Board Meetings", description: "The board's schedules, agendas, files and minutes.", href: "/administration?tab=board" },
             { icon: <Briefcase size={20} aria-hidden="true" />, label: "Business Meetings", description: "The congregation in session: agendas, files and minutes.", href: "/administration?tab=business" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
@@ -331,10 +345,8 @@ function AdministrationContent() {
       ? {
           label: "Eldership",
           icon: <Armchair size={16} aria-hidden="true" />,
-          description: "Leadership, church settings, announcements and the requests members send.",
+          description: "The church's announcements and the requests members send.",
           cards: [
-            { icon: <Crown size={20} aria-hidden="true" />, label: "Leadership", description: "Every ministry and department's leadership, roll and calendar, in one place.", href: "/administration?tab=leaders" },
-            { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
           ],

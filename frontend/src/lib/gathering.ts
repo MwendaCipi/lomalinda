@@ -135,3 +135,63 @@ export function gatheringLabel(gathering: Gathering, now: Date) {
   if (hoursAway > 0 && hoursAway <= 6) return `${gathering.name} begins soon`;
   return gathering.name;
 }
+
+/** The same calendar day, in the reader's own clock. */
+function sameCalendarDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+/**
+ * How long until the gathering begins, in the card's words.
+ *
+ * A gathering still to come today is counted in hours — the day is already
+ * understood, so "in 3 hours" beside the join button needs no weekday or
+ * start time repeated at it. Anything farther out is counted in days, hours
+ * and minutes, so a member reading on Sunday knows exactly how much of the
+ * week is left. A gathering already under way has nothing to count down to,
+ * and returns null; so does one with no clock behind it.
+ */
+export function gatheringCountdown(gathering: Gathering, now: Date): string | null {
+  if (gathering.active) return null;
+  const remaining = gathering.date.getTime() - now.getTime();
+  if (remaining <= 0) return null;
+
+  const plural = (value: number, unit: string) => `${value} ${unit}${value === 1 ? "" : "s"}`;
+  const totalMinutes = Math.floor(remaining / 60_000);
+
+  if (sameCalendarDay(gathering.date, now)) {
+    // Hours are the unit of a day already in progress; under the last hour the
+    // minutes are what is left, and "in 0 hours" would say nothing.
+    const hours = Math.floor(remaining / 3_600_000);
+    const value = hours >= 1 ? plural(hours, "hour") : plural(Math.max(1, totalMinutes), "minute");
+    return `in ${value}`;
+  }
+
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  return `in ${plural(days, "day")}, ${plural(hours, "hour")}, ${plural(minutes, "minute")}`;
+}
+
+/**
+ * What the join button calls the platform it opens.
+ *
+ * The button names the platform *and* says what tapping it does — "Open on
+ * Google Meet", "Open on Zoom" — so it reads as an action rather than as a
+ * bare product name. Every platform gets the same verb; a lone "Zoom" beside
+ * "Open on Google Meet" would read as a different kind of control. "Join
+ * online" stays the fallback when the link points somewhere unrecognised.
+ */
+export function platformLabel(href: string | null | undefined) {
+  if (!href) return "Join online";
+  const url = href.toLowerCase();
+  if (url.includes("meet.google.com")) return "Open on Google Meet";
+  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open on Zoom";
+  if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open on YouTube";
+  if (url.includes("teams.microsoft.com")) return "Open on Teams";
+  return "Join online";
+}
