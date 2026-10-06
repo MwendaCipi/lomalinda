@@ -17,6 +17,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { brand } from "@/lib/brand";
 import {
   Accessibility,
+  ArrowDownLeft,
+  ArrowUpRight,
   Baby,
   CalendarDays,
   Church,
@@ -2501,7 +2503,7 @@ type FundWithdrawal = {
  * desk may not do is move the money: the leader requests a withdrawal, the
  * request goes to the treasurer, and the answer comes back to this view.
  */
-function DepartmentAccountsPanel({
+export function DepartmentAccountsPanel({
   department,
   onChanged,
   search,
@@ -2511,6 +2513,7 @@ function DepartmentAccountsPanel({
   /** The fund ledger's search, owned by the desk so it rides the header band. */
   search: string;
 }) {
+  const isDeaconate = department.code === "deaconate";
   const [account, setAccount] = useState<{ name: string; description: string; balance: string | number } | null>(null);
   const [movements, setMovements] = useState<FundMovement[]>([]);
   const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
@@ -2542,8 +2545,6 @@ function DepartmentAccountsPanel({
   }, [department.code]);
 
   useEffect(() => {
-    // The state writes ride a microtask, which is what keeps the effect
-    // from cascading the render.
     let alive = true;
     void Promise.resolve().then(() => {
       if (alive) load();
@@ -2567,7 +2568,11 @@ function DepartmentAccountsPanel({
       setShowWithdrawModal(false);
       setAmount("");
       setReason("");
-      showAlert("Request sent", data.detail || "The treasurer has your withdrawal request.", "success");
+      showAlert(
+        "Request sent",
+        data.detail || (isDeaconate ? "The treasurer has your funding request." : "The treasurer has your withdrawal request."),
+        "success"
+      );
       load();
       onChanged();
     } catch (error) {
@@ -2578,8 +2583,6 @@ function DepartmentAccountsPanel({
   };
 
   const balance = Number(account?.balance ?? 0);
-  // The ledger's search reads the movement's wording, its reference and the
-  // kind of movement it was; the count line says how many of the whole it is.
   const movementQuery = search.trim().toLowerCase();
   const visibleMovements = movementQuery
     ? movements.filter((movement) =>
@@ -2595,20 +2598,26 @@ function DepartmentAccountsPanel({
         <p className="py-8 text-center text-xs text-moss">Loading the fund…</p>
       ) : !account ? (
         <div className="rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
-          <p className="text-sm font-semibold text-bark">No account yet</p>
+          <p className="text-sm font-semibold text-bark">No account connected yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
-            The treasurer has not opened a giving account for {department.label}. Gifts cannot name it until one exists.
+            The treasurer has not linked a church treasury account for {department.label} yet. Accounts can be linked at the Treasury Accounts desk.
           </p>
         </div>
       ) : (
         <>
-          {/* The fund itself: what it holds, and the one ask the desk may
-              make of it. */}
+          {/* Fund Header Banner */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-moss">
-                {account.description || account.name} — balance
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-moss">
+                  {account.description || account.name} — balance
+                </span>
+                {isDeaconate && (
+                  <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
+                    Church Budget (LCB)
+                  </span>
+                )}
+              </div>
               <p className="mt-0.5 text-2xl font-bold text-bark">
                 KES {balance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
               </p>
@@ -2617,94 +2626,156 @@ function DepartmentAccountsPanel({
               <button
                 type="button"
                 onClick={() => setShowWithdrawModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep"
               >
-                <Wallet className="h-4 w-4" />
-                Request withdrawal
+                {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
+                {isDeaconate ? "Request funding" : "Request withdrawal"}
               </button>
             )}
           </div>
 
+          {/* Pending or Past Withdrawal / Funding Requests */}
           {withdrawals.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">Withdrawal requests</h3>
-              {withdrawals.map((row) => (
-                <div key={row.id} className="rounded-xl border border-sand-line bg-white p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-bark">
-                      KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} — {row.reason}
-                    </p>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        row.status === "approved"
-                          ? "bg-green-50 text-green-800"
-                          : row.status === "declined"
-                            ? "bg-red-50 text-red-800"
-                            : "bg-mist-select text-bark"
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-moss-faint">
-                    Asked by {row.requested_by} · {dayFirst(row.created_at)}
-                  </p>
-                  {row.reply && row.status !== "pending" && (
-                    <p className="mt-1.5 rounded-lg bg-sand px-2.5 py-1.5 text-[11px] text-moss">{row.reply}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* The ledger lines, exactly as the treasury's log reads them. */}
-          <div className="rounded-2xl border border-sand-line bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">Contributions &amp; movements</h3>
-              <span className="text-[11px] text-moss-faint">
-                {visibleMovements.length} line{visibleMovements.length === 1 ? "" : "s"}
-                {movementQuery ? ` of ${movements.length}` : ""}
-              </span>
-            </div>
-            {movements.length === 0 ? (
-              <p className="px-4 py-8 text-center text-xs text-moss">Nothing has moved in this fund yet.</p>
-            ) : visibleMovements.length === 0 ? (
-              <p className="px-4 py-8 text-center text-xs text-moss">No movement matches that search.</p>
-            ) : (
-              <div className="divide-y divide-sand-soft">
-                {visibleMovements.map((movement) => (
-                  <div key={movement.id} className={`flex flex-wrap items-center justify-between gap-2 px-4 ${rowPad}`}>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-bark">{movement.description}</p>
-                      <p className="text-[11px] text-moss-faint">
-                        {movement.reference || movement.transaction_type_display} · {dayFirstTime(movement.created_at)}
+              <h3 className="text-xs font-bold uppercase tracking-wider text-moss">
+                {isDeaconate ? "Funding requests" : "Withdrawal requests"}
+              </h3>
+              <div className="space-y-2">
+                {withdrawals.map((row) => (
+                  <div key={row.id} className="rounded-xl border border-sand-line bg-white p-3 shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-bark">
+                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} — {row.reason}
                       </p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          row.status === "approved"
+                            ? "bg-green-50 text-green-800"
+                            : row.status === "declined"
+                              ? "bg-red-50 text-red-800"
+                              : "bg-mist-select text-bark"
+                        }`}
+                      >
+                        {row.status}
+                      </span>
                     </div>
-                    <p
-                      className={`shrink-0 text-xs font-bold ${
-                        movement.transaction_type === "debit" || movement.transaction_type === "transfer_out"
-                          ? "text-ember"
-                          : "text-moss-dark"
-                      }`}
-                    >
-                      {movement.transaction_type === "debit" || movement.transaction_type === "transfer_out" ? "−" : "+"}KES{" "}
-                      {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                    <p className="mt-1 text-[11px] text-moss-faint">
+                      Asked by {row.requested_by} · {dayFirst(row.created_at)}
                     </p>
+                    {row.reply && row.status !== "pending" && (
+                      <p className="mt-1.5 rounded-lg bg-sand px-2.5 py-1.5 text-[11px] text-moss">{row.reply}</p>
+                    )}
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Scrollable Transactions Table */}
+          <div className="rounded-2xl border border-sand-line bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-moss">
+                  Transactions &amp; Ledger Movements
+                </h3>
+                <p className="text-[11px] text-moss-faint">
+                  All credits, contributions and debited disbursements for this account.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold text-moss">
+                {visibleMovements.length} {visibleMovements.length === 1 ? "transaction" : "transactions"}
+                {movementQuery ? ` of ${movements.length}` : ""}
+              </span>
+            </div>
+
+            {movements.length === 0 ? (
+              <p className="px-4 py-12 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
+            ) : visibleMovements.length === 0 ? (
+              <p className="px-4 py-12 text-center text-xs text-moss">No transaction matches that search.</p>
+            ) : (
+              <div className="max-h-[380px] sm:max-h-[440px] overflow-y-auto custom-table-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
+                    <tr>
+                      <th className="px-4 py-2.5">Date</th>
+                      <th className="px-4 py-2.5">Description</th>
+                      <th className="px-4 py-2.5">Reference / Type</th>
+                      <th className="px-4 py-2.5 text-right">Amount (KES)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sand-soft bg-white">
+                    {visibleMovements.map((movement) => {
+                      const isOutflow = movement.transaction_type === "debit" || movement.transaction_type === "transfer_out";
+                      return (
+                        <tr key={movement.id} className="transition hover:bg-sand-linen/60">
+                          <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                            {dayFirstTime(movement.created_at)}
+                          </td>
+                          <td className={`px-4 ${rowPad} font-medium text-bark`}>
+                            <div className="flex items-center gap-1.5">
+                              {isOutflow ? (
+                                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
+                              ) : (
+                                <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
+                              )}
+                              <span className="truncate">{movement.description}</span>
+                            </div>
+                          </td>
+                          <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
+                            <span className="font-mono">{movement.reference || movement.transaction_type_display}</span>
+                          </td>
+                          <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${isOutflow ? "text-ember" : "text-moss-dark"}`}>
+                            {isOutflow ? "−" : "+"}KES{" "}
+                            {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
+
+            {/* Bottom Action Footer Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand-linen/50 px-4 py-3">
+              <p className="text-[11px] text-moss">
+                {isDeaconate
+                  ? "Deaconate funding requests are reviewed and disbursed by the church treasurer from LCB."
+                  : "Withdrawals from this fund are requested by department leadership and disbursed by the treasurer."}
+              </p>
+              {canRequest ? (
+                <button
+                  type="button"
+                  onClick={() => setShowWithdrawModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
+                >
+                  {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
+                  {isDeaconate ? "Request funding" : "Request withdrawal"}
+                </button>
+              ) : (
+                <span className="text-[11px] italic text-moss-faint">
+                  (Only leaders of {department.label} can request {isDeaconate ? "funding" : "withdrawals"})
+                </span>
+              )}
+            </div>
           </div>
         </>
       )}
 
+      {/* Withdrawal / Funding Request Modal */}
       {showWithdrawModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-label="Request a withdrawal" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line">
+          <div role="dialog" aria-modal="true" aria-label={isDeaconate ? "Request funding" : "Request a withdrawal"} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line">
             <div className="flex items-start justify-between border-b border-sand-line pb-3">
               <div>
-                <h3 className="text-lg font-bold text-bark">Request a withdrawal</h3>
-                <p className="mt-0.5 text-xs text-moss">The treasurer answers it at the accounts desk.</p>
+                <h3 className="text-lg font-bold text-bark">
+                  {isDeaconate ? "Request Funding" : "Request a withdrawal"}
+                </h3>
+                <p className="mt-0.5 text-xs text-moss">
+                  {isDeaconate
+                    ? "The treasurer reviews funding requests for church budget allocations."
+                    : "The treasurer answers it at the accounts desk."}
+                </p>
               </div>
               <button type="button" onClick={() => setShowWithdrawModal(false)} aria-label="Close" className="rounded-lg p-1 text-moss hover:bg-sand hover:text-bark">
                 <X className="h-5 w-5" />
@@ -2712,7 +2783,7 @@ function DepartmentAccountsPanel({
             </div>
             <form onSubmit={requestWithdrawal} className="mt-4 space-y-4">
               <label className="block text-sm font-medium text-bark">
-                Amount (KES)
+                Amount (KES) *
                 <input
                   type="number"
                   required
@@ -2721,18 +2792,24 @@ function DepartmentAccountsPanel({
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 5000.00"
                   className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  autoFocus
                 />
               </label>
               <label className="block text-sm font-medium text-bark">
-                What is it for?
+                What is it for? *
                 <textarea
                   required
                   rows={3}
                   maxLength={255}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="What the money will pay for."
+                  placeholder={
+                    isDeaconate
+                      ? "Explain what the funding will be used for (e.g. communion bread/wine, sanctuary maintenance, ordinance supplies)..."
+                      : "Explain what the money will pay for..."
+                  }
                   className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
                 />
               </label>
@@ -2747,9 +2824,9 @@ function DepartmentAccountsPanel({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-bark px-4 py-2 text-sm font-bold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-4 py-2 text-sm font-bold text-white transition hover:bg-bark/90 disabled:opacity-60"
                 >
-                  {submitting ? "Sending…" : "Send request"}
+                  {submitting ? "Sending…" : isDeaconate ? "Request funding" : "Request withdrawal"}
                 </button>
               </div>
             </form>

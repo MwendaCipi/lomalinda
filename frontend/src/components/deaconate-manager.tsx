@@ -15,7 +15,7 @@ import {
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { DepartmentHub } from "./department-hub";
+import { DepartmentAccountsPanel, DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
 
@@ -159,7 +159,7 @@ function custodyCell(item: InventoryItem) {
 }
 
 interface DeaconateManagerProps {
-  initialTab?: "inventory" | "rota" | "members" | "calendar";
+  initialTab?: "inventory" | "rota" | "members" | "calendar" | "funding" | "accounts";
 }
 
 export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerProps) {
@@ -647,6 +647,35 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
             No deaconate events have been recorded yet.
           </div>
+        </div>
+      )}
+
+      {/* ── TAB: FUNDING & ACCOUNTS ── */}
+      {(activeTab === "funding" || activeTab === "accounts") && (
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-hover-scrollbar">
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <div className="md:hidden">
+              <h2 className="text-base font-bold text-bark">Deaconate Funding &amp; Accounts</h2>
+              <p className="text-xs text-moss">Local Church Budget allocations, transactions ledger, and funding requests.</p>
+            </div>
+          </div>
+          <DepartmentAccountsPanel
+            department={{
+              code: "deaconate",
+              label: "Deaconate",
+              description: "Church property, ordinances and logistics",
+              leader: null,
+              assistants: [],
+              roles: [],
+              member_count: 0,
+              event_count: 0,
+              group: "office",
+              units: [],
+            }}
+            onChanged={() => {}}
+            search=""
+          />
         </div>
       )}
 

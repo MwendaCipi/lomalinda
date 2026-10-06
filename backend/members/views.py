@@ -9082,9 +9082,11 @@ class DepartmentAccountView(APIView):
             ).select_related('requested_by', 'decided_by').order_by('-created_at')[:50]
         ]
 
+        is_deaconate = target.code == 'deaconate'
         return Response({
             'account': TreasuryAccountSerializer(account).data,
             'can_request_withdrawal': can_manage_department(request.user, department) and not is_treasurer,
+            'is_deaconate': is_deaconate,
             'movements': movements,
             'withdrawals': withdrawals,
         })
@@ -9095,7 +9097,7 @@ class DepartmentAccountView(APIView):
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
-            return Response({'detail': "Only this department's leadership can request a withdrawal."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': "Only this department's leadership can request a withdrawal or funding."}, status=status.HTTP_403_FORBIDDEN)
         account = TreasuryAccount.objects.filter(
             department__code=department, department__is_active=True,
         ).order_by('id').first()
@@ -9107,7 +9109,7 @@ class DepartmentAccountView(APIView):
             if amount <= 0:
                 raise ValueError()
         except (ValueError, TypeError):
-            return Response({'detail': 'Say how much the withdrawal is for.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Say how much the request is for.'}, status=status.HTTP_400_BAD_REQUEST)
         reason = str(request.data.get('reason') or '').strip()
         if not reason:
             return Response({'reason': 'Tell the treasurer what the money is for.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -9117,6 +9119,7 @@ class DepartmentAccountView(APIView):
             reason=reason[:255], requested_by=request.user,
         )
 
+        is_deaconate = target.code == 'deaconate'
         # The ask lands with the treasurer's office — the people who move the
         # church's money — as a bell and a mail.
         audience = User.objects.filter(
@@ -9124,7 +9127,7 @@ class DepartmentAccountView(APIView):
             is_active=True,
         ).distinct()
         desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
-        subject = f'Withdrawal request from {target.name}'
+        subject = f'Funding request from {target.name}' if is_deaconate else f'Withdrawal request from {target.name}'
         body = (
             f"{giver_display_name('', member=request.user)} asks for KES {amount:,.2f} "
             f"from the {account.description or account.name} account — {reason}. "
@@ -9142,7 +9145,8 @@ class DepartmentAccountView(APIView):
             )
         except Exception:
             pass
-        return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent to the treasurer.'}, status=status.HTTP_201_CREATED)
+        detail_msg = 'Your funding request has been sent to the treasurer.' if is_deaconate else 'Your withdrawal request has been sent to the treasurer.'
+        return Response({'id': row.id, 'status': row.status, 'detail': detail_msg}, status=status.HTTP_201_CREATED)
 
 
 class DepartmentWithdrawalReviewView(APIView):

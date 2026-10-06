@@ -32,6 +32,7 @@ import {
   Undo2,
   UserCheck,
   Users,
+  Wallet,
 } from "lucide-react";
 
 /**
@@ -652,6 +653,11 @@ export const deaconateItems: RailRow[] = [
     roles: DEACONATE_ROLES,
     short: "Calendar",
     description: "Communion services, foot washing and the ordinances the desk keeps.",
+  }),
+  officeTab("deaconate-funding", "Funding & Accounts", Wallet, {
+    roles: DEACONATE_ROLES,
+    short: "Funding",
+    description: "Local Church Budget allocations, transactions ledger, and funding requests.",
   }),
 ];
 

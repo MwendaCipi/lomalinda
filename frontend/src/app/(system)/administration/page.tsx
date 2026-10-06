@@ -88,6 +88,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   "deaconate-rota": "the duty rota",
   "deaconate-members": "the deaconate team",
   "deaconate-calendar": "the deaconate calendar",
+  "deaconate-funding": "deaconate funding and accounts",
   settings: "church settings",
   overview: "the overview",
 };
@@ -282,7 +283,7 @@ function AdministrationContent() {
    */
   const activeTab = searchTab ? (searchTab === "expenditures" ? "accounts" : searchTab) : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -532,7 +533,7 @@ function AdministrationContent() {
             )}
 
             {/* Deaconate Ministry Manager */}
-            {["inventory", "deaconate-rota", "deaconate-members", "deaconate-calendar"].includes(activeTab) && (
+            {["inventory", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding"].includes(activeTab) && (
               // The deaconate panels own their own scrolling (fixed filters, scrolling
               // rows, fixed actions), so the page itself must not scroll.
               <div className="h-full min-h-0">
@@ -544,6 +545,8 @@ function AdministrationContent() {
                       ? "members"
                       : activeTab === "deaconate-calendar"
                       ? "calendar"
+                      : activeTab === "deaconate-funding"
+                      ? "funding"
                       : "inventory"
                   }
                 />
