@@ -42,6 +42,7 @@ import {
   UserPlus,
   Users,
   Volume2,
+  SlidersHorizontal,
   Wallet,
   X,
 } from "lucide-react";
@@ -2499,22 +2500,118 @@ type FundWithdrawal = {
 };
 
 /**
- * The department's own fund — the Accounts view of its desk.
+ * Popover filter near the search input to toggle between All, Contributions, and Withdrawals.
+ */
+function AccountsFilterPopover({
+  value,
+  onChange,
+}: {
+  value: "all" | "contributions" | "withdrawals";
+  onChange: (v: "all" | "contributions" | "withdrawals") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const labels = {
+    all: "All",
+    contributions: "Contributions",
+    withdrawals: "Withdrawals",
+  };
+
+  return (
+    <div className="relative inline-block shrink-0" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+          value !== "all"
+            ? "border-ember bg-ember/10 text-ember"
+            : "border-sand-mute bg-white text-bark hover:bg-sand"
+        }`}
+        aria-label="Filter transactions"
+        aria-expanded={open}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{labels[value]}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">
+            Filter by type
+          </p>
+          {(
+            [
+              { key: "all", label: "All items" },
+              { key: "contributions", label: "Contributions only (+)" },
+              { key: "withdrawals", label: "Withdrawals & requests (−)" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                onChange(item.key);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                value === item.key
+                  ? "bg-sand-linen text-ember"
+                  : "text-bark hover:bg-sand"
+              }`}
+            >
+              <span>{item.label}</span>
+              {value === item.key && <span className="text-ember font-bold">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type UnifiedAccountItem = {
+  key: string;
+  date: string;
+  description: string;
+  reference: string;
+  amount: number;
+  isOutflow: boolean;
+  category: "contribution" | "withdrawal";
+  status: "completed" | "pending" | "elder_approved" | "approved" | "declined" | "reversed";
+  requestedBy?: string;
+  reply?: string;
+};
+
+/**
+ * The department's own fund — the Account & Withdrawals view of its desk.
  *
- * Contributions credited to the department's giving account show here with
- * the balance they built, read straight off the treasury's ledger. What the
- * desk may not do is move the money: the leader requests a withdrawal, the
- * request goes to the treasurer, and the answer comes back to this view.
+ * Displays both financial movements (contributions & debits) and withdrawal requests
+ * with real-time status badges (Pending, Elder Approved, Approved, Declined, Reversed).
  */
 export function DepartmentAccountsPanel({
   department,
   onChanged,
   search,
+  typeFilter = "all",
 }: {
   department: DepartmentRow;
   onChanged: () => void;
   /** The fund ledger's search, owned by the desk so it rides the header band. */
   search: string;
+  /** Category filter: all, contributions, or withdrawals. */
+  typeFilter?: "all" | "contributions" | "withdrawals";
 }) {
   const isDeaconate = department.code === "deaconate";
   const [account, setAccount] = useState<{ name: string; description: string; balance: string | number } | null>(null);
@@ -2587,21 +2684,121 @@ export function DepartmentAccountsPanel({
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
-
   const balance = Number(account?.balance ?? 0);
   const movementQuery = search.trim().toLowerCase();
-  const filteredMovements = movementQuery
-    ? movements.filter((movement) =>
-        `${movement.description} ${movement.reference} ${movement.transaction_type_display}`
+
+  const unifiedItems = useMemo(() => {
+    const items: UnifiedAccountItem[] = [];
+    const wdMap = new Map<number, FundWithdrawal>();
+    for (const w of withdrawals) {
+      wdMap.set(w.id, w);
+    }
+
+    const matchedWdIds = new Set<number>();
+
+    for (const mov of movements) {
+      const isOutflow = mov.transaction_type === "debit" || mov.transaction_type === "transfer_out";
+      const wdMatch = mov.reference ? mov.reference.match(/^WD-(\d+)$/i) : null;
+      let status: UnifiedAccountItem["status"] = "completed";
+      const category: UnifiedAccountItem["category"] = isOutflow ? "withdrawal" : "contribution";
+      let requestedBy: string | undefined;
+      let reply: string | undefined;
+
+      if (wdMatch) {
+        const wdId = parseInt(wdMatch[1], 10);
+        matchedWdIds.add(wdId);
+        const wd = wdMap.get(wdId);
+        if (wd) {
+          status = "approved";
+          requestedBy = wd.requested_by;
+          reply = wd.reply;
+        }
+      }
+
+      items.push({
+        key: `mov-${mov.id}`,
+        date: mov.created_at,
+        description: mov.description,
+        reference: mov.reference || mov.transaction_type_display,
+        amount: Number(mov.amount),
+        isOutflow,
+        category,
+        status,
+        requestedBy,
+        reply,
+      });
+    }
+
+    for (const wd of withdrawals) {
+      if (!matchedWdIds.has(wd.id)) {
+        items.push({
+          key: `wd-${wd.id}`,
+          date: wd.created_at,
+          description: wd.reason,
+          reference: isDeaconate ? "Funding request" : "Withdrawal request",
+          amount: Number(wd.amount),
+          isOutflow: true,
+          category: "withdrawal",
+          status: (wd.status as UnifiedAccountItem["status"]) || "pending",
+          requestedBy: wd.requested_by,
+          reply: wd.reply,
+        });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return items;
+  }, [movements, withdrawals, isDeaconate]);
+
+  const filteredItems = useMemo(() => {
+    let list = unifiedItems;
+    if (typeFilter === "contributions") {
+      list = list.filter((item) => item.category === "contribution");
+    } else if (typeFilter === "withdrawals") {
+      list = list.filter((item) => item.category === "withdrawal");
+    }
+
+    if (movementQuery) {
+      list = list.filter((item) =>
+        `${item.description} ${item.reference} ${item.status} ${item.requestedBy || ""} ${item.reply || ""}`
           .toLowerCase()
           .includes(movementQuery)
-      )
-    : movements;
+      );
+    }
+    return list;
+  }, [unifiedItems, typeFilter, movementQuery]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredMovements.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePageNum = Math.min(page, totalPages);
-  const visibleMovements = filteredMovements.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
+  const visibleItems = filteredItems.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
 
+  const statusBadge = (status: UnifiedAccountItem["status"]) => {
+    const map: Record<string, string> = {
+      completed: "bg-sand text-moss",
+      pending: "bg-amber-50 text-amber-800",
+      elder_approved: "bg-mist-select text-bark",
+      approved: "bg-green-50 text-green-800",
+      declined: "bg-red-50 text-red-700",
+      reversed: "bg-sand text-moss",
+    };
+    const labels: Record<string, string> = {
+      completed: "Completed",
+      pending: "Pending",
+      elder_approved: "Elder Approved",
+      approved: "Approved",
+      declined: "Declined",
+      reversed: "Reversed",
+    };
+    return (
+      <span
+        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+          map[status] ?? "bg-sand text-moss"
+        }`}
+      >
+        {labels[status] ?? status}
+      </span>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
@@ -2616,14 +2813,12 @@ export function DepartmentAccountsPanel({
         </div>
       ) : (
         <>
-
-
-          {/* Contained Scrollable Transactions Table: Only Rows Scroll */}
+          {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll */}
           <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
-            {movements.length === 0 ? (
+            {unifiedItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
-            ) : visibleMovements.length === 0 ? (
-              <p className="px-4 py-16 text-center text-xs text-moss">No transaction matches that search.</p>
+            ) : visibleItems.length === 0 ? (
+              <p className="px-4 py-16 text-center text-xs text-moss">No transaction matches that filter or search.</p>
             ) : (
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
@@ -2632,44 +2827,53 @@ export function DepartmentAccountsPanel({
                     <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3">Reference / Type</th>
                     <th className="px-4 py-3 text-right">Amount (KES)</th>
+                    <th className="px-4 py-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-soft bg-white">
-                  {visibleMovements.map((movement) => {
-                    const isOutflow = movement.transaction_type === "debit" || movement.transaction_type === "transfer_out";
-                    return (
-                      <tr key={movement.id} className="transition hover:bg-sand-linen/60">
-                        <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
-                          {dayFirstTime(movement.created_at)}
-                        </td>
-                        <td className={`px-4 ${rowPad} font-medium text-bark`}>
-                          <div className="flex items-center gap-1.5">
-                            {isOutflow ? (
-                              <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
-                            ) : (
-                              <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
+                  {visibleItems.map((item) => (
+                    <tr key={item.key} className="transition hover:bg-sand-linen/60">
+                      <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                        {dayFirstTime(item.date)}
+                      </td>
+                      <td className={`px-4 ${rowPad} font-medium text-bark`}>
+                        <div className="flex items-center gap-1.5">
+                          {item.isOutflow ? (
+                            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
+                          ) : (
+                            <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
+                          )}
+                          <div className="min-w-0">
+                            <span className="truncate">{item.description}</span>
+                            {item.requestedBy && item.status !== "completed" && (
+                              <span className="ml-1.5 text-[10px] text-moss-faint">
+                                (by {item.requestedBy})
+                              </span>
                             )}
-                            <span className="truncate">{movement.description}</span>
+                            {item.reply && (item.status === "declined" || item.status === "approved") && (
+                              <p className="text-[10px] italic text-moss-faint">{item.reply}</p>
+                            )}
                           </div>
-                        </td>
-                        <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
-                          <span className="font-mono">{movement.reference || movement.transaction_type_display}</span>
-                        </td>
-                        <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${isOutflow ? "text-ember" : "text-moss-dark"}`}>
-                          {isOutflow ? "−" : "+"}KES{" "}
-                          {Number(movement.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                      <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
+                        <span className="font-mono">{item.reference}</span>
+                      </td>
+                      <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold ${item.isOutflow ? "text-ember" : "text-moss-dark"}`}>
+                        {item.isOutflow ? "−" : "+"}KES{" "}
+                        {item.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
+                        {statusBadge(item.status)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
           </div>
 
-          {/* Bottom footer — two rows so mobile never loses the button:
-               row 1: balance (left) + request button (right), always visible.
-               row 2: page navigation centred below, only when > 1 page. */}
+          {/* Bottom footer — balance + request button + pagination */}
           <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
             {/* Row 1 — balance + action */}
             <div className="flex items-center justify-between gap-2">
@@ -2694,7 +2898,6 @@ export function DepartmentAccountsPanel({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep sm:px-4"
                   >
                     {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-                    {/* Shorter label on phones, full label on larger screens */}
                     <span className="sm:hidden">{isDeaconate ? "Request" : "Withdraw"}</span>
                     <span className="hidden sm:inline">{isDeaconate ? "Request funding" : "Request withdrawal"}</span>
                   </button>
@@ -2730,9 +2933,9 @@ export function DepartmentAccountsPanel({
                 </button>
               </div>
             )}
-            {totalPages <= 1 && filteredMovements.length > 0 && (
+            {totalPages <= 1 && filteredItems.length > 0 && (
               <p className="mt-0.5 text-center text-[11px] text-moss-faint">
-                {filteredMovements.length} {filteredMovements.length === 1 ? "transaction" : "transactions"}
+                {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
               </p>
             )}
           </div>
@@ -2798,16 +3001,16 @@ export function DepartmentAccountsPanel({
                 <button
                   type="button"
                   onClick={() => setShowWithdrawModal(false)}
-                  className="rounded-xl border border-sand-mute px-4 py-2 text-sm font-semibold text-bark transition hover:bg-sand-linen"
+                  className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-4 py-2 text-sm font-bold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  disabled={submitting || !amount || !reason.trim()}
+                  className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
                 >
-                  {submitting ? "Sending…" : isDeaconate ? "Request funding" : "Request withdrawal"}
+                  {submitting ? "Sending…" : isDeaconate ? "Send funding request" : "Send request"}
                 </button>
               </div>
             </form>
@@ -2818,119 +3021,6 @@ export function DepartmentAccountsPanel({
   );
 }
 
-/**
- * Dedicated panel showing all withdrawal / funding requests raised by this department.
- */
-function DepartmentWithdrawalRequestsPanel({
-  department,
-  requests,
-  search,
-}: {
-  department: DepartmentRow;
-  requests: {
-    id: number;
-    amount: string | number;
-    reason: string;
-    status: string;
-    reply?: string;
-    requested_by: string;
-    created_at: string;
-    decided_at?: string;
-    elder_approved_by?: string;
-    elder_approved_at?: string;
-  }[];
-  search: string;
-}) {
-  const isDeaconate = department.code === "deaconate";
-  const query = search.trim().toLowerCase();
-  const filtered = query
-    ? requests.filter((r) =>
-        `${r.reason} ${r.amount} ${r.status} ${r.requested_by} ${r.reply || ""}`
-          .toLowerCase()
-          .includes(query)
-      )
-    : requests;
-
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      pending: "bg-sand text-bark",
-      elder_approved: "bg-mist-select text-bark",
-      approved: "bg-green-50 text-green-800",
-      declined: "bg-red-50 text-red-700",
-      reversed: "bg-sand text-moss",
-    };
-    const labels: Record<string, string> = {
-      pending: "Pending",
-      elder_approved: "Elder Approved",
-      approved: "Approved",
-      declined: "Declined",
-      reversed: "Reversed",
-    };
-    return (
-      <span
-        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-          map[status] ?? "bg-sand text-bark"
-        }`}
-      >
-        {labels[status] ?? status}
-      </span>
-    );
-  };
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
-      <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar p-4 sm:p-5">
-        {requests.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm font-semibold text-bark">No requests yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
-              {isDeaconate
-                ? "Funding requests made from the Account & Withdrawals desk will appear here."
-                : "Withdrawal requests submitted from the Account & Withdrawals desk will appear here."}
-            </p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="py-16 text-center text-xs text-moss">No requests match that search.</p>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map((row) => (
-              <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-2xs">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-bark">
-                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                      </span>
-                      {statusBadge(row.status)}
-                    </div>
-                    <p className="mt-1 text-xs text-moss">{row.reason}</p>
-                    <p className="mt-1 text-[11px] text-moss-faint">
-                      Requested by {row.requested_by} · {dayFirst(row.created_at)}
-                    </p>
-                    {row.elder_approved_at && (
-                      <p className="mt-0.5 text-[11px] text-moss-faint">
-                        Elder approved on {dayFirst(row.elder_approved_at)}
-                      </p>
-                    )}
-                    {row.reply && (
-                      <div className="mt-2 rounded-xl bg-sand-soft/60 px-3 py-1.5 text-xs text-bark">
-                        <span className="font-semibold text-moss">Treasurer response:</span> {row.reply}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
-        {filtered.length} {filtered.length === 1 ? "request" : "requests"} ·{" "}
-        {requests.filter((r) => r.status === "pending" || r.status === "elder_approved").length} pending
-      </div>
-    </div>
-  );
-}
 
 function DepartmentDetail({
   department,
@@ -2979,18 +3069,14 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "withdrawals" | "requests">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests">(initialTab);
+  const [accountsTypeFilter, setAccountsTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // How many asks are waiting on this desk. The strip carries the count and
   // The join asks raised from the rail, answered on this desk.
   const [joinRequests, setJoinRequests] = useState<
     { id: number; member_name: string; note: string; status: string; created_at: string }[]
   >([]);
-  // The withdrawal (or funding) requests this department has raised, loaded
-  // from the account endpoint alongside the ledger. Lifted here so the strip
-  // badge can show the pending count before the tab is opened.
-  const [withdrawalRequests, setWithdrawalRequests] = useState<
-    { id: number; amount: string | number; reason: string; status: string; reply?: string; requested_by: string; created_at: string; decided_at?: string }[]
-  >([]);
+
   // The strip names the view, and which unit's roll it reads: All Members and
   // the unit fellowships read their roll, the rest name the view itself. This
   // is what marks the active toggle in the merged strip.
@@ -3002,7 +3088,6 @@ function DepartmentDetail({
   const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
-  const [withdrawalsSearch, setWithdrawalsSearch] = useState("");
   const [meetingsSearch, setMeetingsSearch] = useState("");
 
   const rowPad = densityCellPad();
@@ -3068,23 +3153,19 @@ function DepartmentDetail({
       );
     } else if (subTab === "accounts") {
       setHeaderRightAction(
-        <input
-          type="text"
-          value={accountsSearch}
-          onChange={(e) => setAccountsSearch(e.target.value)}
-          placeholder="Search the fund…"
-          className={inputCls}
-        />
-      );
-    } else if (subTab === "withdrawals") {
-      setHeaderRightAction(
-        <input
-          type="text"
-          value={withdrawalsSearch}
-          onChange={(e) => setWithdrawalsSearch(e.target.value)}
-          placeholder="Search requests…"
-          className={inputCls}
-        />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <input
+            type="text"
+            value={accountsSearch}
+            onChange={(e) => setAccountsSearch(e.target.value)}
+            placeholder="Search account…"
+            className="w-36 sm:w-56 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+          />
+          <AccountsFilterPopover
+            value={accountsTypeFilter}
+            onChange={setAccountsTypeFilter}
+          />
+        </div>
       );
     } else if (subTab === "meetings") {
       setHeaderRightAction(
@@ -3108,7 +3189,7 @@ function DepartmentDetail({
     choirSearch,
     groupsSearch,
     accountsSearch,
-    withdrawalsSearch,
+    accountsTypeFilter,
     meetingsSearch,
     setHeaderRightAction,
   ]);
@@ -3164,21 +3245,12 @@ function DepartmentDetail({
           : {}),
       },
       { key: "calendar", label: "Calendar", icon: CalendarDays },
-      // The fund ledger and withdrawal history together under one toggle, with
-      // withdrawal requests on their own toggle immediately after.
+      // The fund ledger and withdrawal requests unified under one desk.
       { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
-      {
-        key: "withdrawals",
-        label: "Withdrawal Requests",
-        icon: ArrowDownLeft,
-        ...(withdrawalRequests.filter((w) => w.status === "pending").length > 0
-          ? { count: withdrawalRequests.filter((w) => w.status === "pending").length }
-          : {}),
-      },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
     ];
-  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests, withdrawalRequests]);
+  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -3237,23 +3309,13 @@ function DepartmentDetail({
       .catch(() => setJoinRequests([]));
   }, [department.code]);
 
-  const loadWithdrawalRequests = useCallback(() => {
-    fetch(`${API_URL}/api/members/departments/${department.code}/account/`, { headers: authHeaders() })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setWithdrawalRequests(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
-      })
-      .catch(() => setWithdrawalRequests([]));
-  }, [department.code]);
-
   useEffect(() => {
     // Every department carries a roll — Eldership, Clerkship and Deaconate
     // included; the church itself is not a department.
     loadRoll();
     loadEvents();
     loadJoinRequests();
-    loadWithdrawalRequests();
-  }, [loadRoll, loadEvents, loadJoinRequests, loadWithdrawalRequests]);
+  }, [loadRoll, loadEvents, loadJoinRequests]);
 
   const loadUnitBoard = useCallback(() => {
     // Deferred by a microtask: the read settles state after the effect's own
@@ -3661,23 +3723,13 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* Accounts & Withdrawals tab */}
+      {/* Account & Withdrawals tab */}
       {subTab === "accounts" && (
         <DepartmentAccountsPanel
           department={department}
-          onChanged={() => {
-            loadWithdrawalRequests();
-            onChanged();
-          }}
+          onChanged={onChanged}
           search={accountsSearch}
-        />
-      )}
-      {/* Withdrawal Requests tab */}
-      {subTab === "withdrawals" && (
-        <DepartmentWithdrawalRequestsPanel
-          department={department}
-          requests={withdrawalRequests}
-          search={withdrawalsSearch}
+          typeFilter={accountsTypeFilter}
         />
       )}
       {subTab === "calendar" && (

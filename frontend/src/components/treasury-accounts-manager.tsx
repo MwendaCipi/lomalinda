@@ -60,9 +60,10 @@ type WithdrawalRequestRow = {
 
 /**
  * The departments' withdrawal queue — showing all non-reversed requests across
- * every department. Approval is a two-step process:
+ * every department in a structured, actionable table.
+ * Approval is a two-step process:
  *   1. An elder clears the request ("Elder Approve")
- *   2. The treasurer then approves (debiting the fund) or declines
+ *   2. The treasurer then approves (debiting the fund and reflecting in Expenses) or declines
  * Approved requests remain visible so the treasurer can reverse them if needed.
  */
 function WithdrawalRequestsPanel() {
@@ -71,6 +72,7 @@ function WithdrawalRequestsPanel() {
   const [declining, setDeclining] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const rowPad = densityCellPad();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -101,9 +103,9 @@ function WithdrawalRequestsPanel() {
       setReply("");
       const messages: Record<string, [string, string]> = {
         elder_approve: ["Elder approval recorded", "The treasurer can now act on this request."],
-        approve: ["Withdrawal approved", "The fund has been debited and the desk notified."],
+        approve: ["Withdrawal approved", "The fund has been debited and reflected in Expenses."],
         decline: ["Request declined", "The desk has your reply."],
-        reverse: ["Withdrawal reversed", "The fund has been credited back."],
+        reverse: ["Withdrawal reversed", "The fund has been credited back and expense record removed."],
       };
       const [title, msg] = messages[action] ?? ["Done", ""];
       showAlert(title, msg, "success");
@@ -131,7 +133,7 @@ function WithdrawalRequestsPanel() {
       reversed: "Reversed",
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[status] ?? "bg-sand text-bark"}`}>
+      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[status] ?? "bg-sand text-bark"}`}>
         {labels[status] ?? status}
       </span>
     );
@@ -153,132 +155,169 @@ function WithdrawalRequestsPanel() {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-5">
-      <div className="space-y-3">
-        {rows.map((row) => (
-          <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-bold text-bark">
-                    {row.department} — KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
+            <tr>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">Department & Account</th>
+              <th className="px-4 py-3">Purpose & Details</th>
+              <th className="px-4 py-3 text-right">Amount (KES)</th>
+              <th className="px-4 py-3 text-center">Status</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-sand-soft bg-white">
+            {rows.map((row) => (
+              <tr key={row.id} className="transition hover:bg-sand-linen/60">
+                <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                  {dayFirst(row.created_at)}
+                </td>
+                <td className={`px-4 ${rowPad} font-medium text-bark`}>
+                  <p className="font-semibold text-bark">{row.department}</p>
+                  <p className="text-[11px] text-moss-faint">{row.account_name}</p>
+                </td>
+                <td className={`px-4 ${rowPad} text-moss`}>
+                  <p className="font-medium text-bark">{row.reason}</p>
+                  <p className="text-[11px] text-moss-faint">
+                    Asked by {row.requested_by} · Bal: KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </p>
+                  {row.elder_approved_by && (
+                    <p className="text-[10px] text-moss-faint">
+                      Elder approved by {row.elder_approved_by}
+                    </p>
+                  )}
+                  {row.decided_by && (row.status === "approved" || row.status === "declined") && (
+                    <p className="text-[10px] italic text-moss-faint">
+                      {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}
+                      {row.reply ? ` — "${row.reply}"` : ""}
+                    </p>
+                  )}
+                </td>
+                <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold text-bark`}>
+                  KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </td>
+                <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
                   {statusBadge(row.status)}
-                </div>
-                <p className="mt-0.5 text-xs text-moss">{row.reason}</p>
-                <p className="mt-1 text-[11px] text-moss-faint">
-                  {row.account_name} holds KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} · asked by {row.requested_by} · {dayFirst(row.created_at)}
-                </p>
-                {row.elder_approved_by && (
-                  <p className="mt-0.5 text-[11px] text-moss-faint">
-                    Elder approved by {row.elder_approved_by}{row.elder_approved_at ? ` · ${dayFirst(row.elder_approved_at)}` : ""}
-                  </p>
-                )}
-                {row.decided_by && (row.status === "approved" || row.status === "declined") && (
-                  <p className="mt-0.5 text-[11px] text-moss-faint">
-                    {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}{row.decided_at ? ` · ${dayFirst(row.decided_at)}` : ""}
-                    {row.reply ? ` — "${row.reply}"` : ""}
-                  </p>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                {/* Step 1: Elder must approve before treasurer can act */}
-                {row.status === "pending" && (
-                  <button
-                    type="button"
-                    onClick={() => act(row.id, "elder_approve")}
-                    disabled={busy}
-                    className="rounded-xl border border-mist-select bg-mist-select/30 px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
-                  >
-                    Elder Approve
-                  </button>
-                )}
-                {/* Step 2: Treasurer approves once elder has cleared it */}
-                {row.status === "elder_approved" && (
-                  <button
-                    type="button"
-                    onClick={() => act(row.id, "approve")}
-                    disabled={busy}
-                    className="rounded-xl bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                  >
-                    Approve
-                  </button>
-                )}
-                {/* Decline: available while pending or elder_approved */}
-                {(row.status === "pending" || row.status === "elder_approved") && (
-                  <button
-                    type="button"
-                    onClick={() => setDeclining(declining === row.id ? null : row.id)}
-                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                  >
-                    Decline
-                  </button>
-                )}
-                {/* Reverse: available after approval */}
-                {row.status === "approved" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showAlert(
-                        "Reverse withdrawal?",
-                        `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name}.`,
-                        "warning",
-                        {
-                          showCancelButton: true,
-                          confirmButtonText: "Yes, reverse it",
-                          cancelButtonText: "Cancel",
-                        }
-                      ).then((result) => {
-                        if (result.isConfirmed) act(row.id, "reverse");
-                      });
-                    }}
-                    disabled={busy}
-                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
-                  >
-                    Reverse
-                  </button>
-                )}
-              </div>
+                </td>
+                <td className={`whitespace-nowrap px-4 ${rowPad} text-right`}>
+                  <div className="flex justify-end gap-1.5">
+                    {/* Step 1: Elder must approve before treasurer can act */}
+                    {row.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => act(row.id, "elder_approve")}
+                        disabled={busy}
+                        className="rounded-lg border border-mist-select bg-mist-select/30 px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
+                      >
+                        Elder Approve
+                      </button>
+                    )}
+                    {/* Step 2: Treasurer approves once elder has cleared it */}
+                    {row.status === "elder_approved" && (
+                      <button
+                        type="button"
+                        onClick={() => act(row.id, "approve")}
+                        disabled={busy}
+                        className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                    )}
+                    {/* Decline: available while pending or elder_approved */}
+                    {(row.status === "pending" || row.status === "elder_approved") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeclining(row.id);
+                          setReply("");
+                        }}
+                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                      >
+                        Decline
+                      </button>
+                    )}
+                    {/* Reverse: available after approval */}
+                    {row.status === "approved" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showAlert(
+                            "Reverse withdrawal?",
+                            `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name} and remove the corresponding expense record.`,
+                            "warning",
+                            {
+                              showCancelButton: true,
+                              confirmButtonText: "Yes, reverse it",
+                              cancelButtonText: "Cancel",
+                            }
+                          ).then((result) => {
+                            if (result.isConfirmed) act(row.id, "reverse");
+                          });
+                        }}
+                        disabled={busy}
+                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
+                      >
+                        Reverse
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Decline modal */}
+      {declining !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
+            <h4 className="text-sm font-bold text-bark">Decline Request</h4>
+            <p className="mt-0.5 text-xs text-moss">
+              Give a reason for the department leadership explaining why this request cannot be fulfilled.
+            </p>
+            <textarea
+              rows={3}
+              maxLength={255}
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              placeholder="e.g. Insufficient budget allocation for this quarter..."
+              className="mt-3 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end gap-2 border-t border-sand-line pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeclining(null);
+                  setReply("");
+                }}
+                className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => act(declining, "decline", reply)}
+                disabled={busy}
+                className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+              >
+                {busy ? "Declining…" : "Decline request"}
+              </button>
             </div>
-            {declining === row.id && (
-              <div className="mt-3 border-t border-sand-line pt-3">
-                <label className="block text-xs font-semibold text-bark">
-                  Why are you declining?
-                  <textarea
-                    rows={2}
-                    maxLength={255}
-                    value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    placeholder="The desk reads this with your answer."
-                    className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  />
-                </label>
-                <div className="mt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setDeclining(null); setReply(""); }}
-                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => act(row.id, "decline", reply)}
-                    disabled={busy}
-                    className="rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                  >
-                    Decline request
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        ))}
+        </div>
+      )}
+
+      <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
+        {rows.length} {rows.length === 1 ? "request" : "requests"} ·{" "}
+        {rows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action
       </div>
     </div>
   );
 }
-
 
 type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals";
 

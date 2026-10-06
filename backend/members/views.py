@@ -9289,6 +9289,19 @@ class DepartmentWithdrawalReviewView(APIView):
                     reference=f'WD-{row.id}',
                     created_by=request.user,
                 )
+                # Reflect approved withdrawal as an expenditure record in the treasurer's expenses table
+                Expenditure.objects.create(
+                    title=f"{row.department.name} withdrawal: {row.reason}"[:200],
+                    amount=row.amount,
+                    category='operations',
+                    account=row.account,
+                    payment_method='mpesa',
+                    vendor_payee=giver_display_name('', member=row.requested_by),
+                    receipt_number=f"WD-{row.id}",
+                    expenditure_date=timezone.localdate(),
+                    notes=f"Approved withdrawal request #{row.id} for {row.department.name}. {reply}".strip(),
+                    recorded_by=request.user,
+                )
                 row.status = 'approved'
                 row.decided_by = request.user
                 row.decided_at = timezone.now()
@@ -9333,6 +9346,8 @@ class DepartmentWithdrawalReviewView(APIView):
                     reference=f'WD-REV-{row.id}',
                     created_by=request.user,
                 )
+                # Remove corresponding expenditure record upon reversal
+                Expenditure.objects.filter(receipt_number=f"WD-{row.id}").delete()
                 row.status = 'reversed'
                 row.save(update_fields=['status'])
             # Notify the department.
