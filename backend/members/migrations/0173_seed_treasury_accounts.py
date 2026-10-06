@@ -10,6 +10,11 @@
 # its own account, and the department desk reads that balance and the
 # movements instead of the church's self-fund.
 #
+# The department desk finds a fund through ``TreasuryAccount.department``
+# (see views.department_account), so the department must be *set* on the
+# row — filtering on ``department__code`` alone would create an unlinked
+# account that no desk ever reads.
+#
 # Depends on 0065 which creates TreasuryAccount — the schema must have
 # been migrated before this runs.
 
@@ -17,6 +22,7 @@ from django.db import migrations, transaction
 
 
 def seed_treasury_accounts(apps, schema_editor):
+    Department = apps.get_model("members", "Department")
     TreasuryAccount = apps.get_model("members", "TreasuryAccount")
 
     accounts = [
@@ -28,8 +34,15 @@ def seed_treasury_accounts(apps, schema_editor):
 
     with transaction.atomic():
         for dept_code, name, description, account_type in accounts:
-            TreasuryAccount.objects.update_or_create(
-                department__code=dept_code,
+            department = Department.objects.filter(code=dept_code).first()
+            if department is None:
+                # The department is seeded by an earlier migration; with no
+                # department there is nothing for the fund to belong to.
+                continue
+            # One fund per department, keyed on the department itself so a
+            # re-run adopts the existing fund rather than opening a second.
+            TreasuryAccount.objects.get_or_create(
+                department=department,
                 defaults={
                     "name": name,
                     "account_number": "",
