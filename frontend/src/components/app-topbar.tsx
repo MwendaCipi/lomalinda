@@ -46,7 +46,9 @@ export function AppTopBar() {
   const [now, setNow] = useState(() => new Date());
   const { hasToken } = useHeaderData();
   // Chat lives in the bottom bar on a phone; a PC has the room here, so the
-  // bar itself carries the way in — with the same unread badge the tab wears.
+  // bar itself carries the way in — pinned to the bar's far left (mr-auto),
+  // with the same unread badge the tab wears and the account controls
+  // keeping the right end.
   const chatUnread = useChatUnread();
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export function AppTopBar() {
           href="/chat"
           aria-label={chatUnread > 0 ? `Chat — ${chatUnread} unread` : "Chat"}
           title="Chat"
-          className="relative mr-1.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 lg:flex"
+          className="relative mr-auto hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 lg:flex"
         >
           <MessagesSquare className="h-4 w-4" />
           {chatUnread > 0 && (

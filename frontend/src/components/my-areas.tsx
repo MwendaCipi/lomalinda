@@ -65,8 +65,18 @@ export function MyAreas() {
   const [joining, setJoining] = useState<string | null>(null);
 
   const areas = useMemo(
-    () => rows.filter((row) => row.group === tab).sort((a, b) => a.label.localeCompare(b.label)),
-    [rows, tab],
+    () =>
+      rows
+        .filter((row) => row.group === tab)
+        // The member's own areas lead the list — the map opens on their
+        // fellowship, not on whoever sorts first alphabetically — and the
+        // ones they could join follow, each group in its own name order.
+        .sort((a, b) => {
+          const mineA = ties.includes(a.code) ? 0 : 1;
+          const mineB = ties.includes(b.code) ? 0 : 1;
+          return mineA - mineB || a.label.localeCompare(b.label);
+        }),
+    [rows, tab, ties],
   );
 
   /** May the member ask to join this area? The two sex-only fellowships say no

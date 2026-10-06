@@ -226,18 +226,11 @@ export const fellowshipLinks: SectionLink[] = [
     icon: Sparkles,
   },
   {
-    key: "testimonies",
-    href: "/spiritual/testimonies",
-    label: "Testimonies",
-    description: "Read and share how God is at work among us.",
+    key: "testimonyIdeas",
+    href: "/spiritual",
+    label: "Testimonies & Ideas",
+    description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,
-  },
-  {
-    key: "ideas",
-    href: "/support/ideas",
-    label: "Ideas",
-    description: "Offer an idea that could help the church.",
-    icon: Lightbulb,
   },
 ];
 

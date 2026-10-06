@@ -116,7 +116,7 @@ export const destinations = {
   fellowship: {
     href: "/announcements",
     label: "Fellowship",
-    description: "Where the church family gathers — news, testimony and care.",
+    description: "Where the church family gathers — news, testimony, ideas and care.",
     icon: Megaphone,
     area: "fellowship",
     // Materials rides this section now (it is a page of Fellowship, not a
@@ -161,13 +161,14 @@ export const destinations = {
     area: "fellowship",
     match: ["/share/moments"],
   },
-  testimonies: {
-    href: "/spiritual/testimonies",
-    label: "Testimonies",
-    description: "Read and share how God is at work among us.",
+  testimonyIdeas: {
+    href: "/spiritual",
+    label: "Testimonies & Ideas",
+    short: "Testimonies",
+    description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,
     area: "fellowship",
-    match: ["/spiritual"],
+    match: ["/spiritual", "/support/ideas"],
   },
   /**
    * Prayer — the first of the two request desks and the Requests row's way
@@ -215,15 +216,8 @@ export const destinations = {
     area: "fellowship",
     match: ["/enroll"],
   },
-  ideas: {
-    href: "/support/ideas",
-    label: "Ideas",
-    short: "Ideas",
-    description: "Offer an idea that could help the church.",
-    icon: Lightbulb,
-    area: "fellowship",
-    match: ["/support/ideas"],
-  },
+  // Ideas and Testimonies ride the same toggle on the page — one entry below
+  // answers for both, so Ideas is no longer a destination of its own.
   calendar: {
     href: "/calendar",
     label: "Church Calendar",
@@ -339,7 +333,7 @@ export const destinations = {
     href: "/administration",
     label: "Administration",
     short: "Admin",
-    description: "The office console — members, departments, meetings, treasury.",
+    description: "The church's members and the roles they hold, and the church's own settings.",
     icon: ShieldCheck,
     area: "office",
     audience: STAFF_ROLES,
@@ -363,21 +357,18 @@ export const destinations = {
     match: ["/my-areas"],
   },
   /**
-   * The member's Requests row — the forms: prayer and visitation, child
-   * dedication, joining. The row opens on the prayer & visitation form, the
-   * most-made request, and the strip on it names the rest. The office answers
-   * the same requests from the console's Requests desk, which is a different
-   * page and is named by the desk's tile (`REQUESTS_TILE`); the two are
-   * separate destinations on purpose, because a member asking and an officer
-   * answering are two jobs.
+   * Requests — the four asking-for-something desks after Fellowship is merged:
+   * Prayer Requests, Visitation Requests, Child Dedication, Join/Transfer.
+   * Their forms each begin with a "Request type" selector so the member picks
+   * which one they are filling in.
    */
   requests: {
-    href: "/community/prayer",
+    href: "/requests",
     label: "Requests",
-    description: "Request prayer or a pastoral visit, dedicate a child, or join the church.",
+    description: "Prayer, visitation, dedication, joining — four request types, one place.",
     icon: HeartHandshake,
     area: "fellowship",
-    match: ["/requests", "/community"],
+    match: ["/requests", "/community/prayer", "/community/visitation", "/community/child-dedication"],
   },
 } satisfies Record<string, NavDestination>;
 
@@ -701,7 +692,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   deaconate: "The church's property, its duty rota, and the ordinances it serves.",
   amm: "Men growing in faith and friendship, and serving the church and the community.",
   awm: "Women encouraging one another through fellowship, discipleship and care.",
-  aym: "Young people growing in faith, friendship, leadership and service.",
+  aym: "Young people growing in faith,  friendship, leadership and service.",
   children: "Nurturing children into a loving, lifelong relationship with Jesus.",
   ambassadors: "Young adults growing together in faith, service and leadership.",
   apm: "Belonging and full participation for people with disabilities, orphans, widows and caregivers.",
@@ -709,6 +700,8 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   health: "The church's health ministry — wholeness of body, mind and spirit.",
   sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
+  // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
+  // own page and the rail both label it Church Choir.
   music: "The church's music — its singing groups and the seasons they sing.",
   choir: "The church's singing — its own ministry, not a department.",
 };
@@ -742,7 +735,7 @@ export const treasuryItems: RailRow[] = [
     href: "/administration/fund-drives",
     label: "Fund Drives",
     // The rail row reads Fund Drives at every width; the phone's strip chip
-    //    shortens to Drives, as the member's Giving strip does.
+    // shortens to Drives, as the member's Giving strip does.
     short: "Drives",
     icon: Target,
     match: ["/administration/fund-drives"],
@@ -785,8 +778,7 @@ export const railEntries: RailEntry[] = [
       page("announcements"),
       page("calendar"),
       page("moments"),
-      page("testimonies"),
-      page("ideas"),
+      page("testimonyIdeas"),
       page("materials"),
     ],
   },
@@ -1010,6 +1002,16 @@ const SEX_ONLY_RAIL = new Set(["amm", "awm"]);
  */
 const NON_JOINABLE_MINISTRY_CODES = new Set(["personal_ministries"]);
 
+/**
+ * The departments a member joins by belonging — the age- and gender-based
+ * fellowships. Any of these the member is not yet on rides the folded
+ * "Other Departments" heading, so an AYM member is offered AMM or AWM (their
+ * own sex's — the sex gate above decides) and an Ambassadors member is
+ * offered AYM. The office-held desks (Elders', Clerk's, Treasury, Deaconate)
+ * are held by appointment, never joined, so they stay unoffered.
+ */
+const JOINABLE_DEPARTMENT_CODES = new Set(["aym", "amm", "awm"]);
+
 
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "AMM",
@@ -1117,13 +1119,15 @@ export function railFor(
           if (!sex) return true;
           return (department.code === "amm" ? "male" : "female") === sex;
         })
-        // The departments are the member's own — the one they belong to and
-        // any they serve (every department for an office account) — and are
-        // never folded. The ministries split: the ones they serve in, and the
-        // rest they could still join; an appointed ministry they are not on
-        // is not offered at all.
+        // The departments split like the ministries: the member's own — the
+        // one they belong to and any they serve (every department for an
+        // office account) — and, folded, the age- and gender-based
+        // fellowships the church opens to joining. The offices' desks are
+        // held by appointment, never joined, so they are not offered.
         .filter((department) => {
-          if (group === "department") return tieCodes.includes(department.code);
+          if (group === "department") {
+            return tieCodes.includes(department.code) || JOINABLE_DEPARTMENT_CODES.has(department.code);
+          }
           return tieCodes.includes(department.code) || !NON_JOINABLE_MINISTRY_CODES.has(department.code);
         });
       return rows.map((department) => {
@@ -1132,7 +1136,9 @@ export function railFor(
           ? group === "department"
             ? "my-department"
             : "my-ministry"
-          : "other-ministry";
+          : group === "department"
+            ? "other-department"
+            : "other-ministry";
         return {
           label: RAIL_AREA_LABELS[department.code] ?? department.label,
           icon: DEPARTMENT_ICONS[department.code] ?? Users,
@@ -1260,9 +1266,8 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
-  { key: "give" },
-  { key: "requests" },
   { key: "myAreas" },
+  { key: "give" },
   { key: "chat" },
 ];
 

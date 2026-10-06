@@ -19,7 +19,9 @@ interface ComboboxPopoverProps {
   open: boolean;
   /** Minimum panel width in px; the panel is never narrower than its trigger. */
   minW?: number;
-  /** Chrome (radius, padding, shadow, scrolling) on top of the positioning. */
+  /** Chrome (radius, padding, shadow, scrolling) on top of the positioning.
+   *  Defaults to an opaque white card — a panel without one floats see-through
+   *  over the page's own text and becomes unreadable behind it. */
   panelClassName?: string;
   /** Which edge of the trigger the panel aligns to. */
   align?: "left" | "right";
@@ -42,7 +44,7 @@ export function ComboboxPopover({
   panelRef,
   open,
   minW = 0,
-  panelClassName = "",
+  panelClassName = "rounded-xl border border-sand-line bg-white p-2 shadow-lg",
   align = "left",
   children,
 }: ComboboxPopoverProps) {
