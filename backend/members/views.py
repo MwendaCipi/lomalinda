@@ -9044,9 +9044,15 @@ def department_account(user, code):
 
 def department_accounts(user, code):
     """The treasury accounts accessible for this department desk:
-    - The department's own fund (e.g. AWM, AMO, AYM).
-    - If the user is leadership (can_manage_department) or treasurer/admin, also LCB (Local Church Budget).
-    - Regular roll members only see the department's own fund.
+    - Specific account mappings:
+        - development: Church Plot and Church Development accounts
+        - clerkship: LCB (Local Church Budget)
+        - dorcas: Nyakundis / Dorcas account
+        - personal_ministries: Evangelism and LCB
+        - children, aym: Department fund + Camporee / Campout accounts (+ LCB if leadership)
+        - Other departments: Their linked treasury account (+ LCB if leadership)
+    - Leaders/Admins can access all designated accounts and LCB.
+    - Regular roll members see the department's primary fund(s).
     """
     can_manage = can_manage_department(user, code) or is_treasurer_or_admin(user)
     on_roll = DepartmentMembership.objects.filter(member=user, department=code).exists()
@@ -9061,12 +9067,69 @@ def department_accounts(user, code):
     if dept_account:
         accounts.append(dept_account)
 
-    if can_manage:
-        lcb_account = TreasuryAccount.objects.filter(
+    # 1. Development: Church Plot and Church Development / Building accounts
+    if code in ('development', 'church_development', 'building'):
+        dev_accounts = TreasuryAccount.objects.filter(
+            Q(name__icontains='plot') | Q(description__icontains='plot') |
+            Q(name__icontains='dev') | Q(description__icontains='development') |
+            Q(name__icontains='build') | Q(description__icontains='building')
+        ).order_by('id')
+        for acc in dev_accounts:
+            if acc not in accounts:
+                accounts.append(acc)
+
+    # 2. Clerkship: LCB account
+    if code == 'clerkship':
+        lcb = TreasuryAccount.objects.filter(
             Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
         ).order_by('id').first()
-        if lcb_account and lcb_account not in accounts:
-            accounts.append(lcb_account)
+        if lcb and lcb not in accounts:
+            accounts.append(lcb)
+
+    # 3. Dorcas: Nyakundi / Dorcas account
+    if code in ('dorcas', 'dorcas_ministry'):
+        nyakundi_accounts = TreasuryAccount.objects.filter(
+            Q(name__icontains='nyakundi') | Q(description__icontains='nyakundi') |
+            Q(name__icontains='dorcas') | Q(description__icontains='dorcas')
+        ).order_by('id')
+        for acc in nyakundi_accounts:
+            if acc not in accounts:
+                accounts.append(acc)
+
+    # 4. Personal Ministries: Evangelism and LCB
+    if code == 'personal_ministries':
+        evang_accounts = TreasuryAccount.objects.filter(
+            Q(name__icontains='evangelism') | Q(description__icontains='evangelism') |
+            Q(name__icontains='personal') | Q(description__icontains='personal')
+        ).order_by('id')
+        for acc in evang_accounts:
+            if acc not in accounts:
+                accounts.append(acc)
+        if can_manage:
+            lcb = TreasuryAccount.objects.filter(
+                Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
+            ).order_by('id').first()
+            if lcb and lcb not in accounts:
+                accounts.append(lcb)
+
+    # 5. Children and AYM: department fund + camporee & camp out accounts
+    if code in ('children', 'aym', 'youth', 'pathfinders', 'ambassadors'):
+        camp_accounts = TreasuryAccount.objects.filter(
+            Q(name__icontains='camp') | Q(description__icontains='camp') |
+            Q(name__icontains='camporee') | Q(description__icontains='camporee') |
+            Q(name__icontains='campout') | Q(description__icontains='campout')
+        ).order_by('id')
+        for acc in camp_accounts:
+            if acc not in accounts:
+                accounts.append(acc)
+
+    # 6. For leadership of any department: LCB is also accessible if not already included
+    if can_manage:
+        lcb = TreasuryAccount.objects.filter(
+            Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
+        ).order_by('id').first()
+        if lcb and lcb not in accounts:
+            accounts.append(lcb)
 
     return accounts
 

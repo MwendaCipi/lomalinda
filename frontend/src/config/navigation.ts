@@ -685,6 +685,9 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   personal_ministries: Megaphone,
   health: HeartPulse,
   sabbath_school: BookOpen,
+  welfare: HandHeart,
+  dorcas: Sparkles,
+  development: Landmark,
 };
 
 /**
@@ -706,6 +709,9 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   health: "The church's health ministry — wholeness of body, mind and spirit.",
   sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
+  welfare: "Practical support and compassion for church members and neighbours in need.",
+  dorcas: "Providing food, clothing, and compassionate service in the spirit of Dorcas.",
+  development: "Planning, infrastructure, sanctuary building, and church plot development.",
   // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
   // own page and the rail both label it Church Choir.
   music: "The church's music — its singing groups and the seasons they sing.",

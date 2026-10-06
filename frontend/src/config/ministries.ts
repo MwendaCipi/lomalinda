@@ -134,6 +134,18 @@ export const MINISTRIES: Ministry[] = [
       { title: "Acts of Kindness", text: "Embodying the example of Dorcas — faithful, generous service that makes Christ's love tangible and real." },
     ],
   },
+  {
+    slug: "development",
+    title: "Church Development & Building",
+    givingPurpose: "Development",
+    description: "Planning, acquiring, and constructing church land, sanctuary infrastructure, and development projects.",
+    department: "Development",
+    sections: [
+      { title: "Church Plot & Land Acquisition", text: "Securing, managing, and developing church plots, title deeds, and expanding the church's physical borders." },
+      { title: "Sanctuary & Building Construction", text: "Erecting and maintaining modern worship facilities, classrooms, and community service centers." },
+      { title: "Development Stewardship & Giving", text: "Mobilizing financial, material, and professional resources for lasting church infrastructure." },
+    ],
+  },
 ];
 
 export type CalendarEvent = { date: string; name: string; department?: string };

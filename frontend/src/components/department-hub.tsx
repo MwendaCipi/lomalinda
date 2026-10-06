@@ -23,6 +23,7 @@ import {
   CalendarDays,
   Church,
   Clock,
+  HandHeart,
   Handshake,
   Heart,
   HeartPulse,
@@ -77,6 +78,9 @@ const DEPARTMENT_STYLES: Record<string, { icon: React.ReactNode; accent: string;
   clerkship: { icon: <PenLine className="h-4 w-4" />, accent: "text-cyan-800", chip: "bg-cyan-50 text-cyan-800" },
   deaconate: { icon: <Handshake className="h-4 w-4" />, accent: "text-emerald-800", chip: "bg-emerald-50 text-emerald-800" },
   health: { icon: <HeartPulse className="h-4 w-4" />, accent: "text-green-800", chip: "bg-green-50 text-green-800" },
+  welfare: { icon: <HandHeart className="h-4 w-4" />, accent: "text-amber-800", chip: "bg-amber-50 text-amber-800" },
+  dorcas: { icon: <Sparkles className="h-4 w-4" />, accent: "text-rose-800", chip: "bg-rose-50 text-rose-800" },
+  development: { icon: <Landmark className="h-4 w-4" />, accent: "text-emerald-800", chip: "bg-emerald-50 text-emerald-800" },
 };
 
 /** A row's style, with a shared neutral look for areas the desk added. */
@@ -2665,7 +2669,7 @@ export function DepartmentAccountsPanel({
         // Initial default account filter:
         // For AWM, both accounts are selected by default ("all").
         // For other departments, their primary account is selected by default, or "all".
-        if (department.code === "awm") {
+        if (department.code === "awm" || department.code === "development") {
           setAccountFilter("all");
         } else if (accList.length > 0) {
           const primary = accList.find((a) => a.is_primary) ?? accList[0];
