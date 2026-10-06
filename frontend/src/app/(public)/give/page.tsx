@@ -273,7 +273,7 @@ function GivePageContent() {
       .total{margin-top:16px;text-align:right;font-weight:700;}
     </style></head><body>
       <h1>My Giving Report</h1>
-      <p>${fromDate} to ${toDate}</p>
+      <p>${dayFirstTime(fromDate)} to ${dayFirstTime(toDate)}</p>
       <table><thead><tr><th>#</th><th>Date</th><th>Account</th><th>Method</th><th>Receipt</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="total">Total: KES ${givingTotal.toLocaleString()}</p>
     </body></html>`);
@@ -788,7 +788,7 @@ function GivePageContent() {
                 {givingsVisible && (
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <p className="text-[11px] text-moss">{fromDate} <ArrowRight size={10} className="inline" aria-hidden="true" /> {toDate}</p>
+                    <p className="text-[11px] text-moss">{dayFirstTime(fromDate)} <ArrowRight size={10} className="inline" aria-hidden="true" /> {dayFirstTime(toDate)}</p>
                     <p className="text-[11px] font-semibold text-bark">
                       {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
                     </p>
