@@ -83,6 +83,10 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
   const [accountEmail, setAccountEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  // A tickable switch that keeps the gift from the giver: when ticked, the
+  // request says it is not about this person, and the ledger records the gift
+  // against the phone it was paid from alone — never their name or email.
+  const [anonymous, setAnonymous] = useState(false);
   // Signed-in status and the account's email/phone come from the cached header
   // hook — the modal never needs its own /me/ request to pre-fill the form.
   const { me, hasToken: signedIn } = useHeaderData();
@@ -93,11 +97,12 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
     );
   };
 
-  // Opening the modal never wears the previous attempt's message, and each
-  // opening adopts the account the caller named.
+  // Opening the modal never wears the previous attempt's message or anonymity
+  // tick, and each opening adopts the account the caller named.
   useEffect(() => {
     if (!open) return;
     setMessage("");
+    setAnonymous(false);
     if (presetAccount) setSelectedAccounts([presetAccount]);
   }, [open, presetAccount]);
 
@@ -246,7 +251,14 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
       // it is saved before the gift is initiated and the callback's ledger row
       // and receipt already carry it. It never clears an existing address.
       const typedEmail = donorEmail.trim();
-      if (signedIn && token && !accountEmail.trim() && typedEmail) {
+
+      // Anonymous: the request says it is not about this person, so no name,
+      // phone or email may ride with it. The one edit this form makes is
+      // adding an email to an account that has none — the field only exists
+      // for that case — so it is saved before the gift is initiated and the
+      // callback's ledger row and receipt already carry it. It never clears
+      // an existing address.
+      if (signedIn && !anonymous && token && !accountEmail.trim() && donorEmail.trim()) {
         const saveResponse = await fetch(`${API_URL}/api/members/me/`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -277,12 +289,14 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
       const payload: Record<string, unknown> = {
         giving_type: "financial",
         payment_method: methodOfGiving,
-        // The whole gift, split per account. The API totals it for the prompt.
         allocations,
         amount: allocationTotal,
         purpose: allocations[0].purpose,
         phone_number: phoneNumber,
         item_description: descriptionPayload,
+        // The stamp that keeps this gift off the giver's own record: the
+        // backend drops the name and email when it sees it.
+        ...(anonymous ? { anonymous: true } : {}),
       };
 
       const response = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -369,8 +383,9 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
               signed-in member's receipt carries their account's name and
               email, and the SMS receipt rides the phone they give with, so
               the form asks for neither. Only a member whose account has no
-              email sees a field — the one thing they alone can fix. */}
-          {signedIn && !accountEmail.trim() && (
+              email sees a field — the one thing they alone can fix. An
+              anonymous gift keeps even that: nothing of theirs is saved. */}
+          {signedIn && !anonymous && !accountEmail.trim() && (
             <label className="block text-sm font-medium text-bark">
               Email for receipts <span className="font-normal text-moss">(optional)</span>
               <input
@@ -402,22 +417,41 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             </label>
 
             {methodOfGiving === "mpesa" && (
-              <label className="block self-start text-sm font-medium text-bark">
-                Phone number
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  minLength={10}
-                  required
-                  placeholder="e.g. 0712345678"
-                  value={phoneNumber}
-                  onFocus={liftAboveKeyboard}
-                  onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
-                />
-              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block text-sm font-medium text-bark">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="give-anonymously"
+                      checked={anonymous}
+                      onChange={(event) => setAnonymous(event.target.checked)}
+                      className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
+                    />
+                    <span className="text-sm">Give anonymously</span>
+                  </div>
+                  <span className="mt-1 block text-[11px] font-normal text-moss">
+                    Keep this gift off your record: the ledger will not show your
+                    name or email — the phone you pay from is all it keeps.
+                  </span>
+                </label>
+
+                <label className="block self-start text-sm font-medium text-bark">
+                  Phone number
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{10}"
+                    maxLength={10}
+                    minLength={10}
+                    required
+                    placeholder="e.g. 0712345678"
+                    value={phoneNumber}
+                    onFocus={liftAboveKeyboard}
+                    onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                    className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+              </div>
             )}
 
             <div className="block self-start text-sm font-medium text-bark">
