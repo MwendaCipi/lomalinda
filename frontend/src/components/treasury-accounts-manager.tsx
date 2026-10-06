@@ -48,23 +48,29 @@ type WithdrawalRequestRow = {
   account_balance: string;
   amount: string;
   reason: string;
+  status: "pending" | "elder_approved" | "approved" | "declined" | "reversed";
   requested_by: string;
+  elder_approved_by: string | null;
+  elder_approved_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  reply: string;
   created_at: string;
 };
 
 /**
- * The departments' withdrawal queue — the treasurer's side of the fund
- * arrangement. A department's leadership sees its money on its own desk but
- * cannot move it; the asks land here, and answering one approves the debit
- * (the ledger line writes itself) or declines it with a word back.
+ * The departments' withdrawal queue — showing all non-reversed requests across
+ * every department. Approval is a two-step process:
+ *   1. An elder clears the request ("Elder Approve")
+ *   2. The treasurer then approves (debiting the fund) or declines
+ * Approved requests remain visible so the treasurer can reverse them if needed.
  */
 function WithdrawalRequestsPanel() {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [answering, setAnswering] = useState<number | null>(null);
+  const [declining, setDeclining] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
-  const rowPad = densityCellPad();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -76,40 +82,59 @@ function WithdrawalRequestsPanel() {
   }, []);
 
   useEffect(() => {
-    // The state writes ride a microtask, which is what keeps the effect
-    // from cascading the render.
     let alive = true;
-    void Promise.resolve().then(() => {
-      if (alive) load();
-    });
-    return () => {
-      alive = false;
-    };
+    void Promise.resolve().then(() => { if (alive) load(); });
+    return () => { alive = false; };
   }, [load]);
 
-  const answer = async (id: number, approve: boolean) => {
+  const act = async (id: number, action: string, extraReply?: string) => {
     setBusy(true);
     try {
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/review/`, {
         method: "POST",
         headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ id, approve, reply: reply.trim() }),
+        body: JSON.stringify({ id, action, reply: (extraReply ?? "").trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not save the answer.");
-      setAnswering(null);
+      setDeclining(null);
       setReply("");
-      showAlert(
-        approve ? "Withdrawal approved" : "Withdrawal declined",
-        approve ? "The fund is debited and the desk has been told." : "The desk has your reply.",
-        "success"
-      );
+      const messages: Record<string, [string, string]> = {
+        elder_approve: ["Elder approval recorded", "The treasurer can now act on this request."],
+        approve: ["Withdrawal approved", "The fund has been debited and the desk notified."],
+        decline: ["Request declined", "The desk has your reply."],
+        reverse: ["Withdrawal reversed", "The fund has been credited back."],
+      };
+      const [title, msg] = messages[action] ?? ["Done", ""];
+      showAlert(title, msg, "success");
       load();
     } catch (error) {
-      showAlert("Could not save the answer", error instanceof Error ? error.message : "Try again.", "error");
+      showAlert("Could not complete action", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
       setBusy(false);
     }
+  };
+
+  const statusBadge = (status: WithdrawalRequestRow["status"]) => {
+    const map: Record<string, string> = {
+      pending: "bg-sand text-bark",
+      elder_approved: "bg-mist-select text-bark",
+      approved: "bg-green-50 text-green-800",
+      declined: "bg-red-50 text-red-700",
+      reversed: "bg-sand text-moss",
+    };
+    const labels: Record<string, string> = {
+      pending: "Pending",
+      elder_approved: "Elder Approved",
+      approved: "Approved",
+      declined: "Declined",
+      reversed: "Reversed",
+    };
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[status] ?? "bg-sand text-bark"}`}>
+        {labels[status] ?? status}
+      </span>
+    );
   };
 
   if (loading) {
@@ -134,34 +159,88 @@ function WithdrawalRequestsPanel() {
           <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-bark">
-                  {row.department} — KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-bark">
+                    {row.department} — KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </p>
+                  {statusBadge(row.status)}
+                </div>
                 <p className="mt-0.5 text-xs text-moss">{row.reason}</p>
                 <p className="mt-1 text-[11px] text-moss-faint">
-                  {row.account_name} holds KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} · asked by{" "}
-                  {row.requested_by} · {dayFirst(row.created_at)}
+                  {row.account_name} holds KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} · asked by {row.requested_by} · {dayFirst(row.created_at)}
                 </p>
+                {row.elder_approved_by && (
+                  <p className="mt-0.5 text-[11px] text-moss-faint">
+                    Elder approved by {row.elder_approved_by}{row.elder_approved_at ? ` · ${dayFirst(row.elder_approved_at)}` : ""}
+                  </p>
+                )}
+                {row.decided_by && (row.status === "approved" || row.status === "declined") && (
+                  <p className="mt-0.5 text-[11px] text-moss-faint">
+                    {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}{row.decided_at ? ` · ${dayFirst(row.decided_at)}` : ""}
+                    {row.reply ? ` — "${row.reply}"` : ""}
+                  </p>
+                )}
               </div>
-              <div className="flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  onClick={() => answer(row.id, true)}
-                  disabled={busy}
-                  className="rounded-xl bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAnswering(answering === row.id ? null : row.id)}
-                  className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                >
-                  Decline
-                </button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {/* Step 1: Elder must approve before treasurer can act */}
+                {row.status === "pending" && (
+                  <button
+                    type="button"
+                    onClick={() => act(row.id, "elder_approve")}
+                    disabled={busy}
+                    className="rounded-xl border border-mist-select bg-mist-select/30 px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
+                  >
+                    Elder Approve
+                  </button>
+                )}
+                {/* Step 2: Treasurer approves once elder has cleared it */}
+                {row.status === "elder_approved" && (
+                  <button
+                    type="button"
+                    onClick={() => act(row.id, "approve")}
+                    disabled={busy}
+                    className="rounded-xl bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  >
+                    Approve
+                  </button>
+                )}
+                {/* Decline: available while pending or elder_approved */}
+                {(row.status === "pending" || row.status === "elder_approved") && (
+                  <button
+                    type="button"
+                    onClick={() => setDeclining(declining === row.id ? null : row.id)}
+                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                  >
+                    Decline
+                  </button>
+                )}
+                {/* Reverse: available after approval */}
+                {row.status === "approved" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showAlert(
+                        "Reverse withdrawal?",
+                        `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name}.`,
+                        "warning",
+                        {
+                          showCancelButton: true,
+                          confirmButtonText: "Yes, reverse it",
+                          cancelButtonText: "Cancel",
+                        }
+                      ).then((result) => {
+                        if (result.isConfirmed) act(row.id, "reverse");
+                      });
+                    }}
+                    disabled={busy}
+                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
+                  >
+                    Reverse
+                  </button>
+                )}
               </div>
             </div>
-            {answering === row.id && (
+            {declining === row.id && (
               <div className="mt-3 border-t border-sand-line pt-3">
                 <label className="block text-xs font-semibold text-bark">
                   Why are you declining?
@@ -177,17 +256,14 @@ function WithdrawalRequestsPanel() {
                 <div className="mt-2 flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setAnswering(null);
-                      setReply("");
-                    }}
+                    onClick={() => { setDeclining(null); setReply(""); }}
                     className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
                   >
                     Back
                   </button>
                   <button
                     type="button"
-                    onClick={() => answer(row.id, false)}
+                    onClick={() => act(row.id, "decline", reply)}
                     disabled={busy}
                     className="rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
                   >
@@ -202,6 +278,7 @@ function WithdrawalRequestsPanel() {
     </div>
   );
 }
+
 
 type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals";
 

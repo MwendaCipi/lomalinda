@@ -1957,15 +1957,22 @@ class TreasuryAccountTransaction(models.Model):
 class DepartmentWithdrawalRequest(models.Model):
     """A department asks its treasurer to pay money out of its own fund.
 
-    The department's leadership sees its balance and the contributions that
-    built it on the desk's accounts view; what they may not do is move the
-    money — that is the treasurer's alone. So a leader raises a request with
-    the amount and what it is for, and the treasurer answers it: approving
-    debits the fund (the movement lands in the ledger like any other outflow)
-    and declining sends the reason back to the desk.
+    The approval travels in two steps:
+      1. An elder (or admin) blesses the request — status becomes
+         ``elder_approved``. This confirms the purpose is church-sanctioned.
+      2. The treasurer then approves (debiting the fund) or declines.
+
+    Once approved, the treasurer may also reverse the debit — returning the
+    money to the fund and marking the request ``reversed``.
     """
 
-    STATUS_CHOICES = [('pending', 'Pending'), ('approved', 'Approved'), ('declined', 'Declined')]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('elder_approved', 'Elder Approved'),
+        ('approved', 'Approved'),
+        ('declined', 'Declined'),
+        ('reversed', 'Reversed'),
+    ]
 
     department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='withdrawal_requests')
     account = models.ForeignKey(TreasuryAccount, on_delete=models.PROTECT, related_name='withdrawal_requests')
@@ -1973,6 +1980,13 @@ class DepartmentWithdrawalRequest(models.Model):
     reason = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_withdrawals_requested')
+    # Elder gate — set when an elder (or admin) blesses the request.
+    elder_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_withdrawals_elder_approved',
+    )
+    elder_approved_at = models.DateTimeField(null=True, blank=True)
+    # Treasurer decision — set when the treasurer approves or declines.
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='department_withdrawals_decided')
     decided_at = models.DateTimeField(null=True, blank=True)
     reply = models.CharField(max_length=255, blank=True, default='')

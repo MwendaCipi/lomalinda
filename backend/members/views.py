@@ -609,6 +609,16 @@ def is_treasurer_or_admin(user):
     return bool(profile and profile.has_role('treasurer', 'admin'))
 
 
+def is_elder_or_admin(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('elder', 'admin'))
+
+
+
 def user_has_role(user, *codes):
     """True if the user's member profile holds any of the given role codes."""
     profile = getattr(user, 'member_profile', None)
@@ -8351,7 +8361,7 @@ class DepartmentMembersView(APIView):
         unit = str(request.query_params.get('unit') or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
-        def row_for(user, *, membership_id=None, unit_value='', via=''):
+        def row_for(user, *, membership_id=None, unit_value='', via='', role=''):
             """One roll row. ``via`` names where a unioned row came from."""
             profile = getattr(user, 'member_profile', None)
             return {
@@ -8364,6 +8374,7 @@ class DepartmentMembersView(APIView):
                 'gender': (profile.gender if profile else '') or '',
                 'unit': unit_value,
                 'via': via,
+                'role': role,
                 'added_at': None,
             }
 
@@ -8399,6 +8410,24 @@ class DepartmentMembersView(APIView):
                     continue
                 seen_ids.add(user_id)
                 members.append(row_for(user, via=via))
+
+        # Annotate each member with any role they hold in this department.
+        # A member may hold more than one role (e.g. Leader + Choir Director);
+        # we show a comma-joined list, or a blank string when they hold none.
+        assignments = (
+            DepartmentAssignment.objects.select_related('role')
+            .filter(department=department, member__in=[m['id'] for m in members])
+        )
+        role_map: dict[int, list[str]] = {}
+        for asgn in assignments:
+            parts = role_map.setdefault(asgn.member_id, [])
+            label = asgn.role.name
+            if asgn.kind == 'assistant':
+                label = f'{label} (asst.)'
+            if label not in parts:
+                parts.append(label)
+        for m in members:
+            m['role'] = ', '.join(role_map.get(m['id'], []))
 
         members.sort(key=lambda m: m['name'].lower())
         # The same flag the writes are guarded by, so a desk's Add button
@@ -9154,22 +9183,27 @@ class DepartmentAccountView(APIView):
 
 
 class DepartmentWithdrawalReviewView(APIView):
-    """The treasurer's answer to a department's withdrawal ask.
+    """The two-step review of a department's withdrawal ask.
 
-    GET lists the pending asks across every department — the desk works a
-    queue, not one fund at a time. POST answers one: approving debits the
-    fund and writes the outflow the ledger already speaks, declining sends
-    the reason back to the department's desk. Only the treasurer's office
-    may answer, and only a pending ask may be answered at all.
+    GET  — returns all non-reversed requests across every department, with
+           enough detail for both the elder gate and the treasurer's queue.
+    POST — handles four actions via the ``action`` field:
+           • ``elder_approve`` (elder or admin only) — blesses the request so
+             the treasurer can then act on it.
+           • ``approve`` (treasurer or admin only) — requires the request to
+             be ``elder_approved``; debits the fund.
+           • ``decline`` (elder or treasurer) — declines with a reply.
+           • ``reverse`` (treasurer or admin only) — credits the fund back
+             and marks the request ``reversed``.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not is_treasurer_or_admin(request.user):
-            return Response({'detail': 'Only church treasurers or administrators can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
-        rows = DepartmentWithdrawalRequest.objects.filter(status='pending').select_related(
-            'department', 'account', 'requested_by',
+        if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user):
+            return Response({'detail': 'Only elders or treasurers can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+        rows = DepartmentWithdrawalRequest.objects.exclude(status='reversed').select_related(
+            'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
         ).order_by('created_at')
         return Response({
             'requests': [
@@ -9181,7 +9215,13 @@ class DepartmentWithdrawalReviewView(APIView):
                     'account_balance': str(row.account.balance),
                     'amount': str(row.amount),
                     'reason': row.reason,
+                    'status': row.status,
                     'requested_by': giver_display_name('', member=row.requested_by),
+                    'elder_approved_by': giver_display_name('', member=row.elder_approved_by) if row.elder_approved_by else None,
+                    'elder_approved_at': row.elder_approved_at,
+                    'decided_by': giver_display_name('', member=row.decided_by) if row.decided_by else None,
+                    'decided_at': row.decided_at,
+                    'reply': row.reply,
                     'created_at': row.created_at,
                 }
                 for row in rows
@@ -9189,25 +9229,55 @@ class DepartmentWithdrawalReviewView(APIView):
         })
 
     def post(self, request):
-        if not is_treasurer_or_admin(request.user):
-            return Response({'detail': 'Only church treasurers or administrators can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
-        row = DepartmentWithdrawalRequest.objects.select_related('department', 'account').filter(
-            pk=request.data.get('id'), status='pending',
-        ).first()
-        if row is None:
-            return Response({'detail': 'That request is not waiting any more.'}, status=status.HTTP_404_NOT_FOUND)
+        action = str(request.data.get('action') or '').strip()
+        row_id = request.data.get('id')
 
-        approve = bool(request.data.get('approve'))
-        reply = str(request.data.get('reply') or '').strip()[:255]
-        if not approve:
-            row.status = 'declined'
-            row.decided_by = request.user
-            row.decided_at = timezone.now()
-            row.reply = reply or 'The treasurer could not approve this withdrawal.'
-            row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
-        else:
+        if action == 'elder_approve':
+            # Any elder or admin may bless the request.
+            if not is_elder_or_admin(request.user):
+                return Response({'detail': 'Only elders or administrators can give elder approval.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
+                pk=row_id, status='pending',
+            ).first()
+            if row is None:
+                return Response({'detail': 'That request is not pending or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            row.status = 'elder_approved'
+            row.elder_approved_by = request.user
+            row.elder_approved_at = timezone.now()
+            row.save(update_fields=['status', 'elder_approved_by', 'elder_approved_at'])
+            # Notify the treasurer's office so they can act.
+            audience = User.objects.filter(
+                Q(member_profile__role='treasurer') | Q(member_profile__role='admin'),
+                is_active=True,
+            ).distinct()
+            desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+            title = f'{row.department.name} withdrawal cleared by elder'
+            msg = (
+                f"{giver_display_name('', member=request.user)} has cleared the "
+                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} — "
+                f"it is ready for your approval: {desk_link}"
+            )
+            ChurchNotification.objects.bulk_create([
+                ChurchNotification(user=person, title=title, message=msg, link=desk_link)
+                for person in audience
+            ])
+            try:
+                send_mail(title, msg, settings.DEFAULT_FROM_EMAIL, [u.email for u in audience if u.email], fail_silently=True)
+            except Exception:
+                pass
+            return Response({'id': row.id, 'status': row.status})
+
+        if action == 'approve':
+            if not is_treasurer_or_admin(request.user):
+                return Response({'detail': 'Only church treasurers or administrators can approve withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
+                pk=row_id, status='elder_approved',
+            ).first()
+            if row is None:
+                return Response({'detail': 'That request has not been cleared by an elder yet, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             if row.amount > row.account.balance:
                 return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
+            reply = str(request.data.get('reply') or '').strip()[:255]
             with transaction.atomic():
                 row.account.balance -= row.amount
                 row.account.save()
@@ -9224,21 +9294,78 @@ class DepartmentWithdrawalReviewView(APIView):
                 row.decided_at = timezone.now()
                 row.reply = reply
                 row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+            self._notify_department(row, approved=True)
+            return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
 
-        # The answer goes back to the desk that asked, and to the leader who
-        # raised it by name.
+        if action == 'decline':
+            if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user):
+                return Response({'detail': 'Only elders or treasurers can decline withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
+                pk=row_id, status__in=['pending', 'elder_approved'],
+            ).first()
+            if row is None:
+                return Response({'detail': 'That request cannot be declined at this point.'}, status=status.HTTP_404_NOT_FOUND)
+            reply = str(request.data.get('reply') or '').strip()[:255]
+            row.status = 'declined'
+            row.decided_by = request.user
+            row.decided_at = timezone.now()
+            row.reply = reply or 'The request could not be approved.'
+            row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+            self._notify_department(row, approved=False)
+            return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
+
+        if action == 'reverse':
+            if not is_treasurer_or_admin(request.user):
+                return Response({'detail': 'Only church treasurers or administrators can reverse withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
+                pk=row_id, status='approved',
+            ).first()
+            if row is None:
+                return Response({'detail': 'That request is not approved, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            with transaction.atomic():
+                row.account.balance += row.amount
+                row.account.save()
+                TreasuryAccountTransaction.objects.create(
+                    account=row.account,
+                    transaction_type='credit',
+                    amount=row.amount,
+                    description=f"Reversal of withdrawal for {row.department.name}: {row.reason}"[:255],
+                    reference=f'WD-REV-{row.id}',
+                    created_by=request.user,
+                )
+                row.status = 'reversed'
+                row.save(update_fields=['status'])
+            # Notify the department.
+            audience_ids = {row.requested_by_id}
+            audience_ids.update(DepartmentAssignment.objects.filter(
+                department=row.department, member__is_active=True,
+            ).values_list('member_id', flat=True))
+            audience = User.objects.filter(id__in=audience_ids, is_active=True).exclude(pk=request.user.id)
+            desk_link = f'{settings.FRONTEND_URL}/administration?tab=leaders&dept={row.department.code}'
+            title = f'{row.department.name} withdrawal reversed'
+            msg = f'The KES {row.amount:,.2f} withdrawal from {row.account.description or row.account.name} has been reversed by the treasurer.'
+            ChurchNotification.objects.bulk_create([ChurchNotification(user=p, title=title, message=msg, link=desk_link) for p in audience])
+            try:
+                send_mail(title, msg, settings.DEFAULT_FROM_EMAIL, [u.email for u in audience if u.email], fail_silently=True)
+            except Exception:
+                pass
+            return Response({'id': row.id, 'status': row.status})
+
+        return Response({'detail': 'Unknown action. Use elder_approve, approve, decline, or reverse.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _notify_department(self, row, approved: bool):
         audience_ids = {row.requested_by_id}
         audience_ids.update(DepartmentAssignment.objects.filter(
             department=row.department, member__is_active=True,
         ).values_list('member_id', flat=True))
-        audience = User.objects.filter(id__in=audience_ids, is_active=True).exclude(pk=request.user.id)
-        verb = 'approved' if approve else 'declined'
+        audience = User.objects.filter(id__in=audience_ids, is_active=True)
+        verb = 'approved' if approved else 'declined'
         title = f'{row.department.name} withdrawal {verb}'
         message = row.reply or (
             f'KES {row.amount:,.2f} has been released from the '
             f'{row.account.description or row.account.name} account.'
-            if approve else
-            'The treasurer could not approve this withdrawal.'
+            if approved else
+            'The request could not be approved.'
         )
         desk_link = f'{settings.FRONTEND_URL}/administration?tab=leaders&dept={row.department.code}'
         ChurchNotification.objects.bulk_create([
@@ -9246,14 +9373,11 @@ class DepartmentWithdrawalReviewView(APIView):
             for person in audience
         ])
         try:
-            send_mail(
-                title, message, settings.DEFAULT_FROM_EMAIL,
-                [u.email for u in audience if u.email],
-                fail_silently=True,
-            )
+            send_mail(title, message, settings.DEFAULT_FROM_EMAIL, [u.email for u in audience if u.email], fail_silently=True)
         except Exception:
             pass
-        return Response({'id': row.id, 'status': row.status, 'reply': row.reply})
+
+
 
 
 class DeaconateRequestView(APIView):

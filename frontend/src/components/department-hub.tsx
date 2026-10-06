@@ -184,6 +184,7 @@ type RollMember = {
   email: string;
   phone_number: string;
   gender: string;
+  role?: string;
   unit?: string;
   /** Music's roll is a union: a row with no membership id arrived through
       the choir or a singing group, and ``via`` names which. */
@@ -215,6 +216,8 @@ type RollRow = {
   sex?: string;
   /** The office held on the department's board, when the row is one of them. */
   office: string | null;
+  /** Custom or assigned role within this department. */
+  role?: string | null;
   /** Where a unioned roll row came through ("Choir", a group's name) — the
       music desk's way of showing why someone with no membership row is on
       the roll. */
@@ -2613,43 +2616,7 @@ export function DepartmentAccountsPanel({
         </div>
       ) : (
         <>
-          {/* Pending or Past Withdrawal / Funding Requests (compact top strip if any) */}
-          {withdrawals.length > 0 && (
-            <div className="shrink-0 border-b border-sand-line bg-sand-linen/40 px-4 py-2.5 max-h-36 overflow-y-auto custom-table-scrollbar space-y-1.5">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-moss">
-                  {isDeaconate ? "Funding requests" : "Withdrawal requests"}
-                </h4>
-                <span className="text-[10px] font-semibold text-moss-faint">
-                  {withdrawals.filter((w) => w.status === "pending").length} pending
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {withdrawals.map((row) => (
-                  <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs shadow-2xs">
-                    <div className="min-w-0">
-                      <span className="font-bold text-bark">
-                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-moss"> — {row.reason}</span>
-                      <span className="text-[10px] text-moss-faint ml-2">({row.requested_by} · {dayFirst(row.created_at)})</span>
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        row.status === "approved"
-                          ? "bg-green-50 text-green-800"
-                          : row.status === "declined"
-                            ? "bg-red-50 text-red-800"
-                            : "bg-mist-select text-bark"
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {/* Contained Scrollable Transactions Table: Only Rows Scroll */}
           <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
@@ -2851,6 +2818,120 @@ export function DepartmentAccountsPanel({
   );
 }
 
+/**
+ * Dedicated panel showing all withdrawal / funding requests raised by this department.
+ */
+function DepartmentWithdrawalRequestsPanel({
+  department,
+  requests,
+  search,
+}: {
+  department: DepartmentRow;
+  requests: {
+    id: number;
+    amount: string | number;
+    reason: string;
+    status: string;
+    reply?: string;
+    requested_by: string;
+    created_at: string;
+    decided_at?: string;
+    elder_approved_by?: string;
+    elder_approved_at?: string;
+  }[];
+  search: string;
+}) {
+  const isDeaconate = department.code === "deaconate";
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? requests.filter((r) =>
+        `${r.reason} ${r.amount} ${r.status} ${r.requested_by} ${r.reply || ""}`
+          .toLowerCase()
+          .includes(query)
+      )
+    : requests;
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      pending: "bg-sand text-bark",
+      elder_approved: "bg-mist-select text-bark",
+      approved: "bg-green-50 text-green-800",
+      declined: "bg-red-50 text-red-700",
+      reversed: "bg-sand text-moss",
+    };
+    const labels: Record<string, string> = {
+      pending: "Pending",
+      elder_approved: "Elder Approved",
+      approved: "Approved",
+      declined: "Declined",
+      reversed: "Reversed",
+    };
+    return (
+      <span
+        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+          map[status] ?? "bg-sand text-bark"
+        }`}
+      >
+        {labels[status] ?? status}
+      </span>
+    );
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar p-4 sm:p-5">
+        {requests.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-sm font-semibold text-bark">No requests yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+              {isDeaconate
+                ? "Funding requests made from the Account & Withdrawals desk will appear here."
+                : "Withdrawal requests submitted from the Account & Withdrawals desk will appear here."}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <p className="py-16 text-center text-xs text-moss">No requests match that search.</p>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((row) => (
+              <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-2xs">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-bark">
+                        KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                      </span>
+                      {statusBadge(row.status)}
+                    </div>
+                    <p className="mt-1 text-xs text-moss">{row.reason}</p>
+                    <p className="mt-1 text-[11px] text-moss-faint">
+                      Requested by {row.requested_by} · {dayFirst(row.created_at)}
+                    </p>
+                    {row.elder_approved_at && (
+                      <p className="mt-0.5 text-[11px] text-moss-faint">
+                        Elder approved on {dayFirst(row.elder_approved_at)}
+                      </p>
+                    )}
+                    {row.reply && (
+                      <div className="mt-2 rounded-xl bg-sand-soft/60 px-3 py-1.5 text-xs text-bark">
+                        <span className="font-semibold text-moss">Treasurer response:</span> {row.reply}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
+        {filtered.length} {filtered.length === 1 ? "request" : "requests"} ·{" "}
+        {requests.filter((r) => r.status === "pending" || r.status === "elder_approved").length} pending
+      </div>
+    </div>
+  );
+}
+
 function DepartmentDetail({
   department,
   onChanged,
@@ -2898,16 +2979,21 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "withdrawals" | "requests">(initialTab);
   // How many asks are waiting on this desk. The strip carries the count and
-  // the Requests view is only offered when there is something to answer —
-  // the shell has no room for a toggle that would open onto an empty page.
+  // The join asks raised from the rail, answered on this desk.
   const [joinRequests, setJoinRequests] = useState<
     { id: number; member_name: string; note: string; status: string; created_at: string }[]
   >([]);
-  // The strip names the view, and which unit's roll it reads: All and the
-  // unit fellowships read their roll, the rest name the view itself. This is
-  // what marks the active toggle in the merged strip.
+  // The withdrawal (or funding) requests this department has raised, loaded
+  // from the account endpoint alongside the ledger. Lifted here so the strip
+  // badge can show the pending count before the tab is opened.
+  const [withdrawalRequests, setWithdrawalRequests] = useState<
+    { id: number; amount: string | number; reason: string; status: string; reply?: string; requested_by: string; created_at: string; decided_at?: string }[]
+  >([]);
+  // The strip names the view, and which unit's roll it reads: All Members and
+  // the unit fellowships read their roll, the rest name the view itself. This
+  // is what marks the active toggle in the merged strip.
   const activeStripKey = subTab === "members" ? (unit === null ? "unit:null" : `unit:${unit}`) : subTab;
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
@@ -2916,7 +3002,9 @@ function DepartmentDetail({
   const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
+  const [withdrawalsSearch, setWithdrawalsSearch] = useState("");
   const [meetingsSearch, setMeetingsSearch] = useState("");
+
   const rowPad = densityCellPad();
 
   const [canManageRoll, setCanManageRoll] = useState(false);
@@ -2988,6 +3076,16 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
+    } else if (subTab === "withdrawals") {
+      setHeaderRightAction(
+        <input
+          type="text"
+          value={withdrawalsSearch}
+          onChange={(e) => setWithdrawalsSearch(e.target.value)}
+          placeholder="Search requests…"
+          className={inputCls}
+        />
+      );
     } else if (subTab === "meetings") {
       setHeaderRightAction(
         <input
@@ -3010,6 +3108,7 @@ function DepartmentDetail({
     choirSearch,
     groupsSearch,
     accountsSearch,
+    withdrawalsSearch,
     meetingsSearch,
     setHeaderRightAction,
   ]);
@@ -3042,32 +3141,45 @@ function DepartmentDetail({
     return [
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside
-      // the views: All, then the desk's own fellowships (AMM and AWM read
-      // All · Young Couples · Single Parents · Calendar).
+      // the views: All Members, then the desk's own fellowships.
       ...(names.length > 0
-        ? [{ key: "unit:null", label: department.code === "amm" || department.code === "awm" ? "All members" : "All", icon: Users }]
+        ? [{ key: "unit:null", label: "All Members", icon: Users }]
         : []),
       ...names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })),
-      // A desk without units keeps the roll named plainly; where units ride
-      // the strip, All is the whole roll and Members would say it twice.
-      ...(names.length === 0 ? [{ key: "members", label: "Members", icon: Users }] : []),
+      // A desk without units keeps the roll named "All Members".
+      ...(names.length === 0 ? [{ key: "members", label: "All Members", icon: Users }] : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll.
       ...(isMusic ? [{ key: "choir", label: "Ensemble", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+      // The join asks raised from the rail — always shown so the desk can
+      // see at a glance whether anything is waiting; a count badge appears
+      // when there are pending asks.
+      {
+        key: "requests",
+        label: "Join Requests",
+        icon: UserPlus,
+        ...(joinRequests.filter((row) => row.status === "pending").length > 0
+          ? { count: joinRequests.filter((row) => row.status === "pending").length }
+          : {}),
+      },
       { key: "calendar", label: "Calendar", icon: CalendarDays },
-      // Every desk reads its own fund when the treasurer has opened one.
-      { key: "accounts", label: "Accounts", icon: Wallet },
-      // The asks raised from the rail. A toggle rather than a table beneath
-      // the roll — it is a view of the desk, and the count says when there is
-      // something waiting.
-      ...(joinRequests.length > 0
-        ? [{ key: "requests", label: "Join Requests", icon: UserPlus, count: joinRequests.filter((row) => row.status === "pending").length }]
-        : []),
+      // The fund ledger and withdrawal history together under one toggle, with
+      // withdrawal requests on their own toggle immediately after.
+      { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
+      {
+        key: "withdrawals",
+        label: "Withdrawal Requests",
+        icon: ArrowDownLeft,
+        ...(withdrawalRequests.filter((w) => w.status === "pending").length > 0
+          ? { count: withdrawalRequests.filter((w) => w.status === "pending").length }
+          : {}),
+      },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
     ];
-  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests]);
+  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests, withdrawalRequests]);
+
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
     // is a view of the department as the strip held before.
@@ -3125,13 +3237,23 @@ function DepartmentDetail({
       .catch(() => setJoinRequests([]));
   }, [department.code]);
 
+  const loadWithdrawalRequests = useCallback(() => {
+    fetch(`${API_URL}/api/members/departments/${department.code}/account/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        setWithdrawalRequests(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
+      })
+      .catch(() => setWithdrawalRequests([]));
+  }, [department.code]);
+
   useEffect(() => {
     // Every department carries a roll — Eldership, Clerkship and Deaconate
     // included; the church itself is not a department.
     loadRoll();
     loadEvents();
     loadJoinRequests();
-  }, [loadRoll, loadEvents]);
+    loadWithdrawalRequests();
+  }, [loadRoll, loadEvents, loadJoinRequests, loadWithdrawalRequests]);
 
   const loadUnitBoard = useCallback(() => {
     // Deferred by a microtask: the read settles state after the effect's own
@@ -3321,6 +3443,7 @@ function DepartmentDetail({
       const key = keyOf(holder);
       if (seen.has(key)) continue;
       seen.add(key);
+      const memberMatch = roll.find((m) => keyOf(m) === key);
       rows.push({
         key,
         id: holder.id,
@@ -3328,10 +3451,11 @@ function DepartmentDetail({
         username: holder.username,
         email: holder.email,
         phone_number: holder.phone_number,
-        sex: holder.gender || roll.find((m) => keyOf(m) === key)?.gender || "",
+        sex: holder.gender || memberMatch?.gender || "",
         office,
+        role: office || memberMatch?.role || null,
         via: null,
-        member: roll.find((m) => keyOf(m) === key) ?? null,
+        member: memberMatch ?? null,
       });
     }
     for (const member of roll) {
@@ -3347,6 +3471,7 @@ function DepartmentDetail({
         phone_number: member.phone_number,
         sex: member.gender,
         office: null,
+        role: member.role || null,
         via: member.via ?? null,
         member,
       });
@@ -3356,7 +3481,7 @@ function DepartmentDetail({
 
   const rollQuery = rollSearch.trim().toLowerCase();
   const visibleRoll = rollQuery
-    ? rollRows.filter((row) => `${row.name} ${row.username} ${row.phone_number} ${row.email}`.toLowerCase().includes(rollQuery))
+    ? rollRows.filter((row) => `${row.name} ${row.username} ${row.phone_number} ${row.email} ${row.role || ""}`.toLowerCase().includes(rollQuery))
     : rollRows;
 
   return (
@@ -3381,6 +3506,7 @@ function DepartmentDetail({
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                   <tr className="border-b border-sand-line">
                     <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                    <th className="px-4 pb-3 pt-3 font-bold">Role</th>
                     {/* The desks the church files by age read who they are
                         filed by: Young Adults, Ambassadors and Children's
                         roll carries a sex column. */}
@@ -3397,11 +3523,6 @@ function DepartmentDetail({
                       <td className={`px-4 ${rowPad} align-middle`}>
                         <div className="flex items-center gap-2">
                           <p className="truncate font-semibold text-bark">{row.name}</p>
-                          {row.office && (
-                            <span className="shrink-0 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-bark">
-                              {row.office}
-                            </span>
-                          )}
                           {/* A unioned row: the person sits on the roll through
                               the choir or a singing group, not a roll entry. */}
                           {row.via && (
@@ -3413,6 +3534,15 @@ function DepartmentDetail({
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td className={`px-4 ${rowPad} align-middle`}>
+                        {row.role ? (
+                          <span className="inline-flex rounded-full bg-mist-select px-2.5 py-0.5 text-[11px] font-semibold text-bark">
+                            {row.role}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-moss-mute">None</span>
+                        )}
                       </td>
                       {SHOW_SEX.has(department.code) && (
                         <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
@@ -3531,9 +3661,24 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* Calendar tab */}
+      {/* Accounts & Withdrawals tab */}
       {subTab === "accounts" && (
-        <DepartmentAccountsPanel department={department} onChanged={onChanged} search={accountsSearch} />
+        <DepartmentAccountsPanel
+          department={department}
+          onChanged={() => {
+            loadWithdrawalRequests();
+            onChanged();
+          }}
+          search={accountsSearch}
+        />
+      )}
+      {/* Withdrawal Requests tab */}
+      {subTab === "withdrawals" && (
+        <DepartmentWithdrawalRequestsPanel
+          department={department}
+          requests={withdrawalRequests}
+          search={withdrawalsSearch}
+        />
       )}
       {subTab === "calendar" && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
