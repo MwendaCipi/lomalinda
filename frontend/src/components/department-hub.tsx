@@ -44,7 +44,7 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { DEPARTMENT_BLURBS } from "@/config/navigation";
+import { DEPARTMENT_BLURBS, departmentDeskCode } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
@@ -3639,7 +3639,8 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
           // hub lands on it rather than on the table it is listed in. The URL
           // wins over whatever is on screen — clicking a different area's row
           // while one is open must move the desk, not keep the old one.
-          const code = initialDept ?? current?.code;
+          // An older row named AMM's desk `amo`; links saved then still land there.
+          const code = departmentDeskCode(initialDept) ?? current?.code;
           if (!code) return null;
           return (data.departments || []).find((d: DepartmentRow) => d.code === code) ?? null;
         });

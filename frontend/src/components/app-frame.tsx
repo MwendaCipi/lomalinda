@@ -124,9 +124,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     "items" in entry && entry.items ? entry.items : "href" in entry && entry.href ? [entry as RailRow] : []
   );
   const hereItem = railRows.find((item) => item.href === here.href) ?? null;
-  const pageHeader = hereItem?.description
-    ? { label: hereItem.label, description: hereItem.description }
-    : pageHeaderFor(pathname);
+  // A department's desk is its own place even where no blurb is seeded for it:
+  // its rail row names the area in full, so the heading reads the department
+  // rather than falling back to the console's.
+  const pageHeader =
+    hereItem && (hereItem.description || hereItem.dept)
+      ? { label: hereItem.label, description: hereItem.description }
+      : pageHeaderFor(pathname);
   // A page that names itself wins over the rail row that led here.
   const header = customHeader ?? pageHeader;
   const sectionPages = (section && "items" in section && section.items ? section.items : [])

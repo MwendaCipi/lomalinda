@@ -966,7 +966,7 @@ export function canSee(
  * not open is not a section they should see at all).
  */
 /** The rail's wording for an area — the short forms, so a 256px rail never
- *  has to ellipsis "Adventist Possibility Ministries (APM)" into mush. The
+ *  has to ellipsis "Adventist Possibility Ministries" into mush. The
  *  full names stay everywhere else (the directory, the desks, the titles). */
 const RAIL_AREA_CODES_MOVED = new Set([
   "music",
@@ -1143,13 +1143,17 @@ export function railFor(
           : group === "department"
             ? "other-department"
             : "other-ministry";
+        // The row names the area in full — the desk's page heading reads it —
+        // and keeps the short form for the rail column itself.
+        const label = department.label;
         return {
-          label: RAIL_AREA_LABELS[department.code] ?? department.label,
+          label,
+          short: RAIL_AREA_LABELS[department.code],
           icon: DEPARTMENT_ICONS[department.code] ?? Users,
-          href: `/administration?tab=leaders&dept=${department.code === "amm" ? "amo" : department.code}`,
+          href: `/administration?tab=leaders&dept=${department.code}`,
           match: ["/administration"],
           tab: "leaders",
-          dept: department.code === "amm" ? "amo" : department.code,
+          dept: department.code,
           // The desk's own blurb, so its page heading has a line under it too.
           description: DEPARTMENT_BLURBS[department.code],
           roles: memberRowRoles,
@@ -1171,9 +1175,23 @@ export type RailHere = { group: string | null; href: string | null };
 /** The query values that tell two pages of one route apart. */
 export type RailQuery = { tab?: string | null; dept?: string | null };
 
+/**
+ * Retired spellings a `?dept=` value may carry: the rail once named AMM's
+ * desk `amo`, so links saved then still answer to the desk's real code.
+ */
+const DEPARTMENT_DESK_ALIASES: Record<string, string> = {
+  amo: "amm",
+};
+
+/** The desk code a `?dept=` value names — a retired spelling maps forward. */
+export function departmentDeskCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return DEPARTMENT_DESK_ALIASES[code] ?? code;
+}
+
 export function railHere(pathname: string, query: RailQuery | null, entries: RailEntry[]): RailHere {
   const tab = query?.tab ?? null;
-  const dept = query?.dept ?? null;
+  const dept = departmentDeskCode(query?.dept);
   let best: RailHere = { group: null, href: null };
   let bestLength = -1;
 

@@ -25,7 +25,7 @@ export const MINISTRIES: Ministry[] = [
   },
   {
     slug: "possibility-ministries",
-    title: "Adventist Possibility Ministries (APM)",
+    title: "Adventist Possibility Ministries",
     givingPurpose: "Possibility",
     description: "Building belonging and meaningful participation for people with disabilities, special needs, orphans, widows, and caregivers.",
     department: "Adventist Possibility Ministries",
@@ -37,10 +37,13 @@ export const MINISTRIES: Ministry[] = [
   },
   {
     slug: "adventist-youth",
-    title: "Adventist Youth Ministries (AY)",
+    title: "Adventist Youth Ministry",
     givingPurpose: "Adventist Youth Ministry",
     description: "Helping young people grow in faith, friendship, leadership, and missionary service.",
-    department: "Adventist Youth Ministries",
+    // The word the office's programme lines carry, whichever way they spell
+    // the ministry — "Adventist Youth (AYM)" and "Adventist Youth Ministry"
+    // both name this desk's calendar.
+    department: "Adventist Youth",
     sections: [
       { title: "Youth Discipleship", text: "Deepening young people's love for God's Word through vibrant study, prayer, and mentorship." },
       { title: "Community Outreach", text: "Leading compassionate service, evangelism, and community projects in Meru and beyond." },
@@ -49,10 +52,10 @@ export const MINISTRIES: Ministry[] = [
   },
   {
     slug: "adventist-men",
-    title: "Adventist Men Ministries (AMM)",
+    title: "Adventist Men Ministry",
     givingPurpose: "Adventist Men Ministry",
     description: "Creating space for men to grow spiritually, build strong friendships, and serve the church and community.",
-    department: "Adventist men ministries",
+    department: "Adventist Men Ministry",
     sections: [
       { title: "Spiritual Growth & Brotherhood", text: "Gathering for prayer breakfasts, Bible study, and honest conversations on faith and purpose." },
       { title: "Family & Fatherhood", text: "Equipping men to lead their families with love, integrity, and godly example." },
@@ -61,10 +64,10 @@ export const MINISTRIES: Ministry[] = [
   },
   {
     slug: "adventist-women",
-    title: "Adventist Women Ministries (AWM)",
+    title: "Adventist Women Ministry",
     givingPurpose: "Adventist Women Ministry",
     description: "Encouraging women through fellowship, discipleship, prayer, care, and outreach.",
-    department: "Adventist Women Ministries",
+    department: "Adventist Women Ministry",
     sections: [
       { title: "Prayer & Fellowship", text: "Deepening spiritual life and sisterhood through prayer networks and inspirational retreats." },
       { title: "Nurture & Mentorship", text: "Supporting young women, mothers, and families with practical Christian guidance and love." },

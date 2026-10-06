@@ -2665,7 +2665,7 @@ export function UserManagement() {
                   <option value="Other">Other Special Need</option>
                 </select>
                 <p className="mt-1 text-[11px] text-moss">
-                  Note: Friends with a recorded disability automatically belong to <span className="font-bold text-ember">Adventist Possibility Ministries (APM)</span>.
+                  Note: Friends with a recorded disability automatically belong to <span className="font-bold text-ember">Adventist Possibility Ministries</span>.
                 </p>
               </div>
               <div>

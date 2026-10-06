@@ -9,13 +9,20 @@ import { RecordList } from "./record-list";
 
 type DepartmentEvent = { date: string; name: string; department?: string };
 
+/**
+ * The office writes a programme's department by hand, so the spellings drift
+ * — "Adventist Men Ministries (AMM)" and "Adventist Men Ministry" name the
+ * same area. Folding the plural into the singular lets one matcher read both.
+ */
+const departmentStem = (value: string) => value.toLowerCase().replace(/ies\b/g, "y");
+
 export function DepartmentCalendar({ department, events, loaded }: { department: string; events: DepartmentEvent[]; loaded: boolean }) {
   const year = new Date().getFullYear();
   const [open, setOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(year);
   const [month, setMonth] = useState("all");
   const [search, setSearch] = useState("");
-  const rows = useMemo(() => events.filter((event) => event.department?.toLowerCase().includes(department.toLowerCase()) && event.date.startsWith(`${selectedYear}-`) && (month === "all" || Number(event.date.slice(5, 7)) - 1 === Number(month)) && `${event.date} ${event.name} ${event.department}`.toLowerCase().includes(search.toLowerCase().trim())).sort((a, b) => a.date.localeCompare(b.date)), [department, events, month, search, selectedYear]);
+  const rows = useMemo(() => events.filter((event) => event.department && departmentStem(event.department).includes(departmentStem(department)) && event.date.startsWith(`${selectedYear}-`) && (month === "all" || Number(event.date.slice(5, 7)) - 1 === Number(month)) && `${event.date} ${event.name} ${event.department}`.toLowerCase().includes(search.toLowerCase().trim())).sort((a, b) => a.date.localeCompare(b.date)), [department, events, month, search, selectedYear]);
   return (
     <div className="mt-6 border-t border-sand-line pt-5">
       <button

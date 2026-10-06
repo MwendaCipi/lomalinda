@@ -4260,6 +4260,26 @@ class SplitGivingTests(APITestCase):
         self.assertTrue(all(row.paid_at for row in lines.values()))
 
     @patch('members.views._deliver_receipt_message')
+    def test_an_anonymous_mpesa_callback_records_no_payer_name(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': False, 'sms_sent': False, 'sms_configured': True}
+        # Safaricom names the payer in the callback metadata; an anonymous
+        # gift must not let that name onto the ledger.
+        context = {
+            'amount': '1500.00',
+            'purpose': 'Tithe',
+            'allocations': [{'purpose': 'Tithe', 'amount': '1500.00'}],
+            'phone_number': '254712345678',
+            'anonymous': True,
+        }
+        response = self._post_callback(context)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.donor_name, '')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertIsNone(contribution.member)
+
+    @patch('members.views._deliver_receipt_message')
     def test_a_split_gift_receives_one_receipt_listing_its_distribution(self, mock_deliver):
         mock_deliver.return_value = {'email_sent': True, 'sms_sent': False, 'sms_configured': True}
         context = {
@@ -4446,6 +4466,39 @@ class ReceiptAddressEnforcementTests(APITestCase):
         context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
         self.assertNotIn('donor_email', context)
         self.assertNotIn('member_id', context)
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_an_anonymous_prompt_carries_no_name_address_or_member(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        member = User.objects.create_user('anon.giver', 'anon@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        response = self._gift(
+            payment_method='mpesa', phone_number='0712345678',
+            donor_name='Esther Wanjiru', anonymous=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        # The giver asked to stay out of it: nothing that names them rides
+        # to the callback — not their typed name, not their account email,
+        # not their member id.
+        self.assertNotIn('donor_name', context)
+        self.assertNotIn('donor_email', context)
+        self.assertNotIn('member_id', context)
+        self.assertTrue(context['anonymous'])
+
+    def test_an_anonymous_bank_gift_is_recorded_without_the_giver(self):
+        response = self._gift(
+            payment_method='bank_transfer',
+            donor_name='Esther Wanjiru', anonymous=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.donor_name, '')
+        self.assertEqual(contribution.donor_email, '')
+        # The money still counts — only the giver's identity is held back.        self.assertEqual(contribution.status, 'completed')
 
 
 class MemberEmailFromTheGivingFormTests(APITestCase):
@@ -6674,7 +6727,7 @@ class DepartmentApiTests(APITestCase):
         res = self.client.get('/api/members/me/')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data['my_departments'], [
-            {'code': 'amm', 'label': 'Adventist Men Ministries (AMM)', 'audience_code': 'dept_amm'},
+            {'code': 'amm', 'label': 'Adventist Men Ministry', 'audience_code': 'dept_amm'},
         ])
 
         # A lead role belongs to its department even without a roll entry.

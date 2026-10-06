@@ -4076,6 +4076,9 @@ class InitiateContributionView(APIView):
         prefix = prefix_map.get(method, 'REC')
         created = []
         for row in allocations:
+            # An anonymous gift arrives with its name and email already
+            # blanked by the serializer, so nothing of the giver's is written
+            # to the ledger — the phone it was paid from carries the gift.
             contribution = Contribution.objects.create(
                 member=request.user if request.user.is_authenticated else None,
                 amount=row['amount'],
@@ -4146,11 +4149,17 @@ class InitiateContributionView(APIView):
         # The receipt address is the account's own, set by the serializer; the
         # member id rides along so the callback can attribute the gift even if
         # the phone it was paid from is not the one on the member's profile.
-        if request.user and request.user.is_authenticated:
+        # An anonymous gift carries neither: the giver asked not to be tied to
+        # it, so the callback records it against the phone alone.
+        if request.user and request.user.is_authenticated and not data.get('anonymous'):
             context['member_id'] = request.user.pk
         donor_email = (data.get('donor_email') or '').strip()
         if donor_email:
             context['donor_email'] = donor_email
+        # The anonymity stamp rides the signed context, so the callback
+        # records the gift without resolving the payer's name or account.
+        if data.get('anonymous'):
+            context['anonymous'] = True
         item_description = (data.get('item_description') or '').strip()
         if item_description:
             context['item_description'] = item_description
@@ -4222,7 +4231,12 @@ class MpesaCallbackView(APIView):
                 str(metadata.get(part) or '').strip()
                 for part in ('FirstName', 'MiddleName', 'LastName')
             ).strip()
-            if not payer_name:
+            # An anonymous gift keeps no name at all — not Safaricom's and
+            # not one resolved from the giver's account. The ledger greets it
+            # "Dear friend" and the phone it was paid from carries it.
+            if context.get('anonymous'):
+                payer_name = ''
+            elif not payer_name:
                 # The push callback carries the payer's MSISDN but not their
                 # name — look the giver up by it (or the emailed account) so
                 # a registered member is never recorded as an anonymous giver.
@@ -4288,7 +4302,13 @@ class MpesaCallbackView(APIView):
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
     def _link_giver(self, contribution, context):
-        """Attribute the completed contribution to a user or campaign card."""
+        """Attribute the completed contribution to a user or campaign card.
+
+        An anonymous gift is never attributed to anyone: the giver asked for
+        exactly that, so neither their account nor their email is attached.
+        """
+        if context.get('anonymous'):
+            return
         msisdn = contribution.phone_number
         campaign_card = CampaignCardAssignment.objects.filter(referral_token=context.get('referral_token', '')).first() if context.get('referral_token') else None
         if campaign_card:

@@ -806,7 +806,9 @@ class ContributionInitiateSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     donor_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
     donor_email = serializers.EmailField(required=False, allow_blank=True)
-    item_description = serializers.CharField(required=False, allow_blank=True, default='')
+    # Anonymous givers stamp the request; the ledger records the gift under
+    # the phone it was paid from, never under this person's name.
+    anonymous = serializers.BooleanField(default=False)
     payment_method = serializers.ChoiceField(
         choices=['cash', 'mpesa', 'bank_transfer', 'cheque'],
         default='mpesa'
@@ -824,6 +826,13 @@ class ContributionInitiateSerializer(serializers.Serializer):
         attrs['donor_email'] = receipt_email_for(getattr(self.context.get('request'), 'user', None))
 
         from .treasury import account_reference_for
+
+        # Anonymous: the gift is not recorded against this person. The phone
+        # it was paid from is the only thing that carries it, so its name and
+        # email stay unbound from the row that the callback writes.
+        if attrs.get('anonymous'):
+            attrs['donor_name'] = ''
+            attrs['donor_email'] = ''
 
         submitted = attrs.get('allocations') or []
         cleaned = []

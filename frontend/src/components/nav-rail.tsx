@@ -142,17 +142,21 @@ export function NavRail() {
                   // A row is "here" when it is the section you are in — whatever
                   // page of it you are on — or the single page it links to.
                   const active = here.group === entry.label || here.href === href;
+                  // The short form is the rail's own: a 256px column reads
+                  // "AMM" where the desk's page heading keeps the full name.
+                  const shown = entry.short ?? entry.label;
                   return (
                     <Link
                       key={entry.label}
                       href={href}
                       aria-current={active ? "page" : undefined}
+                      title={entry.short ? entry.label : undefined}
                       className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                         active ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
                       }`}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{entry.label}</span>
+                      <span className="truncate">{shown}</span>
                     </Link>
                   );
                 })}

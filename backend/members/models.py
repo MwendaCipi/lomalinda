@@ -13,14 +13,14 @@ from .roles import ROLE_CHOICES, normalize_roles, role_label
 # (role codes, the department tabs, the ministries pages); the label is the
 # name members read.
 DEPARTMENT_CHOICES = [
-    ('amm', 'Adventist Men Ministries (AMM)'),
-    ('awm', 'Adventist Women Ministries (AWM)'),
+    ('amm', 'Adventist Men Ministry'),
+    ('awm', 'Adventist Women Ministry'),
     # Youth and Children are two departments with their own leaders and
     # assistants, not one; Ambassadors round out the youth ministries.
-    ('aym', 'Adventist Youth (AYM)'),
+    ('aym', 'Adventist Youth Ministry'),
     ('children', 'Children Ministry'),
     ('ambassadors', 'Ambassadors'),
-    ('apm', 'Adventist Possibility Ministries (APM)'),
+    ('apm', 'Adventist Possibility Ministries'),
     ('chaplaincy', 'Chaplaincy Ministry'),
 ]
 DEPARTMENT_CODES = tuple(code for code, _label in DEPARTMENT_CHOICES)
@@ -279,12 +279,12 @@ SEED_DEPARTMENTS = (
     ('eldership', 'Eldership', 1),
     ('clerkship', 'Clerkship', 2),
     ('deaconate', 'Deaconate', 3),
-    ('amm', 'Adventist Men Ministries (AMM)', 10),
-    ('awm', 'Adventist Women Ministries (AWM)', 11),
-    ('aym', 'Adventist Youth (AYM)', 12),
+    ('amm', 'Adventist Men Ministry', 10),
+    ('awm', 'Adventist Women Ministry', 11),
+    ('aym', 'Adventist Youth Ministry', 12),
     ('children', 'Children Ministry', 13),
     ('ambassadors', 'Ambassadors', 14),
-    ('apm', 'Adventist Possibility Ministries (APM)', 15),
+    ('apm', 'Adventist Possibility Ministries', 15),
     ('chaplaincy', 'Chaplaincy Ministry', 16),
     # The children's bands, each a department of its own — the frontend gathers
     # them under Children. Filed below the desk that leads them.

@@ -89,47 +89,40 @@ export function DepartmentContributionsTable({
 
   const rowPad = densityCellPad();
 
-  const fetchAccounts = useCallback(async () => {
+  const fetchAccounts = useCallback(() => {
     setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/members/treasury/accounts/`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-        },
-      });
-      if (res.ok) setAccounts(await res.json());
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+    fetch(`${API_URL}/api/members/treasury/accounts/`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setAccounts(data))
+      .catch(() => setAccounts([]))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
 
-  const fetchDepartments = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/members/departments/?all=true`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-          },
+  const fetchDepartments = useCallback(() => {
+    fetch(`${API_URL}/api/members/departments/?all=true`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.departments) {
+          const rows = ((data.departments as { code: string; label: string }[]).map(
+            (d) => ({ code: d.code, label: d.label })
+          ));
+          setDepartments(rows);
         }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const rows = ((data?.departments ?? []) as { code: string; label: string }[]).map(
-          (d) => ({ code: d.code, label: d.label })
-        );
-        setDepartments(rows);
-      }
-    } catch {
-      // ignore
-    }
+      })
+      .catch(() => setDepartments([]));
   }, []);
 
   useEffect(() => {
