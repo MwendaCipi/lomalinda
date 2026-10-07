@@ -7775,6 +7775,9 @@ DEPARTMENT_LEAD_ROLE = {
     'apm': 'apm_leader',
     'chaplaincy': 'chaplaincy',
     'health': 'health_leader',
+    'welfare': 'welfare_leader',
+    'development': 'development',
+    'dorcas': 'dorcas_leader',
 }
 
 
@@ -7993,7 +7996,10 @@ OFFICE_ROLE_CODES = {
     'publishing head': 'publishing_head',
     'welfare leader': 'welfare_leader',
     'interest coordinator': 'interest_coordinator',
+    'development leader': 'development',
     'development': 'development',
+    'dorcas leader': 'dorcas_leader',
+    'dorcas': 'dorcas_leader',
     'choir director': 'choir_director',
     'pathfinders leader': 'pathfinders_leader',
     'adventurers leader': 'adventurers_leader',
@@ -8667,19 +8673,25 @@ class DepartmentEventsView(APIView):
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
         events = DepartmentEvent.objects.filter(department=department, **({'unit': unit} if unit else {}))
         events = events.order_by('event_date', 'event_time', 'title')
+        church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
         return Response({'events': [
             {
                 'id': event.id,
                 'title': event.title,
                 'date': event.event_date,
-                'time': event.event_time,
+                'time': event.event_time.strftime('%H:%M') if event.event_time else '',
+                'end_date': event.end_date,
+                'end_time': event.end_time.strftime('%H:%M') if event.end_time else '',
+                'mode': event.mode,
                 'location': event.location,
+                'meeting_link': event.meeting_link,
+                'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None,
                 'lead': event.lead,
                 'notes': event.notes,
                 'unit': event.unit,
             }
             for event in events
-        ], 'unit': unit, 'units': target.unit_names})
+        ], 'unit': unit, 'units': target.unit_names, 'church_name': church_settings.church_name})
 
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
@@ -8694,18 +8706,38 @@ class DepartmentEventsView(APIView):
         unit = str(request.data.get('unit') or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
+        mode = (request.data.get('mode') or 'physical').strip()
+        if mode not in ('physical', 'virtual'):
+            mode = 'physical'
+        # Parse time fields — accept HH:MM strings from the frontend time inputs
+        def _parse_time(val):
+            val = (val or '').strip()
+            if not val:
+                return None
+            try:
+                from datetime import time as dt_time
+                parts = val.split(':')
+                return dt_time(int(parts[0]), int(parts[1]))
+            except Exception:
+                return None
         event = DepartmentEvent.objects.create(
             department=department,
             title=title,
             unit=unit,
             event_date=event_date,
-            event_time=(request.data.get('time') or '').strip(),
+            event_time=_parse_time(request.data.get('time')),
+            end_date=request.data.get('end_date') or None,
+            end_time=_parse_time(request.data.get('end_time')),
+            mode=mode,
             location=(request.data.get('location') or '').strip(),
+            meeting_link=(request.data.get('meeting_link') or '').strip(),
+            program_file=request.FILES.get('program_file'),
             lead=(request.data.get('lead') or '').strip(),
             notes=(request.data.get('notes') or '').strip(),
             created_by=request.user,
         )
         return Response({'detail': 'Event added to the calendar.', 'id': event.id}, status=status.HTTP_201_CREATED)
+
 
     def delete(self, request, department, event_id=None):
         if not Department.objects.filter(code=department, is_active=True).exists():

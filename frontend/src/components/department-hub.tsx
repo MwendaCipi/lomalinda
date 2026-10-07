@@ -256,7 +256,12 @@ type DeptEvent = {
   title: string;
   date: string;
   time: string;
+  end_date: string;
+  end_time: string;
+  mode: "physical" | "virtual";
   location: string;
+  meeting_link: string;
+  program_file: string | null;
   lead: string;
   notes: string;
   unit?: string;
@@ -712,22 +717,50 @@ function AddMemberModal({
 
 function AddEventModal({
   departmentLabel,
+  defaultLocation,
   onClose,
   onAdd,
 }: {
   departmentLabel: string;
+  defaultLocation: string;
   onClose: () => void;
-  onAdd: (event: { title: string; date: string; time: string; location: string; lead: string; notes: string }) => void;
+  onAdd: (event: {
+    title: string;
+    date: string;
+    time: string;
+    end_date: string;
+    end_time: string;
+    mode: string;
+    location: string;
+    meeting_link: string;
+    lead: string;
+    notes: string;
+    program_file: File | null;
+  }) => void;
 }) {
-  const [form, setForm] = useState({ title: "", date: "", time: "09:00 AM", location: "", lead: "", notes: "" });
+  const [form, setForm] = useState({
+    title: "",
+    date: "",
+    time: "",
+    end_date: "",
+    end_time: "",
+    mode: "physical" as "physical" | "virtual",
+    location: defaultLocation,
+    meeting_link: "",
+    lead: "",
+    notes: "",
+  });
+  const [programFile, setProgramFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const valid = form.title.trim() && form.date;
+  const inputCls = "mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Add event to ${departmentLabel}`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <h3 className="text-lg font-bold text-bark">Add event — {departmentLabel}</h3>
@@ -736,13 +769,14 @@ function AddEventModal({
           </button>
         </div>
         <form
-          className="mt-4 space-y-3"
+          className="mt-4 space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!valid) return;
-            onAdd(form);
+            onAdd({ ...form, program_file: programFile });
           }}
         >
+          {/* Title */}
           <div>
             <label className="text-xs font-semibold text-bark">Event title *</label>
             <input
@@ -750,56 +784,151 @@ function AddEventModal({
               type="text"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+              className={inputCls}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-bark">Date *</label>
+
+          {/* From date + time */}
+          <div>
+            <label className="text-xs font-semibold text-bark">From *</label>
+            <div className="mt-1 grid grid-cols-2 gap-3">
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                className={inputCls}
               />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-bark">Time</label>
               <input
-                type="text"
+                type="time"
                 value={form.time}
                 onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                className={inputCls}
+                placeholder="HH:MM"
               />
             </div>
           </div>
+
+          {/* To date + time */}
           <div>
-            <label className="text-xs font-semibold text-bark">Location</label>
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
-            />
+            <label className="text-xs font-semibold text-bark">To</label>
+            <div className="mt-1 grid grid-cols-2 gap-3">
+              <input
+                type="date"
+                value={form.end_date}
+                min={form.date || undefined}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                className={inputCls}
+              />
+              <input
+                type="time"
+                value={form.end_time}
+                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                className={inputCls}
+                placeholder="HH:MM"
+              />
+            </div>
           </div>
+
+          {/* Mode toggle */}
+          <div>
+            <label className="text-xs font-semibold text-bark">Mode</label>
+            <div className="mt-1 flex gap-2">
+              {(["physical", "virtual"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      mode: m,
+                      location: m === "physical" ? defaultLocation : form.location,
+                      meeting_link: m === "virtual" ? form.meeting_link : "",
+                    })
+                  }
+                  className={`rounded-xl px-4 py-1.5 text-xs font-semibold capitalize transition ${
+                    form.mode === m
+                      ? "bg-ember text-white"
+                      : "border border-sand-line bg-sand text-bark hover:border-ember"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Physical: location */}
+          {form.mode === "physical" && (
+            <div>
+              <label className="text-xs font-semibold text-bark">Location</label>
+              <input
+                type="text"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                className={inputCls}
+              />
+            </div>
+          )}
+
+          {/* Virtual: meeting link */}
+          {form.mode === "virtual" && (
+            <div>
+              <label className="text-xs font-semibold text-bark">Meeting link <span className="font-normal text-moss">(can be added later)</span></label>
+              <input
+                type="url"
+                value={form.meeting_link}
+                onChange={(e) => setForm({ ...form, meeting_link: e.target.value })}
+                placeholder="https://meet.google.com/…"
+                className={inputCls}
+              />
+            </div>
+          )}
+
+          {/* Lead */}
           <div>
             <label className="text-xs font-semibold text-bark">Lead</label>
             <input
               type="text"
               value={form.lead}
               onChange={(e) => setForm({ ...form, lead: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+              className={inputCls}
             />
           </div>
+
+          {/* Notes */}
           <div>
             <label className="text-xs font-semibold text-bark">Notes</label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={3}
-              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+              rows={2}
+              className={inputCls}
             />
           </div>
+
+          {/* Program file */}
+          <div>
+            <label className="text-xs font-semibold text-bark">Upload program</label>
+            <div
+              className="mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-sand-line bg-sand px-3 py-2.5 text-xs text-moss hover:border-ember"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              {programFile ? (
+                <span className="truncate text-bark">{programFile.name}</span>
+              ) : (
+                <span>Choose file (PDF, Word, image…)</span>
+              )}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => setProgramFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
           <button
             type="submit"
             disabled={!valid}
@@ -812,6 +941,8 @@ function AddEventModal({
     </div>
   );
 }
+
+
 
 /**
  * Register a singing group: a name, an optional leader found by the same
@@ -3208,6 +3339,7 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
   // right here — the request goes to the desk, not to the street.
@@ -3446,7 +3578,10 @@ function DepartmentDetail({
     setLoadingEvents(true);
     fetch(`${API_URL}/api/members/departments/${department.code}/events/${unitQuery(unit)}`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { events: [] }))
-      .then((data) => setEvents(data.events || []))
+      .then((data) => {
+        setEvents(data.events || []);
+        if (data.church_name) setChurchName(data.church_name);
+      })
       .catch(() => setEvents([]))
       .finally(() => setLoadingEvents(false));
   }, [department.code, unit]);
@@ -3568,11 +3703,36 @@ function DepartmentDetail({
     }
   };
 
-  const addEvent = async (event: { title: string; date: string; time: string; location: string; lead: string; notes: string }) => {
+  const addEvent = async (event: {
+    title: string;
+    date: string;
+    time: string;
+    end_date: string;
+    end_time: string;
+    mode: string;
+    location: string;
+    meeting_link: string;
+    lead: string;
+    notes: string;
+    program_file: File | null;
+  }) => {
+    const body = new FormData();
+    body.append("title", event.title);
+    body.append("date", event.date);
+    body.append("time", event.time);
+    body.append("end_date", event.end_date);
+    body.append("end_time", event.end_time);
+    body.append("mode", event.mode);
+    body.append("location", event.location);
+    body.append("meeting_link", event.meeting_link);
+    body.append("lead", event.lead);
+    body.append("notes", event.notes);
+    body.append("unit", unit ?? "");
+    if (event.program_file) body.append("program_file", event.program_file);
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
       method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ ...event, unit: unit ?? "" }),
+      headers: authHeaders(),
+      body,
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -4026,7 +4186,7 @@ function DepartmentDetail({
         />
       )}
       {showAddEvent && (
-        <AddEventModal departmentLabel={department.label} onClose={() => setShowAddEvent(false)} onAdd={addEvent} />
+        <AddEventModal departmentLabel={department.label} defaultLocation={churchName} onClose={() => setShowAddEvent(false)} onAdd={addEvent} />
       )}
     </div>
   );

@@ -666,6 +666,13 @@ class DepartmentEvent(models.Model):
     elder's desk is visible to the congregation without a rebuild.
     """
 
+    MODE_PHYSICAL = 'physical'
+    MODE_VIRTUAL = 'virtual'
+    MODE_CHOICES = [
+        (MODE_PHYSICAL, 'Physical'),
+        (MODE_VIRTUAL, 'Virtual'),
+    ]
+
     department = models.CharField(max_length=100)
     title = models.CharField(max_length=160)
     unit = models.CharField(
@@ -673,8 +680,13 @@ class DepartmentEvent(models.Model):
         help_text="The sub-unit the event belongs to; blank for the whole department",
     )
     event_date = models.DateField()
-    event_time = models.CharField(max_length=20, blank=True, help_text="Free-text, e.g. '09:00 AM' or 'during divine service'")
+    event_time = models.TimeField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_PHYSICAL)
     location = models.CharField(max_length=160, blank=True)
+    meeting_link = models.URLField(max_length=500, blank=True)
+    program_file = models.FileField(upload_to='dept_event_programs/', null=True, blank=True)
     lead = models.CharField(max_length=120, blank=True, help_text="Who leads the event; blank means the department itself")
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_events_created')

@@ -57,7 +57,8 @@ ROLE_DEFINITIONS = (
     ('publishing_head', 'Publishing Head', None, False, True),
     ('welfare_leader', 'Welfare Leader', None, False, True),
     ('interest_coordinator', 'Interest Coordinator', None, False, True),
-    ('development', 'Development', None, False, True),
+    ('development', 'Development Leader', None, False, True),
+    ('dorcas_leader', 'Dorcas Leader', None, False, True),
     ('choir_director', 'Choir Director', 'Choir Director', False, True),
     (ADMIN_ROLE, 'Administrator', 'Administrators', True, False),
 )
@@ -120,7 +121,8 @@ MINISTRY_AUDIENCE_OPTIONS = (
     ('publishing_head', 'Publishing Head'),
     ('welfare_leader', 'Welfare Leader'),
     ('interest_coordinator', 'Interest Coordinator'),
-    ('development', 'Development'),
+    ('development', 'Development Leader'),
+    ('dorcas_leader', 'Dorcas Leader'),
     ('choir_director', 'Choir Director'),
     ('head_deacon', 'Head Deacon'),
     ('head_deaconess', 'Head Deaconess'),
@@ -138,6 +140,9 @@ MINISTRY_AUDIENCE_OPTIONS = (
     ('dept_ambassadors', 'Ambassadors Department'),
     ('dept_apm', 'APM Department'),
     ('dept_chaplaincy', 'Chaplaincy Department'),
+    ('dept_development', 'Development Ministry'),
+    ('dept_dorcas', 'Dorcas Ministry'),
+    ('dept_welfare', 'Welfare Ministry'),
 )
 
 MINISTRY_AUDIENCE_CODES = tuple(code for code, _label in MINISTRY_AUDIENCE_OPTIONS)

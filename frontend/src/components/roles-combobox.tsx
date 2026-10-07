@@ -60,7 +60,8 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "publishing_head", label: "Publishing Head", assistant: true },
   { value: "welfare_leader", label: "Welfare Leader", assistant: true },
   { value: "interest_coordinator", label: "Interest Coordinator", assistant: true },
-  { value: "development", label: "Development", assistant: true },
+  { value: "development", label: "Development Leader", assistant: true },
+  { value: "dorcas_leader", label: "Dorcas Leader", assistant: true },
   { value: "choir_director", label: "Choir Director", group: "Choir Director", assistant: true },
   { value: "admin", label: "Administrator", group: "Administrators", system: true },
 ];
