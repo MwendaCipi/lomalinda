@@ -10,12 +10,24 @@ import { ministrySectionLinks } from "@/config/site-sections";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/**
+ * Mirrors the calendar's own match: the church writes a ministry's name with
+ * drifting spellings ("Adventist Men Ministries", "Adventist Men Ministry"),
+ * so the plural folds into the singular before the two are compared.
+ */
+const departmentStem = (value: string) => value.toLowerCase().replace(/ies\b/g, "y");
+
 export default function MinistryDetailClient() {
   const params = useParams();
   const slug = typeof params?.slug === "string" ? params.slug : "";
   const ministry = getMinistryBySlug(slug);
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  // The fund this ministry gives into, read from its own rows: the server
+  // links each ministry to its treasury account, so this page's giving button
+  // opens the same account its calendar rows do. Until a row arrives — or
+  // when the ministry has no fund yet — the directory's own wording stands in.
+  const [fundPurpose, setFundPurpose] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const year = new Date().getFullYear();
 
@@ -27,17 +39,34 @@ export default function MinistryDetailClient() {
     if (!ministry?.department) return;
     fetch(`${API_URL}/api/members/church-calendar/`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) =>
-        setEvents(
-          (Array.isArray(data?.events) ? data.events : []).map(
-            (event: { date: string; title: string; department_name?: string }) => ({
-              date: event.date,
-              name: event.title,
-              department: event.department_name,
-            })
-          )
-        )
-      )
+      .then((data) => {
+        const rows: CalendarEvent[] = (
+          Array.isArray(data?.events) ? data.events : []
+        ).map(
+          (event: {
+            date: string;
+            title: string;
+            department_name?: string;
+            giving_purpose?: string;
+          }) => ({
+            date: event.date,
+            name: event.title,
+            department: event.department_name,
+            // The fund this ministry gives into, as the server names it, so
+            // the row's giving link opens that ministry's own account.
+            purpose: event.giving_purpose,
+          })
+        );
+        setEvents(rows);
+        const wanted = departmentStem(ministry?.department ?? "");
+        setFundPurpose(
+          rows.find(
+            (row) =>
+              row.purpose &&
+              departmentStem(row.department ?? "").includes(wanted)
+          )?.purpose ?? null
+        );
+      })
       .catch(() => setEvents([]))
       .finally(() => setLoaded(true));
   }, [ministry?.department]);
@@ -63,7 +92,7 @@ export default function MinistryDetailClient() {
                 <p className="mt-3 text-base leading-7 text-moss sm:text-lg">{ministry.description}</p>
               </div>
               <Link
-                href={`/give?purpose=${encodeURIComponent(ministry.givingPurpose)}`}
+                href={`/give?purpose=${encodeURIComponent(fundPurpose ?? ministry.givingPurpose)}`}
                 className="inline-flex items-center justify-center rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-ember-dark"
               >
                 Support this ministry

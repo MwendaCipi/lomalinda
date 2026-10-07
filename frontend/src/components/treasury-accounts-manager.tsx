@@ -159,7 +159,7 @@ function WithdrawalRequestsPanel({
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [declining, setDeclining] = useState<number | null>(null);
+  const [openAction, setOpenAction] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const rowPad = densityCellPad();
@@ -189,7 +189,7 @@ function WithdrawalRequestsPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not save the answer.");
-      setDeclining(null);
+      setOpenAction(null);
       setReply("");
       const messages: Record<string, [string, string]> = {
         elder_approve: ["Elder approval recorded", "The treasurer can now act on this request."],
@@ -219,7 +219,7 @@ function WithdrawalRequestsPanel({
       pending: "Pending",
       elder_approved: "Elder Approved",
       approved: "Approved",
-      declined: "Declined",
+      declined: "Rejected",
       reversed: "Reversed",
     };
     return (
@@ -314,8 +314,8 @@ function WithdrawalRequestsPanel({
                     )}
                     {row.decided_by && (row.status === "approved" || row.status === "declined") && (
                       <p className="text-[10px] italic text-moss-faint">
-                        {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}
-                        {row.reply ? ` — "${row.reply}"` : ""}
+                        {row.status === "approved" ? "Approved" : "Rejected"} by {row.decided_by}
+                        {row.reply ? ` — &ldquo;${row.reply}&rdquo;` : ""}
                       </p>
                     )}
                   </td>
@@ -349,17 +349,14 @@ function WithdrawalRequestsPanel({
                           Approve
                         </button>
                       )}
-                      {/* Decline: available while pending or elder_approved */}
+                      {/* Respond: available while pending or elder_approved, to approve, or reject with a reply. */}
                       {(row.status === "pending" || row.status === "elder_approved") && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setDeclining(row.id);
-                            setReply("");
-                          }}
+                          onClick={() => setOpenAction(row.id)}
                           className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                         >
-                          Decline
+                          Respond
                         </button>
                       )}
                       {/* Reverse: available after approval */}
@@ -395,20 +392,20 @@ function WithdrawalRequestsPanel({
         </div>
       )}
 
-      {/* Decline modal */}
-      {declining !== null && (
+      {/* Action modal: approve the request, or decline it with a reply. */}
+      {openAction !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
-            <h4 className="text-sm font-bold text-bark">Decline Request</h4>
+            <h4 className="text-sm font-bold text-bark">Respond to request</h4>
             <p className="mt-0.5 text-xs text-moss">
-              Give a reason for the department leadership explaining why this request cannot be fulfilled.
+              Ask the department&apos;s leadership to approve the request, or decline it with a reply explaining why the money cannot be released.
             </p>
             <textarea
               rows={3}
               maxLength={255}
               value={reply}
               onChange={(e) => setReply(e.target.value)}
-              placeholder="e.g. Insufficient budget allocation for this quarter..."
+              placeholder="A short reply the department can read…"
               className="mt-3 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
               autoFocus
             />
@@ -416,7 +413,7 @@ function WithdrawalRequestsPanel({
               <button
                 type="button"
                 onClick={() => {
-                  setDeclining(null);
+                  setOpenAction(null);
                   setReply("");
                 }}
                 className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
@@ -425,11 +422,14 @@ function WithdrawalRequestsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => act(declining, "decline", reply)}
+                onClick={() => {
+                  const action = reply.trim() ? "decline" : "approve";
+                  act(openAction, action, reply);
+                }}
                 disabled={busy}
                 className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
               >
-                {busy ? "Declining…" : "Decline request"}
+                {busy ? "Saving…" : reply.trim() ? "Decline request" : "Approve request"}
               </button>
             </div>
           </div>
@@ -440,7 +440,7 @@ function WithdrawalRequestsPanel({
         <div>
           {filteredRows.length} {filteredRows.length === 1 ? "request" : "requests"}
           {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
-          {filteredRows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action
+          <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action</span></span>
         </div>
         <button
           type="button"

@@ -6845,6 +6845,25 @@ class DepartmentApiTests(APITestCase):
             [('Men Sabbath', 'Adventist Men Ministry'), ('Youth Sabbath', 'Adventist Youth Ministry')],
         )
 
+    def test_a_row_carries_the_fund_its_ministry_gives_into(self):
+        """A row's giving purpose is the ministry's own fund, not a word read
+        back out of its name. The giving form preselects an account by its
+        wording, so a purpose the church never opened selects nothing."""
+        desk = Department.objects.create(
+            code='custody', name='Custody Desk', group='ministry', is_active=True,
+        )
+        TreasuryAccount.objects.create(
+            name='Custody', description='Custody Fund', department=desk,
+        )
+        DepartmentEvent.objects.create(
+            department='custody', title='Custody Sabbath', event_date='2026-10-24',
+        )
+        self.client.force_authenticate(user=None)
+        res = self.client.get('/api/members/church-calendar/')
+        row = next(event for event in res.data['events'] if event['title'] == 'Custody Sabbath')
+        self.assertEqual(row['department_name'], 'Custody Desk')
+        self.assertEqual(row['giving_purpose'], 'Custody Fund')
+
     def test_office_flag_without_a_seat_gets_one_back(self):
         """Migration 0141: a church-office flag the old system carried with
         no seat behind it (the church area's elders, clerk, deacons) is given

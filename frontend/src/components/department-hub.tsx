@@ -4825,7 +4825,7 @@ function JoinRequestsPanel({
   const [replies, setReplies] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  async function answer(id: number, status: "approved" | "rejected") {
+  async function answer(id: number, status: "approved" | "rejected", providedReply?: string) {
     setBusyId(id);
     try {
       const res = await fetch(`${API_URL}/api/members/department-join-requests/${id}/`, {
@@ -4858,7 +4858,6 @@ function JoinRequestsPanel({
     ? requests.filter((row) => `${row.member_name} ${row.note}`.toLowerCase().includes(query))
     : requests;
   const open = matching.filter((row) => row.status === "pending");
-  const answered = matching.filter((row) => row.status !== "pending");
 
   if (requests.length === 0) {
     return (
@@ -4872,67 +4871,55 @@ function JoinRequestsPanel({
     <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-bark">Join requests</h3>
       <p className="mt-0.5 text-xs text-moss">
-        Members asking to join {departmentCode.replace("_", " ")} — approve to add them to the roll, with a reply they will read.
+        Members asking to join {departmentCode.replace("_", " ")} — approve, reject with a reply, or leave as is.
       </p>
-      {query && open.length === 0 && answered.length === 0 && (
+      {query && open.length === 0 && matching.filter((row) => row.status !== "pending").length === 0 && (
         <p className="mt-4 text-center text-xs text-moss">No join request matches that search.</p>
       )}
-      {open.length > 0 && (
-        <div className="mt-4 space-y-3">
-          {open.map((row) => (
-            <div key={row.id} className="rounded-2xl border border-ember/30 bg-sand-linen p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-bold text-bark">{row.member_name}</p>
-                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">
-                  waiting
-                </span>
-              </div>
-              {row.note && <p className="mt-1.5 text-xs italic text-moss">&ldquo;{row.note}&rdquo;</p>}
-              <input
-                type="text"
-                value={replies[row.id] ?? ""}
-                onChange={(e) => setReplies((current) => ({ ...current, [row.id]: e.target.value }))}
-                placeholder="Reply to the member (optional)"
-                className="mt-3 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-              />
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={busyId === row.id}
-                  onClick={() => answer(row.id, "approved")}
-                  className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === row.id}
-                  onClick={() => answer(row.id, "rejected")}
-                  className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
-          ))}
+      {matching.map((row) => (
+        <div key={row.id} className="mt-4 rounded-2xl border border-ember/30 bg-sand-linen p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-bark">{row.member_name}</p>
+            <span className="text-[11px] font-semibold text-moss">
+              {row.status === "approved" ? "Approved" : row.status === "rejected" ? "Rejected" : "Pending"}
+            </span>
+          </div>
+          {row.note && <p className="mt-1.5 text-xs italic text-moss">&ldquo;{row.note}&rdquo;</p>}
+          <input
+            type="text"
+            value={replies[row.id] ?? ""}
+            onChange={(e) => setReplies((current) => ({ ...current, [row.id]: e.target.value }))}
+            placeholder="Reply to the member…"
+            className="mt-3 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busyId === row.id}
+              onClick={() => answer(row.id, "approved", replies[row.id] ?? "")}
+              className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+            >
+              Respond
+            </button>
+            <button
+              type="button"
+              disabled={busyId === row.id}
+              onClick={() => answer(row.id, "rejected", replies[row.id] ?? "")}
+              className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              Reject
+            </button>
+            <button
+              type="button"
+              disabled={busyId === row.id}
+              onClick={() => setReplies((current) => ({ ...current, [row.id]: "" }))}
+              className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Close
+            </button>
+          </div>
         </div>
-      )}
-      {answered.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {answered.map((row) => (
-            <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sand px-4 py-2.5">
-              <p className="text-xs font-semibold text-bark">{row.member_name}</p>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${
-                  row.status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                }`}
-              >
-                {row.status === "approved" ? "approved" : "declined"}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      ))}
     </section>
   );
 }

@@ -8810,6 +8810,13 @@ class ChurchCalendarView(APIView):
     the ministry's name rather than its code. The desk's own notes stay with
     the desk that wrote them; a programme file and a leader's name are what
     the congregation is shown.
+
+    Each event also carries its ministry's giving purpose — the wording of
+    the treasury account the ministry gives into, which is the account a
+    giver's deep link must name to preselect it. Reading it from the linked
+    fund (rather than the page guessing from the ministry's name) keeps the
+    purpose on a row and the fund it opens in step; a ministry with no fund
+    yet carries its own name, which is still the purpose its row displays.
     """
 
     permission_classes = [AllowAny]
@@ -8818,6 +8825,16 @@ class ChurchCalendarView(APIView):
         departments = {
             row.code: row.name for row in Department.objects.filter(is_active=True)
         }
+        # One fund per ministry, so the first account linked to a department is
+        # the one its desk reads and the giving form offers.
+        purposes = {}
+        for account in TreasuryAccount.objects.filter(
+            department__code__in=departments.keys(),
+        ).order_by('id'):
+            purposes.setdefault(
+                account.department.code,
+                (account.description or account.name).strip() or account.name,
+            )
         events = DepartmentEvent.objects.filter(department__in=departments.keys()).order_by(
             'event_date', 'event_time', 'title',
         )
@@ -8826,6 +8843,9 @@ class ChurchCalendarView(APIView):
                 'id': event.id,
                 'department': event.department,
                 'department_name': departments.get(event.department, event.department),
+                'giving_purpose': purposes.get(
+                    event.department, departments.get(event.department, event.department),
+                ),
                 'title': event.title,
                 'date': event.event_date,
                 'time': event.event_time.strftime('%H:%M') if event.event_time else '',

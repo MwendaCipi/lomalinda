@@ -148,7 +148,18 @@ export const MINISTRIES: Ministry[] = [
   },
 ];
 
-export type CalendarEvent = { date: string; name: string; department?: string };
+export type CalendarEvent = {
+  date: string;
+  name: string;
+  department?: string;
+  /**
+   * The ministry's giving purpose — the wording of the treasury account it
+   * gives into, which is what a giver's deep link must name to preselect the
+   * fund. Supplied by the church calendar feed, which reads it from the
+   * ministry's linked account rather than guessing from its name.
+   */
+  purpose?: string;
+};
 
 export function getMinistryBySlug(slug: string): Ministry | undefined {
   return MINISTRIES.find((m) => m.slug === slug);

@@ -89,7 +89,7 @@ export function DepartmentContributionsTable({
 
   const rowPad = densityCellPad();
 
-  const fetchAccounts = useCallback(() => {
+  const fetchAccounts = useCallback(async () => {
     setLoading(true);
     fetch(`${API_URL}/api/members/treasury/accounts/`, {
       headers: {
@@ -104,8 +104,10 @@ export function DepartmentContributionsTable({
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchAccounts();
+    const load = async () => {
+      await fetchAccounts();
+    };
+    load();
   }, [fetchAccounts]);
 
   const fetchDepartments = useCallback(() => {

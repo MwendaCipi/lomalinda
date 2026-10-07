@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, ChevronUp } from "lucide-react";
-import { getMinistryGivingPurpose } from "@/config/ministries";
+import { getMinistryGivingPurpose, type CalendarEvent } from "@/config/ministries";
 import { dayFirst } from "@/lib/dates";
 import { RecordList } from "./record-list";
 
-type DepartmentEvent = { date: string; name: string; department?: string };
+type DepartmentEvent = CalendarEvent;
 
 /**
  * The office writes a programme's department by hand, so the spellings drift
@@ -104,7 +104,7 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                       View program &rarr;
                     </Link>
                     <Link
-                      href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(event.department || department))}`}
+                      href={`/give?purpose=${encodeURIComponent(event.purpose || getMinistryGivingPurpose(event.department || department))}`}
                       className="font-semibold text-sage hover:underline"
                     >
                       Give support
@@ -131,9 +131,10 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                         <span className="text-sand-mute">|</span>
                         <Link
                           href={`/give?purpose=${encodeURIComponent(
-                            getMinistryGivingPurpose(
-                              event.department || department
-                            )
+                            event.purpose ||
+                              getMinistryGivingPurpose(
+                                event.department || department
+                              )
                           )}`}
                           className="font-semibold text-sage hover:underline"
                         >

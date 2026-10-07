@@ -8,7 +8,7 @@ import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { newsAndEventsLinks } from "@/config/site-sections";
 import { usePageHeader } from "@/components/app-frame";
-import { dayFirst, weekdayOf } from "@/lib/dates";
+import { dayFirst, localDate, weekdayOf } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -16,6 +16,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const weekdayLabel = (iso: string) =>
   `${weekdayOf(iso)}, ${dayFirst(iso)}`;
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+//: The week as the grid reads it, Sunday first. Short on a phone, spelled out
+//: once the columns have room.
+const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekdayNamesFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+//: The week's own column — the Sabbath. The grid shades it so the church's
+//: week reads at a glance, the way a printed wall calendar rings it.
+const SABBATH_COLUMN = 6;
+
+/** How the page is read: the list of events, or the month laid out as a grid. */
+type CalendarView = "table" | "month";
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
 // A row the church calendar shows. These are the ministries' and departments'
@@ -29,6 +39,14 @@ type CalendarEvent = {
   department: string;
   /** The area's own name, as the church records it. */
   department_name: string;
+  /**
+   * The ministry's giving purpose — the wording of the fund it gives into,
+   * which is the account a giver's link preselects. The server reads it from
+   * the ministry's linked treasury account, so the purpose a row offers and
+   * the fund it opens always agree; a ministry with no fund yet carries its
+   * own name.
+   */
+  giving_purpose?: string;
   time?: string;
   end_date?: string;
   end_time?: string;
@@ -58,13 +76,215 @@ function timeRange(event: CalendarEvent) {
 }
 
 /**
+ * An event's own menu — the choices follow the event wherever it is listed:
+ * the table's row, a phone's card, or a day in the month grid, so no view
+ * offers less than another. The caller owns the box it sits in, since each
+ * view anchors it differently.
+ */
+function EventActionsMenu({
+  row, mapUrl, variant, onClose, onProgram,
+}: {
+  row: CalendarEvent;
+  mapUrl: string;
+  /** The table's row keeps the full menu; the tighter the listing, the fewer words. */
+  variant: "row" | "card";
+  onClose: () => void;
+  onProgram: (row: CalendarEvent) => void;
+}) {
+  const item = variant === "row" ? "text-sm" : "text-xs";
+  return (
+    <>
+      {row.mode === "virtual" && row.meeting_link && (
+        <a href={row.meeting_link} target="_blank" rel="noreferrer" className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}>
+          Join meeting
+        </a>
+      )}
+      {row.mode !== "virtual" && mapUrl && (
+        <a href={mapUrl} target="_blank" rel="noreferrer" className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}>
+          Open map
+        </a>
+      )}
+      <Link
+        href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
+        onClick={onClose}
+        className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
+      >
+        Give support
+      </Link>
+      <a
+        href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
+        onClick={onClose}
+        className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
+      >
+        Contact department
+      </a>
+      {variant === "row" && (
+        <>
+          <a
+            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
+            onClick={onClose}
+            className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
+          >
+            Give suggestion
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onProgram(row);
+            }}
+            className={`block w-full text-left rounded-lg px-3 py-2 ${item} font-semibold text-ember hover:bg-sand`}
+          >
+            View Sabbath program
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * The month as a wall calendar: one column per weekday, the Sabbath shaded,
+ * and each day holding the events the ministries filed on it. Every event is
+ * a chip opening the same menu the table's rows carry, so switching views
+ * changes how the month is read, never what can be done with it.
+ */
+function MonthGrid({
+  year, month, events, mapUrl, openActions, onToggleActions, onCloseActions, onProgram,
+}: {
+  year: number;
+  /** The month's index, 0-11 — a grid cannot lay out "all months". */
+  month: number;
+  events: CalendarEvent[];
+  mapUrl: string;
+  openActions: string | null;
+  onToggleActions: (key: string) => void;
+  onCloseActions: () => void;
+  onProgram: (row: CalendarEvent) => void;
+}) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  //: The first day's weekday decides how many leading days the first week borrows.
+  const leadingDays = new Date(year, month, 1).getDay();
+  const weeks = Math.ceil((leadingDays + daysInMonth) / 7);
+  const todayKey = localDate();
+  const byDate = new Map<string, CalendarEvent[]>();
+  for (const event of events) {
+    const key = (event.date ?? "").slice(0, 10);
+    if (!key) continue;
+    byDate.set(key, [...(byDate.get(key) ?? []), event]);
+  }
+  const isoDay = (day: number) =>
+    `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  return (
+    <div className="overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-sand-line px-5 py-3">
+        <h2 className="text-sm font-bold text-bark">
+          {monthNames[month]} {year}
+        </h2>
+        <p className="text-xs text-moss">
+          {events.length} {events.length === 1 ? "event" : "events"} this month
+        </p>
+      </div>
+      <table className="w-full min-w-[720px] border-collapse text-left">
+        <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
+          <tr>
+            {weekdayNames.map((short, weekday) => (
+              <th
+                key={short}
+                scope="col"
+                className={`px-3 py-2 font-semibold ${weekday === SABBATH_COLUMN ? "bg-mist-soft" : ""}`}
+              >
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{weekdayNamesFull[weekday]}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-sand-wash">
+          {Array.from({ length: weeks }, (_, week) => (
+            <tr key={week} className="align-top">
+              {weekdayNames.map((short, weekday) => {
+                // Days before the 1st and after the month's end borrow their
+                // number from the neighbouring month and hold nothing: the
+                // grid keeps its weeks square without inventing events.
+                const day = week * 7 + weekday - leadingDays + 1;
+                const withinMonth = day >= 1 && day <= daysInMonth;
+                const key = isoDay(day);
+                const dayEvents = withinMonth ? byDate.get(key) ?? [] : [];
+                const isToday = withinMonth && key === todayKey;
+                // A menu near the foot of the grid opens upwards, so the last
+                // weeks' events are not pushed out of the viewport.
+                const opensUpwards = week >= weeks - 2;
+                return (
+                  <td
+                    key={short}
+                    className={`h-24 w-[14.28%] border-l border-sand-wash px-2 py-2 align-top first:border-l-0 ${
+                      weekday === SABBATH_COLUMN ? "bg-sand-linen" : ""
+                    } ${isToday ? "bg-mist-tint" : ""}`}
+                  >
+                    <div
+                      className={`mb-1 text-xs font-semibold ${
+                        isToday ? "text-ember" : withinMonth ? "text-moss-dark" : "text-moss-faint"
+                      }`}
+                    >
+                      {new Date(year, month, day).getDate()}
+                    </div>
+                    <div className="space-y-1">
+                      {dayEvents.map((row) => {
+                        const actionKey = `${row.date}-${row.id}`;
+                        return (
+                          <div key={actionKey} data-calendar-action-menu className="relative">
+                            <button
+                              type="button"
+                              aria-expanded={openActions === actionKey}
+                              onClick={() => onToggleActions(actionKey)}
+                              title={`${row.title}${row.department_name ? ` — ${row.department_name}` : ""}`}
+                              className="w-full rounded-md border-l-2 border-ember bg-sand-plate px-1.5 py-1 text-left transition hover:bg-sand-wash"
+                            >
+                              <span className="block truncate text-[10px] font-semibold text-bark">{row.title}</span>
+                              {row.time && (
+                                <span className="block truncate text-[10px] text-moss">{clockTime(row.time)}</span>
+                              )}
+                            </button>
+                            {openActions === actionKey && (
+                              <div
+                                className={`absolute left-0 z-30 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
+                                  opensUpwards ? "bottom-full mb-1" : "top-full mt-1"
+                                }`}
+                              >
+                                <EventActionsMenu
+                                  row={row}
+                                  mapUrl={mapUrl}
+                                  variant="row"
+                                  onClose={onCloseActions}
+                                  onProgram={onProgram}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
  * The calendar's own controls — the year, the month, the search and the print
  * — in one cluster. Signed in they ride the shell's header beside the page's
  * name (the way every other desk places its search); signed out they sit
  * beside the page's own heading, where a visitor still reaches them.
  */
 function CalendarFilters({
-  search, onSearch, year, onYear, month, onMonth, years, className,
+  search, onSearch, year, onYear, month, onMonth, years, view, onView, className,
 }: {
   search: string;
   onSearch: (value: string) => void;
@@ -73,6 +293,8 @@ function CalendarFilters({
   month: string;
   onMonth: (value: string) => void;
   years: number[];
+  view: CalendarView;
+  onView: (view: CalendarView) => void;
   className?: string;
 }) {
   return (
@@ -103,13 +325,34 @@ function CalendarFilters({
         aria-label="Church calendar month"
         className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember"
       >
-        <option value="all">All months</option>
+        {/* The grid lays out one month, so the whole-year reading is the
+            list's alone: the choice is offered only while the list is on. */}
+        {view === "table" && <option value="all">All months</option>}
         {monthNames.map((name, index) => (
           <option key={name} value={index}>
             {name}
           </option>
         ))}
       </select>
+      <div
+        role="group"
+        aria-label="How to read the calendar"
+        className="flex items-center rounded-xl border border-sand-mute bg-white p-0.5"
+      >
+        {([["table", "List"], ["month", "Month"]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={view === value}
+            onClick={() => onView(value)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              view === value ? "bg-ember text-white" : "text-moss-dark hover:text-bark"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         onClick={() => window.print()}
@@ -146,6 +389,9 @@ function CalendarPageContent() {
   const [selectedYear, setSelectedYear] = useState(() => { const requestedYear = Number(searchParams.get("year")); return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear; });
   const [selectedMonth, setSelectedMonth] = useState(searchParams.get("month") ?? String(today.getMonth()));
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  // The list is what the page opens on; the month grid is the other way to
+  // read the same events, and both stay reachable from the same controls.
+  const [view, setView] = useState<CalendarView>(searchParams.get("view") === "month" ? "month" : "table");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
   const { setHeaderRightAction } = usePageHeader();
@@ -177,6 +423,15 @@ function CalendarPageContent() {
 
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
+  /**
+   * The grid lays out a single month, so asking for it while the page is
+   * showing every month lands on this one rather than on an unreadable year.
+   */
+  function chooseView(next: CalendarView) {
+    if (next === "month" && selectedMonth === "all") setSelectedMonth(String(today.getMonth()));
+    setView(next);
+  }
+
   // Signed in, the controls ride the shell's header beside the page's name —
   // one row for the heading and its controls at both widths, exactly as the
   // treasury and the department desks place theirs.
@@ -194,11 +449,13 @@ function CalendarPageContent() {
         month={selectedMonth}
         onMonth={setSelectedMonth}
         years={years}
+        view={view}
+        onView={chooseView}
       />
     );
     return () => setHeaderRightAction(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn, setHeaderRightAction, search, selectedMonth, selectedYear]);
+  }, [signedIn, setHeaderRightAction, search, selectedMonth, selectedYear, view]);
 
   const mapUrl = mapsLink(settings);
 
@@ -237,6 +494,8 @@ function CalendarPageContent() {
               month={selectedMonth}
               onMonth={setSelectedMonth}
               years={years}
+              view={view}
+              onView={chooseView}
               className="lg:justify-end"
             />
           </div>
@@ -302,7 +561,7 @@ function CalendarPageContent() {
                             </a>
                           )}
                           <Link
-                            href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.department_name || row.title))}`}
+                            href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
@@ -408,7 +667,7 @@ function CalendarPageContent() {
                           </a>
                         )}
                         <Link
-                          href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.department_name || row.title))}`}
+                          href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
                           onClick={() => setOpenActions(null)}
                           className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                         >
