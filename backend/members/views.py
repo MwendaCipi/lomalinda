@@ -7911,6 +7911,31 @@ def can_manage_department(user, department):
     ).exists()
 
 
+#: The desk that keeps the church's own week. The events it plans span every
+#: ministry — a youth Sabbath, a men's seminar, a Dorcas drive — so its
+#: leadership may write an event on any department's calendar rather than
+#: keeping a private copy on its own.
+CHURCH_CALENDAR_DEPARTMENT = 'personal_ministries'
+
+
+def can_schedule_across_departments(user):
+    """Church officers, and the personal ministries desk, schedule anywhere.
+
+    Everyone else schedules only what their own desk holds: an AMM leader
+    cannot write on AWM's calendar, or the point of a department's own
+    calendar — its leadership deciding what lands on it — is lost.
+    """
+    if department_office_profile(user):
+        return True
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    return DepartmentAssignment.objects.filter(
+        department__code=CHURCH_CALENDAR_DEPARTMENT,
+        department__is_active=True,
+        member=user,
+    ).exists()
+
+
 class DepartmentBudgetView(APIView):
     """A department's budget lines: read, add, remove.
 
@@ -8674,6 +8699,7 @@ class DepartmentEventsView(APIView):
         events = DepartmentEvent.objects.filter(department=department, **({'unit': unit} if unit else {}))
         events = events.order_by('event_date', 'event_time', 'title')
         church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
+        can_schedule_across = can_schedule_across_departments(request.user)
         return Response({'events': [
             {
                 'id': event.id,
@@ -8691,18 +8717,40 @@ class DepartmentEventsView(APIView):
                 'unit': event.unit,
             }
             for event in events
-        ], 'unit': unit, 'units': target.unit_names, 'church_name': church_settings.church_name})
+        ], 'unit': unit, 'units': target.unit_names, 'church_name': church_settings.church_name,
+            # Whether this reader may file an event on another desk's calendar —
+            # and so whether the desk should offer the choice at all. Carrying
+            # the church's own directory alongside keeps the picker reading the
+            # codes the server will accept rather than a second list the page
+            # builds for itself.
+            'can_schedule_across': can_schedule_across,
+            'departments': (
+                [{'code': row.code, 'label': row.name}
+                 for row in Department.objects.filter(is_active=True).order_by('name')]
+                if can_schedule_across else []
+            )})
 
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can add events.'}, status=status.HTTP_403_FORBIDDEN)
+        # An event is written on the calendar that will hold it — usually the
+        # desk writing it, but the desk that plans the church's week (personal
+        # ministries) files into the ministry that will run the event.
+        target_code = str(request.data.get('department') or department).strip() or department
+        if target_code != department and not can_schedule_across_departments(request.user):
+            return Response(
+                {'detail': 'Only church officers or the personal ministries desk can add events to another department.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        target = Department.objects.filter(code=target_code, is_active=True).first()
+        if target is None:
+            return Response({'department': 'Unknown department.'}, status=status.HTTP_400_BAD_REQUEST)
         title = (request.data.get('title') or '').strip()
         event_date = request.data.get('date') or ''
         if not title or not event_date:
             return Response({'detail': 'A title and a date are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        target = Department.objects.filter(code=department, is_active=True).first()
         unit = str(request.data.get('unit') or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -8721,7 +8769,7 @@ class DepartmentEventsView(APIView):
             except Exception:
                 return None
         event = DepartmentEvent.objects.create(
-            department=department,
+            department=target_code,
             title=title,
             unit=unit,
             event_date=event_date,
@@ -8736,7 +8784,10 @@ class DepartmentEventsView(APIView):
             notes=(request.data.get('notes') or '').strip(),
             created_by=request.user,
         )
-        return Response({'detail': 'Event added to the calendar.', 'id': event.id}, status=status.HTTP_201_CREATED)
+        return Response(
+            {'detail': 'Event added to the calendar.', 'id': event.id, 'department': target_code},
+            status=status.HTTP_201_CREATED,
+        )
 
 
     def delete(self, request, department, event_id=None):
@@ -8749,6 +8800,46 @@ class DepartmentEventsView(APIView):
         if not deleted:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Event removed from the calendar.'})
+
+
+class ChurchCalendarView(APIView):
+    """The church calendar: every ministry's own events in one feed.
+
+    The desks write these rows (the department calendar), and this read is
+    the congregation's window on them — so it is open, and each event carries
+    the ministry's name rather than its code. The desk's own notes stay with
+    the desk that wrote them; a programme file and a leader's name are what
+    the congregation is shown.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        departments = {
+            row.code: row.name for row in Department.objects.filter(is_active=True)
+        }
+        events = DepartmentEvent.objects.filter(department__in=departments.keys()).order_by(
+            'event_date', 'event_time', 'title',
+        )
+        return Response({'events': [
+            {
+                'id': event.id,
+                'department': event.department,
+                'department_name': departments.get(event.department, event.department),
+                'title': event.title,
+                'date': event.event_date,
+                'time': event.event_time.strftime('%H:%M') if event.event_time else '',
+                'end_date': event.end_date,
+                'end_time': event.end_time.strftime('%H:%M') if event.end_time else '',
+                'mode': event.mode,
+                'location': event.location,
+                'meeting_link': event.meeting_link,
+                'lead': event.lead,
+                'unit': event.unit,
+                'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None,
+            }
+            for event in events
+        ]})
 
 
 def can_manage_weekly_meetings(user):

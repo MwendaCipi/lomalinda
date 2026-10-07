@@ -7,7 +7,7 @@ import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbat
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { newsAndEventsLinks } from "@/config/site-sections";
-import { meetingHours, type WeeklyMeeting } from "@/lib/gathering";
+import { usePageHeader } from "@/components/app-frame";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -18,15 +18,108 @@ const weekdayLabel = (iso: string) =>
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
-// `recurring` marks a row the church's weekly meetings put on every matching
-// weekday, as opposed to something the church wrote down for one date.
-type CalendarEvent = { date: string; name: string; department?: string; program_text?: string; program_file?: string | null; program_items?: [string, string][]; kind?: "online" | "onsite" | "sabbath" | "special"; time?: string; meeting_link?: string; location_link?: string; recurring?: boolean };
+// A row the church calendar shows. These are the ministries' and departments'
+// own events — the calendar holds nothing of its own — so each row wears the
+// area that will run it rather than a generic church-wide heading.
+type CalendarEvent = {
+  id: number;
+  date: string;
+  title: string;
+  /** The area's code, e.g. "aym" — what the giving purpose is read from. */
+  department: string;
+  /** The area's own name, as the church records it. */
+  department_name: string;
+  time?: string;
+  end_date?: string;
+  end_time?: string;
+  mode?: "physical" | "virtual";
+  location?: string;
+  meeting_link?: string;
+  lead?: string;
+  unit?: string;
+  program_file?: string | null;
+};
 
-function dateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
-function getDates(year: number, day: number) { const dates: Date[] = []; const date = new Date(year, 0, 1); while (date.getFullYear() === year) { if (date.getDay() === day) dates.push(new Date(date)); date.setDate(date.getDate() + 1); } return dates; }
 function mapsLink(settings: ChurchSettings | null) { return settings?.latitude && settings.longitude ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}` : ""; }
-function timeOnly(value?: string) { if (!value) return "-"; const match = value.match(/\d{1,2}:\d{2}\s*[AP]M(?:\s*[-–—]\s*\d{1,2}:\d{2}\s*[AP]M)?/i); return match?.[0] ?? value; }
-function newYearsThanksgiving(year: number): CalendarEvent { return { date: `${year}-01-01`, name: "New Year's Thanksgiving", department: "Whole church", kind: "special", program_items: [["9:00 AM", "Opening prayer"], ["9:15 AM", "Music"], ["9:45 AM", "Bible sharing"], ["10:30 AM", "Testimonies"], ["11:15 AM", "Prayers"], ["12:00 PM", "Offerings"], ["12:30 PM", "Departure"]] }; }
+/** "14:30" spoken back as "2:30 PM", the way the desks write the time. */
+function clockTime(value?: string) {
+  const match = (value ?? "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return "";
+  const hours = Number(match[1]);
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${match[2]} ${hours >= 12 ? "PM" : "AM"}`;
+}
+/** The row's time: a range when the event finishes on the day it starts. */
+function timeRange(event: CalendarEvent) {
+  const start = clockTime(event.time);
+  const end = clockTime(event.end_time);
+  if (start && end) return `${start} – ${end}`;
+  return start || end || "-";
+}
+
+/**
+ * The calendar's own controls — the year, the month, the search and the print
+ * — in one cluster. Signed in they ride the shell's header beside the page's
+ * name (the way every other desk places its search); signed out they sit
+ * beside the page's own heading, where a visitor still reaches them.
+ */
+function CalendarFilters({
+  search, onSearch, year, onYear, month, onMonth, years, className,
+}: {
+  search: string;
+  onSearch: (value: string) => void;
+  year: number;
+  onYear: (value: number) => void;
+  month: string;
+  onMonth: (value: string) => void;
+  years: number[];
+  className?: string;
+}) {
+  return (
+    <div className={`flex w-full flex-wrap items-center gap-2 sm:w-auto ${className ?? ""}`}>
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => onSearch(event.target.value)}
+        placeholder="Search event, ministry, or date…"
+        aria-label="Search the church calendar"
+        className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56"
+      />
+      <select
+        value={year}
+        onChange={(event) => onYear(Number(event.target.value))}
+        aria-label="Church calendar year"
+        className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember"
+      >
+        {years.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <select
+        value={month}
+        onChange={(event) => onMonth(event.target.value)}
+        aria-label="Church calendar month"
+        className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember"
+      >
+        <option value="all">All months</option>
+        {monthNames.map((name, index) => (
+          <option key={name} value={index}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => window.print()}
+        className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-dark"
+      >
+        Print
+      </button>
+    </div>
+  );
+}
 
 function CalendarPageContent() {
   // Signed in, the page lives in the app shell — the strip at the top names
@@ -48,7 +141,6 @@ function CalendarPageContent() {
   const currentYear = today.getFullYear();
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [meetings, setMeetings] = useState<WeeklyMeeting[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => { const requestedYear = Number(searchParams.get("year")); return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear; });
@@ -56,6 +148,7 @@ function CalendarPageContent() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
+  const { setHeaderRightAction } = usePageHeader();
 
   useEffect(() => {
     function closeActions(event: MouseEvent) {
@@ -66,139 +159,117 @@ function CalendarPageContent() {
     return () => document.removeEventListener("mousedown", closeActions);
   }, []);
 
-  useEffect(() => { Promise.all([fetch(`${API_URL}/api/members/sabbath-events/`).then((response) => response.ok ? response.json() : []), fetch(`${API_URL}/api/members/church-settings/`).then((response) => response.ok ? response.json() : null), fetch(`${API_URL}/api/members/weekly-meetings/`).then((response) => (response.ok ? response.json() : null))]).then(([calendarEvents, churchSettings, week]) => { setEvents(calendarEvents); setSettings(churchSettings); setMeetings(Array.isArray(week?.meetings) ? week.meetings : []); }).catch(() => setEvents([])).finally(() => setLoaded(true)); }, []);
+  // The church calendar reads the ministries' and departments' own events —
+  // the areas write them from their desks, so the calendar holds no second
+  // copy of its own and no placeholders it invented.
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_URL}/api/members/church-calendar/`).then((response) => (response.ok ? response.json() : null)),
+      fetch(`${API_URL}/api/members/church-settings/`).then((response) => (response.ok ? response.json() : null)),
+    ])
+      .then(([calendar, churchSettings]) => {
+        setEvents(Array.isArray(calendar?.events) ? calendar.events : []);
+        setSettings(churchSettings);
+      })
+      .catch(() => setEvents([]))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
+
+  // Signed in, the controls ride the shell's header beside the page's name —
+  // one row for the heading and its controls at both widths, exactly as the
+  // treasury and the department desks place theirs.
+  useEffect(() => {
+    if (!signedIn) {
+      setHeaderRightAction(null);
+      return;
+    }
+    setHeaderRightAction(
+      <CalendarFilters
+        search={search}
+        onSearch={setSearch}
+        year={selectedYear}
+        onYear={setSelectedYear}
+        month={selectedMonth}
+        onMonth={setSelectedMonth}
+        years={years}
+      />
+    );
+    return () => setHeaderRightAction(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, setHeaderRightAction, search, selectedMonth, selectedYear]);
+
+  const mapUrl = mapsLink(settings);
 
   const rows = useMemo(() => {
-    const eventMap = new Map(events.filter((event) => event.date.startsWith(`${selectedYear}-`)).map((event) => [event.date, { ...event, time: timeOnly(event.time) }]));
-    const mapUrl = mapsLink(settings);
-    const entries: { date: string; event: CalendarEvent }[] = [];
-    // The church's week, from the meetings the personal ministries leader
-    // keeps: every meeting lands on each of its own weekdays in the year.
-    // The Sabbath is the one day a stored programme can take over, so that
-    // row is answered by the church's own notes when it has written any.
-    meetings.forEach((meeting) => {
-      const weekday = (meeting.weekday + 1) % 7;
-      getDates(selectedYear, weekday).forEach((date) => {
-        const key = dateKey(date);
-        const hours = meetingHours(meeting);
-        if (weekday === 6) {
-          const customEvent = eventMap.get(key);
-          entries.push({
-            date: key,
-            event: customEvent
-              ? { ...customEvent, kind: "sabbath", time: timeOnly(customEvent.time || hours), location_link: mapUrl }
-              : { date: key, name: meeting.title, kind: "sabbath", time: hours, location_link: mapUrl, recurring: true },
-          });
-          return;
-        }
-        entries.push({
-          date: key,
-          event: {
-            date: key,
-            name: meeting.title,
-            kind: meeting.online ? "online" : "onsite",
-            time: hours,
-            meeting_link: meeting.online ? meeting.meeting_link : undefined,
-            location_link: meeting.online ? undefined : mapUrl,
-            recurring: true,
-          },
-        });
-      });
-    });
-    const newYear = newYearsThanksgiving(selectedYear); entries.push({ date: newYear.date, event: newYear });
-    eventMap.forEach((event, date) => { if (!entries.some((entry) => entry.date === date)) entries.push({ date, event }); });
-    return entries.sort((a, b) => a.date.localeCompare(b.date)).filter(({ date, event }) => { const monthMatches = selectedMonth === "all" || Number(date.slice(5, 7)) - 1 === Number(selectedMonth); const dateText = weekdayLabel(date); return monthMatches && `${date} ${dateText} ${event.name} ${event.department ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()); });
-  }, [events, meetings, search, selectedMonth, selectedYear, settings]);
+    const needle = search.trim().toLowerCase();
+    return events
+      .filter((event) => event.date?.startsWith(`${selectedYear}-`))
+      .filter((event) => selectedMonth === "all" || Number(event.date.slice(5, 7)) - 1 === Number(selectedMonth))
+      .filter((event) => {
+        if (!needle) return true;
+        const hay = `${event.date} ${weekdayLabel(event.date)} ${event.title} ${event.department_name} ${event.lead ?? ""} ${event.unit ?? ""} ${event.location ?? ""}`;
+        return hay.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
+  }, [events, search, selectedMonth, selectedYear]);
 
-  function openProgram(row: { date: string; event: CalendarEvent }) { const file = row.event.program_file ? (row.event.program_file.startsWith("http") ? row.event.program_file : `${API_URL}${row.event.program_file}`) : null; setActiveProgram({ name: row.event.name, department: row.event.department, date: weekdayLabel(row.date), programText: row.event.program_text, programFile: file, programItems: row.event.program_items, isDesignated: row.event.kind === "special" || !row.event.recurring }); }
-  const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
+  function openProgram(row: CalendarEvent) { const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null; setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true }); }
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-sand text-bark" : "min-h-screen bg-sand text-bark"}>
       <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className="mx-auto max-w-6xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
-          <p className="mt-4 max-w-2xl text-base leading-8 text-moss">
-            Sabbaths, vespers, programmes and special events across the church year.
-          </p>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
+              <p className="mt-4 text-base leading-8 text-moss">
+                Sabbaths, vespers, programmes and special events across the church year.
+              </p>
+            </div>
+            <CalendarFilters
+              search={search}
+              onSearch={setSearch}
+              year={selectedYear}
+              onYear={setSelectedYear}
+              month={selectedMonth}
+              onMonth={setSelectedMonth}
+              years={years}
+              className="lg:justify-end"
+            />
+          </div>
         </div>
       </section>
 
       <div className="mx-auto max-w-6xl space-y-6 px-6 py-10 lg:px-8 lg:py-12">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-[150px_170px_1fr]">
-          <label className="text-sm font-semibold">
-            Year
-            <select
-              value={selectedYear}
-              onChange={(event) => setSelectedYear(Number(event.target.value))}
-              className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-semibold">
-            Month
-            <select
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-              className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal"
-            >
-              <option value="all">All months</option>
-              {monthNames.map((month, index) => (
-                <option key={month} value={index}>
-                  {month}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="col-span-2 flex items-end gap-3 md:col-span-1">
-            <label className="min-w-0 flex-1 text-sm font-semibold">
-              Search
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Event, department, or date"
-                className="mt-2 block w-full rounded-lg border border-sand-edge bg-white px-3 py-2 font-normal outline-none focus:border-ember"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="shrink-0 rounded-lg bg-ember px-4 py-2 text-sm font-semibold text-white hover:bg-ember-dark"
-            >
-              Print Calendar
-            </button>
-          </div>
-        </div>
-
         {/* PC Desktop Table View (visible on md and up) */}
-        <div className="hidden md:block mt-3 overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
+        <div className="hidden md:block overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
               <tr>
                 <th className="px-5 py-4 font-semibold">Date</th>
                 <th className="px-5 py-4 font-semibold">Event</th>
                 <th className="px-5 py-4 font-semibold">Time</th>
-                <th className="px-5 py-4 font-semibold">Department</th>
+                <th className="px-5 py-4 font-semibold">Ministry</th>
                 <th className="px-5 py-4 font-semibold">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand-wash">
               {rows.map((row) => {
-                const actionKey = `${row.date}-${row.event.name}`;
+                const actionKey = `${row.date}-${row.id}`;
                 return (
                   <tr key={actionKey} className="hover:bg-sand-plate">
                     <td className="whitespace-nowrap px-5 py-4 text-moss">
                       {dayFirst(row.date)}
                     </td>
-                    <td className="px-5 py-4 font-semibold">{row.event.name}</td>
-                    <td className="whitespace-nowrap px-5 py-4 text-moss">{row.event.time || "-"}</td>
-                    <td className="px-5 py-4 text-moss">{row.event.department || "-"}</td>
+                    <td className="px-5 py-4 font-semibold">
+                      {row.title}
+                      {row.lead && <span className="block text-xs font-normal text-moss">Led by {row.lead}</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-moss">{timeRange(row)}</td>
+                    <td className="px-5 py-4 text-moss">{row.department_name || "-"}</td>
                     <td data-calendar-action-menu className="relative px-5 py-4">
                       <button
                         type="button"
@@ -210,9 +281,9 @@ function CalendarPageContent() {
                       </button>
                       {openActions === actionKey && (
                         <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
-                          {row.event.kind === "online" && row.event.meeting_link && (
+                          {row.mode === "virtual" && row.meeting_link && (
                             <a
-                              href={row.event.meeting_link}
+                              href={row.meeting_link}
                               target="_blank"
                               rel="noreferrer"
                               className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
@@ -220,9 +291,9 @@ function CalendarPageContent() {
                               Join meeting
                             </a>
                           )}
-                          {row.event.location_link && (
+                          {row.mode !== "virtual" && mapUrl && (
                             <a
-                              href={row.event.location_link}
+                              href={mapUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
@@ -231,21 +302,21 @@ function CalendarPageContent() {
                             </a>
                           )}
                           <Link
-                            href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.event.department || row.event.name))}`}
+                            href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.department_name || row.title))}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
                             Give support
                           </Link>
                           <a
-                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
+                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
                             Contact department
                           </a>
                           <a
-                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.event.name}`)}`}
+                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
                             onClick={() => setOpenActions(null)}
                             className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
                           >
@@ -272,27 +343,27 @@ function CalendarPageContent() {
         </div>
 
         {/* Mobile Calendar Cards View (visible on mobile only) */}
-        <div className="mt-3 grid gap-4 md:hidden">
+        <div className="grid gap-4 md:hidden">
           {rows.map((row) => {
-            const actionKey = `mobile-${row.date}-${row.event.name}`;
+            const actionKey = `mobile-${row.date}-${row.id}`;
             const dateStr = dayFirst(row.date);
             return (
               <div key={actionKey} className="rounded-2xl bg-white p-5 border border-sand-line shadow-sm space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="text-xs font-semibold text-ember">{dateStr}</span>
-                    <h3 className="font-bold text-base text-bark mt-0.5">{row.event.name}</h3>
+                    <h3 className="font-bold text-base text-bark mt-0.5">{row.title}</h3>
                   </div>
-                  {row.event.department && (
+                  {row.department_name && (
                     <span className="rounded-full bg-mist-select px-2.5 py-1 text-[10px] font-bold text-moss-dark shrink-0">
-                      {row.event.department}
+                      {row.department_name}
                     </span>
                   )}
                 </div>
 
-                {row.event.time && (
+                {row.time && (
                   <p className="text-xs text-moss">
-                    <span className="font-semibold text-bark">Time:</span> {row.event.time}
+                    <span className="font-semibold text-bark">Time:</span> {timeRange(row)}
                   </p>
                 )}
 
@@ -316,9 +387,9 @@ function CalendarPageContent() {
                     </button>
                     {openActions === actionKey && (
                       <div className="absolute right-0 bottom-full mb-1.5 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
-                        {row.event.kind === "online" && row.event.meeting_link && (
+                        {row.mode === "virtual" && row.meeting_link && (
                           <a
-                            href={row.event.meeting_link}
+                            href={row.meeting_link}
                             target="_blank"
                             rel="noreferrer"
                             className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
@@ -326,9 +397,9 @@ function CalendarPageContent() {
                             Join meeting
                           </a>
                         )}
-                        {row.event.location_link && (
+                        {row.mode !== "virtual" && mapUrl && (
                           <a
-                            href={row.event.location_link}
+                            href={mapUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
@@ -337,14 +408,14 @@ function CalendarPageContent() {
                           </a>
                         )}
                         <Link
-                          href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.event.department || row.event.name))}`}
+                          href={`/give?purpose=${encodeURIComponent(getMinistryGivingPurpose(row.department_name || row.title))}`}
                           onClick={() => setOpenActions(null)}
                           className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                         >
                           Give support
                         </Link>
                         <a
-                          href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.event.name}`)}`}
+                          href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
                           onClick={() => setOpenActions(null)}
                           className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
                         >
@@ -366,7 +437,7 @@ function CalendarPageContent() {
         )}
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
         <p className="mt-4 text-xs text-moss">
-          Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}.
+          Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}, added by the ministries and departments.
         </p>
       </div>
 
@@ -388,4 +459,3 @@ function CalendarPageContent() {
 export default function CalendarPage() {
   return <Suspense fallback={<main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">Loading calendar...</main>}><CalendarPageContent /></Suspense>;
 }
-

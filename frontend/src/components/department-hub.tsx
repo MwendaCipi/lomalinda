@@ -718,11 +718,19 @@ function AddMemberModal({
 function AddEventModal({
   departmentLabel,
   defaultLocation,
+  departments = [],
   onClose,
   onAdd,
 }: {
   departmentLabel: string;
   defaultLocation: string;
+  /**
+   * Every area the church records, offered only to a desk that may file on
+   * another's calendar (the personal ministries desk keeps the church's week,
+   * and the officers may write anywhere). An empty list means the desk writes
+   * its own calendar, and the choice is not offered at all.
+   */
+  departments?: { code: string; label: string }[];
   onClose: () => void;
   onAdd: (event: {
     title: string;
@@ -733,6 +741,8 @@ function AddEventModal({
     mode: string;
     location: string;
     meeting_link: string;
+    /** The area whose calendar holds the event; "" is this desk's own. */
+    department: string;
     program_file: File | null;
   }) => void;
 }) {
@@ -745,9 +755,14 @@ function AddEventModal({
     mode: "physical" as "physical" | "virtual",
     location: defaultLocation,
     meeting_link: "",
+    department: "",
   });
   const [programFile, setProgramFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Which area's calendar will hold the event. The desk writing it is the
+  // default — the church's own week is filed into the ministry that runs it,
+  // so the heading follows the choice.
+  const targetLabel = departments.find((row) => row.code === form.department)?.label ?? departmentLabel;
   const valid = form.title.trim() && form.date;
   const inputCls = "mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none";
   return (
@@ -755,11 +770,11 @@ function AddEventModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Add event to ${departmentLabel}`}
+        aria-label={`Add event to ${targetLabel}`}
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
-          <h3 className="text-lg font-bold text-bark">Add event — {departmentLabel}</h3>
+          <h3 className="text-lg font-bold text-bark">Add event — {targetLabel}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
@@ -783,6 +798,28 @@ function AddEventModal({
               className={inputCls}
             />
           </div>
+
+          {/* Whose calendar holds it — offered only to a desk that may write
+              on another's (the church's week is filed into the ministry that
+              will run it, rather than kept as a second list). */}
+          {departments.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-bark">Department / ministry</label>
+              <select
+                value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                aria-label="Which department or ministry runs this event"
+                className={inputCls}
+              >
+                <option value="">{departmentLabel} (this desk)</option>
+                {departments.map((row) => (
+                  <option key={row.code} value={row.code}>
+                    {row.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Dates — both on one row */}
           <div>
@@ -3324,6 +3361,11 @@ function DepartmentDetail({
   const [unitBoard, setUnitBoard] = useState<{ leader: Holder | null; assistants: Holder[] } | null>(null);
   const [roll, setRoll] = useState<RollMember[]>([]);
   const [events, setEvents] = useState<DeptEvent[]>([]);
+  // The areas this desk may file an event into, when it may file beyond its
+  // own calendar — the personal ministries desk keeps the church's week, so
+  // its events land on the ministry that will run them. The server decides:
+  // an empty list means this desk writes its own calendar only.
+  const [eventDepartments, setEventDepartments] = useState<{ code: string; label: string }[]>([]);
   const [loadingRoll, setLoadingRoll] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -3571,6 +3613,7 @@ function DepartmentDetail({
       .then((data) => {
         setEvents(data.events || []);
         if (data.church_name) setChurchName(data.church_name);
+        setEventDepartments(Array.isArray(data.departments) ? data.departments : []);
       })
       .catch(() => setEvents([]))
       .finally(() => setLoadingEvents(false));
@@ -3702,6 +3745,7 @@ function DepartmentDetail({
     mode: string;
     location: string;
     meeting_link: string;
+    department: string;
     program_file: File | null;
   }) => {
     const body = new FormData();
@@ -3714,6 +3758,10 @@ function DepartmentDetail({
     body.append("location", event.location);
     body.append("meeting_link", event.meeting_link);
     body.append("unit", unit ?? "");
+    // Which area's calendar holds it. Left off, the server files it with the
+    // desk that wrote it; the personal ministries desk may name another and
+    // the server refuses anyone else who tries.
+    body.append("department", event.department);
     if (event.program_file) body.append("program_file", event.program_file);
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
       method: "POST",
@@ -3722,7 +3770,8 @@ function DepartmentDetail({
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      showAlert("Event added", `"${event.title}" is on the ${department.label} calendar.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      const filedInto = eventDepartments.find((row) => row.code === event.department)?.label ?? department.label;
+      showAlert("Event added", `"${event.title}" is on the ${filedInto} calendar.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       setShowAddEvent(false);
       loadEvents();
       onChanged();
@@ -4172,7 +4221,13 @@ function DepartmentDetail({
         />
       )}
       {showAddEvent && (
-        <AddEventModal departmentLabel={department.label} defaultLocation={churchName} onClose={() => setShowAddEvent(false)} onAdd={addEvent} />
+        <AddEventModal
+          departmentLabel={department.label}
+          defaultLocation={churchName}
+          departments={eventDepartments}
+          onClose={() => setShowAddEvent(false)}
+          onAdd={addEvent}
+        />
       )}
     </div>
   );

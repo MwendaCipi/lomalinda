@@ -19,11 +19,25 @@ export default function MinistryDetailClient() {
   const [loaded, setLoaded] = useState(false);
   const year = new Date().getFullYear();
 
+  // The ministry's calendar reads the events its own desk writes, not the
+  // church's generic feed: the church calendar gathers the same rows from
+  // every area, and `DepartmentCalendar` picks this ministry's out of them by
+  // the name each event wears.
   useEffect(() => {
     if (!ministry?.department) return;
-    fetch(`${API_URL}/api/members/sabbath-events/`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setEvents(data))
+    fetch(`${API_URL}/api/members/church-calendar/`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) =>
+        setEvents(
+          (Array.isArray(data?.events) ? data.events : []).map(
+            (event: { date: string; title: string; department_name?: string }) => ({
+              date: event.date,
+              name: event.title,
+              department: event.department_name,
+            })
+          )
+        )
+      )
       .catch(() => setEvents([]))
       .finally(() => setLoaded(true));
   }, [ministry?.department]);

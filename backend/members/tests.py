@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -6789,6 +6789,61 @@ class DepartmentApiTests(APITestCase):
         self._auth(self.elder)
         res = self.client.get('/api/members/departments/awm/events/')
         self.assertEqual(res.data['events'], [])
+
+    def test_the_personal_ministries_desk_files_into_any_department(self):
+        """The desk that plans the church's week writes on the ministry's own
+        calendar instead of keeping a second copy on its own: a youth Sabbath
+        the PM leader files is stored under AYM and reaches the church
+        calendar wearing that ministry's name."""
+        pm = Department.objects.get(code='personal_ministries')
+        pm_leader_role = DepartmentRole.objects.get(department=pm, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=pm, role=pm_leader_role, member=self.plain, kind='leader',
+        )
+        self._auth(self.plain)
+        # The desk is told it may file elsewhere, and which calendars exist —
+        # the picker offers only what the server will accept.
+        listed = self.client.get('/api/members/departments/personal_ministries/events/')
+        self.assertTrue(listed.data['can_schedule_across'])
+        self.assertIn('aym', [row['code'] for row in listed.data['departments']])
+        res = self.client.post('/api/members/departments/personal_ministries/events/', {
+            'title': 'Youth Sabbath', 'date': '2026-11-07', 'department': 'aym',
+        }, format='json')
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['department'], 'aym')
+        self.assertEqual(
+            [event.title for event in DepartmentEvent.objects.filter(department='aym')],
+            ['Youth Sabbath'],
+        )
+        self.assertFalse(DepartmentEvent.objects.filter(department='personal_ministries').exists())
+
+    def test_a_departments_own_desk_keeps_its_calendar(self):
+        """The cross-department key belongs to the officers and the personal
+        ministries desk: an AMM leader still writes AMM's calendar and no other."""
+        self._auth(self.leader)
+        # And a desk that may not file elsewhere is not offered the choice.
+        listed = self.client.get('/api/members/departments/amm/events/')
+        self.assertFalse(listed.data['can_schedule_across'])
+        self.assertEqual(listed.data['departments'], [])
+        res = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Men Sabbath', 'date': '2026-10-10', 'department': 'awm',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(DepartmentEvent.objects.filter(department='awm').exists())
+
+    def test_the_church_calendar_gathers_every_ministry(self):
+        """The congregation's calendar is the ministries' own events, read
+        without signing in, each carrying the ministry's name rather than its
+        code — the generic feed it used to show is gone."""
+        DepartmentEvent.objects.create(department='amm', title='Men Sabbath', event_date='2026-10-10')
+        DepartmentEvent.objects.create(department='aym', title='Youth Sabbath', event_date='2026-10-17')
+        self.client.force_authenticate(user=None)
+        res = self.client.get('/api/members/church-calendar/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            [(event['title'], event['department_name']) for event in res.data['events']],
+            [('Men Sabbath', 'Adventist Men Ministry'), ('Youth Sabbath', 'Adventist Youth Ministry')],
+        )
 
     def test_office_flag_without_a_seat_gets_one_back(self):
         """Migration 0141: a church-office flag the old system carried with
