@@ -461,7 +461,7 @@ function AdministrationContent() {
             {/* Leadership — the directory of the church's areas, opened on
                 one of them when a rail row (or a link) names it. The API
                 decides who may edit; the page itself is open to every office. */}
-            {activeTab === "leaders" && <DepartmentHub initialDept={searchDept} />}
+            {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} />}
 
             {/* Board and Business Meetings — two rows of the Clerkship strip,
                 so the desk opens on the kind the row named and no second

@@ -828,8 +828,8 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The register and the meetings'
   // minutes are the clerk's row, so they are back on a desk of their own
   // own rather than folded into the elders' strip.
-  { label: "Elder's Desk", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true },
-  { label: "Clerk's Desk", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true },
+  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true },
+  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true },
   // The church's music. One page, not two: the desk opens straight onto its
@@ -1036,6 +1036,9 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   children: "Children",
   personal_ministries: "PM",
   health: "Health",
+  welfare: "Welfare",
+  dorcas: "Dorcas",
+  development: "Development",
 };
 
 /**

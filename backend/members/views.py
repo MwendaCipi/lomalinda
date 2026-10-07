@@ -9123,7 +9123,14 @@ def department_accounts(user, code):
             if acc not in accounts:
                 accounts.append(acc)
 
-    # 6. For leadership of any department: LCB is also accessible if not already included
+    # 6. Eldership: access to all treasury accounts
+    if code == 'eldership':
+        all_accounts = TreasuryAccount.objects.all().order_by('id')
+        for acc in all_accounts:
+            if acc not in accounts:
+                accounts.append(acc)
+
+    # 7. For leadership of any department: LCB is also accessible if not already included
     if can_manage:
         lcb = TreasuryAccount.objects.filter(
             Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')

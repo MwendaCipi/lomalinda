@@ -2927,8 +2927,9 @@ export function DepartmentAccountsPanel({
                       ? "bg-ember text-white shadow-2xs"
                       : "bg-white text-bark border border-sand-line hover:bg-sand"
                   }`}
+                  title={acc.description || acc.name}
                 >
-                  {acc.description || acc.name}{" "}
+                  {acc.name}{" "}
                   <span className={accountFilter === String(acc.id) ? "text-white/80 font-normal" : "text-moss font-normal"}>
                     (KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 0 })})
                   </span>
@@ -4086,13 +4087,8 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
       .then((res) => (res.ok ? res.json() : { departments: [] }))
       .then((data) => {
         setDepartments(data.departments || []);
-        setSelected((current) => {
-          // A rail row names the department it opens (`?dept=children`), so the
-          // hub lands on it rather than on the table it is listed in. The URL
-          // wins over whatever is on screen — clicking a different area's row
-          // while one is open must move the desk, not keep the old one.
-          // An older row named AMM's desk `amo`; links saved then still land there.
-          const code = departmentDeskCode(initialDept) ?? current?.code;
+        setSelected(() => {
+          const code = departmentDeskCode(initialDept);
           if (!code) return null;
           return (data.departments || []).find((d: DepartmentRow) => d.code === code) ?? null;
         });
