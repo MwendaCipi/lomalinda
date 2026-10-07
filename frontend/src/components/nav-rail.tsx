@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, Mail, UserPlus } from "lucide-react";
 
 import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
@@ -29,6 +29,7 @@ import { AreaJoinModal, AreaContactModal } from "./area-modals";
  */
 export function NavRail() {
   const pathname = normalizePath(usePathname());
+  const railScrollRef = useRef<HTMLDivElement | null>(null);
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
@@ -50,13 +51,17 @@ export function NavRail() {
   // The headings the member has folded open; the rest of the folded headings
   // (Other Ministries) start closed.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleSection = (key: string) =>
+  const toggleSection = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    if (key === "other-department" || key === "other-ministry") {
+      requestAnimationFrame(() => railScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+    }
+  };
 
   return (
     <aside
@@ -82,7 +87,7 @@ export function NavRail() {
       {/* The rail scrolls on its own; the page never moves with it. The
           headings are a reading aid — Dashboard, then the church's life, then
           the desks — not a click target and not a group to expand. */}
-      <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
+      <div ref={railScrollRef} className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
         <nav>
           {railSectionsFor(entries).map((section, index) => {
             const collapsed = section.collapsed && !expanded.has(section.key);

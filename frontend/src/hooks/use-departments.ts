@@ -6,6 +6,10 @@ import type { DepartmentSummary } from "@/config/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TTL = 60 * 1000;
 
+const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
+  development: "Development",
+};
+
 /** One person on a department's leadership table, and the office they hold. */
 export type DepartmentHolder = { username: string; name: string; kind: "leader" | "assistant"; role: string };
 
@@ -52,7 +56,7 @@ function mapDepartmentRows(data: unknown): DepartmentRow[] {
     roles?: { name?: string; holders?: { name?: string; username?: string; kind?: string }[] }[];
   }[]).map((row) => ({
     code: row.code,
-    label: row.label,
+    label: DEPARTMENT_LABEL_OVERRIDES[row.code] ?? row.label,
     description: String(row.description ?? ""),
     group: row.group === "ministry" || row.group === "office" ? row.group : "department",
     memberCount: Number(row.member_count ?? 0),

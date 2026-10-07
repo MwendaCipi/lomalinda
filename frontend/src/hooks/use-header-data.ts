@@ -58,6 +58,10 @@ export type HeaderMe = {
   /** The member's recorded sex, where the profile carries one. The area pages
       read it to keep the men's and women's fellowships apart. */
   gender: string;
+  /** The member's own department, first as a real Department row, then the
+      legacy profile code for accounts not yet re-filed. */
+  department_ref: string;
+  department: string;
   announce_email: boolean;
   announce_push: boolean;
   /** The office flags the desk endpoints also accept — a treasurer alone is
@@ -130,6 +134,8 @@ async function fetchMe(token: string): Promise<MeResult> {
       email: data.email || "",
       phone_number: data.phone_number || "",
       gender: data.gender || "",
+      department_ref: data.department_ref || "",
+      department: data.department || "",
       announce_email: !!data.announce_email,
       announce_push: !!data.announce_push,
       is_staff: !!data.is_staff,

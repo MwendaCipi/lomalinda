@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, ROLE_OPTIONS, refreshRoleRegister } from "./roles-combobox";
+import { useCallback, useEffect, useState } from "react";
+import { RolesCombobox, formatRoles, roleLabel, heldSystemRoles, refreshRoleRegister } from "./roles-combobox";
 import { brand } from "@/lib/brand";
 import { localDate } from "@/lib/dates";
 import { X } from "lucide-react";
@@ -24,8 +24,6 @@ type MemberUser = {
   phone_number?: string;
 };
 
-const OFFICIAL_ROLES = ROLE_OPTIONS;
-
 export function LeaderManagement() {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +39,7 @@ export function LeaderManagement() {
   const [modalSearch, setModalSearch] = useState("");
   const [submittingModal, setSubmittingModal] = useState(false);
 
-  const fetchMembers = () => {
+  const fetchMembers = useCallback(() => {
     const token = localStorage.getItem("access_token");
     if (!token) return;
     setLoading(true);
@@ -52,11 +50,11 @@ export function LeaderManagement() {
       .then((data) => setMembers(data))
       .catch(() => setMembers([]))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
-    fetchMembers();
-  }, []);
+    void Promise.resolve().then(fetchMembers);
+  }, [fetchMembers]);
 
   const handleRolesChange = async (userId: number, newRoles: string[], newAssistants: string[] = []) => {
     setUpdatingId(userId);
@@ -107,13 +105,26 @@ export function LeaderManagement() {
     (m) => !m.is_disfellowshipped && m.account_type !== "friend" && (m.roles || [m.role || "member"]).some((r) => r !== "member")
   );
 
-  const filteredMembers = leaders.filter(
-    (m) =>
-      m.username.toLowerCase().includes(search.toLowerCase()) ||
-      m.email.toLowerCase().includes(search.toLowerCase()) ||
-      (m.first_name + " " + m.last_name).toLowerCase().includes(search.toLowerCase()) ||
-      (m.roles || [m.role || "member"]).some((r) => roleLabel(r).toLowerCase().includes(search.toLowerCase()))
-  );
+  const memberName = (member: MemberUser) =>
+    (member.first_name || member.last_name
+      ? `${member.first_name} ${member.last_name}`.trim()
+      : member.username);
+  const primaryRoleLabel = (member: MemberUser) =>
+    formatRoles(member.roles || [member.role || "member"], member.assistant_roles || []);
+
+  const filteredMembers = leaders
+    .filter(
+      (m) =>
+        m.username.toLowerCase().includes(search.toLowerCase()) ||
+        m.email.toLowerCase().includes(search.toLowerCase()) ||
+        memberName(m).toLowerCase().includes(search.toLowerCase()) ||
+        (m.roles || [m.role || "member"]).some((r) => roleLabel(r).toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort(
+      (a, b) =>
+        primaryRoleLabel(a).localeCompare(primaryRoleLabel(b)) ||
+        memberName(a).localeCompare(memberName(b))
+    );
 
   const handlePrint = () => {
     const escapeHtml = (s: string) =>

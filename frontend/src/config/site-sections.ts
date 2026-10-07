@@ -10,7 +10,6 @@ import {
   HandHelping,
   Handshake,
   Heart,
-  Lightbulb,
   Megaphone,
   Music,
   ShieldCheck,
@@ -227,7 +226,7 @@ export const fellowshipLinks: SectionLink[] = [
   },
   {
     key: "testimonyIdeas",
-    href: "/spiritual",
+    href: "/share",
     label: "Testimonies & Ideas",
     description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,

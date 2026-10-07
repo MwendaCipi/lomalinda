@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarDays, Info, UserPlus, UserRound, Users } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
@@ -40,15 +40,20 @@ const SEX_ONLY_AREA: Record<string, "male" | "female"> = {
   awm: "female",
 };
 
-type AreaTab = "ministry" | "department";
+type AreaTab = "all" | "ministry" | "department";
 
-const TAB_LABELS: Record<AreaTab, string> = { ministry: "Ministry", department: "Department" };
+const TAB_LABELS: Record<AreaTab, string> = { all: "All", ministry: "Ministry", department: "Department" };
+
+const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
+  children: "children",
+  young_adults: "aym",
+};
 
 /**
  * My areas — the church's ministries and departments as the member's own map.
  *
- * One page, two sub-navs: Ministry and Department. Each lists the areas the
- * member belongs to and the ones they could join, as cards; opening a card
+ * One page, three sub-navs: All, Ministry and Department. The All tab is the
+ * member's own map; the other two also include areas they could join. Opening a card
  * reads the area — its leadership, its roll and its calendar — without any
  * way to change it. The writing side (adding members, seating leaders,
  * keeping the calendar) stays in the office console, which is why this can be
@@ -60,23 +65,39 @@ export function MyAreas() {
   const { me } = useHeaderData();
   const sex = (me?.gender || "").trim().toLowerCase();
 
-  const [tab, setTab] = useState<AreaTab>("ministry");
+  const [tab, setTab] = useState<AreaTab>("all");
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [joining, setJoining] = useState<string | null>(null);
+  const legacyDepartmentCode = (me?.department || "").trim();
+  const ownDepartmentCode = (me?.department_ref || LEGACY_DEPARTMENT_CODES[legacyDepartmentCode] || legacyDepartmentCode).trim();
+
+  const displayGroup = useCallback((area: (typeof rows)[number]): "ministry" | "department" => {
+    if (area.code === ownDepartmentCode) return "department";
+    if (ties.includes(area.code) && area.group === "department") return "ministry";
+    return area.group === "ministry" ? "ministry" : "department";
+  }, [ownDepartmentCode, ties]);
 
   const areas = useMemo(
     () =>
       rows
-        .filter((row) => row.group === tab)
+        .filter((row) => {
+          if (tab === "all") return ties.includes(row.code);
+          return displayGroup(row) === tab;
+        })
         // The member's own areas lead the list — the map opens on their
         // fellowship, not on whoever sorts first alphabetically — and the
         // ones they could join follow, each group in its own name order.
         .sort((a, b) => {
+          if (tab === "all") {
+            const departmentA = displayGroup(a) === "department" ? 0 : 1;
+            const departmentB = displayGroup(b) === "department" ? 0 : 1;
+            if (departmentA !== departmentB) return departmentA - departmentB;
+          }
           const mineA = ties.includes(a.code) ? 0 : 1;
           const mineB = ties.includes(b.code) ? 0 : 1;
           return mineA - mineB || a.label.localeCompare(b.label);
         }),
-    [rows, tab, ties],
+    [displayGroup, rows, tab, ties],
   );
 
   /** May the member ask to join this area? The two sex-only fellowships say no
@@ -89,13 +110,13 @@ export function MyAreas() {
   // What the member sees: the areas they are part of, and the ones they could
   // join. An area that is neither (the women's ministry, to a man) is not
   // offered at all.
-  const visible = areas.filter((area) => ties.includes(area.code) || canJoin(area.code));
+  const visible = areas.filter((area) => (tab === "all" ? ties.includes(area.code) : ties.includes(area.code) || canJoin(area.code)));
 
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
 
   const { setCustomToggles, setCustomHeader } = usePageHeader();
 
-  // The two sub-navs, drawn by the shell as this page's strip.
+  // The three sub-navs, drawn by the shell as this page's strip.
   useEffect(() => {
     setCustomToggles(
       <SubNav
@@ -106,6 +127,7 @@ export function MyAreas() {
           setOpenCode(null);
         }}
         items={[
+          { key: "all", label: TAB_LABELS.all },
           { key: "ministry", label: TAB_LABELS.ministry },
           { key: "department", label: TAB_LABELS.department },
         ]}
@@ -122,7 +144,9 @@ export function MyAreas() {
         : {
             label: "My Areas",
             description:
-              tab === "ministry"
+              tab === "all"
+                ? "Your department and the ministries you are part of."
+                : tab === "ministry"
                 ? "The ministries you are part of — and the ones you could join."
                 : "The departments you are part of — and the ones you could join.",
           }
@@ -312,7 +336,9 @@ export function MyAreas() {
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
               ? "One moment."
-              : `There are no ${tab === "ministry" ? "ministries" : "departments"} to show you yet.`}
+              : tab === "all"
+                ? "Your department and ministries will appear here once the church office files them."
+                : `There are no ${tab === "ministry" ? "ministries" : "departments"} to show you yet.`}
           </p>
         </div>
       ) : (
@@ -323,7 +349,17 @@ export function MyAreas() {
             return (
               <div
                 key={area.code}
-                className="flex flex-col rounded-2xl border border-sand-line bg-white p-5 shadow-sm"
+                role="button"
+                tabIndex={0}
+                onClick={() => setOpenCode(area.code)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setOpenCode(area.code);
+                  }
+                }}
+                className="flex cursor-pointer flex-col rounded-2xl border border-sand-line bg-white p-5 text-left shadow-sm transition hover:border-ember hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ember/30"
               >
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-sm font-bold text-bark">{area.label}</h3>
@@ -344,7 +380,10 @@ export function MyAreas() {
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-sand-line pt-3">
                   <button
                     type="button"
-                    onClick={() => setOpenCode(area.code)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setOpenCode(area.code);
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
                     View area
@@ -352,7 +391,10 @@ export function MyAreas() {
                   {!inArea && canJoin(area.code) && (
                     <button
                       type="button"
-                      onClick={() => requestToJoin(area.code, area.label)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void requestToJoin(area.code, area.label);
+                      }}
                       disabled={joining === area.code}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                     >

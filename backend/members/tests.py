@@ -8958,6 +8958,7 @@ class DepartmentFundTests(APITestCase):
     def _fund(self):
         """The music department's fund, with its leader seated at the desk."""
         music = Department.objects.get(code='music')
+        TreasuryAccount.objects.filter(department=music).delete()
         role = DepartmentRole.objects.get(department=music, name='Leader')
         DepartmentAssignment.objects.create(department=music, role=role, member=self.leader, kind='leader')
         return TreasuryAccount.objects.create(
@@ -8981,6 +8982,38 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(response.data['account']['balance'], '500.00')
         self.assertTrue(response.data['can_request_withdrawal'])
         self.assertEqual([row['amount'] for row in response.data['movements']], ['250.00'])
+
+    def test_lcb_stays_out_of_other_ministry_accounts_and_withdrawals(self):
+        self._fund()
+        lcb = TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/music/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('LCB', [row['name'] for row in response.data['accounts']])
+
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '100', 'reason': 'Use church budget', 'account_id': lcb.id,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid or inaccessible', response.data['detail'])
+
+    def test_awm_leadership_still_reads_lcb(self):
+        awm = Department.objects.get(code='awm')
+        role = DepartmentRole.objects.get(department=awm, name='Leader')
+        DepartmentAssignment.objects.create(department=awm, role=role, member=self.leader, kind='leader')
+        TreasuryAccount.objects.create(
+            name='AWM', description='AWM', balance=Decimal('500.00'), department=awm,
+        )
+        TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/awm/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('LCB', [row['name'] for row in response.data['accounts']])
 
     def test_a_member_outside_the_desk_reads_nothing(self):
         self._fund()
@@ -9598,5 +9631,3 @@ class TreasuryTransactionGiverDescriptionTests(APITestCase):
 
         enriched = enrich_transaction_descriptions([tx])
         self.assertEqual(enriched[0].description, 'Jane Smith — M-Pesa (Local Church Budget)')
-
-

@@ -1,5 +1,5 @@
-import TestimoniesPage from "@/app/(system)/community/testimonies/page";
+import { redirect } from "next/navigation";
 
 export default function SpiritualTestimoniesPage() {
-  return <TestimoniesPage />;
+  redirect("/share");
 }

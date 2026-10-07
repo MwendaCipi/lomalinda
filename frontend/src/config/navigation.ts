@@ -19,7 +19,6 @@ import {
   HeartHandshake,
   Landmark,
   LayoutDashboard,
-  Lightbulb,
   Megaphone,
   MessagesSquare,
   Music,
@@ -163,13 +162,13 @@ export const destinations = {
     match: ["/share/moments"],
   },
   testimonyIdeas: {
-    href: "/spiritual",
+    href: "/share",
     label: "Testimonies & Ideas",
     short: "Testimonies",
     description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,
     area: "fellowship",
-    match: ["/spiritual", "/support/ideas"],
+    match: ["/share", "/spiritual", "/support/ideas"],
   },
   /**
    * Prayer — the first of the two request desks and the Requests row's way
@@ -911,6 +910,10 @@ export type RailSectionGroup = {
   entries: RailEntry[];
 };
 
+function railEntrySortLabel(entry: RailEntry): string {
+  return ("short" in entry && entry.short ? entry.short : entry.label).toLocaleLowerCase();
+}
+
 /**
  * The rail, read as headings with the rows under each: the member's own page
  * first, alone; the church's life; the areas they belong to; and, folded, the
@@ -928,7 +931,14 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   const groups: RailSectionGroup[] = [];
   const push = (key: RailSection, label: string, collapsed: boolean) => {
     const rows = grouped.get(key);
-    if (rows && rows.length > 0) groups.push({ key, label, collapsed, entries: rows });
+    if (rows && rows.length > 0) {
+      groups.push({
+        key,
+        label,
+        collapsed,
+        entries: [...rows].sort((a, b) => railEntrySortLabel(a).localeCompare(railEntrySortLabel(b))),
+      });
+    }
   };
   push("dashboard", "Dashboard", false);
   push("my-church", "My church", false);
@@ -1394,4 +1404,3 @@ export function footerLinkOf(link: FooterLink): { href: string; label: string } 
   }
   return { href: link.href, label: link.label };
 }
-
