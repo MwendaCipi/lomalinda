@@ -733,8 +733,6 @@ function AddEventModal({
     mode: string;
     location: string;
     meeting_link: string;
-    lead: string;
-    notes: string;
     program_file: File | null;
   }) => void;
 }) {
@@ -747,8 +745,6 @@ function AddEventModal({
     mode: "physical" as "physical" | "virtual",
     location: defaultLocation,
     meeting_link: "",
-    lead: "",
-    notes: "",
   });
   const [programFile, setProgramFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -788,44 +784,60 @@ function AddEventModal({
             />
           </div>
 
-          {/* From date + time */}
+          {/* Dates — both on one row */}
           <div>
-            <label className="text-xs font-semibold text-bark">From *</label>
+            <label className="text-xs font-semibold text-bark">Date</label>
             <div className="mt-1 grid grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className={inputCls}
-              />
-              <input
-                type="time"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className={inputCls}
-                placeholder="HH:MM"
-              />
+              <div>
+                <span className="text-[11px] text-moss">From *</span>
+                <input
+                  type="date"
+                  aria-label="From date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-moss">To</span>
+                <input
+                  type="date"
+                  aria-label="To date"
+                  value={form.end_date}
+                  min={form.date || undefined}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  className={inputCls}
+                />
+              </div>
             </div>
           </div>
 
-          {/* To date + time */}
+          {/* Times — both on one row */}
           <div>
-            <label className="text-xs font-semibold text-bark">To</label>
+            <label className="text-xs font-semibold text-bark">Time</label>
             <div className="mt-1 grid grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={form.end_date}
-                min={form.date || undefined}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                className={inputCls}
-              />
-              <input
-                type="time"
-                value={form.end_time}
-                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                className={inputCls}
-                placeholder="HH:MM"
-              />
+              <div>
+                <span className="text-[11px] text-moss">From</span>
+                <input
+                  type="time"
+                  aria-label="From time"
+                  value={form.time}
+                  onChange={(e) => setForm({ ...form, time: e.target.value })}
+                  className={inputCls}
+                  placeholder="HH:MM"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-moss">To</span>
+                <input
+                  type="time"
+                  aria-label="To time"
+                  value={form.end_time}
+                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                  className={inputCls}
+                  placeholder="HH:MM"
+                />
+              </div>
             </div>
           </div>
 
@@ -883,28 +895,6 @@ function AddEventModal({
               />
             </div>
           )}
-
-          {/* Lead */}
-          <div>
-            <label className="text-xs font-semibold text-bark">Lead</label>
-            <input
-              type="text"
-              value={form.lead}
-              onChange={(e) => setForm({ ...form, lead: e.target.value })}
-              className={inputCls}
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="text-xs font-semibold text-bark">Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={2}
-              className={inputCls}
-            />
-          </div>
 
           {/* Program file */}
           <div>
@@ -3712,8 +3702,6 @@ function DepartmentDetail({
     mode: string;
     location: string;
     meeting_link: string;
-    lead: string;
-    notes: string;
     program_file: File | null;
   }) => {
     const body = new FormData();
@@ -3725,8 +3713,6 @@ function DepartmentDetail({
     body.append("mode", event.mode);
     body.append("location", event.location);
     body.append("meeting_link", event.meeting_link);
-    body.append("lead", event.lead);
-    body.append("notes", event.notes);
     body.append("unit", unit ?? "");
     if (event.program_file) body.append("program_file", event.program_file);
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
