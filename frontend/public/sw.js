@@ -484,7 +484,7 @@ async function cacheFirstImmutable(request) {
     if (response.ok) return remember(request, response);
     const fallback = await caches.match(request, { ignoreSearch: true });
     return fallback || response;
-  } catch (error) {
+  } catch {
     const fallback = await caches.match(request, { ignoreSearch: true });
     return fallback || Response.error();
   }
@@ -502,10 +502,11 @@ async function networkFirstPage(request) {
       return fallback || response;
     }
     return response;
-  } catch (error) {
+  } catch {
     const fallback = await cachedPage(request);
     return fallback || Response.error();
   }
+}
 
 /* Everything else (same-origin non-API dynamic GETs): network first, cache
    successful responses for offline use. HTTP error responses (401, 403, 404 …)
@@ -517,7 +518,7 @@ async function networkOnlyFallbackOffline(request) {
       return remember(request, response);
     }
     return response;
-  } catch (error) {
+  } catch {
     const cached = await caches.match(request, { ignoreSearch: true });
     return cached || Response.error();
   }
