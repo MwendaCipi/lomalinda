@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, SlidersHorizontal } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
@@ -59,6 +59,90 @@ type WithdrawalRequestRow = {
 };
 
 /**
+ * Popover filter near the search input to toggle between All, Pending, Approved, and Rejected requests.
+ */
+function WithdrawalFilterPopover({
+  value,
+  onChange,
+}: {
+  value: "all" | "pending" | "approved" | "rejected";
+  onChange: (v: "all" | "pending" | "approved" | "rejected") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const labels: Record<string, string> = {
+    all: "All",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+  };
+
+  return (
+    <div className="relative inline-block shrink-0" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+          value !== "all"
+            ? "border-ember bg-ember/10 text-ember"
+            : "border-sand-mute bg-white text-bark hover:bg-sand"
+        }`}
+        aria-label="Filter withdrawal requests"
+        aria-expanded={open}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        <span>{labels[value] ?? "All"}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 sm:right-auto sm:left-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">
+            Filter by status
+          </p>
+          {(
+            [
+              { key: "all", label: "All requests" },
+              { key: "pending", label: "Pending" },
+              { key: "approved", label: "Approved" },
+              { key: "rejected", label: "Rejected" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                onChange(item.key);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                value === item.key
+                  ? "bg-sand-linen text-ember"
+                  : "text-bark hover:bg-sand"
+              }`}
+            >
+              <span>{item.label}</span>
+              {value === item.key && <span className="text-ember font-bold">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The departments' withdrawal queue — showing all non-reversed requests across
  * every department in a structured, actionable table.
  * Approval is a two-step process:
@@ -66,7 +150,13 @@ type WithdrawalRequestRow = {
  *   2. The treasurer then approves (debiting the fund and reflecting in Expenses) or declines
  * Approved requests remain visible so the treasurer can reverse them if needed.
  */
-function WithdrawalRequestsPanel() {
+function WithdrawalRequestsPanel({
+  search = "",
+  statusFilter = "all",
+}: {
+  search?: string;
+  statusFilter?: "all" | "pending" | "approved" | "rejected";
+} = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [declining, setDeclining] = useState<number | null>(null);
@@ -139,6 +229,30 @@ function WithdrawalRequestsPanel() {
     );
   };
 
+  const filteredRows = rows.filter((row) => {
+    if (statusFilter === "pending") {
+      if (row.status !== "pending" && row.status !== "elder_approved") return false;
+    } else if (statusFilter === "approved") {
+      if (row.status !== "approved") return false;
+    } else if (statusFilter === "rejected") {
+      if (row.status !== "declined") return false;
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const match =
+        row.department.toLowerCase().includes(q) ||
+        row.account_name.toLowerCase().includes(q) ||
+        row.reason.toLowerCase().includes(q) ||
+        row.requested_by.toLowerCase().includes(q) ||
+        (row.elder_approved_by && row.elder_approved_by.toLowerCase().includes(q)) ||
+        (row.decided_by && row.decided_by.toLowerCase().includes(q)) ||
+        (row.reply && row.reply.toLowerCase().includes(q)) ||
+        row.amount.includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+
   if (loading) {
     return <p className="py-10 text-center text-xs text-moss">Loading the requests…</p>;
   }
@@ -156,119 +270,130 @@ function WithdrawalRequestsPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-      <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
-            <tr>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Department & Account</th>
-              <th className="px-4 py-3">Purpose & Details</th>
-              <th className="px-4 py-3 text-right">Amount (KES)</th>
-              <th className="px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-sand-soft bg-white">
-            {rows.map((row) => (
-              <tr key={row.id} className="transition hover:bg-sand-linen/60">
-                <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
-                  {dayFirst(row.created_at)}
-                </td>
-                <td className={`px-4 ${rowPad} font-medium text-bark`}>
-                  <p className="font-semibold text-bark">{row.department}</p>
-                  <p className="text-[11px] text-moss-faint">{row.account_name}</p>
-                </td>
-                <td className={`px-4 ${rowPad} text-moss`}>
-                  <p className="font-medium text-bark">{row.reason}</p>
-                  <p className="text-[11px] text-moss-faint">
-                    Asked by {row.requested_by} · Bal: KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </p>
-                  {row.elder_approved_by && (
-                    <p className="text-[10px] text-moss-faint">
-                      Elder approved by {row.elder_approved_by}
-                    </p>
-                  )}
-                  {row.decided_by && (row.status === "approved" || row.status === "declined") && (
-                    <p className="text-[10px] italic text-moss-faint">
-                      {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}
-                      {row.reply ? ` — "${row.reply}"` : ""}
-                    </p>
-                  )}
-                </td>
-                <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold text-bark`}>
-                  KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                </td>
-                <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
-                  {statusBadge(row.status)}
-                </td>
-                <td className={`whitespace-nowrap px-4 ${rowPad} text-right`}>
-                  <div className="flex justify-end gap-1.5">
-                    {/* Step 1: Elder must approve before treasurer can act */}
-                    {row.status === "pending" && (
-                      <button
-                        type="button"
-                        onClick={() => act(row.id, "elder_approve")}
-                        disabled={busy}
-                        className="rounded-lg border border-mist-select bg-mist-select/30 px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
-                      >
-                        Elder Approve
-                      </button>
-                    )}
-                    {/* Step 2: Treasurer approves once elder has cleared it */}
-                    {row.status === "elder_approved" && (
-                      <button
-                        type="button"
-                        onClick={() => act(row.id, "approve")}
-                        disabled={busy}
-                        className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                      >
-                        Approve
-                      </button>
-                    )}
-                    {/* Decline: available while pending or elder_approved */}
-                    {(row.status === "pending" || row.status === "elder_approved") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeclining(row.id);
-                          setReply("");
-                        }}
-                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                      >
-                        Decline
-                      </button>
-                    )}
-                    {/* Reverse: available after approval */}
-                    {row.status === "approved" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          showAlert(
-                            "Reverse withdrawal?",
-                            `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name} and remove the corresponding expense record.`,
-                            "warning",
-                            {
-                              showCancelButton: true,
-                              confirmButtonText: "Yes, reverse it",
-                              cancelButtonText: "Cancel",
-                            }
-                          ).then((result) => {
-                            if (result.isConfirmed) act(row.id, "reverse");
-                          });
-                        }}
-                        disabled={busy}
-                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
-                      >
-                        Reverse
-                      </button>
-                    )}
-                  </div>
-                </td>
+      {filteredRows.length === 0 ? (
+        <div className="flex-1 overflow-y-auto">
+          <div className="m-5 rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-bark">No matching requests</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+              Try adjusting your search query or filter selection.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
+          <table className="w-full text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
+              <tr>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Department & Account</th>
+                <th className="px-4 py-3">Purpose & Details</th>
+                <th className="px-4 py-3 text-right">Amount (KES)</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-right no-print">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-sand-soft bg-white">
+              {filteredRows.map((row) => (
+                <tr key={row.id} className="transition hover:bg-sand-linen/60">
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                    {dayFirst(row.created_at)}
+                  </td>
+                  <td className={`px-4 ${rowPad} font-medium text-bark`}>
+                    <p className="font-semibold text-bark">{row.department}</p>
+                    <p className="text-[11px] text-moss-faint">{row.account_name}</p>
+                  </td>
+                  <td className={`px-4 ${rowPad} text-moss`}>
+                    <p className="font-medium text-bark">{row.reason}</p>
+                    <p className="text-[11px] text-moss-faint">
+                      Asked by {row.requested_by} · Bal: KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                    </p>
+                    {row.elder_approved_by && (
+                      <p className="text-[10px] text-moss-faint">
+                        Elder approved by {row.elder_approved_by}
+                      </p>
+                    )}
+                    {row.decided_by && (row.status === "approved" || row.status === "declined") && (
+                      <p className="text-[10px] italic text-moss-faint">
+                        {row.status === "approved" ? "Approved" : "Declined"} by {row.decided_by}
+                        {row.reply ? ` — "${row.reply}"` : ""}
+                      </p>
+                    )}
+                  </td>
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold text-bark`}>
+                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
+                    {statusBadge(row.status)}
+                  </td>
+                  <td className={`whitespace-nowrap px-4 ${rowPad} text-right no-print`}>
+                    <div className="flex justify-end gap-1.5">
+                      {/* Step 1: Elder must approve before treasurer can act */}
+                      {row.status === "pending" && (
+                        <button
+                          type="button"
+                          onClick={() => act(row.id, "elder_approve")}
+                          disabled={busy}
+                          className="rounded-lg border border-mist-select bg-mist-select/30 px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
+                        >
+                          Elder Approve
+                        </button>
+                      )}
+                      {/* Step 2: Treasurer approves once elder has cleared it */}
+                      {row.status === "elder_approved" && (
+                        <button
+                          type="button"
+                          onClick={() => act(row.id, "approve")}
+                          disabled={busy}
+                          className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      {/* Decline: available while pending or elder_approved */}
+                      {(row.status === "pending" || row.status === "elder_approved") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeclining(row.id);
+                            setReply("");
+                          }}
+                          className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                        >
+                          Decline
+                        </button>
+                      )}
+                      {/* Reverse: available after approval */}
+                      {row.status === "approved" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            showAlert(
+                              "Reverse withdrawal?",
+                              `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name} and remove the corresponding expense record.`,
+                              "warning",
+                              {
+                                showCancelButton: true,
+                                confirmButtonText: "Yes, reverse it",
+                                cancelButtonText: "Cancel",
+                              }
+                            ).then((result) => {
+                              if (result.isConfirmed) act(row.id, "reverse");
+                            });
+                          }}
+                          disabled={busy}
+                          className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
+                        >
+                          Reverse
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Decline modal */}
       {declining !== null && (
@@ -311,9 +436,21 @@ function WithdrawalRequestsPanel() {
         </div>
       )}
 
-      <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
-        {rows.length} {rows.length === 1 ? "request" : "requests"} ·{" "}
-        {rows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action
+      <div className="shrink-0 flex items-center justify-between border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
+        <div>
+          {filteredRows.length} {filteredRows.length === 1 ? "request" : "requests"}
+          {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
+          {filteredRows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action
+        </div>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs"
+          aria-label="Print withdrawal requests report"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          <span>Print</span>
+        </button>
       </div>
     </div>
   );
@@ -527,19 +664,34 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // they ride the same header slot as the accounts' search, one row for both.
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseCategory, setExpenseCategory] = useState("all");
+  // Withdrawal requests search and status filter (all / pending / approved / rejected)
+  const [withdrawalSearch, setWithdrawalSearch] = useState("");
+  const [withdrawalFilter, setWithdrawalFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   // The spending window opens on the church's month to date — the same window
   // the reconciliation ledger and the report composer open on — so the desk
   // lands on what it is reviewing rather than on the whole history.
   const [expenseFrom, setExpenseFrom] = useState(firstDayOfMonth);
   const [expenseTo, setExpenseTo] = useState(localDate);
 
-  // The desk's search — and, on Expenses, its category — rides the shell's
+  // The desk's search — and, on Expenses/Requests, its filters — rides the shell's
   // header beside the page's name, so the heading and its search share a row
-  // and the toggles sit below both. The Requests view keeps its own space.
+  // and the toggles sit below both.
   useEffect(() => {
     if (view === "withdrawals") {
-      setHeaderRightAction(null);
-      return;
+      setHeaderRightAction(
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <WithdrawalFilterPopover value={withdrawalFilter} onChange={setWithdrawalFilter} />
+          <input
+            type="text"
+            placeholder="Search department, purpose, requester..."
+            value={withdrawalSearch}
+            onChange={(e) => setWithdrawalSearch(e.target.value)}
+            className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64"
+            aria-label="Search withdrawal requests"
+          />
+        </div>
+      );
+      return () => setHeaderRightAction(null);
     }
     if (view === "expenditure") {
       setHeaderRightAction(
@@ -602,7 +754,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       />
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo]);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -892,7 +1044,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : (

@@ -8,6 +8,8 @@ import { kenyaCounties } from "@/config/kenya-counties";
 import { getPushState, PushSupport } from "@/lib/push";
 import { useAccessibility } from "@/context/accessibility-context";
 import type { ThemeChoice } from "@/lib/theme";
+import { offlineFetch } from "@/lib/offline-fetch";
+import { OfflineBanner } from "@/components/offline-banner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
@@ -24,6 +26,8 @@ export default function MemberPage() {
   const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
   const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
   const [prefMessage, setPrefMessage] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
+  const [cachedAt, setCachedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -60,16 +64,28 @@ export default function MemberPage() {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      fetch(`${API_URL}/api/members/contributions/`, { headers }),
-      fetch(`${API_URL}/api/members/me/enrollment-details/`, { headers })
-    ])
-      .then(async ([contributionsResponse, detailsResponse]) => {
-        if (!contributionsResponse.ok) throw new Error("Your session may have expired.");
-        setContributions(await contributionsResponse.json());
-        if (detailsResponse.ok) setDetails(await detailsResponse.json());
-      })
-      .then(() => setMessage(""))
-      .catch((error) => setMessage(error.message));
+      offlineFetch<Contribution[]>(`${API_URL}/api/members/contributions/`, { headers }),
+      offlineFetch<Details>(`${API_URL}/api/members/me/enrollment-details/`, { headers }),
+    ]).then(([contribResult, detailsResult]) => {
+      if (contribResult.status === 401 || contribResult.status === 403) {
+        setMessage("Your session may have expired.");
+        return;
+      }
+      if (contribResult.ok && contribResult.data) {
+        setContributions(contribResult.data);
+        setMessage("");
+      } else if (contribResult.error === "offline" && !contribResult.data) {
+        setMessage("You're offline and this page hasn't been loaded before. Connect to see your giving history.");
+        return;
+      } else if (!contribResult.ok) {
+        setMessage("Could not load your giving history.");
+      }
+      /* Show offline banner if either response came from SW cache. */
+      const offline = contribResult.isOffline || detailsResult.isOffline;
+      setIsOffline(offline);
+      if (offline) setCachedAt(contribResult.cachedAt ?? detailsResult.cachedAt);
+      if (detailsResult.ok && detailsResult.data) setDetails(detailsResult.data);
+    });
   }, [token]);
 
   async function saveDetails(event: FormEvent<HTMLFormElement>) {
@@ -112,6 +128,8 @@ export default function MemberPage() {
             <Link href="/community/welfare" className="font-semibold text-ember">Church welfare &rarr;</Link>
             <Link href="/announcements" className="font-semibold text-ember">Member announcements &rarr;</Link>
           </div>
+
+          <OfflineBanner isOffline={isOffline} cachedAt={cachedAt} className="mt-4" />
 
           {details && (
             <form onSubmit={saveDetails} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">

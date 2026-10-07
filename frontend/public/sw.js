@@ -396,11 +396,13 @@
    top bar, each wearing the unread count. Chrome changed, so installed apps
    must take the new shell.
 
-   v77 — chat moves to the tail of the phone's tab bar: Fellowship, Giving,
-   Requests and My Areas keep their places and Chat follows them, so the
-   church's own map reads first and the talking sits last. Chrome changed, so
-   installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v77";
+   v78 — API GET responses land in a dedicated offline cache keyed on the
+   full URL: every page that has been opened once is readable offline, with
+   a subtle "offline · last synced" chip instead of an error wall. Auth
+   errors (401/403) are never masked — the sign-in prompt still appears when
+   a session expires. Non-API chrome is unchanged.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v78";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -444,7 +446,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME && key !== API_CACHE_NAME)
+          .map((key) => caches.delete(key))
+      ))
       .then(() => self.clients.claim())
   );
 });
@@ -500,22 +506,71 @@ async function networkFirstPage(request) {
     const fallback = await cachedPage(request);
     return fallback || Response.error();
   }
-}
 
-/* Everything else (API calls, dynamic GETs): network first, cache successful
-   responses for offline use. HTTP error responses (401, 403, 404 …) are
-   returned untouched — never mask them with stale cache, or a logged-out
-   member would see old data instead of being asked to sign in again. */
+/* Everything else (same-origin non-API dynamic GETs): network first, cache
+   successful responses for offline use. HTTP error responses (401, 403, 404 …)
+   are returned untouched — never mask them with stale cache. */
 async function networkOnlyFallbackOffline(request) {
   try {
     const response = await fetch(request);
-    if (response.ok && new URL(request.url).origin === self.location.origin) {
+    if (response.ok) {
       return remember(request, response);
     }
     return response;
   } catch (error) {
     const cached = await caches.match(request, { ignoreSearch: true });
     return cached || Response.error();
+  }
+}
+
+/* ── API offline-read cache ──────────────────────────────────────────────
+   A second, dedicated cache stores responses from /api/ endpoints.  Unlike
+   the shell cache it is keyed on the full URL (including query string) so
+   filtered / paginated results land in the right slot.
+
+   Strategy: network-first with a stale fallback.
+   • Online  → fetch, store successful response, return it.
+   • Offline (or server unreachable) → serve last-known data, add the
+     X-SW-Cache header so the page can show an "offline · last updated" chip.
+   • Auth errors (401/403) are NEVER masked — a logged-out member must not
+     see old data instead of the sign-in prompt. */
+
+const API_CACHE_NAME = "sda-api-v1";
+
+function rememberApi(request, response) {
+  /* Store the timestamp alongside the response body so pages can display
+     "last updated X minutes ago" without an extra round-trip. */
+  const copy = response.clone();
+  const headers = new Headers(copy.headers);
+  headers.set("X-SW-Cached-At", new Date().toISOString());
+  const enhanced = new Response(copy.body, { status: copy.status, statusText: copy.statusText, headers });
+  caches.open(API_CACHE_NAME).then((cache) => cache.put(request.url, enhanced)).catch(() => {});
+  return response;
+}
+
+async function apiNetworkFirst(request) {
+  try {
+    const response = await fetch(request);
+    /* Auth errors must reach the page unchanged. */
+    if (response.status === 401 || response.status === 403) return response;
+    if (response.ok) return rememberApi(request, response);
+    /* 5xx / network error: fall through to cache */
+    throw new Error("server-error");
+  } catch {
+    const cache = await caches.open(API_CACHE_NAME);
+    const cached = await cache.match(request.url);
+    if (cached) {
+      /* Tag the response so the page knows it is reading stale data. */
+      const cachedAt = cached.headers.get("X-SW-Cached-At") || "";
+      const body = await cached.text();
+      const headers = new Headers(cached.headers);
+      headers.set("X-SW-Cache", "stale");
+      headers.set("X-SW-Cached-At", cachedAt);
+      /* Re-set content-type in case the clone lost it */
+      if (!headers.get("content-type")) headers.set("content-type", "application/json");
+      return new Response(body, { status: 200, headers });
+    }
+    return Response.error();
   }
 }
 
@@ -562,6 +617,15 @@ self.addEventListener("notificationclick", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+
+  /* API requests: dedicated network-first-with-stale-fallback cache.
+     These are same-origin (/api/…) so the origin check that excludes
+     third-party requests does not apply here. */
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(apiNetworkFirst(event.request));
+    return;
+  }
+
   if (url.origin !== self.location.origin) return; // third-party: untouched
 
   const isImmutable =

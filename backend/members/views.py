@@ -9384,9 +9384,9 @@ class DepartmentWithdrawalReviewView(APIView):
     def get(self, request):
         if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user):
             return Response({'detail': 'Only elders or treasurers can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
-        rows = DepartmentWithdrawalRequest.objects.exclude(status='reversed').select_related(
+        rows = DepartmentWithdrawalRequest.objects.select_related(
             'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
-        ).order_by('created_at')
+        ).order_by('-created_at')
         return Response({
             'requests': [
                 {
