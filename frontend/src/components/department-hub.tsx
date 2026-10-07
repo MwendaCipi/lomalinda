@@ -207,6 +207,32 @@ type RollMember = {
     roll carries a sex column beside the name. */
 const SHOW_SEX = new Set(["aym", "ambassadors", "children"]);
 
+/** The members view's filter: the whole list, the people approved onto the
+    roll, or the asks still waiting on an answer. */
+type MemberFilter = "all" | "approved" | "requests";
+
+/** An ask's state in one word — what its row's badge carries. */
+function askStatusWord(status: string) {
+  if (status === "pending") return "Pending";
+  if (status === "approved") return "Approved";
+  return "Declined";
+}
+
+/** One ask to join an area, as the desk's review feed carries it. */
+type JoinRequestRow = {
+  id: number;
+  member_id: number;
+  member_name: string;
+  member_email: string;
+  member_phone: string;
+  kind: string;
+  group_name: string;
+  note: string;
+  status: string;
+  reply: string;
+  created_at: string;
+};
+
 type RollRow = {
   key: string;
   /** The user the row is — the board holder's or the roll entry's id, so
@@ -229,6 +255,9 @@ type RollRow = {
   via: string | null;
   /** The roll entry behind the row, when there is one to take off the roll. */
   member: RollMember | null;
+  /** The ask to join behind the row, when the row *is* an ask rather than a
+      roll entry — the desk answers it from the row's own Actions. */
+  request?: JoinRequestRow | null;
 };
 
 /** One singer on a registered group's list, as the singing-groups read carries. */
@@ -3414,13 +3443,16 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
-  // How many asks are waiting on this desk. The strip carries the count and
+  // The members view holds the roll *and* the asks to join it, so the desk
+  // reads one list and narrows it here rather than opening a second view.
+  const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
   // The join asks raised from the rail, answered on this desk.
-  const [joinRequests, setJoinRequests] = useState<
-    { id: number; member_name: string; note: string; status: string; created_at: string }[]
-  >([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequestRow[]>([]);
+  // The reply each ask is being answered with, and which ask is in flight.
+  const [joinsReplies, setJoinsReplies] = useState<Record<number, string>>({});
+  const [busyJoinId, setBusyJoinId] = useState<number | null>(null);
 
   // The strip names the view, and which unit's roll it reads: All Members and
   // the unit fellowships read their roll, the rest name the view itself. This
@@ -3429,7 +3461,6 @@ function DepartmentDetail({
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
-  const [requestSearch, setRequestSearch] = useState("");
   const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
@@ -3446,13 +3477,20 @@ function DepartmentDetail({
     const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
     if (subTab === "members") {
       setHeaderRightAction(
-        <input
-          type="text"
-          value={rollSearch}
-          onChange={(e) => setRollSearch(e.target.value)}
-          placeholder="Search the roll…"
-          className={inputCls}
-        />
+        <div className="flex items-center gap-1.5">
+          <MembersFilterButton
+            value={memberFilter}
+            onChange={setMemberFilter}
+            pending={joinRequests.filter((row) => row.status === "pending").length}
+          />
+          <input
+            type="text"
+            value={rollSearch}
+            onChange={(e) => setRollSearch(e.target.value)}
+            placeholder="Search members…"
+            className={inputCls}
+          />
+        </div>
       );
     } else if (subTab === "calendar") {
       setHeaderRightAction(
@@ -3461,16 +3499,6 @@ function DepartmentDetail({
           value={eventSearch}
           onChange={(e) => setEventSearch(e.target.value)}
           placeholder="Search the calendar…"
-          className={inputCls}
-        />
-      );
-    } else if (subTab === "requests") {
-      setHeaderRightAction(
-        <input
-          type="text"
-          value={requestSearch}
-          onChange={(e) => setRequestSearch(e.target.value)}
-          placeholder="Search join requests…"
           className={inputCls}
         />
       );
@@ -3531,7 +3559,8 @@ function DepartmentDetail({
     subTab,
     rollSearch,
     eventSearch,
-    requestSearch,
+    memberFilter,
+    joinRequests,
     choirSearch,
     groupsSearch,
     accountsSearch,
@@ -3583,24 +3612,16 @@ function DepartmentDetail({
       // groups registered under it each get a view beside the roll.
       ...(isMusic ? [{ key: "choir", label: "Ensemble", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
-      // The join asks raised from the rail — always shown so the desk can
-      // see at a glance whether anything is waiting; a count badge appears
-      // when there are pending asks.
-      {
-        key: "requests",
-        label: "Join Requests",
-        icon: UserPlus,
-        ...(joinRequests.filter((row) => row.status === "pending").length > 0
-          ? { count: joinRequests.filter((row) => row.status === "pending").length }
-          : {}),
-      },
+      // The join asks no longer carry a view of their own: they ride the
+      // members list, where the desk filters to them and answers from the
+      // row (see MembersFilterButton).
       { key: "calendar", label: "Event Calendar", icon: CalendarDays },
       // The fund ledger and withdrawal requests unified under one desk.
       { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
     ];
-  }, [unitsKey, isMusic, keepsTheWeek, department.code, joinRequests]);
+  }, [unitsKey, isMusic, keepsTheWeek, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -3610,7 +3631,7 @@ function DepartmentDetail({
       setSubTab("members");
       return;
     }
-    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests");
+    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
   }, []);
   useEffect(() => {
     if (isDeaconate) {
@@ -3829,6 +3850,42 @@ function DepartmentDetail({
     }
   };
 
+  /**
+   * The desk's answer to an ask to join, taken from the row itself: approve
+   * (onto the roll) or decline, with the reply the member reads on their own
+   * rail. The asks used to have a view of their own; they now answer here.
+   */
+  const answerRequest = async (id: number, status: "approved" | "rejected") => {
+    setBusyJoinId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/department-join-requests/${id}/`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status, reply: joinsReplies[id] ?? "" }),
+      });
+      if (res.ok) {
+        showAlert(
+          status === "approved" ? "Approved" : "Declined",
+          status === "approved"
+            ? "The member is on the roll and has been told."
+            : "The member has been told.",
+          "success",
+        );
+        setOpenMenuKey(null);
+        loadJoinRequests();
+        loadRoll();
+        onChanged();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showAlert("Not answered", data.detail || "Could not save the answer.", "error");
+      }
+    } catch {
+      showAlert("Error", "Could not reach the server.", "error");
+    } finally {
+      setBusyJoinId(null);
+    }
+  };
+
   const rollIds = new Set(roll.map((m) => m.id));
 
   // The roll's per-row Actions popover — one open at a time, found by a
@@ -3922,10 +3979,51 @@ function DepartmentDetail({
     return rows;
   })();
 
+  /**
+   * The members view in one list: the roll (its board first), the asks still
+   * waiting on an answer — those are never hidden, the desk must be able to
+   * answer them — and asks already answered whose member is not on the roll.
+   * An ask answered with an approval lands on the roll, so its row is the
+   * roll's; keeping a second copy would read as two people.
+   */
+  const memberRows: RollRow[] = (() => {
+    const onRollIds = new Set(rollRows.map((row) => row.id));
+    const asks: RollRow[] = joinRequests
+      .filter((ask) => ask.status === "pending" || !onRollIds.has(ask.member_id))
+      .map((ask) => ({
+        key: `ask:${ask.id}`,
+        id: ask.member_id,
+        name: ask.member_name,
+        username: "",
+        email: ask.member_email,
+        phone_number: ask.member_phone,
+        sex: "",
+        office: null,
+        role: null,
+        via: null,
+        member: null,
+        request: ask,
+      }));
+    const asked = [...asks].sort((a, b) =>
+      (a.request?.created_at ?? "").localeCompare(b.request?.created_at ?? ""),
+    );
+    return [...rollRows, ...asked];
+  })();
+
+  const memberFiltered = memberRows.filter((row) => {
+    if (memberFilter === "requests") return row.request?.status === "pending";
+    if (memberFilter === "approved") return !row.request || row.request.status === "approved";
+    return true;
+  });
+
   const rollQuery = rollSearch.trim().toLowerCase();
-  const visibleRoll = rollQuery
-    ? rollRows.filter((row) => `${row.name} ${row.username} ${row.phone_number} ${row.email} ${row.role || ""}`.toLowerCase().includes(rollQuery))
-    : rollRows;
+  const visibleMembers = rollQuery
+    ? memberFiltered.filter((row) =>
+        `${row.name} ${row.username} ${row.phone_number} ${row.email} ${row.role || ""} ${row.request?.note || ""} ${row.request?.group_name || ""}`
+          .toLowerCase()
+          .includes(rollQuery),
+      )
+    : memberFiltered;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
@@ -3938,11 +4036,13 @@ function DepartmentDetail({
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
-            ) : visibleRoll.length === 0 ? (
+            ) : visibleMembers.length === 0 ? (
               <p className="py-8 text-center text-xs text-moss">
-                {rollRows.length === 0
+                {memberRows.length === 0
                   ? "Nobody is on this roll yet. Use “Add member” to build the department's list."
-                  : "No roll member matches that search."}
+                  : memberFilter === "requests"
+                    ? "No one is waiting to join. Set the filter back to All to read the roll."
+                    : "No member matches that search."}
               </p>
             ) : (
               <table className="w-full text-left text-xs">
@@ -3961,11 +4061,13 @@ function DepartmentDetail({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-soft">
-                  {visibleRoll.map((row) => (
+                  {visibleMembers.map((row) => (
                     <tr key={row.key}>
                       <td className={`px-4 ${rowPad} align-middle`}>
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-semibold text-bark">{row.name}</p>
+                        {/* The badges wrap rather than eat the name: a name
+                            squeezed to "Peter Nd…" identifies nobody. */}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="font-semibold text-bark">{row.name}</p>
                           {/* A unioned row: the person sits on the roll through
                               the choir or a singing group, not a roll entry. */}
                           {row.via && (
@@ -3976,10 +4078,47 @@ function DepartmentDetail({
                               via {row.via}
                             </span>
                           )}
+                          {/* An ask to join, waiting on this desk or already
+                              answered: it rides the roll's own list, wearing
+                              the ask and the state it is in. */}
+                          {row.request && (
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                row.request.status === "pending"
+                                  ? "bg-ember/10 text-ember"
+                                  : row.request.status === "approved"
+                                    ? "bg-sage/15 text-sage-strong"
+                                    : "bg-sand text-moss-faint"
+                              }`}
+                            >
+                              {/* A phone's name column has no room for the
+                                  ask's full title: it wears its state alone
+                                  there, and says what it is once there is
+                                  width for both. */}
+                              <span className="sm:hidden">{askStatusWord(row.request.status)}</span>
+                              <span className="hidden sm:inline">
+                                {row.request.kind === "singing_group" ? "Singing group" : "Join request"} ·{" "}
+                                {askStatusWord(row.request.status)}
+                              </span>
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className={`px-4 ${rowPad} align-middle`}>
-                        {row.role ? (
+                        {row.request ? (
+                          // The ask speaks for the row where a role would: the
+                          // member's own words while it waits, the desk's
+                          // answer once it has one. Two lines at most, so one
+                          // long note cannot stretch the whole table.
+                          <span
+                            className="line-clamp-2 text-xs italic text-moss"
+                            title={row.request.note || undefined}
+                          >
+                            {row.request.status === "pending"
+                              ? row.request.note || "Asked without a word."
+                              : row.request.reply || "Answered without a word."}
+                          </span>
+                        ) : row.role ? (
                           <span className="inline-flex rounded-full bg-mist-select px-2.5 py-0.5 text-[11px] font-semibold text-bark">
                             {row.role}
                           </span>
@@ -4001,14 +4140,41 @@ function DepartmentDetail({
                             type="button"
                             onClick={() => setOpenMenuKey(openMenuKey === row.key ? null : row.key)}
                             aria-expanded={openMenuKey === row.key}
-                            aria-label={`Actions for ${row.name}`}
+                            aria-label={
+                              row.request ? `Answer ${row.name}'s ask to join` : `Actions for ${row.name}`
+                            }
                             className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
                           >
-                            Actions
+                            {/* An ask is answered, not administered: the row's
+                                own button says what the desk does with it. */}
+                            {row.request
+                              ? row.request.status === "pending"
+                                ? "Respond"
+                                : "Answer"
+                              : "Actions"}
                             <MoreVertical className="h-3 w-3 text-moss" />
                           </button>
                           {openMenuKey === row.key && (
-                            <div className="absolute right-0 top-full z-40 mt-1.5 w-48 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+                            <div
+                              className={`absolute right-0 top-full z-40 mt-1.5 rounded-2xl border border-sand-line bg-white text-left shadow-2xl ring-1 ring-black/5 ${
+                                row.request ? "w-72 p-3" : "w-48 p-1.5"
+                              }`}
+                            >
+                              {row.request ? (
+                                <JoinAskAnswer
+                                  ask={row.request}
+                                  reply={joinsReplies[row.request.id] ?? ""}
+                                  busy={busyJoinId === row.request.id}
+                                  onReply={(value) =>
+                                    setJoinsReplies((current) => ({
+                                      ...current,
+                                      [row.request!.id]: value,
+                                    }))
+                                  }
+                                  onAnswer={(status) => answerRequest(row.request!.id, status)}
+                                />
+                              ) : (
+                                <>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4053,6 +4219,8 @@ function DepartmentDetail({
                                   {row.via ? `On the roll through ${row.via}` : "Appointed — no roll entry"}
                                 </p>
                               )}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -4069,8 +4237,8 @@ function DepartmentDetail({
               list, not as chrome above it. */}
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
             <p className="text-xs text-moss">
-              {visibleRoll.length} {visibleRoll.length === 1 ? "person" : "people"}
-              {rollQuery ? ` of ${rollRows.length}` : ""} shown · {roll.length} on the roll
+              {visibleMembers.length} {visibleMembers.length === 1 ? "person" : "people"}
+              {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
               <div className="flex items-center gap-2">
@@ -4175,22 +4343,6 @@ function DepartmentDetail({
       {/* Weekly meetings — the church's own week, on the ministry that keeps
           it. Church-wide, so it is its own view rather than a calendar entry. */}
       {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel search={meetingsSearch} />}
-
-      {/* Join requests — the asks raised from the rail, answered here by the
-          desk's own leadership or the office. Approving puts the member on
-          the roll the same way Add member does. Its own view, not a table
-          beneath the roll. */}
-      {subTab === "requests" && (
-        <JoinRequestsPanel
-          departmentCode={department.code}
-          requests={joinRequests}
-          search={requestSearch}
-          onChanged={() => {
-            loadJoinRequests();
-            onChanged();
-          }}
-        />
-      )}
 
       {showAddChild && (
         <AddChildModal
@@ -4835,120 +4987,148 @@ function AddAreaModal({
 }
 
 /**
- * The join requests one department has received, with the desk's answer:
- * approve (onto the roll) or decline, with a reply the member reads on their
- * own rail. Visible to whoever can open this desk — the leadership and the
- * office — and the API decides the same way on the way out.
+ * The desk's answer to one ask to join, as the row's own popover: the member's
+ * note, a reply, and the two answers that close it. Approving puts the member
+ * on the roll (the API does that); declining sends the reply alone.
  */
-function JoinRequestsPanel({
-  departmentCode,
-  requests,
-  search,
-  onChanged,
+function JoinAskAnswer({
+  ask,
+  reply,
+  busy,
+  onReply,
+  onAnswer,
 }: {
-  departmentCode: string;
-  requests: { id: number; member_name: string; note: string; status: string; created_at: string }[];
-  search: string;
-  onChanged: () => void;
+  ask: JoinRequestRow;
+  reply: string;
+  busy: boolean;
+  onReply: (value: string) => void;
+  onAnswer: (status: "approved" | "rejected") => void;
 }) {
-  const [replies, setReplies] = useState<Record<number, string>>({});
-  const [busyId, setBusyId] = useState<number | null>(null);
-
-  async function answer(id: number, status: "approved" | "rejected", providedReply?: string) {
-    setBusyId(id);
-    try {
-      const res = await fetch(`${API_URL}/api/members/department-join-requests/${id}/`, {
-        method: "PATCH",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ status, reply: replies[id] ?? "" }),
-      });
-      if (res.ok) {
-        showAlert(
-          status === "approved" ? "Approved" : "Declined",
-          status === "approved"
-            ? "The member is on the roll and has been told."
-            : "The member has been told.",
-          "success",
-        );
-        onChanged();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        showAlert("Not answered", data.detail || "Could not save the answer.", "error");
-      }
-    } catch {
-      showAlert("Error", "Could not reach the server.", "error");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const query = search.trim().toLowerCase();
-  const matching = query
-    ? requests.filter((row) => `${row.member_name} ${row.note}`.toLowerCase().includes(query))
-    : requests;
-  const open = matching.filter((row) => row.status === "pending");
-
-  if (requests.length === 0) {
-    return (
-      <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-        No one has asked to join {departmentCode.replace("_", " ")} yet.
-      </div>
-    );
-  }
-
   return (
-    <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-bark">Join requests</h3>
-      <p className="mt-0.5 text-xs text-moss">
-        Members asking to join {departmentCode.replace("_", " ")} — approve, reject with a reply, or leave as is.
+    <>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-moss-faint">
+        {ask.kind === "singing_group" ? "Singing group" : "Join request"}
       </p>
-      {query && open.length === 0 && matching.filter((row) => row.status !== "pending").length === 0 && (
-        <p className="mt-4 text-center text-xs text-moss">No join request matches that search.</p>
-      )}
-      {matching.map((row) => (
-        <div key={row.id} className="mt-4 rounded-2xl border border-ember/30 bg-sand-linen p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-bold text-bark">{row.member_name}</p>
-            <span className="text-[11px] font-semibold text-moss">
-              {row.status === "approved" ? "Approved" : row.status === "rejected" ? "Rejected" : "Pending"}
-            </span>
-          </div>
-          {row.note && <p className="mt-1.5 text-xs italic text-moss">&ldquo;{row.note}&rdquo;</p>}
+      {ask.note && <p className="mt-1 text-xs italic text-moss">&ldquo;{ask.note}&rdquo;</p>}
+      {ask.status === "pending" ? (
+        <>
           <input
             type="text"
-            value={replies[row.id] ?? ""}
-            onChange={(e) => setReplies((current) => ({ ...current, [row.id]: e.target.value }))}
+            value={reply}
+            onChange={(e) => onReply(e.target.value)}
             placeholder="Reply to the member…"
-            className="mt-3 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+            className="mt-2 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
           />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
-              disabled={busyId === row.id}
-              onClick={() => answer(row.id, "approved", replies[row.id] ?? "")}
-              className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+              disabled={busy}
+              onClick={() => onAnswer("approved")}
+              className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
             >
-              Respond
+              {busy ? "Saving…" : "Approve"}
             </button>
             <button
               type="button"
-              disabled={busyId === row.id}
-              onClick={() => answer(row.id, "rejected", replies[row.id] ?? "")}
-              className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+              disabled={busy}
+              onClick={() => onAnswer("rejected")}
+              className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
             >
-              Reject
-            </button>
-            <button
-              type="button"
-              disabled={busyId === row.id}
-              onClick={() => setReplies((current) => ({ ...current, [row.id]: "" }))}
-              className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-            >
-              Close
+              Decline
             </button>
           </div>
+        </>
+      ) : (
+        <p className="mt-2 text-xs text-moss">
+          {ask.status === "approved" ? "Approved." : "Declined."} {ask.reply || "No reply was sent."}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The members view's filter, riding the page header just before the search
+ * box: the whole list, the people approved onto the roll, or the asks still
+ * waiting on an answer. The asks used to be a view of their own — the count
+ * they wore on the strip now sits on this button.
+ */
+function MembersFilterButton({
+  value,
+  onChange,
+  pending,
+}: {
+  value: MemberFilter;
+  onChange: (v: MemberFilter) => void;
+  pending: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const labels: Record<MemberFilter, string> = {
+    all: "All",
+    approved: "Approved",
+    requests: "Requests",
+  };
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+          value !== "all"
+            ? "border-ember bg-ember/10 text-ember"
+            : "border-sand-mute bg-white text-bark hover:bg-sand"
+        }`}
+        aria-label="Filter members"
+        aria-expanded={open}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{labels[value]}</span>
+        {pending > 0 && (
+          <span className="rounded-full bg-ember px-1.5 text-[10px] font-bold text-white">{pending}</span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">Show members</p>
+          {(["all", "approved", "requests"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                onChange(key);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                value === key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"
+              }`}
+            >
+              <span>
+                {labels[key]}
+                {key === "requests" && pending > 0 ? ` (${pending})` : ""}
+              </span>
+              {value === key && <span className="font-bold text-ember">✓</span>}
+            </button>
+          ))}
+          <p className="px-3 pb-1 pt-1.5 text-[10px] leading-snug text-moss-faint">
+            All reads the roll and the asks. Approved is the roll; Requests is who is still waiting.
+          </p>
         </div>
-      ))}
-    </section>
+      )}
+    </div>
   );
 }

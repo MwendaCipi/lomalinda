@@ -9221,8 +9221,10 @@ def department_accounts(user, code):
         - clerkship: LCB (Local Church Budget)
         - dorcas: Nyakundis / Dorcas account
         - personal_ministries: Evangelism
-        - children, aym: Department fund + Camporee / Campout accounts
+        - children, youth, pathfinders: Department fund + Camporee / Campout accounts
         - Other departments: Their linked treasury account
+    - The camp funds are kept off the Ambassadors and AYM desks: neither
+      ministry raises a camp offering, so each reads its own fund alone.
     - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
     - Regular roll members see the department's primary fund(s).
     """
@@ -9282,8 +9284,10 @@ def department_accounts(user, code):
             if acc not in accounts:
                 accounts.append(acc)
 
-    # 5. Children and AYM: department fund + camporee & camp out accounts
-    if code in ('children', 'aym', 'youth', 'pathfinders', 'ambassadors'):
+    # 5. Children, Youth and Pathfinders: department fund + camporee & camp
+    #    out accounts. Ambassadors and AYM sit outside this: they raise no
+    #    camp offering, so their desks read only their own fund.
+    if code in ('children', 'youth', 'pathfinders'):
         camp_accounts = TreasuryAccount.objects.filter(
             Q(name__icontains='camp') | Q(description__icontains='camp') |
             Q(name__icontains='camporee') | Q(description__icontains='camporee') |

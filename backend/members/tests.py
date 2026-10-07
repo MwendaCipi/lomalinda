@@ -9015,6 +9015,57 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('LCB', [row['name'] for row in response.data['accounts']])
 
+    def _seat_leader_of(self, code, account_name, description):
+        """A department with its own fund and the leader seated at its desk."""
+        department = Department.objects.get(code=code)
+        TreasuryAccount.objects.filter(department=department).delete()
+        role = DepartmentRole.objects.get(department=department, name='Leader')
+        DepartmentAssignment.objects.create(department=department, role=role, member=self.leader, kind='leader')
+        TreasuryAccount.objects.create(
+            name=account_name, description=description,
+            balance=Decimal('400.00'), department=department,
+        )
+        TreasuryAccount.objects.create(
+            name='CampOffer', description='Camp Offering', balance=Decimal('900.00'),
+        )
+        TreasuryAccount.objects.create(
+            name='Camporee', description='Camporee 2026', balance=Decimal('300.00'),
+        )
+
+    def test_ambassadors_reads_its_fund_alone(self):
+        """No camp offering reaches the Ambassadors desk: the ministry reads
+        the Ambassadors account and nothing else."""
+        self._seat_leader_of('ambassadors', 'Ambassadors', 'Ambassadors')
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/ambassadors/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['name'] for row in response.data['accounts']], ['Ambassadors'])
+
+    def test_aym_keeps_its_fund_without_the_camp_funds(self):
+        self._seat_leader_of('aym', 'AYM', 'Adventist Youth Ministry')
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/aym/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['name'] for row in response.data['accounts']], ['AYM'])
+
+    def test_children_still_read_the_camp_funds(self):
+        """The camp funds stay with the desks that raise them — Children runs
+        a camporee and keeps the money beside its own fund."""
+        self._seat_leader_of('children', 'Children', 'Children Ministry')
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/children/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row['name'] for row in response.data['accounts']],
+            ['Children', 'CampOffer', 'Camporee'],
+        )
+
     def test_a_member_outside_the_desk_reads_nothing(self):
         self._fund()
         self.client.force_authenticate(self.member)
