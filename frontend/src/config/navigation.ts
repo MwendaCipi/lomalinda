@@ -349,8 +349,8 @@ export const destinations = {
    */
   myAreas: {
     href: "/my-areas",
-    label: "My Areas",
-    short: "Areas",
+    label: "Ministry",
+    short: "Ministry",
     description: "The ministries and departments you are part of — and the ones you could join.",
     icon: HeartHandshake,
     area: "fellowship",
@@ -1307,7 +1307,7 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  * tab is "chat" — the church talking (the area rooms, direct messages and the
  * office line) — which rides the bar's tail on a phone because a PC reaches
  * the same page from the top bar's own button instead. "requests" is the
- * member's own page for asking the church for something, and "My Areas" is
+ * member's own page for asking the church for something, and "Ministry" is
  * the church's ministries and departments as the member's own map of them,
  * which every member may read (the office console keeps the writing side).
  * Home has no tab of its own: the topbar's church mark is the way back to the

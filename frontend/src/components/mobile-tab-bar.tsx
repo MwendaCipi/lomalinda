@@ -24,7 +24,7 @@ type TabItem = {
  *
  * Every tab navigates: a section's tab opens the section's first page, and
  * the chip strip on that page carries its siblings (AppFrame). The last tab
- * is My Areas — the church's ministries and departments as the member's own
+ * is Ministry — the church's ministries and departments as the member's own
  * map, which every member may read. The office console has no tab any more
  * (the church's own areas matter more than the office's here); staff reach
  * it from the account menu.

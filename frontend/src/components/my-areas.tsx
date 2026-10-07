@@ -41,9 +41,9 @@ const SEX_ONLY_AREA: Record<string, "male" | "female"> = {
   awm: "female",
 };
 
-type AreaTab = "all" | "ministry" | "department";
+type AreaTab = "mine" | "other";
 
-const TAB_LABELS: Record<AreaTab, string> = { all: "All", ministry: "Ministry", department: "Department" };
+const TAB_LABELS: Record<AreaTab, string> = { mine: "My ministries", other: "Other ministries" };
 
 const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
   children: "children",
@@ -53,10 +53,10 @@ const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
 /**
  * My areas — the church's ministries and departments as the member's own map.
  *
- * One page, three sub-navs: All, Ministry and Department. The All tab is the
- * member's own map; the other two also include areas they could join. Opening a card
- * reads the area — its leadership, its roll, its calendar, and its accounts &
- * withdrawals — with withdrawal requests enabled for leaders.
+ * One page, two sub-navs: the member's own department and ministries, and the
+ * ministries/departments they may ask to join. Opening a card reads the area —
+ * its leadership, its roll, its calendar, and its accounts & withdrawals —
+ * with withdrawal requests enabled for leaders.
  */
 export function MyAreas() {
   const rows = useAllDepartments();
@@ -64,59 +64,54 @@ export function MyAreas() {
   const { me } = useHeaderData();
   const sex = (me?.gender || "").trim().toLowerCase();
 
-  const [tab, setTab] = useState<AreaTab>("all");
+  const [tab, setTab] = useState<AreaTab>("mine");
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [areaView, setAreaView] = useState<"overview" | "leadership" | "calendar" | "accounts">("overview");
   const [joining, setJoining] = useState<string | null>(null);
   const legacyDepartmentCode = (me?.department || "").trim();
   const ownDepartmentCode = (me?.department_ref || LEGACY_DEPARTMENT_CODES[legacyDepartmentCode] || legacyDepartmentCode).trim();
 
-  const displayGroup = useCallback((area: (typeof rows)[number]): "ministry" | "department" => {
-    if (area.code === ownDepartmentCode) return "department";
-    if (ties.includes(area.code) && area.group === "department") return "ministry";
-    return area.group === "ministry" ? "ministry" : "department";
-  }, [ownDepartmentCode, ties]);
-
-  const areas = useMemo(
-    () =>
-      rows
-        .filter((row) => {
-          if (tab === "all") return ties.includes(row.code);
-          return displayGroup(row) === tab;
-        })
-        // The member's own areas lead the list — the map opens on their
-        // fellowship, not on whoever sorts first alphabetically — and the
-        // ones they could join follow, each group in its own name order.
-        .sort((a, b) => {
-          if (tab === "all") {
-            const departmentA = displayGroup(a) === "department" ? 0 : 1;
-            const departmentB = displayGroup(b) === "department" ? 0 : 1;
-            if (departmentA !== departmentB) return departmentA - departmentB;
-          }
-          const mineA = ties.includes(a.code) ? 0 : 1;
-          const mineB = ties.includes(b.code) ? 0 : 1;
-          return mineA - mineB || a.label.localeCompare(b.label);
-        }),
-    [displayGroup, rows, tab, ties],
-  );
-
   /** May the member ask to join this area? The two sex-only fellowships say no
       to the other sex; every other ministry and department is open. */
-  const canJoin = (code: string) => {
+  const canJoin = useCallback((code: string) => {
     const only = SEX_ONLY_AREA[code];
     return !only || !sex || only === sex;
-  };
+  }, [sex]);
 
-  // What the member sees: the areas they are part of, and the ones they could
-  // join. An area that is neither (the women's ministry, to a man) is not
-  // offered at all.
-  const visible = areas.filter((area) => (tab === "all" ? ties.includes(area.code) : ties.includes(area.code) || canJoin(area.code)));
+  const isMyMinistry = useCallback((area: (typeof rows)[number]) => {
+    if (area.code === ownDepartmentCode) return true;
+    return area.group === "ministry" && ties.includes(area.code);
+  }, [ownDepartmentCode, ties]);
+
+  // What the member sees: first their own department and ministries, then the
+  // other ministries/departments open for a join request. Sex-only ministries
+  // stay hidden from people who may not request them.
+  const visible = useMemo(
+    () =>
+      rows
+        .filter((area) => {
+          const mine = isMyMinistry(area);
+          if (tab === "mine") return mine;
+          return !mine && !ties.includes(area.code) && canJoin(area.code);
+        })
+        .sort((a, b) => {
+          if (tab === "mine") {
+            const departmentA = a.code === ownDepartmentCode ? 0 : 1;
+            const departmentB = b.code === ownDepartmentCode ? 0 : 1;
+            if (departmentA !== departmentB) return departmentA - departmentB;
+          }
+          const groupA = a.group === "ministry" ? 0 : 1;
+          const groupB = b.group === "ministry" ? 0 : 1;
+          return groupA - groupB || a.label.localeCompare(b.label);
+        }),
+    [canJoin, isMyMinistry, ownDepartmentCode, rows, tab, ties],
+  );
 
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
 
   const { setCustomToggles, setCustomHeader } = usePageHeader();
 
-  // The sub-navs: for directory list (All/Ministry/Dept), or for opened area (Overview/Leadership/Calendar/Accounts).
+  // The sub-navs: for directory list (my/joinable), or for opened area (Overview/Leadership/Calendar/Accounts).
   useEffect(() => {
     if (openArea) {
       setCustomToggles(
@@ -136,7 +131,7 @@ export function MyAreas() {
     }
     setCustomToggles(
       <SubNav
-        label="My areas"
+        label="Ministry"
         value={tab}
         onChange={(next) => {
           setTab(next as AreaTab);
@@ -144,9 +139,8 @@ export function MyAreas() {
           setAreaView("overview");
         }}
         items={[
-          { key: "all", label: TAB_LABELS.all },
-          { key: "ministry", label: TAB_LABELS.ministry },
-          { key: "department", label: TAB_LABELS.department },
+          { key: "mine", label: TAB_LABELS.mine },
+          { key: "other", label: TAB_LABELS.other },
         ]}
       />
     );
@@ -159,13 +153,11 @@ export function MyAreas() {
       openArea
         ? { label: openArea.label, description: openArea.description }
         : {
-            label: "My Areas",
+            label: "Ministry",
             description:
-              tab === "all"
-                ? "Your department and the ministries you are part of."
-                : tab === "ministry"
-                ? "The ministries you are part of — and the ones you could join."
-                : "The departments you are part of — and the ones you could join.",
+              tab === "mine"
+                ? "Your department and the ministries you are part of or leading."
+                : "Ministries and departments you can ask to join.",
           }
     );
     return () => setCustomHeader(null);
@@ -243,7 +235,7 @@ export function MyAreas() {
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-              All areas
+              Ministry
             </button>
           </div>
 
@@ -393,15 +385,15 @@ export function MyAreas() {
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
               ? "One moment."
-              : tab === "all"
-                ? "Your department and ministries will appear here once the church office files them."
-                : `There are no ${tab === "ministry" ? "ministries" : "departments"} to show you yet.`}
+              : tab === "mine"
+              ? "Your department and ministries will appear here once the church office files them."
+              : "There are no other ministries or departments available to join."}
           </p>
         </div>
       ) : (
         <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2">
           {visible.map((area) => {
-            const inArea = ties.includes(area.code);
+            const inArea = isMyMinistry(area);
             const leaders = area.holders.filter((holder) => holder.kind === "leader").map((h) => h.name);
             return (
               <div
