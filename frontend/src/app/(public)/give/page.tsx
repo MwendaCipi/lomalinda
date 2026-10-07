@@ -893,9 +893,9 @@ function GivePageContent() {
                 </label>
               )}
 
-              {/* 2. How the money moves first — method, then the phone the
-                  M-Pesa prompt goes to — and only then which accounts it
-                  goes to. */}
+              {/* 2. How the money moves first — the method with the anonymity
+                  switch beside it, then the phone the M-Pesa prompt goes to —
+                  and only then which accounts it goes to. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block self-start text-sm font-medium text-bark">
                   Method of Giving
@@ -909,42 +909,42 @@ function GivePageContent() {
                   </select>
                 </label>
 
+                {/* Anonymity shares the row with the method: it answers a
+                    question about the gift itself, not about the phone it
+                    rides in on, so the switch stands beside the method and
+                    the phone keeps its own line next to the accounts. The box
+                    wears the fields' own border and padding, and `sm:mt-7`
+                    drops it level with the select beneath the method's label. */}
                 {methodOfGiving === "mpesa" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-bark">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="give-anonymously"
-                          checked={anonymous}
-                          onChange={(event) => setAnonymous(event.target.checked)}
-                          className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
-                        />
-                        <span className="text-sm">Give anonymously</span>
-                      </div>
-                      <span className="mt-1 block text-[11px] font-normal text-moss">
-                        Keep this gift off your record: the ledger will not show your
-                        name or email — the phone you pay from is all it keeps.
-                      </span>
-                    </label>
+                  <label className="flex cursor-pointer items-center gap-2 self-start rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark sm:mt-7">
+                    <input
+                      type="checkbox"
+                      id="give-anonymously"
+                      checked={anonymous}
+                      onChange={(event) => setAnonymous(event.target.checked)}
+                      className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
+                    />
+                    <span className="text-sm">Give anonymously</span>
+                  </label>
+                )}
 
-                    <label className="block self-start text-sm font-medium text-bark">
-                      Phone number
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        pattern="[0-9]{10}"
-                        maxLength={10}
-                        minLength={10}
-                        required
-                        placeholder="e.g. 0712345678"
-                        value={phoneNumber}
-                        onFocus={liftAboveKeyboard}
-                        onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                        className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
-                      />
-                    </label>
-                  </div>
+                {methodOfGiving === "mpesa" && (
+                  <label className="block self-start text-sm font-medium text-bark">
+                    Phone number
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                      minLength={10}
+                      required
+                      placeholder="e.g. 0712345678"
+                      value={phoneNumber}
+                      onFocus={liftAboveKeyboard}
+                      onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
+                    />
+                  </label>
                 )}
 
                 <div className="block self-start text-sm font-medium text-bark">

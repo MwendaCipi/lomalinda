@@ -458,6 +458,9 @@ function CalendarPageContent() {
   }, [signedIn, setHeaderRightAction, search, selectedMonth, selectedYear, view]);
 
   const mapUrl = mapsLink(settings);
+  // The grid's own month: it lays out a single one, so a page that arrived
+  // asking for every month still gives it something to draw.
+  const gridMonth = selectedMonth === "all" ? today.getMonth() : Number(selectedMonth);
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -504,7 +507,7 @@ function CalendarPageContent() {
 
       <div className="mx-auto max-w-6xl space-y-6 px-6 py-10 lg:px-8 lg:py-12">
         {/* PC Desktop Table View (visible on md and up) */}
-        <div className="hidden md:block overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
+        <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
               <tr>
@@ -540,57 +543,13 @@ function CalendarPageContent() {
                       </button>
                       {openActions === actionKey && (
                         <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
-                          {row.mode === "virtual" && row.meeting_link && (
-                            <a
-                              href={row.meeting_link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
-                            >
-                              Join meeting
-                            </a>
-                          )}
-                          {row.mode !== "virtual" && mapUrl && (
-                            <a
-                              href={mapUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
-                            >
-                              Open map
-                            </a>
-                          )}
-                          <Link
-                            href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
-                            onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
-                          >
-                            Give support
-                          </Link>
-                          <a
-                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
-                            onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
-                          >
-                            Contact department
-                          </a>
-                          <a
-                            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
-                            onClick={() => setOpenActions(null)}
-                            className="block rounded-lg px-3 py-2 text-sm hover:bg-sand"
-                          >
-                            Give suggestion
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActions(null);
-                              openProgram(row);
-                            }}
-                            className="block w-full text-left rounded-lg px-3 py-2 text-sm font-semibold text-ember hover:bg-sand"
-                          >
-                            View Sabbath program
-                          </button>
+                          <EventActionsMenu
+                            row={row}
+                            mapUrl={mapUrl}
+                            variant="row"
+                            onClose={() => setOpenActions(null)}
+                            onProgram={openProgram}
+                          />
                         </div>
                       )}
                     </td>
@@ -602,7 +561,7 @@ function CalendarPageContent() {
         </div>
 
         {/* Mobile Calendar Cards View (visible on mobile only) */}
-        <div className="grid gap-4 md:hidden">
+        <div className={`gap-4 ${view === "table" ? "grid md:hidden" : "hidden"}`}>
           {rows.map((row) => {
             const actionKey = `mobile-${row.date}-${row.id}`;
             const dateStr = dayFirst(row.date);
@@ -646,40 +605,13 @@ function CalendarPageContent() {
                     </button>
                     {openActions === actionKey && (
                       <div className="absolute right-0 bottom-full mb-1.5 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
-                        {row.mode === "virtual" && row.meeting_link && (
-                          <a
-                            href={row.meeting_link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
-                          >
-                            Join meeting
-                          </a>
-                        )}
-                        {row.mode !== "virtual" && mapUrl && (
-                          <a
-                            href={mapUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
-                          >
-                            Open map
-                          </a>
-                        )}
-                        <Link
-                          href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
-                          onClick={() => setOpenActions(null)}
-                          className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
-                        >
-                          Give support
-                        </Link>
-                        <a
-                          href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
-                          onClick={() => setOpenActions(null)}
-                          className="block rounded-lg px-3 py-2 text-xs hover:bg-sand"
-                        >
-                          Contact department
-                        </a>
+                        <EventActionsMenu
+                          row={row}
+                          mapUrl={mapUrl}
+                          variant="card"
+                          onClose={() => setOpenActions(null)}
+                          onProgram={openProgram}
+                        />
                       </div>
                     )}
                   </div>
@@ -688,6 +620,21 @@ function CalendarPageContent() {
             );
           })}
         </div>
+
+        {/* The month, laid out as a calendar: the same events the list shows,
+            read by the day they fall on. */}
+        {view === "month" && (
+          <MonthGrid
+            year={selectedYear}
+            month={gridMonth}
+            events={rows}
+            mapUrl={mapUrl}
+            openActions={openActions}
+            onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
+            onCloseActions={() => setOpenActions(null)}
+            onProgram={openProgram}
+          />
+        )}
 
         {loaded && rows.length === 0 && (
           <p className="px-5 py-10 text-center text-sm text-moss">
