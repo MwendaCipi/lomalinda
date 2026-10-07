@@ -3005,28 +3005,52 @@ export function DepartmentAccountsPanel({
             )}
           </div>
 
-          {/* Bottom footer — balance + request button + pagination */}
-          <div className="shrink-0 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
-            {/* Row 1 — balance + action */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-moss">
+          {/* Bottom footer — balance + pagination in middle + request button (single row) */}
+          <div className="shrink-0 border-t border-sand-line bg-white px-4 py-2.5 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Left — balance */}
+              <div className="flex min-w-0 items-center gap-x-2 text-xs text-moss">
                 <span>
                   {selectedAccountInfo ? `${selectedAccountInfo.description || selectedAccountInfo.name} Balance:` : "Total Balance:"}{" "}
                   <strong className="text-ember font-bold">
                     KES {displayedBalance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                   </strong>
                 </span>
-                {accounts.length > 1 && accountFilter === "all" && (
-                  <span className="hidden sm:inline text-[11px] text-moss-faint">
-                    ({accounts.map((a) => `${a.name}: KES ${Number(a.balance).toLocaleString("en-KE", { minimumFractionDigits: 0 })}`).join(" · ")})
-                  </span>
-                )}
                 {isDeaconate && (
                   <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
                     LCB
                   </span>
                 )}
               </div>
+
+              {/* Middle — pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-1 text-xs text-moss">
+                  <button
+                    type="button"
+                    disabled={safePageNum <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  <span className="px-1 font-medium">
+                    {safePageNum} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safePageNum >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+
+              {/* Right — request button */}
               <div className="shrink-0">
                 {canRequest ? (
                   <button
@@ -3049,38 +3073,6 @@ export function DepartmentAccountsPanel({
                 )}
               </div>
             </div>
-
-            {/* Row 2 — pagination, only when there is more than one page */}
-            {totalPages > 1 && (
-              <div className="mt-2 flex items-center justify-center gap-1 text-xs text-moss">
-                <button
-                  type="button"
-                  disabled={safePageNum <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
-                  aria-label="Previous page"
-                >
-                  ‹
-                </button>
-                <span className="px-1">
-                  {safePageNum} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={safePageNum >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="rounded-lg border border-sand-line px-2.5 py-1 font-semibold text-bark transition hover:bg-sand disabled:opacity-30"
-                  aria-label="Next page"
-                >
-                  ›
-                </button>
-              </div>
-            )}
-            {totalPages <= 1 && filteredItems.length > 0 && (
-              <p className="mt-0.5 text-center text-[11px] text-moss-faint">
-                {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
-              </p>
-            )}
           </div>
         </>
       )}
@@ -3409,7 +3401,7 @@ function DepartmentDetail({
           ? { count: joinRequests.filter((row) => row.status === "pending").length }
           : {}),
       },
-      { key: "calendar", label: "Calendar", icon: CalendarDays },
+      { key: "calendar", label: "Event Calendar", icon: CalendarDays },
       // The fund ledger and withdrawal requests unified under one desk.
       { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.

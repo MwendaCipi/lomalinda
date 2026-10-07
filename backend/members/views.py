@@ -9087,16 +9087,22 @@ def department_accounts(user, code):
     if dept_account:
         accounts.append(dept_account)
 
-    # 1. Development: Church Plot and Church Development / Building accounts
+    # 1. Development: Church Plot and Church Development accounts (excluding station development)
     if code in ('development', 'church_development', 'building'):
         dev_accounts = TreasuryAccount.objects.filter(
             Q(name__icontains='plot') | Q(description__icontains='plot') |
             Q(name__icontains='dev') | Q(description__icontains='development') |
             Q(name__icontains='build') | Q(description__icontains='building')
+        ).exclude(
+            Q(name__icontains='station') | Q(description__icontains='station')
         ).order_by('id')
         for acc in dev_accounts:
             if acc not in accounts:
                 accounts.append(acc)
+        accounts = [
+            a for a in accounts
+            if 'station' not in (a.name or '').lower() and 'station' not in (a.description or '').lower()
+        ]
 
     # 2. Clerkship: LCB account
     if code == 'clerkship':
