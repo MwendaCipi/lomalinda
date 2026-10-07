@@ -622,7 +622,7 @@ function GivePageContent() {
                       <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
                       <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
                     </div>
-                    <div className="relative flex min-w-0 flex-1 items-center gap-2">
+                    <div className="relative flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center">
                       {/* Mobile: the three statuses live behind one compact Filters button; the segmented control stays for desktop. */}
                       <div className="md:hidden">
                         <button
@@ -680,7 +680,7 @@ function GivePageContent() {
                           </button>
                         ))}
                       </div>
-                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none" />
+                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none md:flex-1" />
                     </div>
                   </div>
                 </div>
@@ -893,10 +893,23 @@ function GivePageContent() {
                 </label>
               )}
 
-              {/* 2. How the money moves first — the method with the anonymity
-                  switch beside it, then the phone the M-Pesa prompt goes to —
-                  and only then which accounts it goes to. */}
+              {/* 2. How the money moves: anonymity first, then the method,
+                  the phone the M-Pesa prompt goes to, and finally which
+                  accounts it goes to. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {methodOfGiving === "mpesa" && (
+                  <label className="flex cursor-pointer items-center gap-2 self-start rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark">
+                    <input
+                      type="checkbox"
+                      id="give-anonymously"
+                      checked={anonymous}
+                      onChange={(event) => setAnonymous(event.target.checked)}
+                      className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
+                    />
+                    <span className="text-sm">Give anonymously</span>
+                  </label>
+                )}
+
                 <label className="block self-start text-sm font-medium text-bark">
                   Method of Giving
                   <select
@@ -908,25 +921,6 @@ function GivePageContent() {
                     <option value="bank_transfer">Bank-to-Bank</option>
                   </select>
                 </label>
-
-                {/* Anonymity shares the row with the method: it answers a
-                    question about the gift itself, not about the phone it
-                    rides in on, so the switch stands beside the method and
-                    the phone keeps its own line next to the accounts. The box
-                    wears the fields' own border and padding, and `sm:mt-7`
-                    drops it level with the select beneath the method's label. */}
-                {methodOfGiving === "mpesa" && (
-                  <label className="flex cursor-pointer items-center gap-2 self-start rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark sm:mt-7">
-                    <input
-                      type="checkbox"
-                      id="give-anonymously"
-                      checked={anonymous}
-                      onChange={(event) => setAnonymous(event.target.checked)}
-                      className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
-                    />
-                    <span className="text-sm">Give anonymously</span>
-                  </label>
-                )}
 
                 {methodOfGiving === "mpesa" && (
                   <label className="block self-start text-sm font-medium text-bark">

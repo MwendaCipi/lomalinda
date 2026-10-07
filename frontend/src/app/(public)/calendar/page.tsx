@@ -13,11 +13,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 /** "Saturday, 3 October 2026" — the spoken form for programs and headings. */
 const weekdayLabel = (iso: string) =>
   `${weekdayOf(iso)}, ${dayFirst(iso)}`;
-const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthNames = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 //: The week as the grid reads it, Sunday first. Short on a phone, spelled out
 //: once the columns have room.
 const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const weekdayNamesFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const weekdayNamesFull = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+];
+
 //: The week's own column — the Sabbath. The grid shades it so the church's
 //: week reads at a glance, the way a printed wall calendar rings it.
 const SABBATH_COLUMN = 6;
@@ -66,7 +72,74 @@ type CalendarEvent = {
   program_file?: string | null;
 };
 
-function mapsLink(settings: ChurchSettings | null) { return settings?.latitude && settings.longitude ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}` : ""; }
+function mapsLink(settings: ChurchSettings | null) {
+  return settings?.latitude && settings.longitude
+    ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
+    : "";
+}
+
+/**
+ * Names for the five calendar controls. On phones the controls sit above the
+ * search bar, with the back arrow and the church's own link beside them; the
+ * search and its filters follow, so a thumb can reach the period switch and
+ * the question still sits at the top of the list.
+ */
+function CalendarHeadBar({
+  onBack,
+  churchLink,
+}: {
+  onBack: () => void;
+  churchLink?: string;
+}) {
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        aria-label="Back to the fellowship list"
+      >
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M19 12H5" />
+          <path d="M12 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
+      {churchLink && (
+        <Link
+          href={churchLink}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        >
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 2v20" />
+            <path d="M12 2a10 10 0 0 1 0 20" />
+          </svg>
+          Church
+        </Link>
+      )}
+    </div>
+  );
+}
+
 /** "14:30" spoken back as "2:30 PM", the way the desks write the time. */
 function clockTime(value?: string) {
   const match = (value ?? "").match(/^(\d{1,2}):(\d{2})/);
@@ -75,6 +148,7 @@ function clockTime(value?: string) {
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   return `${hour12}:${match[2]} ${hours >= 12 ? "PM" : "AM"}`;
 }
+
 /** The row's time: a range when the event finishes on the day it starts. */
 function timeRange(event: CalendarEvent) {
   const start = clockTime(event.time);
@@ -161,7 +235,6 @@ function MonthGrid({
   year, month, events, mapUrl, openActions, onToggleActions, onCloseActions, onProgram,
 }: {
   year: number;
-  /** The month's index, 0-11 — a grid cannot lay out "all months". */
   month: number;
   events: CalendarEvent[];
   mapUrl: string;
@@ -285,12 +358,7 @@ function MonthGrid({
   );
 }
 
-/**
- * The calendar's own controls — the year, the month, the search and the print
- * — in one cluster. Signed in they ride the shell's header beside the page's
- * name (the way every other desk places its search); signed out they sit
- * beside the page's own heading, where a visitor still reaches them.
- */
+/** The calendar's own controls — the year, the month, the search and the print — in one cluster. Signed in they ride the shell's header beside the page's name (the way every other desk places its search); signed out they sit beside the page's own heading, where a visitor still reaches them. */
 function CalendarFilters({
   search, onSearch, year, onYear, month, onMonth, years, view, onView, className,
 }: {
@@ -333,8 +401,6 @@ function CalendarFilters({
         aria-label="Church calendar period"
         className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember"
       >
-        {/* The grid lays out one month, so the whole-year reading is the
-            list's alone: the choice is offered only while the list is on. */}
         {view === "table" && <option value="quarter">This quarter</option>}
         {view === "table" && <option value="all">All months</option>}
         {monthNames.map((name, index) => (
@@ -397,7 +463,10 @@ function CalendarPageContent() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(() => { const requestedYear = Number(searchParams.get("year")); return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear; });
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const requestedYear = Number(searchParams.get("year"));
+    return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear;
+  });
   const [selectedMonth, setSelectedMonth] = useState<CalendarPeriod>(() => {
     const requestedMonth = searchParams.get("month");
     if (initialView === "month" && (!requestedMonth || requestedMonth === "quarter" || requestedMonth === "all")) return String(currentMonth);
@@ -438,10 +507,7 @@ function CalendarPageContent() {
 
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
-  /**
-   * The grid lays out a single month, so asking for it while the page is
-   * showing every month lands on this one rather than on an unreadable year.
-   */
+  /** The grid lays out a single month, so asking for it while the page is showing every month lands on this one rather than on an unreadable year. */
   function chooseView(next: CalendarView) {
     if (next === "month" && (selectedMonth === "all" || selectedMonth === "quarter")) setSelectedMonth(String(currentMonth));
     setView(next);
@@ -479,12 +545,14 @@ function CalendarPageContent() {
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const quarter = quarterBounds(selectedYear, currentMonth);
     return events
       .filter((event) => event.date?.startsWith(`${selectedYear}-`))
       .filter((event) => {
         if (selectedMonth === "all") return true;
-        if (selectedMonth === "quarter") return event.date >= quarter.start && event.date <= quarter.end;
+        if (selectedMonth === "quarter") {
+          const quarter = quarterBounds(selectedYear, currentMonth);
+          return event.date >= quarter.start && event.date <= quarter.end;
+        }
         return Number(event.date.slice(5, 7)) - 1 === Number(selectedMonth);
       })
       .filter((event) => {
@@ -495,7 +563,10 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [currentMonth, events, search, selectedMonth, selectedYear]);
 
-  function openProgram(row: CalendarEvent) { const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null; setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true }); }
+  function openProgram(row: CalendarEvent) {
+    const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null;
+    setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true });
+  }
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-sand text-bark" : "min-h-screen bg-sand text-bark"}>
@@ -509,18 +580,24 @@ function CalendarPageContent() {
                 Sabbaths, vespers, programmes and special events across the church year.
               </p>
             </div>
-            <CalendarFilters
-              search={search}
-              onSearch={setSearch}
-              year={selectedYear}
-              onYear={setSelectedYear}
-              month={selectedMonth}
-              onMonth={setSelectedMonth}
-              years={years}
-              view={view}
-              onView={chooseView}
-              className="lg:justify-end"
-            />
+            <div className="flex flex-col items-start gap-3 lg:items-end">
+              <CalendarHeadBar
+                onBack={() => window.history.back()}
+                churchLink="/fellowship"
+              />
+              <CalendarFilters
+                search={search}
+                onSearch={setSearch}
+                year={selectedYear}
+                onYear={setSelectedYear}
+                month={selectedMonth}
+                onMonth={setSelectedMonth}
+                years={years}
+                view={view}
+                onView={chooseView}
+                className="lg:justify-end"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -641,8 +718,7 @@ function CalendarPageContent() {
           })}
         </div>
 
-        {/* The month, laid out as a calendar: the same events the list shows,
-            read by the day they fall on. */}
+        {/* The month, laid out as a calendar: the same events the list shows, read by the day they fall on. */}
         {view === "month" && (
           <MonthGrid
             year={selectedYear}
@@ -657,9 +733,7 @@ function CalendarPageContent() {
         )}
 
         {loaded && rows.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-moss">
-            No calendar entries match your filters.
-          </p>
+          <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
         )}
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
         <p className="mt-4 text-xs text-moss">
