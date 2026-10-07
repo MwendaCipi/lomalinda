@@ -2681,7 +2681,7 @@ type FundWithdrawal = {
 /**
  * Popover filter near the search input to toggle between All, Contributions, and Withdrawals.
  */
-function AccountsFilterPopover({
+function AccountsFilterButton({
   value,
   onChange,
 }: {
@@ -2710,11 +2710,11 @@ function AccountsFilterPopover({
   };
 
   return (
-    <div className="relative inline-block shrink-0" ref={popoverRef}>
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition sm:px-2.5 sm:text-xs ${
           value !== "all"
             ? "border-ember bg-ember/10 text-ember"
             : "border-sand-mute bg-white text-bark hover:bg-sand"
@@ -2726,17 +2726,13 @@ function AccountsFilterPopover({
         <span className="hidden sm:inline">{labels[value]}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">
-            Filter by type
-          </p>
-          {(
-            [
-              { key: "all", label: "All items" },
-              { key: "contributions", label: "Contributions only (+)" },
-              { key: "withdrawals", label: "Withdrawals & requests (−)" },
-            ] as const
-          ).map((item) => (
+        <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">Filter transactions</p>
+          {[
+            { key: "all" as const, label: "All" },
+            { key: "contributions" as const, label: "Contributions" },
+            { key: "withdrawals" as const, label: "Withdrawals" },
+          ].map((item) => (
             <button
               key={item.key}
               type="button"
@@ -2744,11 +2740,7 @@ function AccountsFilterPopover({
                 onChange(item.key);
                 setOpen(false);
               }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-                value === item.key
-                  ? "bg-sand-linen text-ember"
-                  : "text-bark hover:bg-sand"
-              }`}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${value === item.key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"}`}
             >
               <span>{item.label}</span>
               {value === item.key && <span className="text-ember font-bold">✓</span>}
@@ -2785,15 +2777,19 @@ type UnifiedAccountItem = {
 export function DepartmentAccountsPanel({
   department,
   onChanged,
-  search,
+  search = "",
   typeFilter = "all",
+  showInlineControls = false,
+  className = "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full",
 }: {
-  department: DepartmentRow;
-  onChanged: () => void;
+  department: { code: string; label: string };
+  onChanged?: () => void;
   /** The fund ledger's search, owned by the desk so it rides the header band. */
-  search: string;
+  search?: string;
   /** Category filter: all, contributions, or withdrawals. */
   typeFilter?: "all" | "contributions" | "withdrawals";
+  showInlineControls?: boolean;
+  className?: string;
 }) {
   const isDeaconate = department.code === "deaconate";
   const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
@@ -2807,7 +2803,12 @@ export function DepartmentAccountsPanel({
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   const rowPad = densityCellPad();
+
+  const effectiveSearch = (search && search.trim() !== "") ? search : internalSearch;
+  const effectiveTypeFilter = typeFilter !== "all" ? typeFilter : internalTypeFilter;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -2894,7 +2895,7 @@ export function DepartmentAccountsPanel({
         "success"
       );
       load();
-      onChanged();
+      if (onChanged) onChanged();
     } catch (error) {
       showAlert("Could not send the request", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
@@ -2904,7 +2905,7 @@ export function DepartmentAccountsPanel({
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
-  const movementQuery = search.trim().toLowerCase();
+  const movementQuery = effectiveSearch.trim().toLowerCase();
 
   const unifiedItems = useMemo(() => {
     const items: UnifiedAccountItem[] = [];
@@ -2980,9 +2981,9 @@ export function DepartmentAccountsPanel({
     if (accountFilter !== "all") {
       list = list.filter((item) => String(item.accountId) === String(accountFilter));
     }
-    if (typeFilter === "contributions") {
+    if (effectiveTypeFilter === "contributions") {
       list = list.filter((item) => item.category === "contribution");
-    } else if (typeFilter === "withdrawals") {
+    } else if (effectiveTypeFilter === "withdrawals") {
       list = list.filter((item) => item.category === "withdrawal");
     }
 
@@ -2994,7 +2995,7 @@ export function DepartmentAccountsPanel({
       );
     }
     return list;
-  }, [unifiedItems, accountFilter, typeFilter, movementQuery]);
+  }, [unifiedItems, accountFilter, effectiveTypeFilter, movementQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePageNum = Math.min(page, totalPages);
@@ -3040,7 +3041,7 @@ export function DepartmentAccountsPanel({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full">
+    <div className={className}>
       {loading ? (
         <p className="py-8 text-center text-xs text-moss">Loading the fund…</p>
       ) : accounts.length === 0 ? (
@@ -3052,6 +3053,33 @@ export function DepartmentAccountsPanel({
         </div>
       ) : (
         <>
+          {/* Optional inline search and filter row for standalone/mobile views */}
+          {showInlineControls && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line bg-sand/20 px-4 py-2.5">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-moss" />
+                <input
+                  type="text"
+                  value={internalSearch}
+                  onChange={(e) => {
+                    setInternalSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search transactions, reference…"
+                  aria-label="Search transactions"
+                  className="w-full rounded-xl border border-sand-mute bg-white pl-8 pr-3 py-1.5 text-xs outline-none focus:border-ember"
+                />
+              </div>
+              <AccountsFilterButton
+                value={effectiveTypeFilter}
+                onChange={(v) => {
+                  setInternalTypeFilter(v);
+                  setPage(1);
+                }}
+              />
+            </div>
+          )}
+
           {/* Account Filter Switcher Tabs: when more than 1 account is accessible */}
           {accounts.length > 1 && (
             <div className="flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto">
@@ -3097,13 +3125,13 @@ export function DepartmentAccountsPanel({
           )}
 
           {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll */}
-          <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
+          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto custom-table-scrollbar">
             {unifiedItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
             ) : visibleItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transaction matches that filter or search.</p>
             ) : (
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[520px] sm:min-w-full text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
                   <tr>
                     <th className="px-4 py-3">Date</th>
@@ -3387,7 +3415,7 @@ function DepartmentDetail({
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
   const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "requests">(initialTab);
-  const [accountsTypeFilter, setAccountsTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
+  const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // How many asks are waiting on this desk. The strip carries the count and
   // The join asks raised from the rail, answered on this desk.
   const [joinRequests, setJoinRequests] = useState<
@@ -3470,17 +3498,18 @@ function DepartmentDetail({
       );
     } else if (subTab === "accounts") {
       setHeaderRightAction(
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1.5">
           <input
             type="text"
             value={accountsSearch}
             onChange={(e) => setAccountsSearch(e.target.value)}
             placeholder="Search account…"
-            className="w-36 sm:w-56 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+            className="w-36 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56"
+            aria-label="Search account"
           />
-          <AccountsFilterPopover
-            value={accountsTypeFilter}
-            onChange={setAccountsTypeFilter}
+          <AccountsFilterButton
+            value={accountsFilter}
+            onChange={setAccountsFilter}
           />
         </div>
       );
@@ -3506,7 +3535,7 @@ function DepartmentDetail({
     choirSearch,
     groupsSearch,
     accountsSearch,
-    accountsTypeFilter,
+    accountsFilter,
     meetingsSearch,
     setHeaderRightAction,
   ]);
@@ -4081,7 +4110,7 @@ function DepartmentDetail({
           department={department}
           onChanged={onChanged}
           search={accountsSearch}
-          typeFilter={accountsTypeFilter}
+          typeFilter={accountsFilter}
         />
       )}
       {subTab === "calendar" && (

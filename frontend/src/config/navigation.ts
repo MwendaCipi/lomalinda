@@ -162,13 +162,13 @@ export const destinations = {
     match: ["/share/moments"],
   },
   testimonyIdeas: {
-    href: "/share",
+    href: "/spiritual/testimonies",
     label: "Testimonies & Ideas",
     short: "Testimonies",
     description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,
     area: "fellowship",
-    match: ["/share", "/spiritual", "/support/ideas"],
+    match: ["/spiritual/testimonies", "/support/ideas"],
   },
   /**
    * Prayer — the first of the two request desks and the Requests row's way

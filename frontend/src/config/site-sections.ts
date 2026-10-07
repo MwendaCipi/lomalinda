@@ -226,7 +226,7 @@ export const fellowshipLinks: SectionLink[] = [
   },
   {
     key: "testimonyIdeas",
-    href: "/share",
+    href: "/spiritual/testimonies",
     label: "Testimonies & Ideas",
     description: "Share what God has done, or offer an idea that could help the church.",
     icon: Sparkles,

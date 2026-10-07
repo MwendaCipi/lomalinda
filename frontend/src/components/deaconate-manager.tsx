@@ -661,18 +661,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
             </div>
           </div>
           <DepartmentAccountsPanel
-            department={{
-              code: "deaconate",
-              label: "Deaconate",
-              description: "Church property, ordinances and logistics",
-              leader: null,
-              assistants: [],
-              roles: [],
-              member_count: 0,
-              event_count: 0,
-              group: "office",
-              units: [],
-            }}
+            department={{ code: "deaconate", label: "Deaconate" }}
             onChanged={() => {}}
             search=""
           />

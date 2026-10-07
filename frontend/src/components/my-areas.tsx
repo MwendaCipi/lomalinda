@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Info, UserPlus, UserRound, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, Info, UserPlus, UserRound, Users, Wallet } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
@@ -9,6 +9,7 @@ import { showAlert } from "@/lib/alerts";
 import { useAllDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { dayFirst } from "@/lib/dates";
+import { DepartmentAccountsPanel } from "@/components/department-hub";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -54,10 +55,8 @@ const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
  *
  * One page, three sub-navs: All, Ministry and Department. The All tab is the
  * member's own map; the other two also include areas they could join. Opening a card
- * reads the area — its leadership, its roll and its calendar — without any
- * way to change it. The writing side (adding members, seating leaders,
- * keeping the calendar) stays in the office console, which is why this can be
- * every member's page while the console is the offices'.
+ * reads the area — its leadership, its roll, its calendar, and its accounts &
+ * withdrawals — with withdrawal requests enabled for leaders.
  */
 export function MyAreas() {
   const rows = useAllDepartments();
@@ -67,6 +66,7 @@ export function MyAreas() {
 
   const [tab, setTab] = useState<AreaTab>("all");
   const [openCode, setOpenCode] = useState<string | null>(null);
+  const [areaView, setAreaView] = useState<"overview" | "leadership" | "calendar" | "accounts">("overview");
   const [joining, setJoining] = useState<string | null>(null);
   const legacyDepartmentCode = (me?.department || "").trim();
   const ownDepartmentCode = (me?.department_ref || LEGACY_DEPARTMENT_CODES[legacyDepartmentCode] || legacyDepartmentCode).trim();
@@ -116,8 +116,24 @@ export function MyAreas() {
 
   const { setCustomToggles, setCustomHeader } = usePageHeader();
 
-  // The three sub-navs, drawn by the shell as this page's strip.
+  // The sub-navs: for directory list (All/Ministry/Dept), or for opened area (Overview/Leadership/Calendar/Accounts).
   useEffect(() => {
+    if (openArea) {
+      setCustomToggles(
+        <SubNav
+          label={`${openArea.label} views`}
+          value={areaView}
+          onChange={(next) => setAreaView(next as typeof areaView)}
+          items={[
+            { key: "overview", label: "Overview" },
+            { key: "leadership", label: "Leadership & Roll", icon: Users },
+            { key: "calendar", label: "Calendar", icon: CalendarDays },
+            { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
+          ]}
+        />
+      );
+      return () => setCustomToggles(null);
+    }
     setCustomToggles(
       <SubNav
         label="My areas"
@@ -125,6 +141,7 @@ export function MyAreas() {
         onChange={(next) => {
           setTab(next as AreaTab);
           setOpenCode(null);
+          setAreaView("overview");
         }}
         items={[
           { key: "all", label: TAB_LABELS.all },
@@ -134,7 +151,7 @@ export function MyAreas() {
       />
     );
     return () => setCustomToggles(null);
-  }, [tab, setCustomToggles]);
+  }, [openArea, areaView, tab, setCustomToggles]);
 
   // The shell names the area the member opened, or the map they are on.
   useEffect(() => {
@@ -216,103 +233,143 @@ export function MyAreas() {
     return (
       <div className="flex-1 min-w-0 h-full w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
         <div className="mx-auto max-w-4xl space-y-5">
-          <button
-            type="button"
-            onClick={() => setOpenCode(null)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            All areas
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                setOpenCode(null);
+                setAreaView("overview");
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              All areas
+            </button>
+          </div>
 
-          <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <UserRound className="h-4 w-4 text-ember" aria-hidden="true" />
-              Leadership
-            </h2>
-            {leaders.length === 0 && assistants.length === 0 ? (
-              <p className="mt-3 text-xs text-moss">No leadership is seated yet.</p>
-            ) : (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {[...leaders, ...assistants].map((holder) => (
-                  <div
-                    key={`${holder.username}-${holder.role}-${holder.kind}`}
-                    className="flex items-center gap-3 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-3"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember">
-                      {holder.name.slice(0, 1) || "?"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-bark">{holder.name}</p>
-                      <p className="truncate text-[11px] text-moss">
-                        {holder.role}
-                        {holder.kind === "assistant" ? " · Assistant" : ""}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-center justify-between gap-2">
+          {/* Section 1: Leadership */}
+          {(areaView === "overview" || areaView === "leadership") && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
-                <Users className="h-4 w-4 text-ember" aria-hidden="true" />
-                Members
+                <UserRound className="h-4 w-4 text-ember" aria-hidden="true" />
+                Leadership
               </h2>
-              <span className="text-[11px] font-semibold text-moss">
-                {roll.length} {roll.length === 1 ? "person" : "people"}
-              </span>
-            </div>
-            {loading && roll.length === 0 ? (
-              <p className="mt-4 text-xs text-moss">Loading the roll…</p>
-            ) : roll.length === 0 ? (
-              <p className="mt-4 text-xs text-moss">Nobody is on this roll yet.</p>
-            ) : (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {roll.map((member) => (
-                  <span
-                    key={member.id}
-                    title={member.via ? `On the roll through ${member.via}` : undefined}
-                    className="rounded-full border border-sand-line bg-sand-card px-3 py-1 text-xs font-semibold text-bark"
-                  >
-                    {member.name}
-                    {member.via && <span className="ml-1 font-normal text-moss">· {member.via}</span>}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <CalendarDays className="h-4 w-4 text-ember" aria-hidden="true" />
-              Calendar
-            </h2>
-            {loading && events.length === 0 ? (
-              <p className="mt-4 text-xs text-moss">Loading the calendar…</p>
-            ) : events.length === 0 ? (
-              <p className="mt-4 text-xs text-moss">Nothing is on this area&apos;s calendar yet.</p>
-            ) : (
-              <ul className="mt-4 space-y-2">
-                {events.map((event) => (
-                  <li
-                    key={event.id}
-                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-bark">{event.title}</p>
-                      <p className="text-[11px] text-moss">
-                        {[event.time, event.location, event.lead].filter(Boolean).join(" · ") || "—"}
-                      </p>
+              {leaders.length === 0 && assistants.length === 0 ? (
+                <p className="mt-3 text-xs text-moss">No leadership is seated yet.</p>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {[...leaders, ...assistants].map((holder) => (
+                    <div
+                      key={`${holder.username}-${holder.role}-${holder.kind}`}
+                      className="flex items-center gap-3 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-3"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember">
+                        {holder.name.slice(0, 1) || "?"}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-bark">{holder.name}</p>
+                        <p className="truncate text-[11px] text-moss">
+                          {holder.role}
+                          {holder.kind === "assistant" ? " · Assistant" : ""}
+                        </p>
+                      </div>
                     </div>
-                    <span className="shrink-0 text-[11px] font-semibold text-ember">{dayFirst(event.date)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Section 2: Members */}
+          {(areaView === "overview" || areaView === "leadership") && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <Users className="h-4 w-4 text-ember" aria-hidden="true" />
+                  Members
+                </h2>
+                <span className="text-[11px] font-semibold text-moss">
+                  {roll.length} {roll.length === 1 ? "person" : "people"}
+                </span>
+              </div>
+              {loading && roll.length === 0 ? (
+                <p className="mt-4 text-xs text-moss">Loading the roll…</p>
+              ) : roll.length === 0 ? (
+                <p className="mt-4 text-xs text-moss">Nobody is on this roll yet.</p>
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {roll.map((member) => (
+                    <span
+                      key={member.id}
+                      title={member.via ? `On the roll through ${member.via}` : undefined}
+                      className="rounded-full border border-sand-line bg-sand-card px-3 py-1 text-xs font-semibold text-bark"
+                    >
+                      {member.name}
+                      {member.via && <span className="ml-1 font-normal text-moss">· {member.via}</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Section 3: Calendar */}
+          {(areaView === "overview" || areaView === "calendar") && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                <CalendarDays className="h-4 w-4 text-ember" aria-hidden="true" />
+                Calendar
+              </h2>
+              {loading && events.length === 0 ? (
+                <p className="mt-4 text-xs text-moss">Loading the calendar…</p>
+              ) : events.length === 0 ? (
+                <p className="mt-4 text-xs text-moss">Nothing is on this area&apos;s calendar yet.</p>
+              ) : (
+                <ul className="mt-4 space-y-2">
+                  {events.map((event) => (
+                    <li
+                      key={event.id}
+                      className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-bark">{event.title}</p>
+                        <p className="text-[11px] text-moss">
+                          {[event.time, event.location, event.lead].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-semibold text-ember">{dayFirst(event.date)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {/* Section 4: Account & Withdrawals */}
+          {(areaView === "overview" || areaView === "accounts") && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                    <Wallet className="h-4 w-4 text-ember" aria-hidden="true" />
+                    Account &amp; Withdrawals
+                  </h2>
+                  <p className="mt-0.5 text-xs text-moss">
+                    Fund balance, transaction ledger, and withdrawal requests.
+                  </p>
+                </div>
+              </div>
+              <div className={areaView === "accounts" ? "h-[540px]" : "h-[440px]"}>
+                <DepartmentAccountsPanel
+                  department={openArea}
+                  showInlineControls
+                  search=""
+                  typeFilter="all"
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-sand-linen/30 h-full"
+                />
+              </div>
+            </section>
+          )}
 
           <p className="flex items-start gap-2 rounded-xl border border-sand-line bg-sand-linen px-4 py-3 text-[11px] leading-5 text-moss">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-moss" aria-hidden="true" />

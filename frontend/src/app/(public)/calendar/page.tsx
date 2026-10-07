@@ -5,8 +5,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
-import { PublicSectionNav } from "@/components/public-section-nav";
-import { newsAndEventsLinks } from "@/config/site-sections";
 import { usePageHeader } from "@/components/app-frame";
 import { dayFirst, localDate, weekdayOf } from "@/lib/dates";
 
@@ -24,8 +22,18 @@ const weekdayNamesFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"
 //: week reads at a glance, the way a printed wall calendar rings it.
 const SABBATH_COLUMN = 6;
 
+function quarterBounds(year: number, month: number) {
+  const startMonth = Math.floor(month / 3) * 3;
+  const endDay = new Date(year, startMonth + 3, 0).getDate();
+  return {
+    start: `${year}-${String(startMonth + 1).padStart(2, "0")}-01`,
+    end: `${year}-${String(startMonth + 3).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`,
+  };
+}
+
 /** How the page is read: the list of events, or the month laid out as a grid. */
 type CalendarView = "table" | "month";
+type CalendarPeriod = "quarter" | "all" | string;
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
 // A row the church calendar shows. These are the ministries' and departments'
@@ -290,8 +298,8 @@ function CalendarFilters({
   onSearch: (value: string) => void;
   year: number;
   onYear: (value: number) => void;
-  month: string;
-  onMonth: (value: string) => void;
+  month: CalendarPeriod;
+  onMonth: (value: CalendarPeriod) => void;
   years: number[];
   view: CalendarView;
   onView: (view: CalendarView) => void;
@@ -322,11 +330,12 @@ function CalendarFilters({
       <select
         value={month}
         onChange={(event) => onMonth(event.target.value)}
-        aria-label="Church calendar month"
+        aria-label="Church calendar period"
         className="rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember"
       >
         {/* The grid lays out one month, so the whole-year reading is the
             list's alone: the choice is offered only while the list is on. */}
+        {view === "table" && <option value="quarter">This quarter</option>}
         {view === "table" && <option value="all">All months</option>}
         {monthNames.map((name, index) => (
           <option key={name} value={index}>
@@ -382,16 +391,22 @@ function CalendarPageContent() {
 
   const today = new Date();
   const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
   const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") === "month" ? "month" : "table";
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => { const requestedYear = Number(searchParams.get("year")); return requestedYear >= currentYear - 2 && requestedYear <= currentYear + 2 ? requestedYear : currentYear; });
-  const [selectedMonth, setSelectedMonth] = useState(searchParams.get("month") ?? String(today.getMonth()));
+  const [selectedMonth, setSelectedMonth] = useState<CalendarPeriod>(() => {
+    const requestedMonth = searchParams.get("month");
+    if (initialView === "month" && (!requestedMonth || requestedMonth === "quarter" || requestedMonth === "all")) return String(currentMonth);
+    return requestedMonth ?? "quarter";
+  });
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   // The list is what the page opens on; the month grid is the other way to
   // read the same events, and both stay reachable from the same controls.
-  const [view, setView] = useState<CalendarView>(searchParams.get("view") === "month" ? "month" : "table");
+  const [view, setView] = useState<CalendarView>(initialView);
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
   const { setHeaderRightAction } = usePageHeader();
@@ -428,7 +443,7 @@ function CalendarPageContent() {
    * showing every month lands on this one rather than on an unreadable year.
    */
   function chooseView(next: CalendarView) {
-    if (next === "month" && selectedMonth === "all") setSelectedMonth(String(today.getMonth()));
+    if (next === "month" && (selectedMonth === "all" || selectedMonth === "quarter")) setSelectedMonth(String(currentMonth));
     setView(next);
   }
 
@@ -460,20 +475,25 @@ function CalendarPageContent() {
   const mapUrl = mapsLink(settings);
   // The grid's own month: it lays out a single one, so a page that arrived
   // asking for every month still gives it something to draw.
-  const gridMonth = selectedMonth === "all" ? today.getMonth() : Number(selectedMonth);
+  const gridMonth = selectedMonth === "all" || selectedMonth === "quarter" ? currentMonth : Number(selectedMonth);
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const quarter = quarterBounds(selectedYear, currentMonth);
     return events
       .filter((event) => event.date?.startsWith(`${selectedYear}-`))
-      .filter((event) => selectedMonth === "all" || Number(event.date.slice(5, 7)) - 1 === Number(selectedMonth))
+      .filter((event) => {
+        if (selectedMonth === "all") return true;
+        if (selectedMonth === "quarter") return event.date >= quarter.start && event.date <= quarter.end;
+        return Number(event.date.slice(5, 7)) - 1 === Number(selectedMonth);
+      })
       .filter((event) => {
         if (!needle) return true;
         const hay = `${event.date} ${weekdayLabel(event.date)} ${event.title} ${event.department_name} ${event.lead ?? ""} ${event.unit ?? ""} ${event.location ?? ""}`;
         return hay.toLowerCase().includes(needle);
       })
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
-  }, [events, search, selectedMonth, selectedYear]);
+  }, [currentMonth, events, search, selectedMonth, selectedYear]);
 
   function openProgram(row: CalendarEvent) { const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null; setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true }); }
 
@@ -505,7 +525,7 @@ function CalendarPageContent() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-6 px-6 py-10 lg:px-8 lg:py-12">
+      <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
         {/* PC Desktop Table View (visible on md and up) */}
         <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
@@ -646,16 +666,6 @@ function CalendarPageContent() {
           Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}, added by the ministries and departments.
         </p>
       </div>
-
-      {/* The old News & Events sidebar, now part of the page body. */}
-      <PublicSectionNav
-        eyebrow="News & events"
-        title="More news and events"
-        description="Announcements, the church year, and the order of service for this Sabbath."
-        links={newsAndEventsLinks}
-        activeKey="calendar"
-        className="border-t border-sand-line bg-white/60"
-      />
 
       <SabbathProgramModal program={activeProgram} onClose={() => setActiveProgram(null)} />
     </main>
