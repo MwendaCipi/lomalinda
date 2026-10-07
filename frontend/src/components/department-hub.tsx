@@ -2969,7 +2969,7 @@ export function DepartmentAccountsPanel({
                             <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
                           )}
                           <div className="min-w-0">
-                            <span className="truncate">{item.description}</span>
+                            <span className="truncate" title={item.description}>{item.description}</span>
                             {item.requestedBy && item.status !== "completed" && (
                               <span className="ml-1.5 text-[10px] text-moss-faint">
                                 (by {item.requestedBy})

@@ -9475,3 +9475,54 @@ class AnnouncementEmailTransportTests(TestCase):
         )
         self.assertFalse(resolved['use_tls'])
 
+
+class TreasuryTransactionGiverDescriptionTests(APITestCase):
+    def test_credit_contribution_lines_includes_giver_name(self):
+        from members.treasury import credit_contribution_lines
+        from members.models import TreasuryAccount, Contribution
+
+        account = TreasuryAccount.objects.create(name='Dev', description='Church Development', balance=Decimal('0.00'))
+        giver = User.objects.create_user('john.doe', 'john.doe@example.com', 'ChurchPass#2026', first_name='John', last_name='Doe')
+        contrib = Contribution.objects.create(
+            member=giver,
+            donor_name='John Doe',
+            amount=Decimal('1000.00'),
+            purpose='Church Development',
+            payment_method='mpesa',
+            status='completed',
+            mpesa_receipt_number='TI07O4XYZ',
+        )
+
+        rows = credit_contribution_lines(contrib)
+        self.assertEqual(len(rows), 1)
+        self.assertIn('John Doe', rows[0].description)
+        self.assertEqual(rows[0].description, 'John Doe — M-Pesa (Church Development)')
+
+    def test_enrich_transaction_descriptions_helper(self):
+        from members.treasury import enrich_transaction_descriptions
+        from members.models import TreasuryAccount, TreasuryAccountTransaction, Contribution
+
+        account = TreasuryAccount.objects.create(name='LCB', description='Local Church Budget', balance=Decimal('0.00'))
+        giver = User.objects.create_user('jane.smith', 'jane.smith@example.com', 'ChurchPass#2026', first_name='Jane', last_name='Smith')
+        Contribution.objects.create(
+            member=giver,
+            donor_name='Jane Smith',
+            amount=Decimal('500.00'),
+            purpose='Local Church Budget',
+            payment_method='mpesa',
+            status='completed',
+            mpesa_receipt_number='TI07O4ABC',
+        )
+
+        tx = TreasuryAccountTransaction.objects.create(
+            account=account,
+            transaction_type='credit',
+            amount=Decimal('500.00'),
+            description='Contribution — M-Pesa (Local Church Budget)',
+            reference='TI07O4ABC',
+        )
+
+        enriched = enrich_transaction_descriptions([tx])
+        self.assertEqual(enriched[0].description, 'Jane Smith — M-Pesa (Local Church Budget)')
+
+

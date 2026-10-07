@@ -57,7 +57,7 @@ from .pledges import (
 )
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .requests import notify_request_safely, send_membership_approval_email
-from .treasury import credit_account, credit_contribution_lines
+from .treasury import credit_account, credit_contribution_lines, enrich_transaction_descriptions
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -2962,10 +2962,19 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         # receipt names is credited now, so the treasurer never has to enter
         # the same figure twice. Anonymous rows credit their account too — the
         # giver is unknown, the money is not.
+        giver = giver_display_name(
+            cash.donor_name,
+            email=cash.giver_email,
+            phone=cash.giver_phone,
+        )
+        if giver and giver.lower() != 'anonymous giver':
+            cash_desc = f"{giver} — {cash.get_payment_method_display()} ({cash.purpose})"
+        else:
+            cash_desc = f"Contribution — {cash.get_payment_method_display()} ({cash.purpose})"
         credit_account(
             purpose=cash.purpose,
             amount=cash.amount,
-            description=f"Contribution — {cash.get_payment_method_display()} ({cash.purpose})",
+            description=cash_desc,
             reference=cash.receipt_number or f'CASH-{cash.id}',
             created_by=self.request.user,
         )
@@ -3014,10 +3023,19 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
                 has_phone=bool(first.giver_phone),
             )
         for row in rows:
+            giver = giver_display_name(
+                row.donor_name,
+                email=row.giver_email,
+                phone=row.giver_phone,
+            )
+            if giver and giver.lower() != 'anonymous giver':
+                row_desc = f"{giver} — {row.get_payment_method_display()} ({row.purpose})"
+            else:
+                row_desc = f"Contribution — {row.get_payment_method_display()} ({row.purpose})"
             credit_account(
                 purpose=row.purpose,
                 amount=row.amount,
-                description=f"Contribution — {row.get_payment_method_display()} ({row.purpose})",
+                description=row_desc,
                 reference=receipt_number,
                 created_by=self.request.user,
             )
@@ -7478,7 +7496,9 @@ class TreasuryAccountTransactionListView(APIView):
         qs = TreasuryAccountTransaction.objects.all()
         if account_id:
             qs = qs.filter(account_id=account_id)
-        serializer = TreasuryAccountTransactionSerializer(qs[:150], many=True)
+        raw_movements = list(qs[:150])
+        enrich_transaction_descriptions(raw_movements)
+        serializer = TreasuryAccountTransactionSerializer(raw_movements, many=True)
         return Response(serializer.data)
 
 
@@ -9177,6 +9197,13 @@ class DepartmentAccountView(APIView):
 
         primary_account = accounts[0]
 
+        raw_movements = list(
+            TreasuryAccountTransaction.objects.filter(
+                account__in=active_accounts
+            ).select_related('account').order_by('-created_at')[:150]
+        )
+        enrich_transaction_descriptions(raw_movements)
+
         movements = [
             {
                 'id': movement.id,
@@ -9190,9 +9217,7 @@ class DepartmentAccountView(APIView):
                 'reference': movement.reference,
                 'created_at': movement.created_at,
             }
-            for movement in TreasuryAccountTransaction.objects.filter(
-                account__in=active_accounts
-            ).select_related('account').order_by('-created_at')[:150]
+            for movement in raw_movements
         ]
 
         withdrawals = [

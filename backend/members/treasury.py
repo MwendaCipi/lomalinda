@@ -166,12 +166,26 @@ def credit_contribution_lines(contribution, *, allocations=None, created_by=None
         allocations = [(row.purpose, row.amount) for row in siblings]
 
     reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
+    from .models import giver_display_name
+
+    giver = giver_display_name(
+        contribution.donor_name,
+        member=contribution.member,
+        email=contribution.donor_email,
+        phone=contribution.phone_number,
+    )
+    method_display = contribution.get_payment_method_display()
+
     credited = []
     for purpose, amount in allocations:
+        if giver and giver.lower() != 'anonymous giver':
+            desc = f"{giver} — {method_display} ({purpose})"
+        else:
+            desc = f"Contribution — {method_display} ({purpose})"
         row = credit_account(
             purpose=purpose,
             amount=amount,
-            description=f"Contribution — {contribution.get_payment_method_display()} ({purpose})",
+            description=desc,
             reference=reference,
             created_by=created_by,
             at=contribution.paid_at,
@@ -179,6 +193,97 @@ def credit_contribution_lines(contribution, *, allocations=None, created_by=None
         if row is not None:
             credited.append(row)
     return credited
+
+
+def enrich_transaction_descriptions(transactions):
+    """Enriches a list or queryset of TreasuryAccountTransaction objects or dicts with giver names in their descriptions.
+
+    If a transaction originated from a Contribution or CashContribution where the giver is identifiable,
+    the description is updated to show the person's name (e.g. 'John Doe — M-Pesa (Local Church Budget)').
+    """
+    if not transactions:
+        return transactions
+
+    from django.db.models import Q
+    from .models import Contribution, CashContribution, giver_display_name
+
+    is_dict = isinstance(transactions[0], dict)
+
+    refs = set()
+    contrib_ids = set()
+    cash_ids = set()
+
+    for item in transactions:
+        ref = (item.get('reference') if is_dict else getattr(item, 'reference', '')) or ''
+        ref = ref.strip()
+        if not ref:
+            continue
+        if ref.startswith('CONTRIB-'):
+            try:
+                contrib_ids.add(int(ref.split('-')[1]))
+            except (IndexError, ValueError):
+                pass
+        elif ref.startswith('CASH-'):
+            try:
+                cash_ids.add(int(ref.split('-')[1]))
+            except (IndexError, ValueError):
+                pass
+        elif ref.startswith('REC-'):
+            refs.add(ref)
+        elif not ref.startswith(('WD-', 'INIT', 'EXP-')):
+            refs.add(ref)
+
+    giver_map = {}
+
+    if refs or contrib_ids:
+        q = Q()
+        if refs:
+            q |= Q(mpesa_receipt_number__in=refs) | Q(paystack_reference__in=refs)
+        if contrib_ids:
+            q |= Q(id__in=contrib_ids)
+        contribs = Contribution.objects.filter(q).select_related('member')
+        for c in contribs:
+            g = giver_display_name(c.donor_name, member=c.member, email=c.donor_email, phone=c.phone_number)
+            if g and g.lower() != 'anonymous giver':
+                if c.mpesa_receipt_number:
+                    giver_map[c.mpesa_receipt_number] = g
+                if c.paystack_reference:
+                    giver_map[c.paystack_reference] = g
+                giver_map[f"CONTRIB-{c.id}"] = g
+
+    if refs or cash_ids:
+        q = Q()
+        if refs:
+            q |= Q(receipt_number__in=refs)
+        if cash_ids:
+            q |= Q(id__in=cash_ids)
+        cash_contribs = CashContribution.objects.filter(q)
+        for cc in cash_contribs:
+            g = giver_display_name(cc.donor_name, email=cc.giver_email, phone=cc.giver_phone)
+            if g and g.lower() != 'anonymous giver':
+                if cc.receipt_number:
+                    giver_map[cc.receipt_number] = g
+                giver_map[f"CASH-{cc.id}"] = g
+
+    for item in transactions:
+        ref = (item.get('reference') if is_dict else getattr(item, 'reference', '')) or ''
+        ref = ref.strip()
+        desc = (item.get('description') if is_dict else getattr(item, 'description', '')) or ''
+        giver = giver_map.get(ref)
+        if giver:
+            if desc.startswith("Contribution —"):
+                new_desc = desc.replace("Contribution —", f"{giver} —", 1)
+            elif not desc.startswith(giver):
+                new_desc = f"{giver} — {desc}"
+            else:
+                new_desc = desc
+            if is_dict:
+                item['description'] = new_desc
+                item['giver_name'] = giver
+            else:
+                item.description = new_desc
+
+    return transactions
 
 
 class ContributionSiblings:
@@ -197,3 +302,4 @@ class ContributionSiblings:
                 .order_by('id')
             )
         return [contribution]
+
