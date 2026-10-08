@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Info, UserPlus, UserRound, Users, Wallet } from "lucide-react";
+import { ArrowLeft, CalendarDays, Info, Plus, Search, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
@@ -14,7 +14,7 @@ import { DepartmentAccountsPanel } from "@/components/department-hub";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /** One person on an area's roll, as the desk's own endpoint reports them. */
-type RollRow = { id: number; name: string; unit: string; via: string };
+type RollRow = { id: number; name: string; unit: string; via: string; role?: string };
 
 /** One entry of an area's calendar. */
 type AreaEvent = {
@@ -29,6 +29,213 @@ type AreaEvent = {
 function authHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+type AreaCandidate = { id: number; name: string; username: string };
+
+function AddAreaMemberModal({
+  departmentLabel,
+  onClose,
+  onAdd,
+}: {
+  departmentLabel: string;
+  onClose: () => void;
+  onAdd: (member: AreaCandidate) => Promise<boolean>;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AreaCandidate[]>([]);
+  const [resultsForQuery, setResultsForQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [addingId, setAddingId] = useState<number | null>(null);
+
+  const visibleResults = query.trim().length >= 2 && resultsForQuery === query.trim() ? results : [];
+
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (!alive) return;
+          const needle = query.trim().toLowerCase();
+          const members = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+          setResultsForQuery(query.trim());
+          setResults(
+            members
+              .filter((user: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) =>
+                `${user.first_name || ""} ${user.last_name || ""} ${user.username || ""} ${user.phone_number || ""}`
+                  .toLowerCase()
+                  .includes(needle),
+              )
+              .slice(0, 12)
+              .map((user: { id: number; first_name?: string; last_name?: string; username: string }) => ({
+                id: user.id,
+                name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username,
+                username: user.username,
+              })),
+          );
+        })
+        .catch(() => {
+          if (alive) setResults([]);
+        })
+        .finally(() => {
+          if (alive) setSearching(false);
+        });
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div role="dialog" aria-modal="true" aria-labelledby="add-area-member-title" className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line sm:p-6">
+        <div className="flex items-center justify-between gap-3 border-b border-sand-line pb-3">
+          <div>
+            <h2 id="add-area-member-title" className="text-base font-bold text-bark">Add member</h2>
+            <p className="mt-0.5 text-xs text-moss">Add someone to {departmentLabel}&apos;s roll.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-moss hover:bg-sand hover:text-bark">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="relative mt-4">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" aria-hidden="true" />
+          <input
+            autoFocus
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name, username or phone…"
+            aria-label="Search members to add"
+            className="w-full rounded-xl border border-sand-line bg-sand py-2.5 pl-9 pr-3 text-sm outline-none focus:border-ember"
+          />
+        </div>
+        <div className="mt-3 space-y-2">
+          {searching && <p className="py-4 text-center text-xs text-moss">Searching…</p>}
+          {!searching && query.trim().length >= 2 && results.length === 0 && (
+            <p className="py-4 text-center text-xs text-moss">No members match that search.</p>
+          )}
+          {!searching && visibleResults.map((member) => (
+            <button
+              key={member.id}
+              type="button"
+              disabled={addingId !== null}
+              onClick={async () => {
+                setAddingId(member.id);
+                const added = await onAdd(member);
+                if (added) onClose();
+                setAddingId(null);
+              }}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-sand-line px-3.5 py-3 text-left transition hover:border-ember hover:bg-sand-linen disabled:opacity-60"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember" aria-hidden="true">
+                  {member.name.slice(0, 1) || "?"}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-bark">{member.name}</span>
+                  <span className="block truncate text-[11px] text-moss">@{member.username}</span>
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-semibold text-ember">{addingId === member.id ? "Adding…" : "Add"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddAreaEventModal({
+  departmentLabel,
+  onClose,
+  onAdd,
+}: {
+  departmentLabel: string;
+  onClose: () => void;
+  onAdd: (event: { title: string; date: string; time: string; location: string; mode: "physical" | "virtual"; meetingLink: string }) => Promise<boolean>;
+}) {
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [mode, setMode] = useState<"physical" | "virtual">("physical");
+  const [meetingLink, setMeetingLink] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-area-event-title"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!title.trim() || !date) return;
+          setSaving(true);
+          const added = await onAdd({ title: title.trim(), date, time, location, mode, meetingLink });
+          if (added) onClose();
+          setSaving(false);
+        }}
+        className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line sm:p-6"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-sand-line pb-3">
+          <div>
+            <h2 id="add-area-event-title" className="text-base font-bold text-bark">Add calendar event</h2>
+            <p className="mt-0.5 text-xs text-moss">Add an event to {departmentLabel}&apos;s calendar.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-moss hover:bg-sand hover:text-bark">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <label className="block text-xs font-semibold text-bark">
+          Event title
+          <input required autoFocus value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-sm font-normal outline-none focus:border-ember" />
+        </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-semibold text-bark">
+            Date
+            <input required type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-sm font-normal outline-none focus:border-ember" />
+          </label>
+          <label className="block text-xs font-semibold text-bark">
+            Time
+            <input type="time" value={time} onChange={(event) => setTime(event.target.value)} className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-sm font-normal outline-none focus:border-ember" />
+          </label>
+        </div>
+        <fieldset>
+          <legend className="text-xs font-semibold text-bark">Event type</legend>
+          <div className="mt-2 flex gap-2">
+            {(["physical", "virtual"] as const).map((option) => (
+              <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} className={`rounded-xl px-4 py-2 text-xs font-semibold capitalize ${mode === option ? "bg-ember text-white" : "border border-sand-line bg-white text-bark"}`}>
+                {option}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        {mode === "physical" ? (
+          <label className="block text-xs font-semibold text-bark">
+            Location
+            <input value={location} onChange={(event) => setLocation(event.target.value)} className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-sm font-normal outline-none focus:border-ember" />
+          </label>
+        ) : (
+          <label className="block text-xs font-semibold text-bark">
+            Meeting link
+            <input type="url" value={meetingLink} onChange={(event) => setMeetingLink(event.target.value)} placeholder="https://…" className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2.5 text-sm font-normal outline-none focus:border-ember" />
+          </label>
+        )}
+        <div className="flex justify-end gap-2 border-t border-sand-line pt-3">
+          <button type="button" onClick={onClose} className="rounded-xl border border-sand-line px-4 py-2.5 text-xs font-semibold text-moss">Cancel</button>
+          <button type="submit" disabled={saving || !title.trim() || !date} className="rounded-xl bg-ember px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">
+            {saving ? "Saving…" : "Add event"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 /**
@@ -112,7 +319,8 @@ export function MyAreas() {
   const accountViewItems = useMemo(
     () => [
       { key: "members", label: "Members", icon: Users },
-      { key: "calendar", label: "Calendar", icon: CalendarDays },          { key: "accounts", label: "Account & Withdrawals", short: "Accounts", icon: Wallet },
+      { key: "calendar", label: "Calendar", icon: CalendarDays },
+      { key: "accounts", label: "Account & Withdrawals", short: "Accounts", help: "Account & Withdrawals", icon: Wallet },
     ],
     [],
   );
@@ -167,6 +375,11 @@ export function MyAreas() {
   const [roll, setRoll] = useState<RollRow[]>([]);
   const [events, setEvents] = useState<AreaEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [canManageArea, setCanManageArea] = useState(false);
+  const [manageAreaCode, setManageAreaCode] = useState<string | null>(null);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [areaReload, setAreaReload] = useState(0);
 
   useEffect(() => {
     if (!openArea) return;
@@ -189,12 +402,61 @@ export function MyAreas() {
       if (!alive) return;
       setRoll(Array.isArray(membersData?.members) ? membersData.members : []);
       setEvents(Array.isArray(eventsData?.events) ? eventsData.events : []);
+      setCanManageArea(Boolean(membersData?.can_manage));
+      setManageAreaCode(code);
       setLoading(false);
     });
     return () => {
       alive = false;
     };
-  }, [openArea]);
+  }, [openArea, areaReload]);
+
+  async function addAreaMember(member: AreaCandidate): Promise<boolean> {
+    if (!openArea) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/members/departments/${openArea.code}/members/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: member.id, unit: "" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "The member could not be added.");
+      showAlert("Added to roll", `${member.name} now belongs to ${openArea.label}.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      setAreaReload((value) => value + 1);
+      return true;
+    } catch (error) {
+      showAlert("Could not add member", error instanceof Error ? error.message : "Try again.", "error");
+      return false;
+    }
+  }
+
+  async function addAreaEvent(event: { title: string; date: string; time: string; location: string; mode: "physical" | "virtual"; meetingLink: string }): Promise<boolean> {
+    if (!openArea) return false;
+    try {
+      const body = new FormData();
+      body.append("title", event.title);
+      body.append("date", event.date);
+      body.append("time", event.time);
+      body.append("mode", event.mode);
+      body.append("location", event.location);
+      body.append("meeting_link", event.meetingLink);
+      body.append("department", openArea.code);
+      body.append("unit", "");
+      const response = await fetch(`${API_URL}/api/members/departments/${openArea.code}/events/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "The event could not be saved.");
+      showAlert("Event added", `“${event.title}” is on the ${openArea.label} calendar.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      setAreaReload((value) => value + 1);
+      return true;
+    } catch (error) {
+      showAlert("Could not add event", error instanceof Error ? error.message : "Try again.", "error");
+      return false;
+    }
+  }
 
   async function requestToJoin(code: string, label: string) {
     setJoining(code);
@@ -221,12 +483,13 @@ export function MyAreas() {
 
   // ── One area, read-only ────────────────────────────────────────────────
   if (openArea) {
+    const canManageCurrentArea = manageAreaCode === openArea.code && canManageArea;
     const leaders = openArea.holders.filter((holder) => holder.kind === "leader");
     const assistants = openArea.holders.filter((holder) => holder.kind === "assistant");
     return (
       <div className="flex-1 min-w-0 h-full w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
         <div className="mx-auto max-w-4xl space-y-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => {
@@ -277,29 +540,50 @@ export function MyAreas() {
           {areaView === "members" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
-                  <Users className="h-4 w-4 text-ember" aria-hidden="true" />
-                  Members
-                </h2>
-                <span className="text-[11px] font-semibold text-moss">
-                  {roll.length} {roll.length === 1 ? "person" : "people"}
-                </span>
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                    <Users className="h-4 w-4 text-ember" aria-hidden="true" />
+                    Members
+                  </h2>
+                  <span className="mt-1 block text-[11px] font-semibold text-moss">
+                    {roll.length} {roll.length === 1 ? "person" : "people"}
+                  </span>
+                </div>
+                {canManageCurrentArea && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMember(true)}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Add member
+                  </button>
+                )}
               </div>
               {loading && roll.length === 0 ? (
                 <p className="mt-4 text-xs text-moss">Loading the roll…</p>
               ) : roll.length === 0 ? (
                 <p className="mt-4 text-xs text-moss">Nobody is on this roll yet.</p>
               ) : (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {roll.map((member) => (
-                    <span
+                    <article
                       key={member.id}
-                      title={member.via ? `On the roll through ${member.via}` : undefined}
-                      className="rounded-full border border-sand-line bg-sand-card px-3 py-1 text-xs font-semibold text-bark"
+                      className="flex min-w-0 items-center gap-3 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-3"
                     >
-                      {member.name}
-                      {member.via && <span className="ml-1 font-normal text-moss">· {member.via}</span>}
-                    </span>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember" aria-hidden="true">
+                        {member.name.slice(0, 1) || "?"}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-bark">{member.name}</p>
+                        {(member.role || member.unit || member.via) && (
+                          <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-moss">
+                            {member.role && <span>{member.role}</span>}
+                            {member.unit && <span>{member.unit}</span>}
+                            {member.via && <span>Through {member.via}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </article>
                   ))}
                 </div>
               )}
@@ -313,6 +597,17 @@ export function MyAreas() {
                 <CalendarDays className="h-4 w-4 text-ember" aria-hidden="true" />
                 Calendar
               </h2>
+              <div className="mt-3 flex justify-end">
+                {canManageCurrentArea && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddEvent(true)}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Add to calendar
+                  </button>
+                )}
+              </div>
               {loading && events.length === 0 ? (
                 <p className="mt-4 text-xs text-moss">Loading the calendar…</p>
               ) : events.length === 0 ? (
@@ -369,6 +664,20 @@ export function MyAreas() {
             This is the church&apos;s own record of {openArea.label}. To change anything, ask the
             area&apos;s leadership or the church office.
           </p>
+          {showAddMember && (
+            <AddAreaMemberModal
+              departmentLabel={openArea.label}
+              onClose={() => setShowAddMember(false)}
+              onAdd={addAreaMember}
+            />
+          )}
+          {showAddEvent && (
+            <AddAreaEventModal
+              departmentLabel={openArea.label}
+              onClose={() => setShowAddEvent(false)}
+              onAdd={addAreaEvent}
+            />
+          )}
         </div>
       </div>
     );

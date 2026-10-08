@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { CalendarDays, ChevronLeft, ChevronRight, List, Printer } from "lucide-react";
+import { usePageHeader } from "@/components/app-frame";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, localDate, weekdayOf } from "@/lib/dates";
@@ -37,7 +39,7 @@ function quarterBounds(year: number, month: number) {
 }
 
 /** How the page is read: the list of events, or the month laid out as a grid. */
-type CalendarView = "table" | "month";
+type CalendarView = "calendar" | "table";
 type CalendarPeriod = "quarter" | "all";
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
@@ -79,9 +81,7 @@ function mapsLink(settings: ChurchSettings | null) {
 
 /**
  * The arrow back to the section the calendar belongs to. It leads the page —
- * above the heading, the way every other public page opens — and the period
- * and search controls sit below it in the content, so the top of the page
- * stays just the way back to fellowship.
+ * above the heading, the way every other public page opens.
  */
 function CalendarBack() {
   return (
@@ -361,18 +361,13 @@ function PeriodButtons({
             : "text-moss-dark hover:text-bark"
         }`}
       >
-        All this year
+        Whole year
       </button>
     </div>
   );
 }
 
-/** The calendar's own controls — the period above the search. There is no
- *  year toggle and no List/Month switch: a period (this quarter, or the whole
- *  of this year) is all the church needs, and the month grid still reads a
- *  single month when it is open. Stacked, the period tabs lead the search on
- *  a phone, so a thumb reaches the switch before the keyboard.
- */
+/** Search and period filters; signed-in, these sit beside the page heading. */
 function CalendarFilters({
   search, onSearch, period, onPeriod, className,
 }: {
@@ -395,13 +390,27 @@ function CalendarFilters({
           className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
         />
       </div>
-      <button
-        type="button"
-        onClick={() => window.print()}
-        className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-dark shrink-0"
-      >
-        Print
-      </button>
+    </div>
+  );
+}
+
+function CalendarViewToggle({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
+  return (
+    <div role="group" aria-label="Calendar view" className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white p-1">
+      {([
+        ["calendar", "Calendar", CalendarDays],
+        ["table", "Table", List],
+      ] as const).map(([value, label, Icon]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={view === value}
+          onClick={() => onChange(value)}
+          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === value ? "bg-bark text-white" : "text-moss hover:bg-sand"}`}
+        >
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -426,17 +435,37 @@ function CalendarPageContent() {
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
   const searchParams = useSearchParams();
-  // The grid stays reachable by URL (?view=month) even though the toggle is gone.
-  const view: CalendarView = searchParams.get("view") === "month" ? "month" : "table";
+  const [view, setView] = useState<CalendarView>(() => searchParams.get("view") === "table" ? "table" : "calendar");
+  const [monthDate, setMonthDate] = useState(() => new Date(currentYear, currentMonth, 1));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
-  // The list is the default read; the month grid is the other way to read the
-  // same events, and both stay reachable from the same controls.
   const [period, setPeriod] = useState<CalendarPeriod>("quarter");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
+  const { setHeaderRightAction } = usePageHeader();
+
+  useEffect(() => {
+    if (!signedIn) {
+      setHeaderRightAction(null);
+      return;
+    }
+    setHeaderRightAction(
+      <CalendarFilters
+        search={search}
+        onSearch={setSearch}
+        period={period}
+        onPeriod={setPeriod}
+        className="sm:justify-end"
+      />
+    );
+    return () => setHeaderRightAction(null);
+  }, [search, period, setHeaderRightAction, signedIn]);
+
+  const shiftMonth = (amount: number) => {
+    setMonthDate((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
+  };
 
   useEffect(() => {
     function closeActions(event: MouseEvent) {
@@ -464,11 +493,10 @@ function CalendarPageContent() {
   }, []);
 
   const mapUrl = mapsLink(settings);
-  // The grid's own month: it lays out a single one, so a page that arrived
-  // asking for the whole year still gives it something to draw.
-  const gridMonth = period === "quarter" ? currentMonth : 0;
+  const monthYear = monthDate.getFullYear();
+  const monthIndex = monthDate.getMonth();
 
-  const rows = useMemo(() => {
+  const tableRows = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return events
       .filter((event) => event.date?.startsWith(`${currentYear}-`))
@@ -485,6 +513,18 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [currentMonth, currentYear, events, search, period]);
 
+  const monthRows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return events
+      .filter((event) => event.date?.startsWith(`${monthYear}-${String(monthIndex + 1).padStart(2, "0")}-`))
+      .filter((event) => {
+        if (!needle) return true;
+        const hay = `${event.date} ${weekdayLabel(event.date)} ${event.title} ${event.department_name} ${event.lead ?? ""} ${event.unit ?? ""} ${event.location ?? ""}`;
+        return hay.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
+  }, [events, monthIndex, monthYear, search]);
+
   function openProgram(row: CalendarEvent) {
     const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null;
     setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true });
@@ -495,29 +535,39 @@ function CalendarPageContent() {
       <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className="mx-auto max-w-6xl">
           <CalendarBack />
-          <div className="mt-4 max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
-            <p className="mt-4 text-base leading-8 text-moss">
-              Sabbaths, vespers, programmes and special events across the church year.
-            </p>
+          <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
+              <p className="mt-4 text-base leading-8 text-moss">
+                Sabbaths, vespers, programmes and special events across the church year.
+              </p>
+            </div>
+            {!signedIn && (
+              <CalendarFilters search={search} onSearch={setSearch} period={period} onPeriod={setPeriod} className="lg:mb-1" />
+            )}
           </div>
         </div>
       </section>
 
       <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
-        {/* The period and the search lead the content — the page's top stays
-            just the arrow back to fellowship, and on a phone the period tabs
-            sit above the search bar. */}
-        <CalendarFilters
-          search={search}
-          onSearch={setSearch}
-          period={period}
-          onPeriod={(v) => setPeriod(v)}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CalendarViewToggle view={view} onChange={setView} />
+          {view === "calendar" && (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <span className="min-w-32 text-center text-sm font-semibold text-bark">{monthNames[monthIndex]} {monthYear}</span>
+              <button type="button" onClick={() => shiftMonth(1)} aria-label="Next month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </div>
 
-        {/* PC Desktop Table View (visible on md and up) */}
-        <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
+        {/* Table view */}
+        <div className={`${view === "table" ? "block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
               <tr>
@@ -529,7 +579,7 @@ function CalendarPageContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-sand-wash">
-              {rows.map((row) => {
+              {tableRows.map((row) => {
                 const actionKey = `${row.date}-${row.id}`;
                 return (
                   <tr key={actionKey} className="hover:bg-sand-plate">
@@ -572,7 +622,7 @@ function CalendarPageContent() {
 
         {/* Mobile Calendar Cards View (visible on mobile only) */}
         <div className={`gap-4 ${view === "table" ? "grid md:hidden" : "hidden"}`}>
-          {rows.map((row) => {
+          {tableRows.map((row) => {
             const actionKey = `mobile-${row.date}-${row.id}`;
             const dateStr = dayFirst(row.date);
             return (
@@ -631,12 +681,12 @@ function CalendarPageContent() {
           })}
         </div>
 
-        {/* The month, laid out as a calendar: the same events the list shows, read by the day they fall on. */}
-        {view === "month" && (
+        {/* The selected month, with only its own events in their calendar days. */}
+        {view === "calendar" && (
           <MonthGrid
-            year={currentYear}
-            month={gridMonth}
-            events={rows}
+            year={monthYear}
+            month={monthIndex}
+            events={monthRows}
             mapUrl={mapUrl}
             openActions={openActions}
             onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
@@ -645,13 +695,18 @@ function CalendarPageContent() {
           />
         )}
 
-        {loaded && rows.length === 0 && (
+        {loaded && view === "table" && tableRows.length === 0 && (
           <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
         )}
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
-        <p className="mt-4 text-xs text-moss">
-          Showing {rows.length} {rows.length === 1 ? "entry" : "entries"}, added by the ministries and departments.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3">
+          <p className="text-xs text-moss">
+            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : " this year"}, added by the ministries and departments.
+          </p>
+          <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
+            <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
+          </button>
+        </div>
       </div>
 
       <SabbathProgramModal program={activeProgram} onClose={() => setActiveProgram(null)} />

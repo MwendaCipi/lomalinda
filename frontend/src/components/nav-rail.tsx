@@ -58,7 +58,7 @@ export function NavRail() {
       else next.add(key);
       return next;
     });
-    if (key === "other-department" || key === "other-ministry") {
+    if (key === "other-ministry") {
       requestAnimationFrame(() => railScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
     }
   };
