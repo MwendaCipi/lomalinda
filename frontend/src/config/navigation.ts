@@ -161,14 +161,23 @@ export const destinations = {
     area: "fellowship",
     match: ["/share/moments"],
   },
-  testimonyIdeas: {
+  testimonies: {
     href: "/spiritual/testimonies",
-    label: "Testimonies & Ideas",
+    label: "Testimonies",
     short: "Testimonies",
-    description: "Share what God has done, or offer an idea that could help the church.",
+    description: "Share what God has done in your life.",
     icon: Sparkles,
     area: "fellowship",
-    match: ["/spiritual/testimonies", "/support/ideas"],
+    match: ["/spiritual/testimonies"],
+  },
+  ideas: {
+    href: "/support/ideas",
+    label: "Ideas",
+    short: "Ideas",
+    description: "Offer an idea that could help the church.",
+    icon: Sparkles,
+    area: "fellowship",
+    match: ["/support/ideas"],
   },
   /**
    * Prayer — the first of the two request desks and the Requests row's way
@@ -216,8 +225,6 @@ export const destinations = {
     area: "fellowship",
     match: ["/enroll"],
   },
-  // Ideas and Testimonies ride the same toggle on the page — one entry below
-  // answers for both, so Ideas is no longer a destination of its own.
   calendar: {
     href: "/calendar",
     label: "Church Calendar",
@@ -789,7 +796,8 @@ export const railEntries: RailEntry[] = [
       page("announcements"),
       page("calendar"),
       page("moments"),
-      page("testimonyIdeas"),
+      page("testimonies"),
+      page("ideas"),
       page("materials"),
     ],
   },
@@ -870,7 +878,7 @@ export const railEntries: RailEntry[] = [
     icon: Users,
     fromDepartments: "department",
     roles: STAFF_ROLES,
-    sectionKey: "my-department",
+    sectionKey: "my-ministry",
   },
 ];
 
@@ -879,16 +887,13 @@ export const railEntries: RailEntry[] = [
  * target — every row under it is a place, exactly as it was flat. The
  * member's own page reads first under a Dashboard heading of its own; the
  * church's life comes next as one My church list; then the areas the member
- * belongs to — their departments, then their ministries — and, folded away,
- * the ministries they could still join.
+ * belongs to, and, folded away, the other areas they can visit or join.
  */
 export type RailSection =
   | "dashboard"
   | "my-church"
-  | "my-department"
   | "my-ministry"
-  | "other-ministry"
-  | "other-department";
+  | "other-ministry";
 
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
@@ -917,7 +922,7 @@ function railEntrySortLabel(entry: RailEntry): string {
 /**
  * The rail, read as headings with the rows under each: the member's own page
  * first, alone; the church's life; the areas they belong to; and, folded, the
- * ministries they could join. A group with no rows is left out entirely.
+ * other ministries and departments they may visit or join. Empty groups are omitted.
  */
 export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   const grouped = new Map<RailSection, RailEntry[]>();
@@ -942,16 +947,9 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   };
   push("dashboard", "Dashboard", false);
   push("my-church", "My church", false);
-  push("my-department", "My Department", false);
-  // The departments the member belongs to outside their own read as
-  // "My Department": the rest fold under a folded "Other Departments".
-  const otherDepartments = grouped.get("other-department") ?? [];
-  if (otherDepartments.length > 0) {
-    push("other-department", "Other Departments", true);
-  }
+  // Departments and ministries share the same two headings, as they do in the
+  // member's Ministry map: joined areas under My Ministry, the rest folded.
   push("my-ministry", "My Ministry", false);
-  // The ministries the member belongs to read as "My Ministry": the rest
-  // fold under a folded "Other Ministries".
   const otherMinistries = grouped.get("other-ministry") ?? [];
   if (otherMinistries.length > 0) {
     push("other-ministry", "Other Ministries", true);
@@ -1027,10 +1025,9 @@ const NON_JOINABLE_MINISTRY_CODES = new Set(["personal_ministries"]);
 /**
  * The departments a member joins by belonging — the age- and gender-based
  * fellowships. Any of these the member is not yet on rides the folded
- * "Other Departments" heading, so an AYM member is offered AMM or AWM (their
- * own sex's — the sex gate above decides) and an Ambassadors member is
- * offered AYM. The office-held desks (Elders', Clerk's, Treasury, Deaconate)
- * are held by appointment, never joined, so they stay unoffered.
+ * "Other Ministries" heading, so an AYM member is offered AMM or AWM (their
+ * own sex's — the sex gate above decides) and an Ambassadors member is offered
+ * AYM. Office-held desks remain unoffered to members who do not hold them.
  */
 const JOINABLE_DEPARTMENT_CODES = new Set(["aym", "amm", "awm"]);
 
@@ -1076,14 +1073,11 @@ export type RailMember = {
 /**
  * The rail as the signed-in member sees it.
  *
- * The church's own areas are the interesting part. **My Department** holds
- * only what the member may open — their age- and gender-based group and any
- * department they serve, or every department for an office account. **My
- * Ministry** holds the ministries they serve in; every other ministry they
- * could join rides the folded **Other Ministries** heading (or a plain
- * **Ministries** one, when they serve in none yet). The leadership desks and
- * the appointed ministries are held by office, never joined, so a member who
- * does not hold one never sees it at all.
+ * The church's own areas share two headings. **My Ministry** holds every
+ * department and ministry the member belongs to or serves in; **Other
+ * Ministries** holds the other areas they may visit or join. The leadership
+ * desks and appointed ministries remain visible only to the offices that
+ * hold them.
  */
 export function railFor(
   member: RailMember,
@@ -1091,7 +1085,7 @@ export function railFor(
 ): RailEntry[] {
   const { roles } = member;
   // Every area the member may open — for the church's offices, the whole
-  // church. This is what My Department reads.
+  // church. Non-owned areas share the Other Ministries heading.
   const areaCodes = member.departmentCodes ?? member.tieCodes ?? [];
   // Only the areas they genuinely belong to or serve in — My Ministry.
   const tieCodes = member.tieCodes ?? areaCodes;
@@ -1144,14 +1138,10 @@ export function railFor(
           if (!sex) return true;
           return (department.code === "amm" ? "male" : "female") === sex;
         })
-        // The departments split like the ministries: the member's own — the
-        // one they belong to and any they serve (every department for an
-        // office account) — and, folded, the age- and gender-based
-        // fellowships the church opens to joining. The offices' desks are
-        // held by appointment, never joined, so they are not offered.
-        // Admins (and other staff) see every department in other departments,
-        // not just the joinable ones, because they are the ones who appoint
-        // and oversee all of them.
+        // Departments and ministries share the same two rail headings. A
+        // member sees their own areas together, then other visitable/joinable
+        // areas under the folded Other Ministries heading. Staff can see all
+        // departments because they appoint and oversee them.
         .filter((department) => {
           if (group === "department") {
             if (isStaffRole(roles)) return true;
@@ -1165,13 +1155,7 @@ export function railFor(
         });
       return rows.map((department) => {
         const isMine = tieCodes.includes(department.code);
-        const sectionKey: RailSection = isMine
-          ? group === "department"
-            ? "my-department"
-            : "my-ministry"
-          : group === "department"
-            ? "other-department"
-            : "other-ministry";
+        const sectionKey: RailSection = isMine ? "my-ministry" : "other-ministry";
         // The row names the area in full — the desk's page heading reads it —
         // and keeps the short form for the rail column itself.
         const label = department.label;
@@ -1317,6 +1301,7 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
+  { key: "requests" },
   { key: "myAreas" },
   { key: "give" },
   { key: "chat" },

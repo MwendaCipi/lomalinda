@@ -43,7 +43,7 @@ const SEX_ONLY_AREA: Record<string, "male" | "female"> = {
 
 type AreaTab = "mine" | "other";
 
-const TAB_LABELS: Record<AreaTab, string> = { mine: "My ministries", other: "Other ministries" };
+const TAB_LABELS: Record<AreaTab, string> = { mine: "My Ministry", other: "Other Ministries" };
 
 const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
   children: "children",
@@ -53,7 +53,7 @@ const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
 /**
  * My areas — the church's ministries and departments as the member's own map.
  *
- * One page, two sub-navs: the member's own department and ministries, and the
+ * One page, two sub-navs: the member's own areas and the other
  * ministries/departments they may ask to join. Opening a card reads the area —
  * its leadership, its roll, its calendar, and its accounts & withdrawals —
  * with withdrawal requests enabled for leaders.
@@ -66,7 +66,7 @@ export function MyAreas() {
 
   const [tab, setTab] = useState<AreaTab>("mine");
   const [openCode, setOpenCode] = useState<string | null>(null);
-  const [areaView, setAreaView] = useState<"overview" | "leadership" | "calendar" | "accounts">("overview");
+  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts">("members");
   const [joining, setJoining] = useState<string | null>(null);
   const legacyDepartmentCode = (me?.department || "").trim();
   const ownDepartmentCode = (me?.department_ref || LEGACY_DEPARTMENT_CODES[legacyDepartmentCode] || legacyDepartmentCode).trim();
@@ -79,13 +79,12 @@ export function MyAreas() {
   }, [sex]);
 
   const isMyMinistry = useCallback((area: (typeof rows)[number]) => {
-    if (area.code === ownDepartmentCode) return true;
-    return area.group === "ministry" && ties.includes(area.code);
+    return area.code === ownDepartmentCode || ties.includes(area.code);
   }, [ownDepartmentCode, ties]);
 
-  // What the member sees: first their own department and ministries, then the
-  // other ministries/departments open for a join request. Sex-only ministries
-  // stay hidden from people who may not request them.
+  // What the member sees: first the areas they belong to or serve in, then
+  // other areas open for a join request. Sex-only ministries stay hidden from
+  // people who may not request them.
   const visible = useMemo(
     () =>
       rows
@@ -110,8 +109,15 @@ export function MyAreas() {
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
 
   const { setCustomToggles, setCustomHeader } = usePageHeader();
+  const accountViewItems = useMemo(
+    () => [
+      { key: "members", label: "Members", icon: Users },
+      { key: "calendar", label: "Calendar", icon: CalendarDays },          { key: "accounts", label: "Account & Withdrawals", short: "Accounts", icon: Wallet },
+    ],
+    [],
+  );
 
-  // The sub-navs: for directory list (my/joinable), or for opened area (Overview/Leadership/Calendar/Accounts).
+  // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
   useEffect(() => {
     if (openArea) {
       setCustomToggles(
@@ -119,12 +125,7 @@ export function MyAreas() {
           label={`${openArea.label} views`}
           value={areaView}
           onChange={(next) => setAreaView(next as typeof areaView)}
-          items={[
-            { key: "overview", label: "Overview" },
-            { key: "leadership", label: "Leadership & Roll", icon: Users },
-            { key: "calendar", label: "Calendar", icon: CalendarDays },
-            { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
-          ]}
+          items={accountViewItems}
         />
       );
       return () => setCustomToggles(null);
@@ -136,7 +137,7 @@ export function MyAreas() {
         onChange={(next) => {
           setTab(next as AreaTab);
           setOpenCode(null);
-          setAreaView("overview");
+          setAreaView("members");
         }}
         items={[
           { key: "mine", label: TAB_LABELS.mine },
@@ -145,7 +146,7 @@ export function MyAreas() {
       />
     );
     return () => setCustomToggles(null);
-  }, [openArea, areaView, tab, setCustomToggles]);
+  }, [openArea, areaView, tab, accountViewItems, setCustomToggles]);
 
   // The shell names the area the member opened, or the map they are on.
   useEffect(() => {
@@ -156,8 +157,8 @@ export function MyAreas() {
             label: "Ministry",
             description:
               tab === "mine"
-                ? "Your department and the ministries you are part of or leading."
-                : "Ministries and departments you can ask to join.",
+                ? "The areas you are part of or serve in."
+                : "Other ministries and departments you can ask to join.",
           }
     );
     return () => setCustomHeader(null);
@@ -230,7 +231,7 @@ export function MyAreas() {
               type="button"
               onClick={() => {
                 setOpenCode(null);
-                setAreaView("overview");
+                setAreaView("members");
               }}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
             >
@@ -240,7 +241,7 @@ export function MyAreas() {
           </div>
 
           {/* Section 1: Leadership */}
-          {(areaView === "overview" || areaView === "leadership") && (
+          {areaView === "members" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
                 <UserRound className="h-4 w-4 text-ember" aria-hidden="true" />
@@ -273,7 +274,7 @@ export function MyAreas() {
           )}
 
           {/* Section 2: Members */}
-          {(areaView === "overview" || areaView === "leadership") && (
+          {areaView === "members" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
@@ -306,7 +307,7 @@ export function MyAreas() {
           )}
 
           {/* Section 3: Calendar */}
-          {(areaView === "overview" || areaView === "calendar") && (
+          {areaView === "calendar" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
                 <CalendarDays className="h-4 w-4 text-ember" aria-hidden="true" />
@@ -338,7 +339,7 @@ export function MyAreas() {
           )}
 
           {/* Section 4: Account & Withdrawals */}
-          {(areaView === "overview" || areaView === "accounts") && (
+          {areaView === "accounts" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div>
@@ -351,7 +352,7 @@ export function MyAreas() {
                   </p>
                 </div>
               </div>
-              <div className={areaView === "accounts" ? "h-[540px]" : "h-[440px]"}>
+              <div className="h-[540px]">
                 <DepartmentAccountsPanel
                   department={openArea}
                   showInlineControls
