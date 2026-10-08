@@ -986,10 +986,10 @@ class PdfGenerationAPITests(APITestCase):
 class WithdrawalRequestsPdfTests(APITestCase):
     """Treasury → Requests prints from the backend now.
 
-    The report is a real PDF — not the browser's print dialog pointed at the
-    live table — and it ends in three signature slots: the authorizing
-    officer, the one issuing, and the receiver. It carries the same rows,
-    filters and permissions as the queue it is printed from.
+    Two prints live on the desk. The foot button prints the wide report —
+    every row under the desk's filters, with no signature slots, because a
+    signed copy belongs to one request. Each row's own Print prints that one
+    request as a signable sheet with the three slots.
     """
 
     def setUp(self):
@@ -1038,7 +1038,7 @@ class WithdrawalRequestsPdfTests(APITestCase):
                     continue
         return bytes(text)
 
-    def test_the_report_is_a_real_pdf_signed_in_three_places(self):
+    def test_the_report_is_a_real_pdf_without_signature_slots(self):
         self.client.force_authenticate(self.treasurer)
         response = self.client.get('/api/members/department-withdrawals/pdf/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -1047,12 +1047,56 @@ class WithdrawalRequestsPdfTests(APITestCase):
         self.assertIn('Withdrawal_Requests_', response['Content-Disposition'])
 
         text = self._pdf_text(response.content)
-        # The slots the printed copy is signed in.
-        for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
-            self.assertIn(label, text)
-        # And the requests themselves.
+        # The report lists the rows…
         self.assertIn(b'Sound', text)
         self.assertIn(b'Tent', text)
+        # …and is not signed: that is the per-request print's job.
+        for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
+            self.assertNotIn(label, text)
+
+    def test_one_request_prints_on_its_own_signable_sheet(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+        self.assertIn(f'Withdrawal_Request_{self.pending.id}.pdf', response['Content-Disposition'])
+
+        text = self._pdf_text(response.content)
+        # The three slots the sheet is signed in.
+        for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
+            self.assertIn(label, text)
+        # This request's own details — and only its details.
+        self.assertIn(b'Sound system repair', text)
+        self.assertIn(b'Music Ministry', text)
+        self.assertIn(b'two hundred', text)
+        self.assertNotIn(b'Tent hire', text)
+
+    def test_one_request_print_keeps_the_desk_permissions(self):
+        self.client.force_authenticate(self.elder)
+        self.assertEqual(
+            self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/').status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.client.force_authenticate(self.member)
+        self.assertEqual(
+            self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.client.force_authenticate(user=None)
+        self.assertEqual(
+            self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/').status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_an_unknown_request_prints_as_not_found(self):
+        self.client.force_authenticate(self.treasurer)
+        self.assertEqual(
+            self.client.get('/api/members/department-withdrawals/999999/pdf/').status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
 
     def test_the_status_filter_prints_only_what_the_desk_sees(self):
         self.client.force_authenticate(self.treasurer)
@@ -1094,6 +1138,167 @@ class WithdrawalRequestsPdfTests(APITestCase):
             self.client.get('/api/members/department-withdrawals/pdf/').status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+
+class FundDriveApprovalTests(APITestCase):
+    """A department desk starts a drive; the treasurer posts it.
+
+    A leader raises a fund drive against their own desk's account — never the
+    LCB — and it lands as *pending* until a treasurer approves it, at which
+    point it shows up in Fund Drives. Until then the public list, the drive's
+    own page, the announcements and the pledge endpoint must not know it.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('fd.treasurer', 'fd.treasurer@example.com', 'StrongPass#2026', first_name='Tess', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.leader = User.objects.create_user('fd.leader', 'fd.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        self.plain = User.objects.create_user('fd.plain', 'fd.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+
+        self.amm = Department.objects.get(code='amm')
+        leader_role = DepartmentRole.objects.filter(department=self.amm, name='Leader').first()
+        DepartmentAssignment.objects.create(department=self.amm, role=leader_role, member=self.leader, kind='leader')
+        # The seed links whatever account it likes to AMM; this desk's drive
+        # must raise into exactly the account the test names, so the desk's
+        # linked account is the one created below and nothing else.
+        TreasuryAccount.objects.filter(department=self.amm).update(department=None)
+        self.account = TreasuryAccount.objects.create(
+            name='AMMFund', description='Men Ministry Fund', department=self.amm, balance=Decimal('1500.00'),
+        )
+        self.lcb = TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('9000.00'),
+        )
+
+    def _payload(self, **overrides):
+        values = {
+            'name': 'AMM Camp Drive 2026',
+            'title': 'AMM Camp Drive 2026',
+            'account_name': 'AMMFund',
+            'description': 'Raising for the camp.',
+            'target_amount': '50000.00',
+            'source_account': self.account.id,
+            'source_department': 'amm',
+        }
+        values.update(overrides)
+        return values
+
+    def _pending_drive(self, **overrides):
+        values = dict(
+            name='Already Raised', title='Already Raised', account_name='AMMFund',
+            target_amount=Decimal('10000.00'), approval_status='pending',
+            created_by=self.leader, source_account=self.account,
+        )
+        values.update(overrides)
+        return FundraisingCampaign.objects.create(**values)
+
+    def test_a_leader_submits_and_the_drive_lands_pending(self):
+        self.client.force_authenticate(self.leader)
+        res = self.client.post('/api/members/campaigns/', self._payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data['approval_status'], 'pending')
+        drive = FundraisingCampaign.objects.get(name='AMM Camp Drive 2026')
+        self.assertEqual(drive.created_by, self.leader)
+        self.assertEqual(drive.source_account, self.account)
+        self.assertIsNone(drive.reviewed_by)
+        # The treasurer's office hears that an answer is wanted.
+        self.assertTrue(
+            ChurchNotification.objects.filter(user=self.treasurer, title='Fund drive awaiting approval').exists()
+        )
+
+    def test_a_pending_drive_is_invisible_until_approved(self):
+        drive = self._pending_drive()
+        # The public list and the drive's own page do not know it exists.
+        listed = self.client.get('/api/members/campaigns/')
+        self.assertNotIn(drive.id, [row['id'] for row in listed.data])
+        self.assertEqual(self.client.get(f'/api/members/campaigns/{drive.id}/').status_code, status.HTTP_404_NOT_FOUND)
+        # The treasurer's desk does see it, waiting.
+        self.client.force_authenticate(self.treasurer)
+        listed = self.client.get('/api/members/campaigns/')
+        self.assertIn(drive.id, [row['id'] for row in listed.data])
+
+    def test_approval_posts_the_drive_and_tells_the_leader(self):
+        drive = self._pending_drive()
+        self.client.force_authenticate(self.treasurer)
+        res = self.client.patch(f'/api/members/campaigns/{drive.id}/', {'approval_status': 'approved'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        drive.refresh_from_db()
+        self.assertEqual(drive.approval_status, 'approved')
+        self.assertEqual(drive.reviewed_by, self.treasurer)
+        self.assertIsNotNone(drive.reviewed_at)
+        # Now the public page answers for it.
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(f'/api/members/campaigns/{drive.id}/').status_code, status.HTTP_200_OK)
+        listed = self.client.get('/api/members/campaigns/')
+        self.assertIn(drive.id, [row['id'] for row in listed.data])
+        # And the desk that raised it hears the answer.
+        self.assertTrue(
+            ChurchNotification.objects.filter(user=self.leader, title__icontains='was approved').exists()
+        )
+
+    def test_rejection_keeps_the_drive_off_and_explains(self):
+        drive = self._pending_drive()
+        self.client.force_authenticate(self.treasurer)
+        res = self.client.patch(
+            f'/api/members/campaigns/{drive.id}/',
+            {'approval_status': 'rejected', 'review_note': 'Not this quarter.'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        drive.refresh_from_db()
+        self.assertEqual(drive.approval_status, 'rejected')
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(f'/api/members/campaigns/{drive.id}/').status_code, status.HTTP_404_NOT_FOUND)
+        notice = ChurchNotification.objects.filter(user=self.leader, title__icontains='not approved').first()
+        self.assertIsNotNone(notice)
+        self.assertIn('Not this quarter.', notice.message)
+
+    def test_only_the_treasurer_decides(self):
+        drive = self._pending_drive()
+        self.client.force_authenticate(self.leader)
+        res = self.client.patch(f'/api/members/campaigns/{drive.id}/', {'approval_status': 'approved'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        drive.refresh_from_db()
+        self.assertEqual(drive.approval_status, 'pending')
+
+    def test_the_lcb_never_becomes_a_drive(self):
+        self.client.force_authenticate(self.leader)
+        res = self.client.post(
+            '/api/members/campaigns/',
+            self._payload(name='LCB Drive', source_account=self.lcb.id),
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Local Church Budget', str(res.data))
+        self.assertFalse(FundraisingCampaign.objects.filter(name='LCB Drive').exists())
+
+    def test_a_desk_cannot_raise_into_another_desks_account(self):
+        self.client.force_authenticate(self.leader)
+        res = self.client.post('/api/members/campaigns/', self._payload(source_department='awm'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        # Nor may a member with no desk at all.
+        self.client.force_authenticate(self.plain)
+        res = self.client.post('/api/members/campaigns/', self._payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(FundraisingCampaign.objects.filter(name='AMM Camp Drive 2026').exists())
+
+    def test_a_pending_drive_takes_no_pledges(self):
+        drive = self._pending_drive()
+        self.client.force_authenticate(self.plain)
+        res = self.client.post(
+            f'/api/members/campaigns/{drive.id}/pledge/',
+            {'amount': '100.00'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_the_treasurers_own_drive_still_posts_at_once(self):
+        self.client.force_authenticate(self.treasurer)
+        payload = self._payload(name='Treasury Roof Drive')
+        res = self.client.post('/api/members/campaigns/', payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data['approval_status'], 'approved')
 
 
 

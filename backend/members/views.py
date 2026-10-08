@@ -2333,7 +2333,10 @@ class CampaignPledgeView(APIView):
         return Response({'pledge': campaign_pledge_payload(pledge) if pledge else None})
 
     def post(self, request, pk):
-        campaign = FundraisingCampaign.objects.filter(pk=pk).first()
+        # Only a posted drive takes pledges: one awaiting the treasurer's
+        # approval has no page, so pledging to it by guessing its id would
+        # promise money to something the church has not yet published.
+        campaign = FundraisingCampaign.objects.filter(pk=pk, approval_status='approved').first()
         if campaign is None:
             return Response({'detail': 'Fund drive not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -5318,7 +5321,9 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
             'leaders': ('elder', 'Church Leaders'),
         }
 
-        from django.contrib.auth.models import User
+        # NB: no local `from django.contrib.auth.models import User` here — a
+        # function-scoped import would shadow the module-level one for the
+        # whole function, breaking the treasurer-notification loop above.
         users_to_assign = set()
         target_groups = campaign.target_groups or []
 
@@ -5344,6 +5349,7 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
                 )
                 if created:
                     ChurchNotification.objects.create(
+                        user=u,
                         title=f"Fund Drive Invite Assigned: {campaign.name}",
                         message=f"You have been assigned a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
                     )
@@ -5477,13 +5483,34 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
         previous = self.get_object()
         next_status = serializer.validated_data.get('approval_status', previous.approval_status)
+        decided = next_status != previous.approval_status and next_status in ('approved', 'rejected')
         update_fields = {}
-        if next_status != previous.approval_status:
+        if decided:
             update_fields = {
                 'reviewed_by': self.request.user,
                 'reviewed_at': timezone.now(),
             }
-        serializer.save(**update_fields)
+        campaign = serializer.save(**update_fields)
+        # The desk that raised the drive hears the answer either way — posted
+        # or kept off — the same way a withdrawal ask hears its treasurer's
+        # reply. Without this the leader submits into silence and never learns
+        # why their drive never appeared.
+        if decided and campaign.created_by and campaign.created_by_id != self.request.user.pk:
+            approved = next_status == 'approved'
+            ChurchNotification.objects.create(
+                user=campaign.created_by,
+                title=f"Fund drive {campaign.title or campaign.name} was {'approved' if approved else 'not approved'}"[:160],
+                message=(
+                    'It is posted in Fund Drives now and members can give to it.'
+                    if approved
+                    else (
+                        f'The treasurer replied: {campaign.review_note}'
+                        if campaign.review_note
+                        else 'The treasurer kept it off Fund Drives for now.'
+                    )
+                ),
+                link='/support/campaigns' if approved else '/member',
+            )
 
     def perform_destroy(self, instance):
         if not is_finance_manager(self.request.user):
@@ -9810,6 +9837,9 @@ class WithdrawalRequestsPdfView(APIView):
             data,
             status_label=self.STATUS_LABELS.get(status_param, 'All requests'),
             search=request.query_params.get('search', '').strip(),
+            # This is the desk's wide report; a signed sheet belongs to one
+            # request, printed from that request's own row.
+            signatures=False,
         )
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -9827,6 +9857,43 @@ class WithdrawalRequestsPdfView(APIView):
             item['reply'], item['amount'],
         ))
         return needle in haystack.lower()
+
+
+class WithdrawalRequestPdfView(APIView):
+    """One withdrawal request, printed from the treasury queue as a form.
+
+    Where the desk's foot button prints the whole filtered list, each row's
+    own Print button prints that one request — laid out on its own sheet with
+    the amount spelled out and the three signature slots (authorizing officer,
+    treasury office, department representative) at the foot, so the
+    department's representative can sign for the money when it is handed over.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user):
+            return Response({'detail': 'Only elders or treasurers can print withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+
+        row = DepartmentWithdrawalRequest.objects.select_related(
+            'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
+        ).filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            church_obj = ChurchSettings.objects.first()
+            church_name = (church_obj.church_name if church_obj else None) or 'SDA Church'
+        except Exception:
+            church_name = 'SDA Church'
+
+        from .pdf_generator import generate_withdrawal_request_pdf
+        pdf_bytes = generate_withdrawal_request_pdf(church_name, _withdrawal_review_row(row))
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        filename = f'Withdrawal_Request_{row.id}.pdf'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
 
 
 class DeaconateRequestView(APIView):

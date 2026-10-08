@@ -163,6 +163,7 @@ function WithdrawalRequestsPanel({
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [printingId, setPrintingId] = useState<number | null>(null);
   const rowPad = densityCellPad();
 
   const load = useCallback(() => {
@@ -230,10 +231,9 @@ function WithdrawalRequestsPanel({
     );
   };
 
-  // The report is printed from the backend now: the same rows under the same
-  // filters arrive as a real PDF — one that ends in three signature slots
-  // (the authorizing officer, the one issuing, and the receiver), which the
-  // browser's print dialog of the live table could never carry.
+  // The wide report prints from the backend now: the same rows under the same
+  // filters arrive as a real PDF. It carries no signature slots — a signed
+  // copy belongs to one request, which each row's own Print produces.
   const printReport = async () => {
     setPrinting(true);
     try {
@@ -261,6 +261,35 @@ function WithdrawalRequestsPanel({
       showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
       setPrinting(false);
+    }
+  };
+
+  // Each request prints itself: one request on its own sheet, with the amount
+  // spelled out and the three signature slots (the authorizing officer, the
+  // one issuing, and the receiver) that the department signs for the money.
+  const printRequest = async (row: WithdrawalRequestRow) => {
+    if (printingId !== null) return;
+    setPrintingId(row.id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${row.id}/pdf/`, {
+        headers: fundAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not print the request.");
+      }
+      const url = URL.createObjectURL(await res.blob());
+      if (!window.open(url, "_blank")) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Withdrawal_Request_${row.id}.pdf`;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setPrintingId(null);
     }
   };
 
@@ -361,63 +390,27 @@ function WithdrawalRequestsPanel({
                     {statusBadge(row.status)}
                   </td>
                   <td className={`whitespace-nowrap px-4 ${rowPad} text-right no-print`}>
+                    {/* Every request answers the same two ways: the desk replies
+                        to it, and it prints as its own signable sheet. Whatever
+                        a status allows is decided inside the reply. */}
                     <div className="flex justify-end gap-1.5">
-                      {/* Step 1: Elder must approve before treasurer can act */}
-                      {row.status === "pending" && (
-                        <button
-                          type="button"
-                          onClick={() => act(row.id, "elder_approve")}
-                          disabled={busy}
-                          className="rounded-lg border border-mist-select bg-mist-select/30 px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
-                        >
-                          Elder Approve
-                        </button>
-                      )}
-                      {/* Step 2: Treasurer approves once elder has cleared it */}
-                      {row.status === "elder_approved" && (
-                        <button
-                          type="button"
-                          onClick={() => act(row.id, "approve")}
-                          disabled={busy}
-                          className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {/* Respond: available while pending or elder_approved, to approve, or reject with a reply. */}
-                      {(row.status === "pending" || row.status === "elder_approved") && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenAction(row.id)}
-                          className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                        >
-                          Respond
-                        </button>
-                      )}
-                      {/* Reverse: available after approval */}
-                      {row.status === "approved" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            showAlert(
-                              "Reverse withdrawal?",
-                              `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name} and remove the corresponding expense record.`,
-                              "warning",
-                              {
-                                showCancelButton: true,
-                                confirmButtonText: "Yes, reverse it",
-                                cancelButtonText: "Cancel",
-                              }
-                            ).then((result) => {
-                              if (result.isConfirmed) act(row.id, "reverse");
-                            });
-                          }}
-                          disabled={busy}
-                          className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
-                        >
-                          Reverse
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setOpenAction(row.id)}
+                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                      >
+                        Respond
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => printRequest(row)}
+                        disabled={printingId === row.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+                        aria-label={`Print withdrawal request for ${row.department}`}
+                      >
+                        <Printer className={`h-3 w-3 ${printingId === row.id ? "animate-spin" : ""}`} />
+                        <span>{printingId === row.id ? "Preparing…" : "Print"}</span>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -427,49 +420,131 @@ function WithdrawalRequestsPanel({
         </div>
       )}
 
-      {/* Action modal: approve the request, or decline it with a reply. */}
-      {openAction !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
-            <h4 className="text-sm font-bold text-bark">Respond to request</h4>
-            <p className="mt-0.5 text-xs text-moss">
-              Ask the department&apos;s leadership to approve the request, or decline it with a reply explaining why the money cannot be released.
-            </p>
-            <textarea
-              rows={3}
-              maxLength={255}
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              placeholder="A short reply the department can read…"
-              className="mt-3 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-              autoFocus
-            />
-            <div className="mt-4 flex justify-end gap-2 border-t border-sand-line pt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenAction(null);
-                  setReply("");
-                }}
-                className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const action = reply.trim() ? "decline" : "approve";
-                  act(openAction, action, reply);
-                }}
-                disabled={busy}
-                className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-              >
-                {busy ? "Saving…" : reply.trim() ? "Decline request" : "Approve request"}
-              </button>
+      {/* Action modal: one request's decisions, and nowhere else. An elder
+          clears a pending ask, the treasury then releases or declines it, and
+          a released withdrawal can be reversed. A settled request reads back
+          what was decided. */}
+      {openAction !== null && (() => {
+        const target = rows.find((r) => r.id === openAction);
+        if (!target) return null;
+        const awaitingElder = target.status === "pending";
+        const awaitingTreasurer = target.status === "elder_approved";
+        const canReverse = target.status === "approved";
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
+              <h4 className="text-sm font-bold text-bark">Respond to request</h4>
+              <p className="mt-0.5 text-xs text-moss">
+                {target.department} · {target.account_name}
+              </p>
+
+              <div className="mt-3 space-y-1.5 rounded-xl border border-sand-line bg-sand-plate p-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-bark">
+                    KES {Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </span>
+                  {statusBadge(target.status)}
+                </div>
+                <p className="text-moss">{target.reason}</p>
+                <p className="text-[11px] text-moss-faint">
+                  {awaitingElder
+                    ? "Waiting for an elder to clear it before the treasury releases the money."
+                    : awaitingTreasurer
+                      ? "Cleared by an elder — the treasury releases or declines it now."
+                      : canReverse
+                        ? `Released by ${target.decided_by ?? "the treasury"}. Reversing credits the fund back and removes the expense.`
+                        : `Decided by ${target.decided_by ?? "the office"}${target.reply ? ` — “${target.reply}”` : ""}.`}
+                </p>
+              </div>
+
+              {(awaitingElder || awaitingTreasurer) && (
+                <textarea
+                  rows={3}
+                  maxLength={255}
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="A short reply the department can read…"
+                  className="mt-3 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  autoFocus
+                />
+              )}
+
+              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sand-line pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenAction(null);
+                    setReply("");
+                  }}
+                  className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+                >
+                  {awaitingElder || awaitingTreasurer ? "Cancel" : "Close"}
+                </button>
+
+                {awaitingElder && (
+                  <button
+                    type="button"
+                    onClick={() => act(target.id, "elder_approve")}
+                    disabled={busy}
+                    className="rounded-xl border border-mist-select bg-mist-select/30 px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
+                  >
+                    {busy ? "Saving…" : "Elder Approve"}
+                  </button>
+                )}
+
+                {(awaitingElder || awaitingTreasurer) && (
+                  <button
+                    type="button"
+                    onClick={() => act(target.id, "decline", reply)}
+                    disabled={busy || !reply.trim()}
+                    className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                  >
+                    Decline request
+                  </button>
+                )}
+
+                {awaitingTreasurer && (
+                  <button
+                    type="button"
+                    onClick={() => act(target.id, "approve", reply)}
+                    disabled={busy}
+                    className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  >
+                    {busy ? "Saving…" : "Approve request"}
+                  </button>
+                )}
+
+                {canReverse && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showAlert(
+                        "Reverse withdrawal?",
+                        `This will credit KES ${Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${target.account_name} and remove the corresponding expense record.`,
+                        "warning",
+                        {
+                          showCancelButton: true,
+                          confirmButtonText: "Yes, reverse it",
+                          cancelButtonText: "Cancel",
+                        }
+                      ).then((result) => {
+                        if (result.isConfirmed) {
+                          setOpenAction(null);
+                          act(target.id, "reverse");
+                        }
+                      });
+                    }}
+                    disabled={busy}
+                    className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
+                  >
+                    Reverse withdrawal
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="shrink-0 flex items-center justify-between border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
         <div>

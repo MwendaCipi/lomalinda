@@ -298,6 +298,11 @@ export function CampaignManagement({
   }, [isAdminMode, allowCreateRequest]);
 
   const canCreate = canEdit || canCreateRequest;
+  // A department or ministry desk starts a drive for the account it was given,
+  // so its reference is fixed at the desk: it answers the M-Pesa prompt and
+  // names where the money lands. Only the treasury names accounts, so only the
+  // treasury may retype it.
+  const accountReferenceLocked = approvalRequired;
 
   useEffect(() => {
     if (openCreate && canCreate && !openedCreateForm.current) {
@@ -580,9 +585,12 @@ export function CampaignManagement({
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Failed to create campaign.");
 
+      // The server has the last word: a treasurer's own drive posts at once,
+      // a leader's lands pending — never what the form happened to expect.
+      const awaitingApproval = data.approval_status ? data.approval_status === "pending" : approvalRequired;
       showAlert(
-        data.approval_status === "pending" || approvalRequired ? "Fund Drive Submitted" : "Fund Drive Created",
-        data.approval_status === "pending" || approvalRequired
+        awaitingApproval ? "Fund Drive Submitted" : "Fund Drive Created",
+        awaitingApproval
           ? `Fund drive "${data.name}" has been sent to the treasurer for approval.`
           : `Fund drive "${data.name}" (Account: ${data.account_name || data.name}) was created successfully.`,
         "success"
@@ -853,11 +861,22 @@ export function CampaignManagement({
                 Account Reference / Title
                 <input
                   type="text"
+                  readOnly={accountReferenceLocked}
+                  aria-readonly={accountReferenceLocked}
                   placeholder="e.g. BUILDING FUND (Default: Drive Name)"
                   value={form.account_name}
                   onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white"
+                  className={`mt-1 w-full rounded-xl border border-sand-line px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember focus:bg-white ${
+                    accountReferenceLocked
+                      ? "cursor-not-allowed bg-sand text-moss"
+                      : "bg-sand-plate"
+                  }`}
                 />
+                {accountReferenceLocked && (
+                  <span className="mt-1 block text-[11px] font-normal text-moss">
+                    Fixed by the treasury — the drive gives into this account.
+                  </span>
+                )}
               </label>
             </div>
 

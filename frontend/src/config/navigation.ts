@@ -162,23 +162,19 @@ export const destinations = {
     area: "fellowship",
     match: ["/share/moments"],
   },
+  /**
+   * Sharing — testimonies and ideas in one place. They were two toggles; a
+   * member arrives in the same frame of mind for either, so one page asks
+   * which one it is. The old Ideas path still leads here.
+   */
   testimonies: {
     href: "/spiritual/testimonies",
-    label: "Testimonies",
-    short: "Testimonies",
-    description: "Share what God has done in your life.",
+    label: "Sharing",
+    short: "Sharing",
+    description: "Share a testimony of what God has done, or an idea that could help the church.",
     icon: Sparkles,
     area: "fellowship",
-    match: ["/spiritual/testimonies"],
-  },
-  ideas: {
-    href: "/support/ideas",
-    label: "Ideas",
-    short: "Ideas",
-    description: "Offer an idea that could help the church.",
-    icon: Sparkles,
-    area: "fellowship",
-    match: ["/support/ideas"],
+    match: ["/spiritual/testimonies", "/support/ideas"],
   },
   /**
    * Prayer — the first of the two request desks and the Requests row's way
@@ -736,7 +732,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
   // own page and the rail both label it Church Choir.
   music: "The church's music — its singing groups and the seasons they sing.",
-  choir: "The church's singing — a ministry of its own, kept apart from the departments.",
+  choir: "The church's choir — the songs it rehearses and the services it leads.",
 };
 
 /**
@@ -812,7 +808,6 @@ export const railEntries: RailEntry[] = [
       page("calendar"),
       page("moments"),
       page("testimonies"),
-      page("ideas"),
       page("materials"),
     ],
   },

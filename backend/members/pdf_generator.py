@@ -1460,13 +1460,14 @@ class SignatureSlotsFlowable(Flowable):
         c.restoreState()
 
 
-def generate_withdrawal_requests_pdf(church_name, rows, status_label="All requests", search="") -> bytes:
+def generate_withdrawal_requests_pdf(church_name, rows, status_label="All requests", search="", signatures=True) -> bytes:
     """The treasury's withdrawal-requests report — printed from the server.
 
     ``rows`` are the review queue's own serialised requests, already filtered
     the way the desk filtered them on screen, so the paper matches the table.
-    The report closes with three signature slots — the authorizing officer,
-    the one issuing, and the receiver — so a printed copy can be signed.
+    This is the wide report the desk's foot button prints, so it carries no
+    signature slots: a signed copy belongs to one request, not to a list —
+    that is what ``generate_withdrawal_request_pdf`` draws.
     """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -1575,8 +1576,171 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
         table.setStyle(TableStyle(style_cmds))
         story.append(table)
 
-    # The three signature slots — the reason this report is printed at all.
-    story.append(Spacer(1, 14))
+    # Only a per-request print is signed; the desk's wide report is not.
+    if signatures:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("Signatures", st["h2"]))
+        story.append(SignatureSlotsFlowable())
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def amount_in_words(amount) -> str:
+    """A money value spelled out, for the signable withdrawal form."""
+    try:
+        value = Decimal(str(amount))
+    except Exception:
+        return ""
+    negative = value < 0
+    value = abs(value).quantize(Decimal("0.01"))
+    shillings = int(value)
+    cents = int((value - shillings) * 100)
+
+    ones = (
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+    )
+    tens = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+    def below_hundred(n):
+        if n < 20:
+            return ones[n]
+        t, o = divmod(n, 10)
+        return tens[t] + (f"-{ones[o]}" if o else "")
+
+    def below_thousand(n):
+        if n < 100:
+            return below_hundred(n)
+        h, r = divmod(n, 100)
+        return ones[h] + " hundred" + (f" and {below_hundred(r)}" if r else "")
+
+    def spell(n):
+        if n == 0:
+            return "zero"
+        parts = []
+        for divisor, name in ((1_000_000_000, "billion"), (1_000_000, "million"), (1_000, "thousand")):
+            if n >= divisor:
+                q, n = divmod(n, divisor)
+                parts.append(f"{spell(q)} {name}")
+        if n:
+            parts.append(below_thousand(n))
+        return " ".join(parts)
+
+    words = spell(shillings)
+    if cents:
+        words += f" and {below_hundred(cents)} cents"
+    if negative:
+        words = "minus " + words
+    return words
+
+
+def generate_withdrawal_request_pdf(church_name, row) -> bytes:
+    """One department withdrawal request as a sheet that can be signed.
+
+    The treasury desk's per-request Print: the same request the queue shows,
+    set alone on its own page with the amount spelled out, so the department's
+    representative can carry it to the treasury, sign for the money and file
+    it. It closes with the three signature slots — the authorizing officer,
+    the one issuing, and the receiver.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2.5 * cm,
+    )
+
+    st = get_pdf_styles()
+    story = []
+
+    story.append(Paragraph(church_name.upper(), st["title"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("WITHDRAWAL REQUEST", st["subtitle"]))
+    story.append(Paragraph(
+        f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d %B %Y, %I:%M %p')}",
+        st["meta"],
+    ))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
+    story.append(Spacer(1, 12))
+
+    status_names = {
+        "pending": "Pending",
+        "elder_approved": "Elder Approved",
+        "approved": "Approved",
+        "declined": "Rejected",
+        "reversed": "Reversed",
+    }
+
+    def fmt_date(value):
+        if hasattr(value, "strftime"):
+            return value.strftime("%d/%m/%Y")
+        text = str(value or "")
+        return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
+
+    amount = Decimal(str(row.get("amount") or "0"))
+    balance = Decimal(str(row.get("account_balance") or "0"))
+
+    elder_line = "—"
+    if row.get("elder_approved_by"):
+        elder_line = str(row["elder_approved_by"])
+        if row.get("elder_approved_at"):
+            elder_line += f" · {fmt_date(row['elder_approved_at'])}"
+
+    decision_line = "—"
+    if row.get("decided_by"):
+        decision_line = f"{status_names.get(row.get('status'), row.get('status') or '')} by {row['decided_by']}"
+        if row.get("decided_at"):
+            decision_line += f" · {fmt_date(row['decided_at'])}"
+    if row.get("reply"):
+        decision_line += f"\n“{row['reply']}”"
+
+    def label(text):
+        return Paragraph(f"<b>{escape(text)}</b>", st["cell"])
+
+    def value(text, style="cell"):
+        return Paragraph(text or "—", st[style])
+
+    detail = Table(
+        [
+            [label("Department"), value(escape(str(row.get("department") or "—"))),
+             label("Date Raised"), value(escape(fmt_date(row.get("created_at"))))],
+            [label("Account"), value(escape(str(row.get("account_name") or "—"))),
+             label("Asked By"), value(escape(str(row.get("requested_by") or "—")))],
+            [label("Amount Requested"), value(f"KES {format_money(amount)}", "cell_right_bold"),
+             label("Fund Balance"), value(f"KES {format_money(balance)}", "cell_right")],
+            [label("Status"), value(status_names.get(row.get("status"), str(row.get("status") or "—"))),
+             label("Elder Approval"), value(escape(elder_line))],
+            [label("Purpose"), value(escape(str(row.get("reason") or "—"))),
+             label("Decision"), value(escape(decision_line))],
+        ],
+        colWidths=[3.0 * cm, 5.8 * cm, 3.0 * cm, 6.2 * cm],
+    )
+    detail.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f4ee")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f4ee")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfdbd1")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(detail)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(
+        f"Amount in words: <b>{escape(amount_in_words(amount))}</b> only.",
+        st["cell"],
+    ))
+
+    story.append(Spacer(1, 16))
     story.append(Paragraph("Signatures", st["h2"]))
     story.append(SignatureSlotsFlowable())
 

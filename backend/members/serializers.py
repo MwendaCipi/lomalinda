@@ -487,8 +487,10 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     # Give now / Pledge affordances; None for ordinary announcements.
     kind = serializers.SerializerMethodField()
     # Writing the link takes a drive's id; reading returns the drive's numbers.
+    # Only a posted drive may be carried by a post: one still waiting on the
+    # treasurer has no page of its own, so it must not surface in the feed.
     campaign = serializers.PrimaryKeyRelatedField(
-        queryset=FundraisingCampaign.objects.all(),
+        queryset=FundraisingCampaign.objects.filter(approval_status='approved'),
         required=False,
         allow_null=True,
         write_only=True,

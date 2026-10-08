@@ -723,25 +723,13 @@ function GivePageContent() {
                 </div>
               )}
 
-              {/* 4. Method-Specific Details — bank instructions and the deposit
-                  reference; the M-Pesa phone now sits beside the method above,
-                  where the prompt will be sent. */}
+              {/* 4. Method-Specific Details — the giver's own deposit reference,
+                  bank and date. The church's account details stay off this form:
+                  they are the ones who must read them, and they are already on
+                  the page above. */}
 
               {methodOfGiving === "bank_transfer" && (
                 <div className="space-y-4">
-                  {/* Bank Account Info Card */}
-                  <div className="rounded-2xl border border-sand-line bg-sand p-4 text-xs space-y-2">
-                    <p className="font-bold text-bark text-sm flex items-center gap-2">
-                      <Landmark size={14} aria-hidden="true" /> Church Bank Account Details
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-moss-dark pt-1">
-                      <div><span className="font-semibold text-bark">Bank:</span> {churchBankDetails.bank_name}</div>
-                      <div><span className="font-semibold text-bark">Account Name:</span> {churchBankDetails.bank_account_name}</div>
-                      <div><span className="font-semibold text-bark">Account No:</span> {churchBankDetails.bank_account_number}</div>
-                      <div><span className="font-semibold text-bark">Branch / Swift:</span> {churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</div>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 gap-4">
                     <label className="block text-sm font-medium text-bark">
                       Bank Deposit / Ref Number

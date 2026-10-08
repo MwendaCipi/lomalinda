@@ -1263,7 +1263,10 @@ class FundraisingCampaign(models.Model):
     account_name = models.CharField(max_length=60, blank=True, help_text="M-Pesa / Giving account reference name (e.g. CAMP2026)")
     description = models.TextField(blank=True)
     target_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    start_date = models.DateField(default=timezone.now)
+    # A date, not a clock: `timezone.now` here put a datetime into a DateField,
+    # which the API then refuses to serialize — every create that omitted
+    # start_date answered 500. `localdate` keeps the church's calendar day.
+    start_date = models.DateField(default=timezone.localdate)
     end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_temporary = models.BooleanField(default=True, help_text="Designates whether this is a temporary campaign with a specific timeline")

@@ -3,9 +3,18 @@
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
-import { Sparkles } from "lucide-react";
+import { Lightbulb, Sparkles } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+const ideaCategories = [
+  "General Church Growth & Ministry",
+  "Worship & Sabbath Services",
+  "Youth & Children Programs",
+  "Community Outreach & Welfare",
+  "Church Infrastructure & Technology",
+  "Fellowship & Hospitality",
+];
 
 interface ApprovedTestimony {
   id: number;
@@ -14,15 +23,24 @@ interface ApprovedTestimony {
   created_at: string;
 }
 
+interface SharedIdea {
+  id: number;
+  submission_type: string;
+  category?: string;
+  content: string;
+  name?: string;
+  created_at?: string;
+}
+
 /**
- * What a member sees while no testimony is on the board.
+ * What a member sees while nothing is on the board.
  *
  * There used to be a single line of grey text here — "No testimonies have been
  * published yet" — which named the absence without offering a way out of it.
- * The empty board is the moment to invite the first testimony, so both ways to
- * give one sit right here: ask for a slot during fellowship, or share it now.
+ * The empty board is the moment to invite the first share, so both ways in sit
+ * right here: ask for a slot during fellowship, or share now.
  */
-function EmptyTestimonies({
+function EmptySharing({
   searching,
   onRequest,
   onShare,
@@ -35,12 +53,12 @@ function EmptyTestimonies({
     <div className="rounded-2xl border border-dashed border-sand-mute bg-white px-6 py-10 text-center shadow-sm sm:py-12">
       <Sparkles size={36} className="text-moss-faint" aria-hidden="true" />
       <h2 className="mt-3 text-base font-bold text-bark sm:text-lg">
-        {searching ? "No testimonies match your search" : "No testimonies yet"}
+        {searching ? "Nothing matches your search" : "Nothing shared yet"}
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-moss">
         {searching
-          ? "Try a different name or word, or clear the search to read every testimony on the board."
-          : "Be the first to tell the church family what God has done. Share it here now, or ask for a slot during fellowship."}
+          ? "Try a different name or word, or clear the search to read everything shared here."
+          : "Be the first to tell the church family what God has done — or to offer an idea that could help the church. Share it here now, or ask for a slot during fellowship."}
       </p>
       <div className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-3">
         <button
@@ -62,6 +80,13 @@ function EmptyTestimonies({
   );
 }
 
+/**
+ * Sharing — the church family's stories and its ideas in one place.
+ *
+ * This was two toggles: Testimonies and Ideas. They are one place now, because
+ * a member offering something arrives in the same frame of mind either way.
+ * The share sheet asks which one it is; the board below reads both.
+ */
 export default function TestimoniesPage() {
   const [mode, setMode] = useState<"online" | "fellowship" | null>(null);
   const [testimony, setTestimony] = useState("");
@@ -74,8 +99,36 @@ export default function TestimoniesPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  // Which thing the share sheet is collecting: a testimony of what God has
+  // done, or an idea that could help the church.
+  const [shareKind, setShareKind] = useState<"testimony" | "idea">("testimony");
   const [searchQuery, setSearchQuery] = useState("");
   const [approvedTestimonies, setApprovedTestimonies] = useState<ApprovedTestimony[]>([]);
+
+  // The ideas board, once its own page.
+  const [ideas, setIdeas] = useState<SharedIdea[]>([]);
+  const [loadingIdeas, setLoadingIdeas] = useState(true);
+  const [ideaCategory, setIdeaCategory] = useState(ideaCategories[0]);
+  const [ideaText, setIdeaText] = useState("");
+  const [ideaName, setIdeaName] = useState("");
+  const [ideaContact, setIdeaContact] = useState("");
+
+  function loadIdeas() {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    fetch(`${API_URL}/api/members/support-submissions/`, { headers })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) =>
+        setIdeas(
+          Array.isArray(data)
+            ? data.filter((item: SharedIdea) => item.submission_type === "idea")
+            : []
+        )
+      )
+      .catch(() => setIdeas([]))
+      .finally(() => setLoadingIdeas(false));
+  }
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -94,6 +147,7 @@ export default function TestimoniesPage() {
       .then(setApprovedTestimonies)
       .catch(() => setApprovedTestimonies([]));
 
+    loadIdeas();
   }, []);
 
   const filteredTestimonies = approvedTestimonies.filter((item) => {
@@ -155,8 +209,55 @@ export default function TestimoniesPage() {
     }
   }
 
+  /** The share sheet's other half: an idea, offered for the board's review. */
+  async function submitIdea(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    const token = localStorage.getItem("access_token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const response = await fetch(`${API_URL}/api/members/support-submissions/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          submission_type: "idea",
+          category: ideaCategory,
+          content: ideaText.trim(),
+          name: ideaName.trim(),
+          phone_number: ideaContact.trim(),
+        }),
+      });
+      if (!response.ok) throw new Error("Unable to submit your idea. Please check the form details.");
+      const successText = "Thank you for sharing your ideas and suggestions. The church board and ministry leaders will review your feedback.";
+      setMessage(successText);
+      showAlert("Idea Submitted", successText, "success");
+      setIdeaText("");
+      setIdeaName("");
+      setIdeaContact("");
+      setShareModalOpen(false);
+      loadIdeas();
+    } catch (error) {
+      const errorText = error instanceof Error ? error.message : "Network error. Please try again.";
+      setMessage(errorText);
+      showAlert("Submission Error", errorText, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function startSharing() {
     setMode("online");
+    setShareKind("testimony");
+    setShareModalOpen(true);
+    setMessage("");
+  }
+
+  function startIdea() {
+    setMode("online");
+    setShareKind("idea");
     setShareModalOpen(true);
     setMessage("");
   }
@@ -167,12 +268,15 @@ export default function TestimoniesPage() {
     setMessage("");
   }
 
+  const sharingIdea = shareKind === "idea";
+
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full p-4 sm:p-8 lg:p-10 md:overflow-y-auto custom-hover-scrollbar">
           <div className="max-w-5xl mx-auto space-y-6">
         <section className="mt-3">
+          <h2 className="text-lg font-bold text-bark">Testimonies</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="block text-sm font-medium sm:w-72">Search testimonies
               <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by name or words" className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 outline-none focus:border-ember" />
@@ -180,7 +284,7 @@ export default function TestimoniesPage() {
           </div>
           <div className="mt-4">
             {filteredTestimonies.length === 0 ? (
-              <EmptyTestimonies
+              <EmptySharing
                 searching={approvedTestimonies.length > 0}
                 onRequest={startRequest}
                 onShare={startSharing}
@@ -225,6 +329,60 @@ export default function TestimoniesPage() {
           </div>
         )}
 
+        {/* Ideas — once their own toggle beside Testimonies. */}
+        <section className="mt-8">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-bark">Ideas &amp; Suggestions</h2>
+            <button
+              type="button"
+              onClick={startIdea}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-sage px-4 py-2 text-xs font-semibold text-white transition hover:bg-sage-deep"
+            >
+              + Share Idea
+            </button>
+          </div>
+          <div className="mt-4">
+            {loadingIdeas ? (
+              <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-sm text-moss">Loading ideas…</div>
+            ) : ideas.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-sand-mute bg-white p-8 text-center sm:p-12">
+                <Lightbulb size={32} className="mx-auto text-moss-faint" aria-hidden="true" />
+                <h3 className="mt-3 text-base font-semibold text-bark">No ideas shared yet</h3>
+                <p className="mx-auto mt-1 max-w-md text-sm text-moss">
+                  Offer an idea, a suggestion or a proposal — anything that could help the church grow and improve ministry.
+                </p>
+                <button
+                  type="button"
+                  onClick={startIdea}
+                  className="mt-5 rounded-full bg-sage px-6 py-3 text-sm font-semibold text-white transition hover:bg-sage-deep"
+                >
+                  + Share Idea
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {ideas.map((item) => (
+                  <div key={item.id} className="flex flex-col justify-between rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 text-xs text-moss">
+                        <span className="font-semibold text-bark">{item.name || "Church Member"}</span>
+                        <span className="rounded-full bg-mist-select px-2.5 py-1 text-[11px] font-semibold text-sage">
+                          {item.category || "General"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-bark">{item.content}</p>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-sand-line pt-2 text-xs text-moss">
+                      <span>Received</span>
+                      {item.created_at && <span>{dayFirstTime(item.created_at)}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
         {requestModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-bark/50 px-5" role="dialog" aria-modal="true" aria-labelledby="request-testimony-title">
           <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
             <div className="flex items-start justify-between gap-4"><div><h2 id="request-testimony-title" className="text-xl font-semibold sm:text-2xl">Request to share</h2><p className="mt-2 text-sm leading-6 text-moss">Tell us when you would like to share during fellowship.</p></div><button type="button" onClick={() => setRequestModalOpen(false)} className="text-xl text-moss" aria-label="Close">&times;</button></div>
@@ -234,18 +392,57 @@ export default function TestimoniesPage() {
             {message && <p className="mt-4 rounded-2xl bg-sand p-4 text-sm leading-6 text-moss">{message}</p>}
           </form>
         </div>}
-        {shareModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-bark/50 px-5" role="dialog" aria-modal="true" aria-labelledby="share-testimony-title">
-          <form onSubmit={submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-            <div className="flex items-start justify-between gap-4"><div><h2 id="share-testimony-title" className="text-xl font-semibold sm:text-2xl">Share testimony</h2><p className="mt-2 text-sm leading-6 text-moss">Tell the church family what God has done in your life.</p></div><button type="button" onClick={() => { setShareModalOpen(false); setMessage(""); }} className="text-xl text-moss" aria-label="Close">&times;</button></div>
-            <label className="mt-5 block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Enter your name" /></label>
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-sm font-medium">
-                <label htmlFor="share-testimony-text">Your Testimony</label>
-                <span className="text-xs text-moss">{testimony.length} / 1000 characters</span>
-              </div>
-              <textarea id="share-testimony-text" required maxLength={1000} rows={5} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Tell us what God has done in your life..." />
+        {shareModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-bark/50 px-5" role="dialog" aria-modal="true" aria-labelledby="share-title">
+          <form onSubmit={sharingIdea ? submitIdea : submitTestimony} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8">
+            <div className="flex items-start justify-between gap-4"><div><h2 id="share-title" className="text-xl font-semibold sm:text-2xl">Share</h2><p className="mt-2 text-sm leading-6 text-moss">{sharingIdea ? "Offer an idea, a suggestion or a proposal that could help the church." : "Tell the church family what God has done in your life."}</p></div><button type="button" onClick={() => { setShareModalOpen(false); setMessage(""); }} className="text-xl text-moss" aria-label="Close">&times;</button></div>
+
+            {/* One sheet, two things to share: pick which. */}
+            <div className="mt-4 grid grid-cols-2 gap-2 rounded-full bg-sand p-1">
+              <button
+                type="button"
+                onClick={() => { setShareKind("testimony"); setMessage(""); }}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${sharingIdea ? "text-moss hover:text-bark" : "bg-white text-bark shadow-sm"}`}
+              >
+                Testimony
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShareKind("idea"); setMessage(""); }}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${sharingIdea ? "bg-white text-bark shadow-sm" : "text-moss hover:text-bark"}`}
+              >
+                Idea
+              </button>
             </div>
-            <button disabled={loading} className="mt-5 w-full rounded-full bg-sage px-5 py-3 font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60">{loading ? "Sending..." : "Share testimony"}</button>
+
+            {sharingIdea ? (
+              <>
+                <label className="mt-4 block text-sm font-medium">Category
+                  <select value={ideaCategory} onChange={(event) => setIdeaCategory(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember">
+                    {ideaCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="mt-4 block text-sm font-medium">Your Idea, Suggestion, or Proposal
+                  <textarea required rows={5} maxLength={2000} value={ideaText} onChange={(event) => setIdeaText(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Describe your suggestion, how it can be implemented, and its expected impact on church life..." />
+                </label>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-medium">Your Name <span className="font-normal text-moss">(Optional)</span><input type="text" maxLength={160} value={ideaName} onChange={(event) => setIdeaName(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Enter your name" /></label>
+                  <label className="block text-sm font-medium">Phone / Email <span className="font-normal text-moss">(Optional)</span><input type="text" maxLength={160} value={ideaContact} onChange={(event) => setIdeaContact(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="e.g. 07XX XXX XXX or name@example.com" /></label>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="mt-4 block text-sm font-medium">Your Name<input required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Enter your name" /></label>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-sm font-medium">
+                    <label htmlFor="share-testimony-text">Your Testimony</label>
+                    <span className="text-xs text-moss">{testimony.length} / 1000 characters</span>
+                  </div>
+                  <textarea id="share-testimony-text" required maxLength={1000} rows={5} value={testimony} onChange={(event) => setTestimony(event.target.value)} className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 outline-none focus:border-ember" placeholder="Tell us what God has done in your life..." />
+                </div>
+              </>
+            )}
+
+            <button disabled={loading} className="mt-5 w-full rounded-full bg-sage px-5 py-3 font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60">{loading ? "Sending..." : sharingIdea ? "Submit Idea" : "Share testimony"}</button>
             {message && <p className="mt-4 rounded-2xl bg-sand p-4 text-sm leading-6 text-moss">{message}</p>}
           </form>
         </div>}
