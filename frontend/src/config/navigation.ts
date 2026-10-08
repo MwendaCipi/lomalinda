@@ -22,6 +22,7 @@ import {
   Megaphone,
   MessagesSquare,
   Music,
+  Receipt,
   Scale,
   Settings,
   ShieldCheck,
@@ -319,6 +320,20 @@ export const destinations = {
     area: "account",
     // `/member/reports` is its own destination below, so it is excluded here.
     match: ["/member"],
+  },
+  /**
+   * The member's own giving record — the table of what they gave, with its
+   * receipts and its privacy eye. It lived on the giving page once, where the
+   * record displaced the act of giving; the account menu links it here now,
+   * one narrow matcher under My Account so the heading stays its own.
+   */
+  myGivings: {
+    href: "/member/givings",
+    label: "My Givings",
+    description: "Your giving records — money and in-kind — with their statuses, receipts and totals.",
+    icon: Receipt,
+    area: "account",
+    match: ["/member/givings"],
   },
   memberReports: {
     href: "/member/reports",
@@ -1314,6 +1329,7 @@ export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
  */
 export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "myAccount" },
+  { key: "myGivings" },
   { key: "calendar" },
   { key: "administration", staffOnly: true },
 ];

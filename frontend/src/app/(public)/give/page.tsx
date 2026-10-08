@@ -1,21 +1,18 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Landmark, Printer, Receipt, RotateCw, SlidersHorizontal, X } from "lucide-react";
-import { brand } from "@/lib/brand";
-import { localDate, firstDayOfMonth, dayFirstTime } from "@/lib/dates";
+import Link from "next/link";
+import { ChevronDown, Landmark, Smartphone, X } from "lucide-react";
+import { localDate } from "@/lib/dates";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { thankYouPath } from "@/lib/giving-thanks";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { stewardshipLinks } from "@/config/site-sections";
+import { PENDING_GIVINGS_KEY } from "@/components/my-givings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-/** Remembers the eye toggle across visits: revealing the record is a
-    deliberate act, so the choice to show it sticks until hidden again. */
-const GIVINGS_VISIBLE_KEY = "my_givings_visible";
 
 const defaultPurposes = [
   "Tithe",
@@ -38,18 +35,6 @@ type GivingAccountOption = {
   account_type_display: string;
 };
 
-type MyGiving = {
-  id: number;
-  amount: string | number;
-  currency?: string;
-  purpose: string;
-  payment_method: string;
-  status: string;
-  mpesa_receipt_number?: string;
-  paid_at?: string | null;
-  created_at: string;
-};
-
 /** Safaricom's prefixes on the Communications Authority number plan — the
  * only lines an M-Pesa push can reach, so the account phone pre-fills the
  * field only when it belongs to one. */
@@ -70,25 +55,6 @@ function safaricomPhoneOf(raw: string): string {
     : "";
   return local && SAFARICOM_PREFIXES.some((prefix) => local.startsWith(prefix)) ? local : "";
 }
-
-const methodLabel = (m: string) =>
-  m === "mpesa" ? "M-Pesa" : m === "bank_transfer" ? "Bank-to-Bank" : m;
-
-const statusLabel = (s: string) => {
-  const v = (s || "").toLowerCase();
-  return v === "completed" ? "Completed" : v === "failed" ? "Failed" : v === "cancelled" ? "Cancelled" : "Pending";
-};
-
-const statusBadge = (s: string) => {
-  const v = (s || "").toLowerCase();
-  const styles =
-    v === "completed"
-      ? "bg-mist-select text-sage-strong"
-      : v === "failed" || v === "cancelled"
-        ? "bg-red-50 text-red-700"
-        : "bg-amber-50 text-amber-700";
-  return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${styles}`}>{statusLabel(s)}</span>;
-};
 
 function GivePageContent() {
   const router = useRouter();
@@ -133,69 +99,17 @@ function GivePageContent() {
   const [showGiveModal, setShowGiveModal] = useState(false);
 
 
-  // ── My Givings ────────────────────────────────────────────────────────────
+  // ── Who is giving ────────────────────────────────────────────────────────────
+  // The record itself lives on its own route now (/member/givings, linked
+  // from the account menu). All this page needs to know is whether there is
+  // an account behind the gift: it decides the toast, the redirect and the
+  // link to that record.
   const [signedIn, setSignedIn] = useState(false);
-  const [myGivings, setMyGivings] = useState<MyGiving[]>([]);
-  const [loadingGivings, setLoadingGivings] = useState(false);
-  const [fromDate, setFromDate] = useState(firstDayOfMonth);
-  const [toDate, setToDate] = useState(() => localDate());
-  const [givingSearch, setGivingSearch] = useState("");
-  // Status filter replaces the old purpose dropdown: Successful by default,
-  // with Failed and All for reviewing attempts that never completed. Purpose
-  // filtering is covered by the search box, which matches purpose text.
-  const [givingStatusFilter, setGivingStatusFilter] = useState<"successful" | "failed" | "all">("successful");
-  const [showStatusFilterMenu, setShowStatusFilterMenu] = useState(false);
-  // Privacy first: a member's giving record starts hidden, shown only while
-  // the eye is open — screensharing a phone at church shouldn't expose it.
-  const [givingsVisible, setGivingsVisible] = useState(false);
-  // Until this instant, refresh the record quietly after an M-Pesa gift: the
-  // prompt must be answered (PIN) before the contribution exists, so the list
-  // is polled until the new row lands — or the window lapses.
-  const [pendingRefreshUntil, setPendingRefreshUntil] = useState<number | null>(null);
-
-  const loadMyGivings = (opts?: { silent?: boolean }) => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    // Silent loads (polling) never show the spinner or blank the list on a
-    // hiccup — only deliberate refreshes do.
-    if (!opts?.silent) setLoadingGivings(true);
-    fetch(`${API_URL}/api/members/contributions/?include_failed=1`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setMyGivings(Array.isArray(data) ? data : []))
-      .catch(() => {
-        if (!opts?.silent) setMyGivings([]);
-      })
-      .finally(() => setLoadingGivings(false));
-  };
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    setSignedIn(true);
-    // A member who chose to reveal their record keeps that choice on their
-    // next visit; read only while signed in, since the eye guards nothing
-    // for visitors.
-    if (localStorage.getItem(GIVINGS_VISIBLE_KEY) === "1") setGivingsVisible(true);
-    loadMyGivings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (token) setSignedIn(true);
   }, []);
-
-  // While a just-sent M-Pesa prompt is pending, quietly re-fetch the record
-  // so the completed gift appears on its own — no pull-to-refresh needed.
-  useEffect(() => {
-    if (pendingRefreshUntil === null) return;
-    const deadline = pendingRefreshUntil;
-    const tick = setInterval(() => {
-      if (Date.now() > deadline) {
-        clearInterval(tick);
-        setPendingRefreshUntil(null);
-        return;
-      }
-      loadMyGivings({ silent: true });
-    }, 10000);
-    return () => clearInterval(tick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingRefreshUntil]);
 
   // A signed-in giver's receipt is addressed from their account, so the form
   // only needs to know whether that account carries an email — it shows the
@@ -214,77 +128,6 @@ function GivePageContent() {
       })
       .catch(() => {});
   }, []);
-
-  const givingDateOf = (g: MyGiving) => (g.paid_at || g.created_at || "").slice(0, 10);
-
-  const filteredGivings = myGivings.filter((g) => {
-    const d = givingDateOf(g);
-    if (fromDate && d && d < fromDate) return false;
-    if (toDate && d && d > toDate) return false;
-    const status = (g.status || "").toLowerCase();
-    if (givingStatusFilter === "successful" && status !== "completed") return false;
-    if (givingStatusFilter === "failed" && status !== "failed" && status !== "cancelled") return false;
-    const q = givingSearch.toLowerCase();
-    if (q && !`${g.purpose} ${g.payment_method} ${g.mpesa_receipt_number || ""}`.toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  // Totals count money actually given; failed attempts stay visible but never inflate the sum.
-  const givingTotal = filteredGivings.reduce((sum, g) => ((g.status || "").toLowerCase() === "completed" ? sum + Number(g.amount || 0) : sum), 0);
-
-  /** Download the server-rendered thermal receipt for one giving. The PDF
-   *  arrives as a blob so the browser's download sheet opens on mobile too. */
-  const handleDownloadReceipt = async (g: MyGiving) => {
-    const token = localStorage.getItem("access_token");
-    try {
-      const res = await fetch(`${API_URL}/api/members/contributions/${g.id}/receipt/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Could not generate the receipt.");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Giving_Receipt_${(g.mpesa_receipt_number || g.id)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      showAlert("Receipt Error", error instanceof Error ? error.message : "Could not generate the receipt.", "error");
-    }
-  };
-
-  const fmtGivingDate = (g: MyGiving) => dayFirstTime(g.paid_at || g.created_at);
-
-  const handlePrintMyReport = () => {
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const rows = filteredGivings
-      .map(
-        (g, i) =>
-          `<tr><td>${i + 1}</td><td>${esc(fmtGivingDate(g))}</td><td>${esc(g.purpose || "—")}</td><td>${esc(methodLabel(g.payment_method))}</td><td>${esc(g.mpesa_receipt_number || "—")}</td><td style="text-align:right">KES ${Number(g.amount || 0).toLocaleString()}</td><td>${statusLabel(g.status)}</td></tr>`
-      )
-      .join("");
-    const win = window.open("", "_blank", "width=900,height=650");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>My Giving Report</title><style>
-      body{font-family:ui-sans-serif,system-ui,sans-serif;color:${brand.bark};padding:32px;}
-      h1{font-size:20px;margin:0 0 4px;} p{color:${brand.moss};font-size:12px;margin:0 0 20px;}
-      table{width:100%;border-collapse:collapse;font-size:12px;}
-      th{text-align:left;border-bottom:2px solid ${brand.ember};padding:8px 6px;text-transform:uppercase;font-size:10px;letter-spacing:.05em;color:${brand.ember};}
-      td{border-bottom:1px solid ${brand.sandSoft};padding:8px 6px;}
-      .total{margin-top:16px;text-align:right;font-weight:700;}
-    </style></head><body>
-      <h1>My Giving Report</h1>
-      <p>${dayFirstTime(fromDate)} to ${dayFirstTime(toDate)}</p>
-      <table><thead><tr><th>#</th><th>Date</th><th>Account</th><th>Method</th><th>Receipt</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="total">Total: KES ${givingTotal.toLocaleString()}</p>
-    </body></html>`);
-    win.document.close();
-    win.focus();
-    win.print();
-  };
 
   useEffect(() => {
     if (rawPurposeParam) {
@@ -362,6 +205,9 @@ function GivePageContent() {
     bank_account_number: "1122334455",
     bank_branch: "Meru",
     bank_swift_code: "KCBKNEN",
+    // Blank by default: the church hides its manual M-Pesa details by leaving
+    // the paybill unset, and the card below disappears with it.
+    mpesa_paybill_number: "",
   });
 
   useEffect(() => {
@@ -375,6 +221,7 @@ function GivePageContent() {
             bank_account_number: data.bank_account_number || "1122334455",
             bank_branch: data.bank_branch || "Nairobi West",
             bank_swift_code: data.bank_swift_code || "KCBKNEN",
+            mpesa_paybill_number: data.mpesa_paybill_number || "",
           });
         }
       })
@@ -416,6 +263,9 @@ function GivePageContent() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    // One stamp for both methods: the record page polls quietly for the new
+    // row until this window lapses (the PIN lands a minute or two later).
+    const watchUntil = String(Date.now() + 5 * 60 * 1000);
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
     try {
@@ -525,10 +375,9 @@ function GivePageContent() {
             timer: 7000,
             showConfirmButton: false,
           });
-          loadMyGivings();
-          // The PIN usually lands within a minute or two; keep the record
-          // fresh until the pending entry shows up (or five minutes pass).
-          setPendingRefreshUntil(Date.now() + 5 * 60 * 1000);
+          // The PIN usually lands within a minute or two: stamp the moment so
+          // My Givings polls quietly for the new row when it is opened.
+          localStorage.setItem(PENDING_GIVINGS_KEY, watchUntil);
         } else {
           // A visitor has no record to poll; they land on the public
           // confirmation page, which carries the drive context home.
@@ -540,7 +389,7 @@ function GivePageContent() {
         if (signedIn) {
           const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
           showAlert("Contribution Received", successMsg, "success");
-          loadMyGivings();
+          localStorage.setItem(PENDING_GIVINGS_KEY, watchUntil);
         } else {
           router.push(thankYouPath({ kind: "money", method: "bank", title: allocations[0]?.purpose }));
         }
@@ -559,268 +408,92 @@ function GivePageContent() {
 
   return (
     <main className={signedIn ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
-      {/* No bottom padding while signed in: the pinned footer bar meets the
-          mobile tab bar directly (the shell already reserves the bar height).
-          No phone top padding either: the shell's page strip sits directly
-          above, and the card rides up under it. */}
-      <div className={signedIn ? "flex min-h-0 flex-1 flex-col px-5 pb-0 sm:px-8 sm:pb-5 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
-          <div className={signedIn ? "flex min-h-0 flex-1 flex-col" : "space-y-6"}>
+      {/* /give pins at every width (scrollModeForPath): the document never
+          scrolls, so the page carries its own scroller — the button and the
+          two manual-giving cards move as one, whatever the viewport. */}
+      <div className={signedIn ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-8 pt-4 sm:px-8 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
+          <div className="space-y-6">
             {/* The strip names the page when signed in; visitors keep the title. */}
             <h1 className={signedIn ? "sr-only" : "mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block"}>
               Giving
             </h1>
 
-            {/* ── My Givings (signed-in members) ── */}
-            {signedIn && (
-              <section className={signedIn ? "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line" : "mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"}>
-                {/* Everything above the action bar scrolls as one on a phone —
-                    the title, the dates and filters, and the record itself —
-                    so the buttons are the only part that stays put. On md+ the
-                    wrapper clips again and the desktop table scrolls inside it
-                    with the header pinned, as it always did. */}
-                <div className={signedIn ? "custom-table-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:overflow-hidden" : ""}>
-                <div className="shrink-0 space-y-3 border-b border-sand-line px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h2 className="text-lg font-bold text-bark">My Givings</h2>
-                      {/* The record starts hidden; the eye reveals it. Show the
-                          crossed eye while hidden, matching the state — not
-                          the action. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = !givingsVisible;
-                          setGivingsVisible(next);
-                          try {
-                            localStorage.setItem(GIVINGS_VISIBLE_KEY, next ? "1" : "0");
-                          } catch {}
-                        }}
-                        aria-pressed={givingsVisible}
-                        aria-label={givingsVisible ? "Hide my givings" : "Show my givings"}
-                        title={givingsVisible ? "Hide my givings" : "Show my givings"}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
-                      >
-                        {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {/* Refresh, not Give Now: while the record is hidden the
-                        empty middle becomes Give Now's home, and the header
-                        keeps a quiet way to pull the latest rows. */}
-                    <button
-                      type="button"
-                      onClick={() => loadMyGivings()}
-                      title="Refresh my givings"
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
-                    >
-                      <RotateCw className={`h-3.5 w-3.5 ${loadingGivings ? "animate-spin" : ""}`} />
-                      Refresh
-                    </button>
-                  </div>
-                  <div className={signedIn ? `flex flex-col gap-2 md:flex-row md:items-center ${givingsVisible ? "" : "hidden"}` : "flex flex-col gap-2 md:flex-row md:items-center"}>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
-                      <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
-                      <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
-                    </div>
-                    <div className="relative flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center">
-                      {/* Mobile: the three statuses live behind one compact Filters button; the segmented control stays for desktop. */}
-                      <div className="md:hidden">
-                        <button
-                          type="button"
-                          onClick={() => setShowStatusFilterMenu((open) => !open)}
-                          aria-expanded={showStatusFilterMenu}
-                          aria-label="Filter by status"
-                          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition ${
-                            givingStatusFilter === "successful"
-                              ? "border-sand-line bg-sand text-moss"
-                              : "border-bark bg-bark text-white shadow-sm"
-                          }`}
-                        >
-                          <SlidersHorizontal className="h-3.5 w-3.5" />
-                          {givingStatusFilter === "successful" ? "Filter" : givingStatusFilter === "failed" ? "Failed" : "All"}
-                        </button>
-                        {showStatusFilterMenu && (
-                          <div className="absolute z-20 mt-2 w-36 overflow-hidden rounded-xl border border-sand-line bg-white shadow-lg">
-                            {(["successful", "failed", "all"] as const).map((key) => (
-                              <button
-                                key={key}
-                                type="button"
-                                onClick={() => {
-                                  setGivingStatusFilter(key);
-                                  setShowStatusFilterMenu(false);
-                                }}
-                                className={`flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold transition ${
-                                  givingStatusFilter === key
-                                    ? "bg-mist-select text-bark"
-                                    : "text-moss hover:bg-sand hover:text-bark"
-                                }`}
-                              >
-                                <span className="capitalize">{key}</span>
-                                {givingStatusFilter === key && <Check className="h-3.5 w-3.5 text-ember" />}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {/* Desktop: one independent button per status. */}
-                      <div className="hidden h-9 shrink-0 items-center gap-1.5 md:flex" role="group" aria-label="Filter by status">
-                        {(["successful", "failed", "all"] as const).map((key) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setGivingStatusFilter(key)}
-                            aria-pressed={givingStatusFilter === key}
-                            className={`h-8 rounded-xl px-2.5 text-[11px] font-semibold capitalize transition ${
-                              givingStatusFilter === key
-                                ? "bg-bark text-white shadow-sm"
-                                : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-                            }`}
-                          >
-                            {key}
-                          </button>
-                        ))}
-                      </div>
-                      <input type="text" placeholder="Search account, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none md:flex-1" />
-                    </div>
-                  </div>
-                </div>
+            {/* ── Give Now: the direct path, in the middle of the page ── */}
+            <div className="flex flex-col items-center justify-center gap-3 py-6 text-center sm:py-8">
+              <p className="max-w-md text-sm text-moss">
+                Give by M-Pesa or bank transfer in a moment: the form sends the M-Pesa prompt
+                straight to your phone and records the gift against your account.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowGiveModal(true)}
+                className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
+              >
+                Give Now
+              </button>
+              {signedIn && (
+                <Link href="/member/givings" className="text-xs font-semibold text-ember hover:underline">
+                  View my givings
+                </Link>
+              )}
+            </div>
 
-                {signedIn && !givingsVisible ? (
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 py-3">
-                    <p className="text-xs text-moss">Your giving record is hidden. Tap the eye beside “My Givings” to show it.</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowGiveModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep"
-                    >
-                      Give Now
-                    </button>
-                  </div>
-                ) : (
-                <div className={signedIn ? "flex flex-col px-5 py-3 md:min-h-0 md:flex-1 md:overflow-hidden" : "px-5 py-3"}>
-                  {/* Desktop table */}
-                  <div className={signedIn ? "hidden min-h-0 flex-1 overflow-y-auto custom-table-scrollbar md:block" : "hidden md:block"}>
-                    <table className="w-full text-left text-xs">
-                      <thead className="border-b border-sand-line">
-                        <tr className="text-[11px] font-bold uppercase tracking-wider text-ember">
-                          <th className="pb-3 pr-4 font-bold w-8">#</th>
-                          <th className="pb-3 pr-4 font-bold">Date</th>
-                          <th className="pb-3 pr-4 font-bold">Account</th>
-                          <th className="pb-3 pr-4 font-bold">Method</th>
-                          <th className="pb-3 pr-4 font-bold">Receipt</th>
-                          <th className="pb-3 pr-4 text-right font-bold">Amount</th>
-                          <th className="pb-3 font-bold">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-sand-soft">
-                        {loadingGivings ? (
-                          <tr><td colSpan={7} className="py-8 text-center text-xs text-moss">Loading your givings...</td></tr>
-                        ) : filteredGivings.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="py-8 text-center">
-                              <p className="text-xs font-semibold text-bark">No givings in this period</p>
-                              <p className="mt-1 text-[11px] text-moss">Adjust the dates above or tap Give Now.</p>
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredGivings.map((g, idx) => (
-                            <tr key={g.id} className="hover:bg-sand">
-                              <td className="py-3 pr-4 text-moss w-8">{idx + 1}</td>
-                              <td className="py-3 pr-4 text-moss">{fmtGivingDate(g)}</td>
-                              <td className="py-3 pr-4 font-semibold text-bark">{g.purpose || "—"}</td>
-                              <td className="py-3 pr-4 text-moss">{methodLabel(g.payment_method)}</td>
-                              <td className="py-3 pr-4 font-mono text-moss">{g.mpesa_receipt_number || "—"}</td>
-                              <td className="py-3 pr-4 text-right font-semibold text-bark">KES {Number(g.amount || 0).toLocaleString()}</td>
-                              <td className="py-3 pr-2 text-right">
-                                {(g.status || "").toLowerCase() === "completed" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadReceipt(g)}
-                                    title="Download receipt"
-                                    className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                                  >
-                                    <Receipt size={10} className="inline" aria-hidden="true" /> Receipt
-                                  </button>
-                                )}
-                              </td>
-                              <td className="py-3">{statusBadge(g.status)}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+            {/* ── Give manually: the church's own accounts ──
+                For a giver who would rather push the money themselves, both
+                ways in sit under the button — Safaricom's paybill, which
+                disappears while the church has not set one, and the bank. */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {churchBankDetails.mpesa_paybill_number && (
+                <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+                  <p className="flex items-center gap-2 text-sm font-bold text-bark">
+                    <Smartphone size={14} aria-hidden="true" /> Pay with Safaricom M-Pesa
+                  </p>
+                  <dl className="mt-3 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-moss">Pay Bill number</dt>
+                      <dd className="font-mono text-base font-bold text-bark">{churchBankDetails.mpesa_paybill_number}</dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-moss">Account number</dt>
+                      <dd className="text-right font-semibold text-bark">
+                        The account you are giving for — e.g. TITHE or Combined Offering
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
+                    M-Pesa → Lipa na M-Pesa → Pay Bill, then enter the account above.
+                  </p>
+                </article>
+              )}
 
-                  {/* Mobile cards */}
-                  {/* Mobile cards — one scroller with the header above them:
-                      everything above the action bar moves together. */}
-                  {/* Mobile cards ride the wrapper's scroller — one scroll for
-                      everything above the action bar. */}
-                  <div className={signedIn ? "grid gap-3 pb-2 md:hidden" : "grid gap-3 md:hidden"}>
-                    {loadingGivings ? (
-                      <div className="py-8 text-center text-xs text-moss">Loading your givings...</div>
-                    ) : filteredGivings.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-moss">No givings in this period.</div>
-                    ) : (
-                      filteredGivings.map((g) => (
-                        <div key={g.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="font-bold text-sm text-bark">{g.purpose || "—"}</h3>
-                            {statusBadge(g.status)}
-                          </div>
-                          <p className="text-xs text-moss">{fmtGivingDate(g)} · {methodLabel(g.payment_method)}</p>
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-bold text-ember">KES {Number(g.amount || 0).toLocaleString()}</p>
-                            {(g.status || "").toLowerCase() === "completed" && (
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadReceipt(g)}
-                                title="Download receipt"
-                                className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                              >
-                                <Receipt size={10} className="inline" aria-hidden="true" /> Receipt
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
+              <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+                <p className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <Landmark size={14} aria-hidden="true" /> Pay by bank transfer
+                </p>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-moss">Bank</dt>
+                    <dd className="font-semibold text-bark">{churchBankDetails.bank_name}</dd>
                   </div>
-                </div>
-                )}
-                </div>
-
-                {/* Footer actions — hidden with the record: the count and
-                    total would leak the giving it conceals. */}
-                {givingsVisible && (
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <p className="text-[11px] text-moss">{dayFirstTime(fromDate)} <ArrowRight size={10} className="inline" aria-hidden="true" /> {dayFirstTime(toDate)}</p>
-                    <p className="text-[11px] font-semibold text-bark">
-                      {loadingGivings ? "Loading your givings..." : `${filteredGivings.length} giving${filteredGivings.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`}
-                    </p>
+                  <div>
+                    <dt className="text-moss">Account name</dt>
+                    <dd className="font-semibold text-bark">{churchBankDetails.bank_account_name}</dd>
                   </div>
-                  {/* On a phone the two actions split the row evenly. */}
-                  <div className="flex w-full items-center gap-2 sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={handlePrintMyReport}
-                      className="inline-flex flex-1 items-center justify-center rounded-xl border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand sm:flex-none"
-                    >
-                      <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowGiveModal(true)}
-                      className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
-                    >
-                      Give Now
-                    </button>
+                  <div>
+                    <dt className="text-moss">Account no</dt>
+                    <dd className="font-mono font-semibold text-bark">{churchBankDetails.bank_account_number}</dd>
                   </div>
-                </div>
-                )}
-              </section>
-            )}
+                  <div>
+                    <dt className="text-moss">Branch / Swift</dt>
+                    <dd className="font-semibold text-bark">{churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</dd>
+                  </div>
+                </dl>
+                <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
+                  After transferring, tap Give Now → Bank-to-Bank and enter the reference so the
+                  gift is recorded against your account.
+                </p>
+              </article>
+            </div>
 
           </div>
       </div>
