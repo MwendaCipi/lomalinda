@@ -2657,6 +2657,24 @@ class ProfileUpdateView(APIView):
 
     MINISTRY_VALUES = {code for code, _label in MemberProfile.MINISTRY_CHOICES}
     DEPARTMENT_VALUES = {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}
+    # The ministry column keeps its four legacy codes, because the announcement
+    # audiences address "Adventist Men", "Adventist Women" and "Young Adults"
+    # by exactly those codes. The pickers, though, offer the church's real areas
+    # — so a modern pick is accepted and folded back where a legacy code exists.
+    LEGACY_MINISTRY_FOR_AREA = {
+        'amm': 'adventist_men',
+        'awm': 'adventist_women',
+        'aym': 'young_adults',
+        'ambassadors': 'ambassadors',
+    }
+
+    @staticmethod
+    def _area_codes(group):
+        """The codes the picker for one heading can offer: the church's own
+        areas as the desks file them, which is what the form reads."""
+        return set(
+            Department.objects.filter(group=group, is_active=True).values_list('code', flat=True)
+        )
 
     def post(self, request):
         profile = MemberProfile.objects.filter(user=request.user).first()
@@ -2687,14 +2705,31 @@ class ProfileUpdateView(APIView):
             profile.gifts = as_text(request.data.get('gifts'))
         if 'ministry' in request.data:
             ministry = as_text(request.data.get('ministry'))
-            if ministry and ministry not in self.MINISTRY_VALUES:
+            # The member picks from the ministry list the church itself keeps,
+            # and a pick from that very list used to be refused here: the two
+            # legacy columns only ever knew four codes each, so "Chaplaincy"
+            # answered "Choose one of the listed ministries" — after it had
+            # been chosen from exactly that list.
+            ministry_values = (
+                self.MINISTRY_VALUES
+                | set(self.LEGACY_MINISTRY_FOR_AREA)
+                | self._area_codes('ministry')
+            )
+            if ministry and ministry not in ministry_values:
                 return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
-            profile.ministry = ministry
+            ministry = self.LEGACY_MINISTRY_FOR_AREA.get(ministry, ministry)
+            profile.ministry = ministry[:30] if ministry else ''
         if 'department' in request.data:
             department = as_text(request.data.get('department'))
-            if department and department not in self.DEPARTMENT_VALUES:
+            # The same page, the same picker, the same refusal — Teens and
+            # Ambassadors are age-group rows, not one of the five old codes.
+            if (
+                department
+                and department not in self.DEPARTMENT_VALUES
+                and department not in self._area_codes('department')
+            ):
                 return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
-            profile.department = department
+            profile.department = department[:30] if department else ''
         if 'department_ref' in request.data:
             ref_code = as_text(request.data.get('department_ref'))
             if ref_code:

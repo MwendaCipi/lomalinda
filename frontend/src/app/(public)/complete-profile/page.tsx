@@ -270,7 +270,18 @@ export default function CompleteProfilePage() {
           : me.ministry
             ? [LEGACY_MINISTRY_MAP[me.ministry] || me.ministry]
             : [];
-        setMinistries(initialMinCodes);
+        // A code the ministry list does not carry — a ministry since re-filed
+        // under another heading — cannot be shown as a pick, so it is not
+        // carried in as one: the member chooses from the list instead of a
+        // raw code sitting in the box while every box below reads unchecked.
+        // The list failing to load keeps whatever is on record, so a
+        // transient error never locks the member out of saving.
+        const ministryCodes = new Set(mins.map((row) => row.code));
+        setMinistries(
+          mins.length === 0
+            ? initialMinCodes
+            : initialMinCodes.filter((code) => ministryCodes.has(code))
+        );
 
         const initialDeptCode = me.department_ref || (me.department ? LEGACY_DEPT_MAP[me.department] || me.department : "");
         setDepartmentRef(initialDeptCode);

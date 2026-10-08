@@ -983,6 +983,78 @@ class PdfGenerationAPITests(APITestCase):
 
 
 
+class ProfileAreaPickerTests(APITestCase):
+    """Add more details: the pickers offer the church's own areas, so a pick
+    from them has to be accepted.
+
+    The legacy ministry and department columns beside the pickers only ever
+    knew four codes each, so choosing Chaplaincy was answered with "Choose one
+    of the listed ministries" — right after the member had picked one from
+    exactly the list the form showed. The areas the desks file are the list
+    now. The four legacy codes still load, and a ministry that has a legacy
+    counterpart still stores it, so an announcement addressed to Adventist Men
+    keeps finding the members who serve in AMM.
+    """
+
+    def setUp(self):
+        self.member = User.objects.create_user('area.member', 'area.member@example.com', 'ChurchPass#2026')
+        self.profile = MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.client.force_authenticate(self.member)
+
+    def _submit(self, **fields):
+        payload = {
+            'gender': 'Female',
+            'gifts': 'Teaching',
+            'ministry': 'chaplaincy',
+            'disability': ['None'],
+        }
+        payload.update(fields)
+        return self.client.post('/api/members/me/profile-update/', payload, format='json')
+
+    def test_a_ministry_the_church_files_is_accepted(self):
+        response = self._submit(ministry='chaplaincy')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ministry, 'chaplaincy')
+
+    def test_a_legacy_ministry_is_still_accepted_as_it_always_was(self):
+        response = self._submit(ministry='adventist_men')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ministry, 'adventist_men')
+
+    def test_a_ministry_with_a_legacy_counterpart_stores_the_legacy_code(self):
+        """AMM is filed as a department these days, but the audience for
+        "Adventist Men" is still addressed by adventist_men — so that is what
+        the ministry column keeps."""
+        response = self._submit(ministry='amm')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ministry, 'adventist_men')
+
+    def test_a_ministry_the_church_does_not_have_is_refused(self):
+        response = self._submit(ministry='robotics')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('listed ministries', response.data['ministry'])
+
+    def test_a_department_the_church_files_is_accepted(self):
+        response = self._submit(department='ambassadors')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.department, 'ambassadors')
+
+    def test_a_department_the_church_does_not_have_is_refused(self):
+        response = self._submit(department='astrology')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('listed departments', response.data['department'])
+
+
 class WithdrawalRequestsPdfTests(APITestCase):
     """Treasury → Requests prints from the backend now.
 
