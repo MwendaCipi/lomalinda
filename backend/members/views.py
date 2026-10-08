@@ -8467,7 +8467,7 @@ class DepartmentMembersView(APIView):
         # we show a comma-joined list, or a blank string when they hold none.
         assignments = (
             DepartmentAssignment.objects.select_related('role')
-            .filter(department=department, member__in=[m['id'] for m in members])
+            .filter(department__code=department, member__in=[m['id'] for m in members])
         )
         role_map: dict[int, list[str]] = {}
         for asgn in assignments:
