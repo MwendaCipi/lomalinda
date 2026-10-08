@@ -22,15 +22,15 @@ const fundAuthHeaders = (): Record<string, string> => {
  */
 export type TreasuryView = "givings" | "summary" | "accounts" | "drives" | "expenses" | "requests";
 
-const TREASURY_VIEWS: { key: TreasuryView; label: string }[] = [
-  { key: "givings", label: "Individual Givings" },
-  { key: "summary", label: "Summary Contributions" },
-  { key: "accounts", label: "Church Accounts" },
+const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
+  { key: "givings", label: "Individual Givings", short: "Givings" },
+  { key: "summary", label: "Summary Contributions", short: "Summary" },
+  { key: "accounts", label: "Church Accounts", short: "Accounts" },
   // A fund drive is born from one of those accounts, so it stands beside
   // them: the treasurer reaches the drives without leaving the treasury.
-  { key: "drives", label: "Fund Drives" },
-  { key: "expenses", label: "Expenses" },
-  { key: "requests", label: "Requests" },
+  { key: "drives", label: "Fund Drives", short: "Drives" },
+  { key: "expenses", label: "Expenses", short: "Expenses" },
+  { key: "requests", label: "Requests", short: "Requests" },
 ];
 
 export function TreasuryNav({
@@ -86,7 +86,8 @@ export function TreasuryNav({
           aria-pressed={active === view.key}
           className={tabClass(active === view.key)}
         >
-          <span>{view.label}</span>
+          <span className="sm:hidden">{view.short}</span>
+          <span className="hidden sm:inline">{view.label}</span>
           {view.key === "requests" && displayCount > 0 && (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
               {displayCount}

@@ -1245,6 +1245,12 @@ class Profession(models.Model):
 
 
 class FundraisingCampaign(models.Model):
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', 'Pending treasurer approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
     MESSAGE_FREQ_CHOICES = [
         ('once', 'One-time broadcast'),
         ('daily', 'Daily reminder'),
@@ -1282,6 +1288,23 @@ class FundraisingCampaign(models.Model):
     message_sent = models.BooleanField(default=False, help_text="Whether the campaign message has been broadcast")
     last_message_sent_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_campaigns')
+    source_account = models.ForeignKey(
+        'TreasuryAccount', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='fundraising_campaigns',
+        help_text='Treasury account this drive raises into.',
+    )
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='approved',
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reviewed_fund_drives',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -57,6 +57,11 @@ interface Campaign {
   donor_count: number;
   assigned_cards_count?: number;
   group_breakdown?: Record<string, number>;
+  source_account?: number | null;
+  source_account_name?: string;
+  source_account_description?: string;
+  approval_status?: "pending" | "approved" | "rejected";
+  review_note?: string;
 }
 
 interface ChurchUser {
@@ -94,7 +99,11 @@ export function CampaignManagement({
   mode = "member",
   openCreate = false,
   presetAccount = "",
+  presetAccountId = null,
   presetAccountLabel = "",
+  sourceDepartment = "",
+  approvalRequired = false,
+  allowCreateRequest = false,
   skipList = false,
   formOnly = false,
   onCreated,
@@ -105,8 +114,16 @@ export function CampaignManagement({
   openCreate?: boolean;
   /** A promoted treasury account: its short reference answers for the drive. */
   presetAccount?: string;
+  /** The treasury account id backing the drive. */
+  presetAccountId?: number | null;
   /** The account's human wording, used to name the drive being promoted. */
   presetAccountLabel?: string;
+  /** Department/ministry desk submitting a drive for its own account. */
+  sourceDepartment?: string;
+  /** Non-treasurer leaders submit for treasurer approval instead of publishing immediately. */
+  approvalRequired?: boolean;
+  /** Let a host desk open the form even when the user is not a treasurer. */
+  allowCreateRequest?: boolean;
   /** While the Fund Drives entry page picks the drive to open, the list holds
       back so the redirect never flashes a page we are leaving anyway. */
   skipList?: boolean;
@@ -125,6 +142,7 @@ export function CampaignManagement({
   const [loading, setLoading] = useState(true);
   const [isOfficial, setIsOfficial] = useState<boolean | null>(null);
   const [canEdit, setCanEdit] = useState<boolean>(false);
+  const [canCreateRequest, setCanCreateRequest] = useState<boolean>(false);
   const [broadcastingId, setBroadcastingId] = useState<number | null>(null);
   // The table search: drives are few, but the desk still wants to find one
   // by name or account reference without reading the whole list.
@@ -149,6 +167,7 @@ export function CampaignManagement({
     message_frequency: "once",
     allow_personal_invitations: false,
   });
+  const [sourceAccountId, setSourceAccountId] = useState<number | null>(presetAccountId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   // A flyer or poster that travels with the drive's announcement and emails.
@@ -256,26 +275,32 @@ export function CampaignManagement({
         const allowedView = user && (userRoles.some((r) => officialRoles.includes(r)) || user.is_staff || user.is_superuser);
         const allowedEdit = user && (userRoles.some((r) => ["treasurer", "admin"].includes(r)) || user.is_staff || user.is_superuser);
 
-        setIsOfficial(allowedView);
+        setIsOfficial(allowedView || allowCreateRequest);
         setCanEdit(allowedEdit && isAdminMode);
+        setCanCreateRequest(Boolean(allowCreateRequest));
         if (allowedView) {
           fetchCampaigns(token);
           if (isAdminMode) {
             fetchUsers(token);
           }
+        } else if (allowCreateRequest) {
+          setLoading(false);
         } else {
           setLoading(false);
         }
       })
       .catch(() => {
-        setIsOfficial(false);
-        setCanEdit(false);
-        setLoading(false);
-      });
-  }, [isAdminMode]);
+      setIsOfficial(false);
+      setCanEdit(false);
+      setCanCreateRequest(false);
+      setLoading(false);
+    });
+  }, [isAdminMode, allowCreateRequest]);
+
+  const canCreate = canEdit || canCreateRequest;
 
   useEffect(() => {
-    if (openCreate && canEdit && !openedCreateForm.current) {
+    if (openCreate && canCreate && !openedCreateForm.current) {
       openedCreateForm.current = true;
       if (presetAccount) {
         // Promoting an account: the drive is about that account, so its short
@@ -287,10 +312,11 @@ export function CampaignManagement({
           name: prev.name || presetAccountLabel || presetAccount,
           title: prev.title || presetAccountLabel,
         }));
+        setSourceAccountId(presetAccountId);
       }
       setShowCreateModal(true);
     }
-  }, [openCreate, canEdit, presetAccount, presetAccountLabel]);
+  }, [openCreate, canCreate, presetAccount, presetAccountId, presetAccountLabel]);
 
   function fetchCampaigns(token: string) {
     fetch(`${API_URL}/api/members/campaigns/`, {
@@ -349,6 +375,7 @@ export function CampaignManagement({
       name: prev.name || label || account.name,
       title: prev.title || label,
     }));
+    setSourceAccountId(account.id);
     setStartDriveOpen(false);
     setAccountSearch("");
     setShowCreateModal(true);
@@ -409,6 +436,7 @@ export function CampaignManagement({
       allow_personal_invitations: false,
     });
     setDriveAttachment(null);
+    setSourceAccountId(presetAccountId);
     setEditingCampaign(null);
     setShowCreateModal(false);
     onClosed?.();
@@ -515,6 +543,8 @@ export function CampaignManagement({
         name: form.name.trim(),
         title: form.title.trim() || form.name.trim(),
         account_name: form.account_name.trim() || form.name.trim(),
+        source_account: sourceAccountId || presetAccountId || undefined,
+        source_department: sourceDepartment || undefined,
         description: form.description.trim(),
         is_temporary: form.is_temporary,
         target_amount: numericTarget,
@@ -551,8 +581,10 @@ export function CampaignManagement({
       if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Failed to create campaign.");
 
       showAlert(
-        "Fund Drive Created",
-        `Fund drive "${data.name}" (Account: ${data.account_name || data.name}) was created successfully.`,
+        data.approval_status === "pending" || approvalRequired ? "Fund Drive Submitted" : "Fund Drive Created",
+        data.approval_status === "pending" || approvalRequired
+          ? `Fund drive "${data.name}" has been sent to the treasurer for approval.`
+          : `Fund drive "${data.name}" (Account: ${data.account_name || data.name}) was created successfully.`,
         "success"
       );
       // A host page (the treasury accounts desk) learns of the new drive here,
@@ -677,6 +709,31 @@ export function CampaignManagement({
     }
   }
 
+  async function handleReviewCampaign(id: number, decision: "approved" | "rejected") {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/${id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ approval_status: decision }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || Object.values(data).flat().join(" ") || "Could not review the drive.");
+      showAlert(
+        decision === "approved" ? "Fund Drive Approved" : "Fund Drive Rejected",
+        decision === "approved" ? "The drive is now posted in Fund Drives." : "The drive will stay off Fund Drives.",
+        "success"
+      );
+      fetchCampaigns(token);
+    } catch (err) {
+      showAlert("Review Failed", err instanceof Error ? err.message : "Try again.", "error");
+    }
+  }
+
   async function handleBroadcastMessage(id: number, name: string) {
     const token = localStorage.getItem("access_token");
     if (!token) return;
@@ -741,7 +798,7 @@ export function CampaignManagement({
   // without ever leaving where the account lives. The drives console renders
   // the very same modal in place below.
   const createFormModal =
-    isAdminMode && showCreateModal ? (
+    isAdminMode && showCreateModal && canCreate ? (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
         onClick={(e) => {
@@ -762,7 +819,9 @@ export function CampaignManagement({
               <p className="mt-1 text-xs text-moss">
                 {editingCampaign
                   ? "Update the drive's details, account reference, target goal, and dates."
-                  : "Set fund drive details, account reference, target goal, and member broadcast options."}
+                  : approvalRequired
+                    ? "Set the drive details. The treasurer will approve it before it appears in Fund Drives."
+                    : "Set fund drive details, account reference, target goal, and member broadcast options."}
               </p>
             </div>
             <button
@@ -896,7 +955,7 @@ export function CampaignManagement({
                 disabled={isSubmitting}
                 className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white transition hover:bg-sage-deep disabled:opacity-60 shadow-sm"
               >
-                {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : "Create Drive"}
+                {isSubmitting ? "Saving..." : editingCampaign ? "Save Changes" : approvalRequired ? "Submit for Approval" : "Create Drive"}
               </button>
             </div>
           </form>
@@ -1346,12 +1405,20 @@ export function CampaignManagement({
                             <td className={`px-3 ${rowDrive} align-middle text-center whitespace-nowrap`}>
                               <span
                                 className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  c.is_active
+                                  c.approval_status === "pending"
+                                    ? "bg-amber-50 text-amber-800"
+                                    : c.approval_status === "rejected"
+                                      ? "bg-red-50 text-red-700"
+                                      : c.is_active
                                     ? "bg-mist-soft text-sage-bright"
                                     : "bg-alert-film text-brick"
                                 }`}
                               >
-                                {c.is_active ? "Active" : "Ended"}
+                                {c.approval_status === "pending"
+                                  ? "Pending"
+                                  : c.approval_status === "rejected"
+                                    ? "Rejected"
+                                    : c.is_active ? "Active" : "Ended"}
                               </span>
                             </td>
                             <td className={`px-5 ${rowDrive} align-middle text-right whitespace-nowrap relative`}>
@@ -1391,6 +1458,31 @@ export function CampaignManagement({
 
                                       {isAdminMode && canEdit && (
                                         <>
+                                          {c.approval_status === "pending" && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  closeActionsMenu();
+                                                  void handleReviewCampaign(c.id, "approved");
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                              >
+                                                <Check size={13} className="inline" aria-hidden="true" /> Approve Drive
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  closeActionsMenu();
+                                                  void handleReviewCampaign(c.id, "rejected");
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+                                              >
+                                                <X size={13} className="inline" aria-hidden="true" /> Reject Drive
+                                              </button>
+                                            </>
+                                          )}
+
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -1442,7 +1534,7 @@ export function CampaignManagement({
                                               closeActionsMenu();
                                               handleBroadcastMessage(c.id, c.title || c.name);
                                             }}
-                                            disabled={broadcastingId === c.id}
+                                            disabled={broadcastingId === c.id || c.approval_status !== "approved"}
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand disabled:opacity-50 transition-colors"
                                           >
                                             <Megaphone size={13} className="inline" aria-hidden="true" /> {broadcastingId === c.id ? "Sending..." : "Message Members"}
@@ -1481,8 +1573,18 @@ export function CampaignManagement({
                     >
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.is_active ? "bg-mist-soft text-sage-bright" : "bg-alert-film text-brick"}`}>
-                            {c.is_active ? "Active" : "Ended"}
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            c.approval_status === "pending"
+                              ? "bg-amber-50 text-amber-800"
+                              : c.approval_status === "rejected"
+                                ? "bg-red-50 text-red-700"
+                                : c.is_active ? "bg-mist-soft text-sage-bright" : "bg-alert-film text-brick"
+                          }`}>
+                            {c.approval_status === "pending"
+                              ? "Pending"
+                              : c.approval_status === "rejected"
+                                ? "Rejected"
+                                : c.is_active ? "Active" : "Ended"}
                           </span>
                           {isAdminMode && (
                             <span className="text-xs text-moss">Invites: <strong className="text-bark">{c.assigned_cards_count || 0}</strong></span>

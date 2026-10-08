@@ -1421,6 +1421,8 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
 
     attachment_name = serializers.SerializerMethodField()
     attachment_size = serializers.SerializerMethodField()
+    source_account_name = serializers.CharField(source='source_account.name', read_only=True, default='')
+    source_account_description = serializers.CharField(source='source_account.description', read_only=True, default='')
 
     def get_attachment_name(self, obj):
         if not obj.attachment:
@@ -1442,12 +1444,16 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             'end_date', 'is_active', 'is_temporary', 'generate_card', 'target_groups', 'allow_personal_invitations', 'custom_card_image',
             'attachment', 'attachment_name', 'attachment_size',
             'member_message', 'schedule_message', 'scheduled_at', 'message_frequency', 'message_sent',
-            'last_message_sent_at', 'created_by', 'created_at', 'updated_at',
+            'last_message_sent_at', 'created_by', 'source_account', 'source_account_name', 'source_account_description',
+            'approval_status', 'reviewed_by', 'reviewed_at', 'review_note', 'created_at', 'updated_at',
             'total_raised', 'percentage_raised', 'donor_count',
             'assigned_cards_count', 'group_breakdown', 'top_fundraisers',
             'contribution_breakdown', 'ministry_breakdown', 'department_breakdown', 'donors', 'recent_gifts', 'deficit'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'message_sent', 'last_message_sent_at')
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'created_by', 'message_sent', 'last_message_sent_at',
+            'reviewed_by', 'reviewed_at',
+        )
 
     def validate_target_amount(self, value):
         if value is None or value <= 0:

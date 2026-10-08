@@ -24,10 +24,9 @@ type TabItem = {
  *
  * Every tab navigates: a section's tab opens the section's first page, and
  * the chip strip on that page carries its siblings (AppFrame). The last tab
- * is Ministry — the church's ministries and departments as the member's own
- * map, which every member may read. The office console has no tab any more
- * (the church's own areas matter more than the office's here); staff reach
- * it from the account menu.
+ * includes Fellowship, the member's ministry map, Giving and Chat. The office
+ * console has no tab any more (the church's own areas matter more than the
+ * office's here); staff reach it from the account menu.
  */
 export function MobileTabBar() {
   const pathname = normalizePath(usePathname());

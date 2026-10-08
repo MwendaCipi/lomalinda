@@ -5232,6 +5232,12 @@ def broadcast_campaign_message(campaign, custom_message=None):
     return len(notifications)
 
 
+def _is_lcb_treasury_account(account):
+    """True for the Local Church Budget account, which desks may read but not turn into a drive."""
+    text = f"{account.name or ''} {account.description or ''}".lower()
+    return account.name.upper() == 'LCB' or 'local church budget' in text or ' lcb' in f" {text}"
+
+
 class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
     # brief=True: the list skips the per-viewer breakdowns, which scan the
     # ledger per drive and would multiply across every row of the list.
@@ -5246,18 +5252,61 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()] if self.request.method == 'POST' else [AllowAny()]
 
     def get_queryset(self):
-        if self.request.user.is_authenticated and is_finance_manager(self.request.user):
+        user = self.request.user
+        if user.is_authenticated and is_treasurer_or_admin(user):
             return FundraisingCampaign.objects.all()
-        return FundraisingCampaign.objects.filter(is_active=True)
+        if user.is_authenticated and is_finance_manager(user):
+            return FundraisingCampaign.objects.filter(
+                Q(approval_status='approved', is_active=True) | Q(created_by=user)
+            )
+        return FundraisingCampaign.objects.filter(is_active=True, approval_status='approved')
 
     def perform_create(self, serializer):
-        if not is_treasurer_or_admin(self.request.user):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church treasurers or administrators can create fund drives.')
-        campaign = serializer.save(created_by=self.request.user)
+        user = self.request.user
+        source_account = serializer.validated_data.get('source_account')
+        source_department = str(self.request.data.get('source_department') or '').strip()
+        if source_account is None:
+            account_name = str(serializer.validated_data.get('account_name') or self.request.data.get('account_name') or '').strip()
+            if account_name:
+                source_account = TreasuryAccount.objects.filter(name__iexact=account_name).first()
+
+        is_treasury = is_treasurer_or_admin(user)
+        approval_status = 'approved' if is_treasury else 'pending'
+        if not is_treasury:
+            if source_account is None:
+                raise PermissionDenied('Choose the department or ministry account this fund drive raises into.')
+            if _is_lcb_treasury_account(source_account):
+                raise PermissionDenied('Local Church Budget cannot be started as a fund drive from a department desk.')
+            if not source_department:
+                raise PermissionDenied('Choose the department or ministry desk this fund drive belongs to.')
+            accessible_accounts = department_accounts(user, source_department)
+            if not can_manage_department(user, source_department) or not any(acc.id == source_account.id for acc in accessible_accounts):
+                raise PermissionDenied('You can only start fund drives for accounts managed by your department or ministry.')
+
+        campaign = serializer.save(
+            created_by=user,
+            source_account=source_account,
+            account_name=(source_account.name if source_account and not serializer.validated_data.get('account_name') else serializer.validated_data.get('account_name', '')),
+            approval_status=approval_status,
+            reviewed_by=(user if is_treasury else None),
+            reviewed_at=(timezone.now() if is_treasury else None),
+        )
         # Giving accounts are treasury accounts now; a drive is offered in the
         # giving form when the treasurer links it to an account, not by minting
         # a giving-purpose row for its name (the old behaviour retired).
+
+        if campaign.approval_status != 'approved':
+            treasurers = User.objects.filter(
+                Q(is_staff=True) | Q(is_superuser=True) | Q(member_profile__roles__icontains='treasurer') | Q(member_profile__role='treasurer')
+            ).distinct()
+            for treasurer in treasurers:
+                ChurchNotification.objects.create(
+                    user=treasurer,
+                    title='Fund drive awaiting approval',
+                    message=f"{user.get_full_name() or user.username} submitted '{campaign.title or campaign.name}' for treasurer approval.",
+                    link='/administration/fund-drives',
+                )
+            return
 
         group_role_map = {
             'choir': ('choir_director', 'Choir Ministry'),
@@ -5408,7 +5457,16 @@ class MyCampaignCardsView(generics.ListAPIView):
 
 class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = FundraisingCampaignSerializer
-    queryset = FundraisingCampaign.objects.all()
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated and is_treasurer_or_admin(user):
+            return FundraisingCampaign.objects.all()
+        if user.is_authenticated:
+            return FundraisingCampaign.objects.filter(
+                Q(is_active=True, approval_status='approved') | Q(created_by=user)
+            )
+        return FundraisingCampaign.objects.filter(is_active=True, approval_status='approved')
 
     def get_permissions(self):
         return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
@@ -5417,7 +5475,15 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not is_treasurer_or_admin(self.request.user):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
-        serializer.save()
+        previous = self.get_object()
+        next_status = serializer.validated_data.get('approval_status', previous.approval_status)
+        update_fields = {}
+        if next_status != previous.approval_status:
+            update_fields = {
+                'reviewed_by': self.request.user,
+                'reviewed_at': timezone.now(),
+            }
+        serializer.save(**update_fields)
 
     def perform_destroy(self, instance):
         if not is_finance_manager(self.request.user):
@@ -9477,6 +9543,28 @@ class DepartmentAccountView(APIView):
         return Response({'id': row.id, 'status': row.status, 'detail': detail_msg}, status=status.HTTP_201_CREATED)
 
 
+def _withdrawal_review_row(row):
+    """One withdrawal request as the review queue shows it — and as its
+    printed report shows it, so the screen and the paper cannot drift apart."""
+    return {
+        'id': row.id,
+        'department': row.department.name,
+        'department_code': row.department.code,
+        'account_name': row.account.description or row.account.name,
+        'account_balance': str(row.account.balance),
+        'amount': str(row.amount),
+        'reason': row.reason,
+        'status': row.status,
+        'requested_by': giver_display_name('', member=row.requested_by),
+        'elder_approved_by': giver_display_name('', member=row.elder_approved_by) if row.elder_approved_by else None,
+        'elder_approved_at': row.elder_approved_at,
+        'decided_by': giver_display_name('', member=row.decided_by) if row.decided_by else None,
+        'decided_at': row.decided_at,
+        'reply': row.reply,
+        'created_at': row.created_at,
+    }
+
+
 class DepartmentWithdrawalReviewView(APIView):
     """The two-step review of a department's withdrawal ask.
 
@@ -9500,28 +9588,7 @@ class DepartmentWithdrawalReviewView(APIView):
         rows = DepartmentWithdrawalRequest.objects.select_related(
             'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
         ).order_by('-created_at')
-        return Response({
-            'requests': [
-                {
-                    'id': row.id,
-                    'department': row.department.name,
-                    'department_code': row.department.code,
-                    'account_name': row.account.description or row.account.name,
-                    'account_balance': str(row.account.balance),
-                    'amount': str(row.amount),
-                    'reason': row.reason,
-                    'status': row.status,
-                    'requested_by': giver_display_name('', member=row.requested_by),
-                    'elder_approved_by': giver_display_name('', member=row.elder_approved_by) if row.elder_approved_by else None,
-                    'elder_approved_at': row.elder_approved_at,
-                    'decided_by': giver_display_name('', member=row.decided_by) if row.decided_by else None,
-                    'decided_at': row.decided_at,
-                    'reply': row.reply,
-                    'created_at': row.created_at,
-                }
-                for row in rows
-            ],
-        })
+        return Response({'requests': [_withdrawal_review_row(row) for row in rows]})
 
     def post(self, request):
         action = str(request.data.get('action') or '').strip()
@@ -9688,6 +9755,78 @@ class DepartmentWithdrawalReviewView(APIView):
             pass
 
 
+class WithdrawalRequestsPdfView(APIView):
+    """The treasury desk's withdrawal-requests report, printed from the server.
+
+    The Print button used to hand the browser's own print dialog whatever
+    the live table happened to show — a screenshot of the screen with no way
+    to sign it. This endpoint prints the same rows, under the same filters
+    and the same permissions as the review queue, as a real PDF that ends in
+    three signature slots: the authorizing officer, the one issuing, and the
+    receiver.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # The panel's status filter, mapped to the rows each choice shows — the
+    # same mapping the on-screen table applies.
+    STATUS_FILTERS = {
+        'pending': ('pending', 'elder_approved'),
+        'approved': ('approved',),
+        'rejected': ('declined',),
+    }
+    STATUS_LABELS = {'pending': 'Pending', 'approved': 'Approved', 'rejected': 'Rejected'}
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user):
+            return Response({'detail': 'Only elders or treasurers can print withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+
+        status_param = (request.query_params.get('status') or 'all').strip()
+        search = (request.query_params.get('search') or '').strip().lower()
+        wanted = self.STATUS_FILTERS.get(status_param)
+
+        rows = DepartmentWithdrawalRequest.objects.select_related(
+            'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
+        ).order_by('-created_at')
+
+        data = []
+        for row in rows:
+            if wanted and row.status not in wanted:
+                continue
+            item = _withdrawal_review_row(row)
+            if search and not self._matches(item, search):
+                continue
+            data.append(item)
+
+        try:
+            church_obj = ChurchSettings.objects.first()
+            church_name = (church_obj.church_name if church_obj else None) or 'SDA Church'
+        except Exception:
+            church_name = 'SDA Church'
+
+        from .pdf_generator import generate_withdrawal_requests_pdf
+        pdf_bytes = generate_withdrawal_requests_pdf(
+            church_name,
+            data,
+            status_label=self.STATUS_LABELS.get(status_param, 'All requests'),
+            search=request.query_params.get('search', '').strip(),
+        )
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        filename = f'Withdrawal_Requests_{timezone.localdate().strftime("%Y%m%d")}.pdf'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
+    @staticmethod
+    def _matches(item, needle):
+        """The panel's search, field for field: department, account, purpose,
+        the parties, the reply — and the amount as it prints."""
+        haystack = ' '.join(str(part or '') for part in (
+            item['department'], item['account_name'], item['reason'],
+            item['requested_by'], item['elder_approved_by'], item['decided_by'],
+            item['reply'], item['amount'],
+        ))
+        return needle in haystack.lower()
 
 
 class DeaconateRequestView(APIView):

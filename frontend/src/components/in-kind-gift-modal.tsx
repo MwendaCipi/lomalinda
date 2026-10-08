@@ -8,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /** The accounts an in-kind gift can be recorded against — the same list the
     in-kind page offers, so a gift is filed the same way wherever it is given. */
-const IN_KIND_PURPOSES = [
+export const IN_KIND_PURPOSES = [
   "In-Kind Offering",
   "Welfare & Charity",
   "Building Project Materials",

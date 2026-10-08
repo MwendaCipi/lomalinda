@@ -330,7 +330,7 @@ export const destinations = {
   myGivings: {
     href: "/member/givings",
     label: "My Givings",
-    description: "Your giving records — money and in-kind — with their statuses, receipts and totals.",
+    description: "Your money and in-kind giving, as one timeline — with statuses, receipts and totals.",
     icon: Receipt,
     area: "account",
     match: ["/member/givings"],
@@ -1305,18 +1305,17 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  * The phone's tab bar: the places members move between all week. The last
  * tab is "chat" — the church talking (the area rooms, direct messages and the
  * office line) — which rides the bar's tail on a phone because a PC reaches
- * the same page from the top bar's own button instead. "requests" is the
- * member's own page for asking the church for something, and "Ministry" is
- * the church's ministries and departments as the member's own map of them,
- * which every member may read (the office console keeps the writing side).
- * Home has no tab of its own: the topbar's church mark is the way back to the
- * dashboard, which is the floor of the back stack. Materials has no tab
- * either — it is a page of Fellowship now. Staff still reach the console from
- * the account menu.
+ * the same page from the top bar's own button instead. Requests ride inside
+ * Fellowship now, so the phone keeps one Fellowship tab instead of splitting
+ * out a second asking-for-something tab. "Ministry" is the church's ministries
+ * and departments as the member's own map of them, which every member may read
+ * (the office console keeps the writing side). Home has no tab of its own: the
+ * topbar's church mark is the way back to the dashboard, which is the floor of
+ * the back stack. Materials has no tab either — it is a page of Fellowship
+ * now. Staff still reach the console from the account menu.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
-  { key: "requests" },
   { key: "myAreas" },
   { key: "give" },
   { key: "chat" },

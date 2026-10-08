@@ -14,7 +14,9 @@ from reportlab.platypus import (
     TableStyle,
     KeepTogether,
     HRFlowable,
+    Flowable,
 )
+from xml.sax.saxutils import escape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 
@@ -1380,6 +1382,203 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
         story.append(notes_table)
     else:
         story.append(Paragraph("<i>No notes accompany this statement.</i>", st["cell"]))
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+class SignatureSlotsFlowable(Flowable):
+    """Three ruled slots at the foot of a report: where the people who touch
+    it put their pens.
+
+    Drawn straight onto the canvas — one ``drawString`` per slot title, rather
+    than as paragraphs — so each title lands in the PDF as a single text
+    object and can be found there.
+    """
+
+    LABELS = (
+        ("Authorizing Officer", "Elder / Church Office"),
+        ("Issued By", "Treasury Office"),
+        ("Received By", "Department Representative"),
+    )
+
+    def __init__(self, height=3.4 * cm):
+        super().__init__()
+        self.height = height
+        self.width = 0
+
+    def wrap(self, availWidth, availHeight):
+        self.width = availWidth
+        return availWidth, self.height
+
+    def draw(self):
+        c = self.canv
+        gap = 0.4 * cm
+        count = len(self.LABELS)
+        box_w = (self.width - gap * (count - 1)) / count
+        h = self.height
+        primary = colors.HexColor("#26352f")
+        accent = colors.HexColor("#b36b3c")
+        muted = colors.HexColor("#617068")
+        border = colors.HexColor("#dfdbd1")
+
+        c.saveState()
+        for i, (label, hint) in enumerate(self.LABELS):
+            x = i * (box_w + gap)
+            # The slot: a white box with a header band across its top.
+            c.setFillColor(colors.white)
+            c.setStrokeColor(border)
+            c.setLineWidth(0.75)
+            c.rect(x, 0, box_w, h, stroke=1, fill=1)
+            c.setFillColor(primary)
+            c.rect(x, h - 0.75 * cm, box_w, 0.75 * cm, stroke=0, fill=1)
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 8.5)
+            c.drawString(x + (box_w - c.stringWidth(label, "Helvetica-Bold", 8.5)) / 2, h - 0.52 * cm, label)
+            c.setFillColor(muted)
+            c.setFont("Helvetica", 6.5)
+            c.drawString(x + (box_w - c.stringWidth(hint, "Helvetica", 6.5)) / 2, h - 1.18 * cm, hint)
+
+            inner_l, inner_r = x + 0.3 * cm, x + box_w - 0.3 * cm
+            # The signature rule, with its caption beneath.
+            c.setStrokeColor(accent)
+            c.setLineWidth(0.75)
+            c.line(inner_l, 1.15 * cm, inner_r, 1.15 * cm)
+            c.setFillColor(muted)
+            c.setFont("Helvetica", 6)
+            c.drawString(inner_l, 0.8 * cm, "Signature")
+            # Name and date, each on its own short rule.
+            c.setStrokeColor(border)
+            c.setLineWidth(0.5)
+            c.setFont("Helvetica", 6)
+            c.drawString(inner_l, 0.32 * cm, "Name")
+            c.line(inner_l + 0.7 * cm, 0.3 * cm, x + box_w * 0.6, 0.3 * cm)
+            date_l = x + box_w * 0.66
+            c.drawString(date_l, 0.32 * cm, "Date")
+            c.line(date_l + 0.62 * cm, 0.3 * cm, inner_r, 0.3 * cm)
+        c.restoreState()
+
+
+def generate_withdrawal_requests_pdf(church_name, rows, status_label="All requests", search="") -> bytes:
+    """The treasury's withdrawal-requests report — printed from the server.
+
+    ``rows`` are the review queue's own serialised requests, already filtered
+    the way the desk filtered them on screen, so the paper matches the table.
+    The report closes with three signature slots — the authorizing officer,
+    the one issuing, and the receiver — so a printed copy can be signed.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2.5 * cm,
+    )
+
+    st = get_pdf_styles()
+    story = []
+
+    story.append(Paragraph(church_name.upper(), st["title"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("WITHDRAWAL REQUESTS REPORT", st["subtitle"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}", st["meta"]))
+    filter_line = f"Shown: {status_label}"
+    if search:
+        filter_line += f" · Search: {escape(search)}"
+    story.append(Paragraph(filter_line, st["meta"]))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
+    story.append(Spacer(1, 10))
+
+    if not rows:
+        story.append(Paragraph("No withdrawal requests match the current filters.", st["cell"]))
+    else:
+        status_names = {
+            "pending": "Pending",
+            "elder_approved": "Elder Approved",
+            "approved": "Approved",
+            "declined": "Rejected",
+            "reversed": "Reversed",
+        }
+
+        def fmt_date(value):
+            if hasattr(value, "strftime"):
+                return value.strftime("%d/%m/%Y")
+            text = str(value or "")
+            return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
+
+        header = [
+            Paragraph("#", st["header"]),
+            Paragraph("Date", st["header"]),
+            Paragraph("Department &amp; Account", st["header"]),
+            Paragraph("Purpose &amp; Details", st["header"]),
+            Paragraph("Amount (KES)", st["header_right"]),
+            Paragraph("Status", st["header"]),
+        ]
+        table_data = [header]
+        total = Decimal("0")
+        for idx, row in enumerate(rows, 1):
+            amount = Decimal(str(row.get("amount") or "0"))
+            total += amount
+            details = [f"<b>{escape(str(row.get('reason') or '—'))}</b>"]
+            details.append(
+                f"Asked by {escape(str(row.get('requested_by') or '—'))} · Bal: KES {format_money(row.get('account_balance'))}"
+            )
+            if row.get("elder_approved_by"):
+                details.append(f"Elder approved by {escape(str(row['elder_approved_by']))}")
+            if row.get("decided_by") and row.get("status") in ("approved", "declined"):
+                line = f"{'Approved' if row['status'] == 'approved' else 'Rejected'} by {escape(str(row['decided_by']))}"
+                if row.get("reply"):
+                    line += f" — “{escape(str(row['reply']))}”"
+                details.append(line)
+            table_data.append([
+                Paragraph(str(idx), st["cell"]),
+                Paragraph(fmt_date(row.get("created_at")), st["cell"]),
+                Paragraph(
+                    f"<b>{escape(str(row.get('department') or '—'))}</b><br/>{escape(str(row.get('account_name') or '—'))}",
+                    st["cell"],
+                ),
+                Paragraph("<br/>".join(details), st["cell"]),
+                Paragraph(format_money(amount), st["cell_right_bold"]),
+                Paragraph(status_names.get(row.get("status"), str(row.get("status") or "—")), st["cell"]),
+            ])
+        table_data.append([
+            "",
+            "",
+            "",
+            Paragraph(f"Total — {len(rows)} request{'s' if len(rows) != 1 else ''}", st["cell_bold"]),
+            Paragraph(format_money(total), st["cell_right_bold"]),
+            "",
+        ])
+
+        table = Table(
+            table_data,
+            colWidths=[0.8 * cm, 1.9 * cm, 3.5 * cm, 6.2 * cm, 2.4 * cm, 1.9 * cm],
+            repeatRows=1,
+        )
+        style_cmds = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfdbd1")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#eef2ed")),
+        ]
+        for i in range(2, len(table_data) - 1, 2):
+            style_cmds.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f7f4ee")))
+        table.setStyle(TableStyle(style_cmds))
+        story.append(table)
+
+    # The three signature slots — the reason this report is printed at all.
+    story.append(Spacer(1, 14))
+    story.append(Paragraph("Signatures", st["h2"]))
+    story.append(SignatureSlotsFlowable())
 
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)

@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Gift } from "lucide-react";
-import { InKindGiftModal } from "@/components/in-kind-gift-modal";
-import { IN_KIND_PURPOSES } from "@/components/my-in-kind-givings";
+import { IN_KIND_PURPOSES, InKindGiftModal } from "@/components/in-kind-gift-modal";
 
 /**
  * In-Kind Giving — the act, not the record.

@@ -29,6 +29,7 @@ import {
   HeartPulse,
   Landmark,
   Mail,
+  Megaphone,
   MicVocal,
   MoreVertical,
   Music,
@@ -59,6 +60,7 @@ import { densityCellPad } from "@/lib/table-density";
 import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
+import { CampaignManagement } from "./campaign-management";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -2828,6 +2830,8 @@ export function DepartmentAccountsPanel({
   const [canRequest, setCanRequest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showDriveForm, setShowDriveForm] = useState(false);
+  const [driveAccount, setDriveAccount] = useState<DepartmentAccountInfo | null>(null);
   const [withdrawAccountId, setWithdrawAccountId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -2884,6 +2888,36 @@ export function DepartmentAccountsPanel({
       alive = false;
     };
   }, [load]);
+
+  // Both buttons open the one form — the footer's and the one the shell
+  // draws at the far right of the toggles strip.
+  const openWithdraw = useCallback(() => {
+    if (withdrawAccountId === null && accounts.length > 0) {
+      const primary = accounts.find((a) => a.is_primary) ?? accounts[0];
+      setWithdrawAccountId(primary.id);
+    }
+    setShowWithdrawModal(true);
+  }, [withdrawAccountId, accounts]);
+
+  // A second Request Withdrawal at the toggles strip's far right — a PC
+  // convenience beside the one in the footer, pointing at the same modal,
+  // and never the only way to reach it: the shell draws that slot on large
+  // screens only (hidden below lg), so a phone keeps the footer's.
+  const { setTogglesRightAction } = usePageHeader();
+  useEffect(() => {
+    if (!canRequest) return;
+    setTogglesRightAction(
+      <button
+        type="button"
+        onClick={openWithdraw}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
+      >
+        {isDeaconate ? <Wallet className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
+        {isDeaconate ? "Request funding" : "Request withdrawal"}
+      </button>
+    );
+    return () => setTogglesRightAction(null);
+  }, [canRequest, openWithdraw, isDeaconate, setTogglesRightAction]);
 
   const selectedWithdrawAccount = useMemo(() => {
     if (withdrawAccountId !== null) {
@@ -3034,6 +3068,17 @@ export function DepartmentAccountsPanel({
     if (accountFilter === "all") return null;
     return accounts.find((a) => String(a.id) === String(accountFilter)) ?? null;
   }, [accounts, accountFilter]);
+
+  const startableDriveAccount = useMemo(() => {
+    const chosen = selectedAccountInfo && !selectedAccountInfo.is_lcb ? selectedAccountInfo : null;
+    return chosen ?? accounts.find((a) => !a.is_lcb) ?? null;
+  }, [accounts, selectedAccountInfo]);
+
+  const openDriveForm = useCallback(() => {
+    if (!startableDriveAccount) return;
+    setDriveAccount(startableDriveAccount);
+    setShowDriveForm(true);
+  }, [startableDriveAccount]);
 
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
@@ -3266,17 +3311,22 @@ export function DepartmentAccountsPanel({
               )}
 
               {/* Right — request button */}
-              <div className="shrink-0">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {canRequest && startableDriveAccount && (
+                  <button
+                    type="button"
+                    onClick={openDriveForm}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep sm:px-4"
+                  >
+                    <Megaphone className="h-4 w-4" />
+                    <span className="sm:hidden">Drive</span>
+                    <span className="hidden sm:inline">Start fund drive</span>
+                  </button>
+                )}
                 {canRequest ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (withdrawAccountId === null && accounts.length > 0) {
-                        const primary = accounts.find((a) => a.is_primary) ?? accounts[0];
-                        setWithdrawAccountId(primary.id);
-                      }
-                      setShowWithdrawModal(true);
-                    }}
+                    onClick={openWithdraw}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep sm:px-4"
                   >
                     {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
@@ -3384,6 +3434,28 @@ export function DepartmentAccountsPanel({
             </form>
           </div>
         </div>
+      )}
+
+      {showDriveForm && driveAccount && (
+        <CampaignManagement
+          mode="admin"
+          formOnly
+          openCreate
+          allowCreateRequest
+          approvalRequired
+          presetAccount={driveAccount.name}
+          presetAccountId={driveAccount.id}
+          presetAccountLabel={driveAccount.description || driveAccount.name}
+          sourceDepartment={department.code}
+          onCreated={() => {
+            setShowDriveForm(false);
+            setDriveAccount(null);
+          }}
+          onClosed={() => {
+            setShowDriveForm(false);
+            setDriveAccount(null);
+          }}
+        />
       )}
     </div>
   );
@@ -3603,11 +3675,11 @@ function DepartmentDetail({
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
       ...(names.length > 0
-        ? [{ key: "unit:null", label: "All Members", icon: Users }]
+        ? [{ key: "unit:null", label: "All Members", short: "Members", icon: Users }]
         : []),
       ...names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })),
       // A desk without units keeps the roll named "All Members".
-      ...(names.length === 0 ? [{ key: "members", label: "All Members", icon: Users }] : []),
+      ...(names.length === 0 ? [{ key: "members", label: "All Members", short: "Members", icon: Users }] : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll.
       ...(isMusic ? [{ key: "choir", label: "Ensemble", icon: Music }] : []),
@@ -3615,11 +3687,11 @@ function DepartmentDetail({
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
-      { key: "calendar", label: "Event Calendar", icon: CalendarDays },
+      { key: "calendar", label: "Event Calendar", short: "Events", icon: CalendarDays },
       // The fund ledger and withdrawal requests unified under one desk.
-      { key: "accounts", label: "Account & Withdrawals", icon: Wallet },
+      { key: "accounts", label: "Account & Withdrawals", short: "Account", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
-      ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", icon: Clock }] : []),
+      ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
     ];
   }, [unitsKey, isMusic, keepsTheWeek, department.code]);
 

@@ -983,6 +983,119 @@ class PdfGenerationAPITests(APITestCase):
 
 
 
+class WithdrawalRequestsPdfTests(APITestCase):
+    """Treasury → Requests prints from the backend now.
+
+    The report is a real PDF — not the browser's print dialog pointed at the
+    live table — and it ends in three signature slots: the authorizing
+    officer, the one issuing, and the receiver. It carries the same rows,
+    filters and permissions as the queue it is printed from.
+    """
+
+    def setUp(self):
+        from .models import DepartmentWithdrawalRequest
+
+        self.treasurer = User.objects.create_user('pdf.treasurer', 'pdf.treasurer@example.com', 'StrongPass#2026', first_name='Tess', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.elder = User.objects.create_user('pdf.elder', 'pdf.elder@example.com', 'StrongPass#2026', first_name='Eli', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.member = User.objects.create_user('pdf.member', 'pdf.member@example.com', 'StrongPass#2026', first_name='Marta', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+        music = Department.objects.get(code='music')
+        account = TreasuryAccount.objects.create(
+            name='MusicFund', description='Music Ministry',
+            balance=Decimal('500.00'), department=music,
+        )
+        self.pending = DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('200.00'),
+            reason='Sound system repair', requested_by=self.member,
+        )
+        self.approved = DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('75.00'),
+            reason='Tent hire for the camporee', requested_by=self.member, status='approved',
+        )
+
+    @staticmethod
+    def _pdf_text(content):
+        """The PDF's literal text, however reportlab stored the page — the
+        content stream is ASCII85 + Flate, so both have to come off before a
+        label the generator drew can be found."""
+        import base64
+        import re
+        import zlib
+        text = bytearray(content)
+        for match in re.finditer(rb'stream\r?\n(.*?)endstream', content, re.S):
+            chunk = match.group(1).strip()
+            for decode in (
+                lambda data: zlib.decompress(data),
+                lambda data: zlib.decompress(base64.a85decode(data.replace(b'~>', b''), adobe=False)),
+            ):
+                try:
+                    text += decode(chunk)
+                    break
+                except Exception:
+                    continue
+        return bytes(text)
+
+    def test_the_report_is_a_real_pdf_signed_in_three_places(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/department-withdrawals/pdf/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+        self.assertIn('Withdrawal_Requests_', response['Content-Disposition'])
+
+        text = self._pdf_text(response.content)
+        # The slots the printed copy is signed in.
+        for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
+            self.assertIn(label, text)
+        # And the requests themselves.
+        self.assertIn(b'Sound', text)
+        self.assertIn(b'Tent', text)
+
+    def test_the_status_filter_prints_only_what_the_desk_sees(self):
+        self.client.force_authenticate(self.treasurer)
+
+        approved = self.client.get('/api/members/department-withdrawals/pdf/?status=approved')
+        self.assertEqual(approved.status_code, status.HTTP_200_OK)
+        text = self._pdf_text(approved.content)
+        self.assertIn(b'Tent', text)
+        self.assertNotIn(b'Sound', text)
+
+        pending = self.client.get('/api/members/department-withdrawals/pdf/?status=pending')
+        text = self._pdf_text(pending.content)
+        self.assertIn(b'Sound', text)
+        self.assertNotIn(b'Tent', text)
+
+    def test_the_search_prints_the_same_narrowed_rows(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/department-withdrawals/pdf/?search=sound')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = self._pdf_text(response.content)
+        self.assertIn(b'Sound', text)
+        self.assertNotIn(b'Tent', text)
+
+    def test_only_the_desk_may_print(self):
+        self.client.force_authenticate(self.elder)
+        self.assertEqual(
+            self.client.get('/api/members/department-withdrawals/pdf/').status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.client.force_authenticate(self.member)
+        self.assertEqual(
+            self.client.get('/api/members/department-withdrawals/pdf/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.client.force_authenticate(user=None)
+        self.assertEqual(
+            self.client.get('/api/members/department-withdrawals/pdf/').status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+
 
 class InvitationAPITests(APITestCase):
     """Email invitations: an admin invites, the invitee sets their own password."""

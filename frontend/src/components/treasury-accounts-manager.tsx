@@ -162,6 +162,7 @@ function WithdrawalRequestsPanel({
   const [openAction, setOpenAction] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const rowPad = densityCellPad();
 
   const load = useCallback(() => {
@@ -227,6 +228,40 @@ function WithdrawalRequestsPanel({
         {labels[status] ?? status}
       </span>
     );
+  };
+
+  // The report is printed from the backend now: the same rows under the same
+  // filters arrive as a real PDF — one that ends in three signature slots
+  // (the authorizing officer, the one issuing, and the receiver), which the
+  // browser's print dialog of the live table could never carry.
+  const printReport = async () => {
+    setPrinting(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (search.trim()) params.set("search", search.trim());
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/pdf/?${params.toString()}`, {
+        headers: fundAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not generate the report.");
+      }
+      const url = URL.createObjectURL(await res.blob());
+      // The PDF opens in its own tab, where the browser offers print and
+      // save; a blocked popup falls back to a download so the copy still lands.
+      if (!window.open(url, "_blank")) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Withdrawal_Requests_${new Date().toISOString().slice(0, 10)}.pdf`;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const filteredRows = rows.filter((row) => {
@@ -444,12 +479,13 @@ function WithdrawalRequestsPanel({
         </div>
         <button
           type="button"
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs"
+          onClick={printReport}
+          disabled={printing}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60"
           aria-label="Print withdrawal requests report"
         >
-          <Printer className="h-3.5 w-3.5" />
-          <span>Print</span>
+          <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} />
+          <span>{printing ? "Preparing…" : "Print"}</span>
         </button>
       </div>
     </div>
