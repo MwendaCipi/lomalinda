@@ -83,7 +83,7 @@ function QuickTile({ tile }: { tile: Tile }) {
  * serve is doing.
  *
  * The rail is that same member workspace every page under it renders, so
- * tapping "Dashboard" from the rail does not lose the rail.
+ * the logo at its head comes back here without ever losing the rail.
  */
 export function MemberHome() {
   const router = useRouter();

@@ -386,7 +386,9 @@ export const destinations = {
     description: "Prayer, visitation, dedication, joining — four request types, one place.",
     icon: HeartHandshake,
     area: "fellowship",
-    match: ["/requests", "/community/prayer", "/community/visitation", "/community/child-dedication"],
+    // The old sibling pages answer to this one chip too, so a deep link into
+    // any of them still reads as the requests place and keeps it lit.
+    match: ["/requests", "/enroll", "/community", "/community/prayer", "/community/visitation", "/community/child-dedication"],
   },
 } satisfies Record<string, NavDestination>;
 
@@ -794,21 +796,28 @@ export const treasuryItems: RailRow[] = [
  * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
-  // The member's own page, alone under the first heading.
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", match: ["/dashboard"], sectionKey: "dashboard" },
+  // The logo at the head of the rail is the way back to the dashboard, so
+  // there is no row for it here — the rail opens on the church's life.
   {
     label: "Fellowship",
     icon: Megaphone,
-    // Materials rides this row rather than standing alone: it is something
-    // the church shares, read beside the news and the calendar, and giving
-    // its slot back to the phone's bar frees the room the Ministries and
-    // Departments tabs need there.
+    // Two things have no row of their own and ride here instead. Materials is
+    // something the church shares, read beside the news and the calendar —
+    // giving its slot back to the phone's bar frees the room the Ministries
+    // and Departments tabs need there. And the requests: prayer, visitation,
+    // dedication and joining used to stand on a rail row of their own, but a
+    // member asking the church for something is already in Fellowship — the
+    // phone's tab stays lit on every /community page — so the four forms have
+    // one place of their own on the strip rather than four chips of their own
+    // in the rail. That one page opens with the request type as its first
+    // field, which is the pick the rest of the form hangs off.
     items: [
       page("announcements"),
       page("calendar"),
       page("moments"),
       page("testimonies"),
       page("materials"),
+      page("requests"),
     ],
   },
   {
@@ -820,25 +829,6 @@ export const railEntries: RailEntry[] = [
     // reads Money: six chips share a phone's width, and the leading "Money" is
     // what tells this row of the strip apart from In-Kind's.
     items: [page("give", { label: "Giving", short: "Money", stripLabel: "Money Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
-  },
-  // Asking the church for something is its own place, not a page of Fellowship:
-  // prayer and visitation, dedication, joining — the member's requests live
-  // here, while the office answers them at the console's Requests desk. The
-  // dedicated and joining pages belong to this row too: a member opening them
-  // is asking the church for something, not browsing what it shares.
-  //
-  // The row opens on the prayer & visitation form — the most-made request —
-  // and the strip on it names the other ways to ask: dedication, joining. The
-  // old `/requests` hub page is a redirect for links already in the world.
-  {
-    label: "Requests",
-    icon: HeartHandshake,
-    items: [
-      page("prayerVisitation"),
-      page("visitation"),
-      page("childDedication"),
-      page("membership"),
-    ],
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
@@ -900,7 +890,6 @@ export const railEntries: RailEntry[] = [
  * belongs to, and, folded away, the other areas they can visit or join.
  */
 export type RailSection =
-  | "dashboard"
   | "my-church"
   | "my-ministry"
   | "other-ministry";
@@ -909,19 +898,12 @@ export type RailSection =
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
   "Giving": "my-church",
-  "Requests": "my-church",
 };
 
 /** One heading in the rail, with the rows filed under it. */
 export type RailSectionGroup = {
   key: RailSection;
   label: string;
-  /**
-   * Whether the heading starts folded. The ministries the member has not
-   * joined ride a folded heading: they are one tap away without spending the
-   * rail's height on areas the member rarely opens.
-   */
-  collapsed: boolean;
   entries: RailEntry[];
 };
 
@@ -930,9 +912,10 @@ function railEntrySortLabel(entry: RailEntry): string {
 }
 
 /**
- * The rail, read as headings with the rows under each: the member's own page
- * first, alone; the church's life; the areas they belong to; and, folded, the
- * other ministries and departments they may visit or join. Empty groups are omitted.
+ * The rail, read as headings with the rows under each: the church's life, then
+ * the areas they belong to, then the other ministries and departments they may
+ * visit or join. Every heading reads the same way — plain label, rows beneath,
+ * nothing folded away. Empty groups are omitted.
  */
 export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
   const grouped = new Map<RailSection, RailEntry[]>();
@@ -944,26 +927,21 @@ export function railSectionsFor(entries: RailEntry[]): RailSectionGroup[] {
     grouped.set(key, list);
   }
   const groups: RailSectionGroup[] = [];
-  const push = (key: RailSection, label: string, collapsed: boolean) => {
+  const push = (key: RailSection, label: string) => {
     const rows = grouped.get(key);
     if (rows && rows.length > 0) {
       groups.push({
         key,
         label,
-        collapsed,
         entries: [...rows].sort((a, b) => railEntrySortLabel(a).localeCompare(railEntrySortLabel(b))),
       });
     }
   };
-  push("dashboard", "Dashboard", false);
-  push("my-church", "My church", false);
+  push("my-church", "My church");
   // Departments and ministries share the same two headings, as they do in the
-  // member's Ministry map: joined areas under My Ministry, the rest folded.
-  push("my-ministry", "My Ministry", false);
-  const otherMinistries = grouped.get("other-ministry") ?? [];
-  if (otherMinistries.length > 0) {
-    push("other-ministry", "Other Ministries", true);
-  }
+  // member's Ministry map: joined areas under My Ministry, the rest beside it.
+  push("my-ministry", "My Ministry");
+  push("other-ministry", "Other Ministries");
   return groups;
 }
 

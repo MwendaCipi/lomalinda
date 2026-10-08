@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
-import { ChevronDown, Mail, UserPlus } from "lucide-react";
+import { useState } from "react";
+import { Mail, Search, UserPlus } from "lucide-react";
 
 import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
@@ -29,7 +29,6 @@ import { AreaJoinModal, AreaContactModal } from "./area-modals";
  */
 export function NavRail() {
   const pathname = normalizePath(usePathname());
-  const railScrollRef = useRef<HTMLDivElement | null>(null);
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
@@ -48,20 +47,27 @@ export function NavRail() {
   // The join and contact affordances: which heading's modal is open.
   const [joinArea, setJoinArea] = useState<string | null>(null);
   const [contactArea, setContactArea] = useState<string | null>(null);
-  // The headings the member has folded open; the rest of the folded headings
-  // (Other Ministries) start closed.
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleSection = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    if (key === "other-ministry") {
-      requestAnimationFrame(() => railScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
-    }
-  };
+  // The rail's own search — it holds the slot the Dashboard row gave up, since
+  // the logo above already is the way home. It narrows the rows below: a
+  // section's own name, or the pages a section row carries.
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const matches = (row: { label: string; short?: string; description?: string }) =>
+    `${row.label} ${row.short ?? ""} ${row.description ?? ""}`.toLowerCase().includes(needle);
+  const sections = railSectionsFor(entries)
+    .map((section) => ({
+      ...section,
+      entries: needle
+        ? section.entries.flatMap((entry) =>
+            matches(entry)
+              ? [entry]
+              : "items" in entry && entry.items
+                ? entry.items.filter(matches)
+                : []
+          )
+        : section.entries,
+    }))
+    .filter((section) => section.entries.length > 0);
 
   return (
     <aside
@@ -84,34 +90,39 @@ export function NavRail() {
         </Link>
       </div>
 
+      {/* The rail's own search, in the slot the Dashboard row gave up: the
+          logo above is the way home, so the space goes to finding a place.
+          It narrows the rows below while there is something typed. */}
+      <div className="shrink-0 border-b border-sand-line px-3 py-2.5">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search the rail"
+            placeholder="Search the rail…"
+            className="w-full rounded-xl border border-sand-line bg-white py-2 pl-8 pr-3 text-xs text-bark outline-none placeholder:text-moss focus:border-ember"
+          />
+        </label>
+      </div>
+
       {/* The rail scrolls on its own; the page never moves with it. The
-          headings are a reading aid — Dashboard, then the church's life, then
-          the desks — not a click target and not a group to expand. */}
-      <div ref={railScrollRef} className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
+          headings are a reading aid — the church's life, then the areas the
+          member belongs to, then the rest — plain labels with their rows
+          beneath them, none of them folded away. */}
+      <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar px-3 py-3">
         <nav>
-          {railSectionsFor(entries).map((section, index) => {
-            const collapsed = section.collapsed && !expanded.has(section.key);
-            return (
+          {sections.length === 0 && (
+            <p className="px-3 py-6 text-center text-xs text-moss">
+              Nothing in the rail matches “{query.trim()}”.
+            </p>
+          )}
+          {sections.map((section, index) => (
             <div key={section.key} className={index === 0 ? "" : "mt-4"}>
-              {section.collapsed ? (
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.key)}
-                  aria-expanded={!collapsed}
-                  className="flex w-full items-center justify-between rounded-md px-3 pb-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-moss transition hover:text-ember"
-                >
-                  <span>{section.label}</span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 transition-transform ${collapsed ? "" : "rotate-180"}`}
-                    aria-hidden="true"
-                  />
-                </button>
-              ) : (
-                <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
-                  {section.label}
-                </p>
-              )}
-              {!collapsed && (
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
+                {section.label}
+              </p>
               <div className="space-y-0.5">
                 {section.entries.map((entry) => {
                   const href = entryHref(entry);
@@ -166,10 +177,8 @@ export function NavRail() {
                   );
                 })}
               </div>
-              )}
             </div>
-            );
-          })}
+          ))}
         </nav>
       </div>
 
