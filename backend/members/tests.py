@@ -638,6 +638,97 @@ class RegisterMpesaC2BUrlsCommandTests(TestCase):
                 self._run()
 
 
+class PullMpesaTransactionsCommandTests(APITestCase):
+    """The pull command is the church asking Safaricom what the paybill
+    received — the manual payments included — and recording what the ledger
+    has never seen, once."""
+
+    ENV = {
+        'MPESA_CONSUMER_KEY': 'key',
+        'MPESA_CONSUMER_SECRET': 'secret',
+        'MPESA_SHORTCODE': '600000',
+    }
+
+    PULL_ROW = {
+        'TransID': 'PUL87NEW42',
+        'TransAmount': '1200',
+        'BillRefNumber': 'Offering',
+        'MSISDN': '254722000222',
+        'FirstName': 'Jane',
+        'MiddleName': 'Q',
+        'LastName': 'Doe',
+    }
+
+    def _run(self, *args, **options):
+        from django.core.management import call_command
+
+        out, err = StringIO(), StringIO()
+        call_command('pull_mpesa_transactions', *args, stdout=out, stderr=err, **options)
+        return out.getvalue(), err.getvalue()
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_records_new_and_skips_known_receipts(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        # One row the ledger already holds, one it has never seen.
+        Contribution.objects.create(
+            payment_method='mpesa',
+            status='completed',
+            mpesa_receipt_number='OLG60ABC12',
+            amount=Decimal('500.00'),
+            purpose='Tithe',
+        )
+        mock_post.return_value.json.return_value = {
+            'ResultCode': 0,
+            'ResultDesc': 'Success',
+            'Result': [
+                {'TransID': 'OLG60ABC12', 'TransAmount': '500', 'BillRefNumber': 'Tithe', 'MSISDN': '254711000111'},
+                self.PULL_ROW,
+            ],
+        }
+
+        with patch.dict('os.environ', self.ENV):
+            out, _ = self._run('--start', '2026-10-01', '--end', '2026-10-09')
+
+        self.assertIn('1 recorded, 1 already in the ledger', out)
+        # The request asks Safaricom for exactly the named window.
+        body = mock_post.call_args.kwargs['json']
+        self.assertEqual(body['ShortCode'], '600000')
+        self.assertTrue(body['StartDate'].startswith('2026-10-01'))
+        self.assertTrue(body['EndDate'].startswith('2026-10-09'))
+        self.assertEqual(body['OffSetValue'], '0')
+
+        # The known receipt is untouched; the new payment is a completed
+        # contribution through the same recorder the C2B callback uses.
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='OLG60ABC12').count(), 1)
+        contribution = Contribution.objects.get(mpesa_receipt_number='PUL87NEW42')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.amount, Decimal('1200'))
+        self.assertEqual(contribution.purpose, 'Offering')
+        self.assertEqual(contribution.donor_name, 'Jane Q Doe')
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_dry_run_lists_without_recording(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {'ResultCode': 0, 'Result': [self.PULL_ROW]}
+
+        with patch.dict('os.environ', self.ENV):
+            out, _ = self._run('--days', '2', '--dry-run')
+
+        self.assertIn('would record PUL87NEW42', out)
+        self.assertIn('1 would be recorded', out)
+        self.assertFalse(Contribution.objects.filter(mpesa_receipt_number='PUL87NEW42').exists())
+
+
 class MpesaRefundAPITests(APITestCase):
     def setUp(self):
         self.treasurer = User.objects.create_user(username='refund_treasurer', password='secure-password')

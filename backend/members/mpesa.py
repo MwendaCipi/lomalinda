@@ -172,3 +172,50 @@ def register_c2b_urls(validation_url=None, confirmation_url=None):
     response.raise_for_status()
     return response.json()
 
+
+def pull_paybill_transactions(start_date, end_date, offset=0):
+    """Pull the paybill's transactions for a window, straight from Safaricom.
+
+    The C2B confirmation callbacks only arrive once Safaricom enables
+    always-on for the shortcode; this is the other direction — the church
+    asks Safaricom what the paybill received — so a manual "send money to
+    paybill" payment is readable here whether or not a callback was ever
+    configured. Reconciliation pulls with it and records what the ledger
+    has not seen (see the pull_mpesa_transactions command).
+
+    Dates are 'YYYY-MM-DD HH:MM:SS' strings in Nairobi time; OffSetValue
+    pages through a long window (the API caps each response, returning the
+    next slice from the given offset).
+    """
+    consumer_key = _setting('MPESA_CONSUMER_KEY')
+    consumer_secret = _setting('MPESA_CONSUMER_SECRET')
+    shortcode = _setting('MPESA_SHORTCODE')
+    base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
+
+    token_response = requests.get(
+        f'{base_url}/oauth/v1/generate?grant_type=client_credentials',
+        auth=(consumer_key, consumer_secret),
+        timeout=15,
+    )
+    token_response.raise_for_status()
+    access_token = token_response.json()['access_token']
+
+    # The initiator credential is the same encrypted one the B2C payouts
+    # use; the pull API names an initiator like they do.
+    payload = {
+        'Initiator': environ.get('MPESA_INITIATOR_NAME') or '',
+        'SecurityCredential': environ.get('MPESA_SECURITY_CREDENTIAL') or '',
+        'ShortCode': shortcode,
+        'StartDate': start_date,
+        'EndDate': end_date,
+        'OffSetValue': str(offset),
+    }
+    response = requests.post(
+        f'{base_url}/pulltransactions/v1/query',
+        json=payload,
+        headers={'Authorization': f'Bearer {access_token}'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+

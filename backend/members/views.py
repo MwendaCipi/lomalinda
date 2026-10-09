@@ -4404,70 +4404,82 @@ class MpesaC2BValidationView(APIView):
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
+def record_direct_paybill_payment(payload):
+    """Record one direct paybill (C2B) payment from a Safaricom payload.
+
+    Shared by the confirmation callback and the pull-based reconciliation
+    command: money that reached the paybill is a completed contribution,
+    credited once, however the server first heard of it — Safaricom pushing
+    a confirmation, or the church pulling its own statement. Returns the
+    contribution, or None for a payload with no transaction id.
+    """
+    trans_id = payload.get('TransID') or payload.get('TransactionID')
+    if not trans_id:
+        return None
+
+    # Extract all name components from Safaricom C2B payload
+    first_name = (payload.get('FirstName') or '').strip()
+    middle_name = (payload.get('MiddleName') or '').strip()
+    last_name = (payload.get('LastName') or '').strip()
+    full_name = ' '.join(filter(None, [first_name, middle_name, last_name]))
+
+    msisdn = str(payload.get('MSISDN') or '').strip()
+    amount_raw = payload.get('TransAmount', 0)
+    try:
+        amount = Decimal(str(amount_raw))
+    except (ValueError, TypeError):
+        amount = Decimal('0')
+
+    purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
+
+    # Check if already recorded
+    # A split STK gift shares one receipt number across its account lines;
+    # a C2B paybill payment is always a single line, so only unsplit rows can
+    # be the payment this confirmation is about.
+    contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id, payment_group__isnull=True).first()
+    was_new_record = contribution is None
+    if not contribution:
+        contribution = Contribution(
+            payment_method='mpesa',
+            giving_type='financial',
+            purpose=purpose,
+        )
+
+    contribution.status = 'completed'
+    contribution.mpesa_receipt_number = trans_id
+    contribution.amount = amount
+    if msisdn:
+        contribution.phone_number = msisdn
+    if full_name:
+        contribution.donor_name = full_name
+    if not contribution.paid_at:
+        contribution.paid_at = timezone.now()
+
+    # Link to member user if exists and not set
+    if not contribution.member and msisdn:
+        normalized_digits = msisdn[-9:] if len(msisdn) >= 9 else msisdn
+        matched_user = User.objects.filter(username__icontains=normalized_digits).first()
+        if matched_user:
+            contribution.member = matched_user
+            if not contribution.donor_email and matched_user.email:
+                contribution.donor_email = matched_user.email
+
+    contribution.save()
+    send_contribution_receipt(contribution)
+    # The paybill money is in; the account it names moves too. A repeated
+    # confirmation finds the saved row first and never reaches a second
+    # credit, because the credit only follows a fresh completion.
+    if was_new_record:
+        credit_contribution_lines(contribution)
+    return contribution
+
+
 class MpesaC2BConfirmationView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        payload = request.data or {}
-        trans_id = payload.get('TransID')
-        if not trans_id:
-            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
-
-        # Extract all name components from Safaricom C2B payload
-        first_name = (payload.get('FirstName') or '').strip()
-        middle_name = (payload.get('MiddleName') or '').strip()
-        last_name = (payload.get('LastName') or '').strip()
-        full_name = ' '.join(filter(None, [first_name, middle_name, last_name]))
-
-        msisdn = str(payload.get('MSISDN') or '').strip()
-        amount_raw = payload.get('TransAmount', 0)
-        try:
-            amount = Decimal(str(amount_raw))
-        except (ValueError, TypeError):
-            amount = Decimal('0')
-
-        purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
-
-        # Check if already recorded
-        # A split STK gift shares one receipt number across its account lines;
-        # a C2B paybill payment is always a single line, so only unsplit rows can
-        # be the payment this confirmation is about.
-        contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id, payment_group__isnull=True).first()
-        was_new_record = contribution is None
-        if not contribution:
-            contribution = Contribution(
-                payment_method='mpesa',
-                giving_type='financial',
-                purpose=purpose,
-            )
-
-        contribution.status = 'completed'
-        contribution.mpesa_receipt_number = trans_id
-        contribution.amount = amount
-        if msisdn:
-            contribution.phone_number = msisdn
-        if full_name:
-            contribution.donor_name = full_name
-        if not contribution.paid_at:
-            contribution.paid_at = timezone.now()
-
-        # Link to member user if exists and not set
-        if not contribution.member and msisdn:
-            normalized_digits = msisdn[-9:] if len(msisdn) >= 9 else msisdn
-            matched_user = User.objects.filter(username__icontains=normalized_digits).first()
-            if matched_user:
-                contribution.member = matched_user
-                if not contribution.donor_email and matched_user.email:
-                    contribution.donor_email = matched_user.email
-
-        contribution.save()
-        send_contribution_receipt(contribution)
-        # The paybill money is in; the account it names moves too. A repeated
-        # confirmation finds the saved row first and never reaches a second
-        # credit, because the credit only follows a fresh completion.
-        if was_new_record:
-            credit_contribution_lines(contribution)
+        record_direct_paybill_payment(request.data or {})
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
