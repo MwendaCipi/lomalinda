@@ -8,6 +8,7 @@ import {
   FileText,
   Globe,
   HandHelping,
+  HandHeart,
   Handshake,
   Heart,
   Megaphone,
@@ -37,6 +38,120 @@ export type SectionLink = {
 };
 
 /** Beside About: the church's story, its calendar and privacy. */
+/**
+ * The links a first-time visitor reaches from the header and the footer.
+ * These are the pages a "English-speaking church in Meru" search returns,
+ * so every one of them is named here, with one canonical description.
+ */
+export const publicWebsiteLinks: SectionLink[] = [
+  {
+    key: "top",
+    href: "#top",
+    label: "The welcome",
+    description: "An English-speaking Seventh-day Adventist church in Meru — worship, study and the fellowship we share between Sabbaths.",
+    icon: Sparkles,
+  },
+  {
+    key: "calendar",
+    href: "/calendar",
+    label: "Church Calendar",
+    description: "Sabbaths, vespers, programmes and special events across the church year.",
+    icon: Calendar,
+  },
+  {
+    key: "materials",
+    href: "/materials",
+    label: "Study Materials",
+    description: "Sabbath School lessons, hymnals, the Bible and the writings of Ellen G. White.",
+    icon: BookOpen,
+  },
+  {
+    key: "prayer",
+    href: "/requests",
+    label: "Prayer & community care",
+    description: "Send a prayer request, ask for a visit, or tell us about a practical need.",
+    icon: Heart,
+  },
+  {
+    key: "give",
+    href: "/give",
+    label: "Giving",
+    description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
+    icon: HandHeart,
+  },
+  {
+    key: "share",
+    href: "/share/moments",
+    label: "Church moments",
+    description: "Sabbath songs, services and events from around the church year.",
+    icon: Sparkles,
+  },
+  {
+    key: "testimonies",
+    href: "/spiritual/testimonies",
+    label: "Sharing",
+    description: "Share a testimony of what God has done, or an idea that could help the church.",
+    icon: Sparkles,
+  },
+];
+
+/**
+ * The links a first-time visitor reaches from the public header and footer.
+ * These are the pages a "english speaking church meru" search returns, so
+every one of them is named here, with one canonical description.
+ */
+export const publicWebsiteHeaderLinks: SectionLink[] = [
+  {
+    key: "top",
+    href: "#top",
+    label: "The welcome",
+    description: "An English-speaking Seventh-day Adventist church in Meru — worship, study and the fellowship we share between Sabbaths.",
+    icon: Sparkles,
+  },
+  {
+    key: "calendar",
+    href: "/calendar",
+    label: "Church Calendar",
+    description: "Sabbaths, vespers, programmes and special events across the church year.",
+    icon: Calendar,
+  },
+  {
+    key: "materials",
+    href: "/materials",
+    label: "Study Materials",
+    description: "Sabbath School lessons, hymnals, the Bible and the writings of Ellen G. White.",
+    icon: BookOpen,
+  },
+  {
+    key: "prayer",
+    href: "/requests",
+    label: "Prayer & community care",
+    description: "Send a prayer request, ask for a visit, or tell us about a practical need.",
+    icon: Heart,
+  },
+  {
+    key: "give",
+    href: "/give",
+    label: "Giving",
+    description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
+    icon: HandHeart,
+  },
+  {
+    key: "share",
+    href: "/share/moments",
+    label: "Church moments",
+    description: "Sabbath songs, services and events from around the church year.",
+    icon: Sparkles,
+  },
+  {
+    key: "testimonies",
+    href: "/spiritual/testimonies",
+    label: "Sharing",
+    description: "Share a testimony of what God has done, or an idea that could help the church.",
+    icon: Sparkles,
+  },
+];
+
 export const aboutSectionLinks: SectionLink[] = [
   {
     key: "about",

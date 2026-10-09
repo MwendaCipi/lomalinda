@@ -11,8 +11,12 @@ import { normalizePath } from "@/lib/paths";
 const marketingLinks = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/materials", label: "Study" },
+  { href: "/requests", label: "Prayer" },
   { href: "/give", label: "Give" },
-  { href: "/#contact", label: "Contact" },
+  { href: "/share/moments", label: "Moments" },
+  { href: "/spiritual/testimonies", label: "Sharing" },
 ];
 
 /**

@@ -1717,9 +1717,11 @@ def generate_withdrawal_request_pdf(church_name, row) -> bytes:
         if row.get("elder_approved_at"):
             elder_line += f" · {fmt_date(row['elder_approved_at'])}"
 
+    # The treasurer's own approval: who decided, and the day they did — the
+    # status itself lives on the row above, so this names the officer and date.
     decision_line = "—"
     if row.get("decided_by"):
-        decision_line = f"{status_names.get(row.get('status'), row.get('status') or '')} by {row['decided_by']}"
+        decision_line = str(row["decided_by"])
         if row.get("decided_at"):
             decision_line += f" · {fmt_date(row['decided_at'])}"
     if row.get("reply"):
@@ -1737,12 +1739,12 @@ def generate_withdrawal_request_pdf(church_name, row) -> bytes:
              label("Date Raised"), value(escape(fmt_date(row.get("created_at"))))],
             [label("Account"), value(escape(str(row.get("account_name") or "—"))),
              label("Asked By"), value(escape(str(row.get("requested_by") or "—")))],
-            [label("Amount Requested"), value(f"KES {format_money(amount)}", "cell_right_bold"),
-             label("Fund Balance"), value(f"KES {format_money(balance)}", "cell_right")],
+            [label("Amount Requested"), value(f"KES {format_money(amount)}", "cell_bold"),
+             label("Fund Balance"), value(f"KES {format_money(balance)}")],
             [label("Status"), value(status_names.get(row.get("status"), str(row.get("status") or "—"))),
              label("Elder Approval"), value(escape(elder_line))],
             [label("Purpose"), value(escape(str(row.get("reason") or "—"))),
-             label("Decision"), value(escape(decision_line))],
+             label("Treasurer approval"), value(escape(decision_line))],
         ],
         colWidths=[3.0 * cm, 5.8 * cm, 3.0 * cm, 6.2 * cm],
     )

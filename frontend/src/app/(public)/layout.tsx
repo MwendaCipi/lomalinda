@@ -1,6 +1,8 @@
 import { AppFrame } from "@/components/app-frame";
 import { MarketingNav } from "@/components/marketing-nav";
+import { PublicSectionNav } from "@/components/public-section-nav";
 import { PopupAnnouncementModal } from "@/components/popup-announcement-modal";
+import { publicWebsiteHeaderLinks } from "@/config/site-sections";
 
 /**
  * Layout for the public website — the marketing side of the site.
@@ -16,6 +18,16 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     <>
       <PopupAnnouncementModal />
       <MarketingNav />
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+        <PublicSectionNav
+          eyebrow="Explore"
+          title="The church at a glance"
+          description="Directions, worship times, what to expect on a Sabbath morning, and the pages a first-time visitor actually needs."
+          links={publicWebsiteHeaderLinks}
+          activeKey="top"
+          className="mb-8"
+        />
+      </div>
       <AppFrame>
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </AppFrame>

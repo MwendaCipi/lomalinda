@@ -57,6 +57,9 @@ export function scrollModeForPath(pathname: string): ScrollMode {
   // list and the thread scroll inside it, so the compose box can sit at the
   // foot of the thread instead of riding the page's own scroll.
   if (pathname === "/chat") return "pinned";
+  // The church calendar holds still and lets its own list scroll inside, so the
+  // toggles and heading stay put while the rows move under them.
+  if (pathname === "/calendar") return "pinned";
   return "panel";
 }
 

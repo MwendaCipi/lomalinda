@@ -31,6 +31,34 @@ type TreasuryAccount = {
   created_at: string;
 };
 
+/**
+ * Hand a finished PDF to the browser.
+ *
+ * A desktop opens the sheet in its own tab, where the browser offers print
+ * and save. A phone refuses a popup raised this long after the tap — the
+ * fetch above has already spent the gesture — and often returns a window it
+ * never shows, so on a touch screen the file is downloaded directly; the
+ * anchor is mounted in the document first, which mobile browsers require
+ * before they honour `download` at all.
+ *
+ * The blob is never revoked. The PDF tab re-reads this URL whenever Save is
+ * pressed — minutes after the print — and a revoked URL turns that later
+ * download into a connection error. The URLs die with the page that made
+ * them, and a receipt-sized PDF costs nothing to hold until then.
+ */
+const deliverPdf = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const touchScreen = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+  const opened = !touchScreen && window.open(url, "_blank");
+  if (opened) return;
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+};
+
 /** The desk's own bearer header, read the way the component below reads it. */
 const fundAuthHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -248,16 +276,10 @@ function WithdrawalRequestsPanel({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Could not generate the report.");
       }
-      const url = URL.createObjectURL(await res.blob());
-      // The PDF opens in its own tab, where the browser offers print and
-      // save; a blocked popup falls back to a download so the copy still lands.
-      if (!window.open(url, "_blank")) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Withdrawal_Requests_${new Date().toISOString().slice(0, 10)}.pdf`;
-        a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      deliverPdf(
+        await res.blob(),
+        `Withdrawal_Requests_${new Date().toISOString().slice(0, 10)}.pdf`
+      );
     } catch (error) {
       showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
@@ -279,14 +301,7 @@ function WithdrawalRequestsPanel({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Could not print the request.");
       }
-      const url = URL.createObjectURL(await res.blob());
-      if (!window.open(url, "_blank")) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Withdrawal_Request_${row.id}.pdf`;
-        a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      deliverPdf(await res.blob(), `Withdrawal_Request_${row.id}.pdf`);
     } catch (error) {
       showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
     } finally {

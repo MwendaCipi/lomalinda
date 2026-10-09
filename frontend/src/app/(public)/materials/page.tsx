@@ -38,6 +38,9 @@ function sectionFromUrl(): MaterialSection {
  *
  * The marketing intro and the Fellowship tail below return only for signed-out
  * visitors, where the page doubles as the public website's study-materials page.
+ *
+ * The page a first-time visitor searches for: every study reading the church
+ * makes available without an account.
  */
 export default function MaterialsPage() {
   const [signedIn, setSignedIn] = useState(false);
@@ -65,8 +68,7 @@ export default function MaterialsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
           <p className="mt-2 hidden text-sm leading-6 text-moss sm:block">
-            Sabbath School lessons, mission readings, Scripture, hymns and the Spirit of Prophecy — pick a shelf and open a
-            reader.
+            Sabbath School lessons, mission readings, Scripture, hymns and the writings of Ellen G. White — one shelf for each kind of study.
           </p>
         </div>
       </section>

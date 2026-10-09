@@ -40,7 +40,12 @@ const ways = [
     text: "Tithes and offerings by mobile money, and fund drives for the church's work.",
   },
   {
-    href: "/share",
+    href: "/share/moments",
+    title: "Church moments",
+    text: "Sabbath songs, services and events from around the church year.",
+  },
+  {
+    href: "/spiritual/testimonies",
     title: "Share your story",
     text: "Testimonies and the fellowship that happens between Sabbaths.",
   },

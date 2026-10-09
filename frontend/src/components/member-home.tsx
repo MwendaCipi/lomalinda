@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, Landmark, UserRoundCheck, type LucideIcon } from "lucide-react";
+import { ClipboardList, UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigation";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
@@ -12,7 +12,6 @@ import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
-import { useTreasuryAwaitingCounts } from "@/hooks/use-treasury-awaiting-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -154,11 +153,6 @@ export function MemberHome() {
   // badge and the Requests manager read — the three can never disagree.
   const pendingRequests = usePendingRequestCounts(isDesk);
 
-  // What is still waiting on the treasurer: department withdrawal requests and
-  // fund drives awaiting the treasurer's approval. Only the treasurer and
-  // administrators reach this — same gate as the analytics panel.
-  const treasuryAwaiting = useTreasuryAwaitingCounts(keepsTheBooks);
-
   // ── The quick tiles ──────────────────────────────────────────────────────
   // The four everyday actions, beside the week's announcements. Requests keeps
   // its two faces — the desk for the offices that answer requests, the forms
@@ -188,42 +182,6 @@ export function MemberHome() {
       icon: dest.icon,
     };
   });
-
-  // The treasurer's own tile, beside the four everyday ones: both queues the
-  // desk keeps — the department withdrawal requests and the fund drives — as
-  // one card saying how many of each are still waiting on this officer's
-  // decision. The gate mirrors the endpoint's exactly: the tile appears only
-  // for the roles the API answers, so no member is ever shown a card that
-  // could only come back refused. It fills its row rather than leaving a
-  // fifth card alone in a half-empty one.
-  if (keepsTheBooks) {
-    const awaitingTotal = treasuryAwaiting.withdrawal_requests + treasuryAwaiting.fund_drives;
-    quickTiles.push({
-      href: "/administration?tab=accounts&view=withdrawals",
-      label: "Treasury",
-      desc: treasuryAwaiting.loading
-        ? "Withdrawal requests and fund drives waiting on you."
-        : awaitingTotal === 0
-          ? "No withdrawal requests or fund drives waiting."
-          : [
-              treasuryAwaiting.withdrawal_requests > 0
-                ? `${treasuryAwaiting.withdrawal_requests} withdrawal request${treasuryAwaiting.withdrawal_requests === 1 ? "" : "s"}`
-                : null,
-              treasuryAwaiting.fund_drives > 0
-                ? `${treasuryAwaiting.fund_drives} fund drive${treasuryAwaiting.fund_drives === 1 ? "" : "s"}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" and ") + " waiting on you",
-      icon: Landmark,
-      badge: awaitingTotal > 0 ? awaitingTotal : undefined,
-      badgeTitle:
-        awaitingTotal > 0
-          ? `${awaitingTotal} item${awaitingTotal === 1 ? "" : "s"} awaiting your decision`
-          : undefined,
-      wide: true,
-    });
-  }
 
   // ── The areas this member belongs to ────────────────────────────────────
   // Two sources, one list: the leadership table names the offices a member

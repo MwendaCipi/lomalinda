@@ -9,6 +9,7 @@ import { showAlert } from "@/lib/alerts";
 import { thankYouPath } from "@/lib/giving-thanks";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { PublicSectionNav } from "@/components/public-section-nav";
+import { publicWebsiteLinks } from "@/config/site-sections";
 import { stewardshipLinks } from "@/config/site-sections";
 import { PENDING_GIVINGS_KEY } from "@/components/my-givings";
 
@@ -498,12 +499,11 @@ function GivePageContent() {
           </div>
       </div>
 
-      {/* The public landing page offers the wider stewardship navigation; the authenticated shell hides it. */}
-      <PublicSectionNav
+      {/* The public landing page offers the wider stewardship navigation; the authenticated shell hides it. */}        <PublicSectionNav
         eyebrow="Stewardship & support"
         title="More ways to support the church"
-        description="Beyond tithes and offerings: in-kind gifts, fund drives, the church budget and the treasury's published figures."
-        links={stewardshipLinks}
+        description="In-kind gifts, fund drives, the church budget and the treasury's published figures."
+        links={publicWebsiteLinks}
         activeKey="give"
         className="public-section-nav border-t border-sand-line bg-white/60"
       />
@@ -789,6 +789,9 @@ function GivePageContent() {
   );
 }
 
+/**
+ * The giving page a first-time visitor searches for: tithes and offerings, online and by mobile money.
+ */
 export default function GivePage() {
   return (
     <Suspense

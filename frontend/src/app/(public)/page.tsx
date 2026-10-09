@@ -1,4 +1,5 @@
 import { MarketingHome } from "@/components/marketing-home";
+import { publicWebsiteLinks } from "@/config/site-sections";
 
 /**
  * Site home — the marketing page visitors land on.

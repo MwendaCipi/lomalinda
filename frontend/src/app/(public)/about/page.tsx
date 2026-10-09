@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
-import { aboutSectionLinks } from "@/config/site-sections";
+import { aboutSectionLinks, publicWebsiteLinks } from "@/config/site-sections";
 
 const values = [
   ["Faith", "We follow Jesus, trust Scripture, and make room for questions, growth, and grace."],
@@ -83,11 +83,10 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* The old About sidebar, now part of the page: the same four destinations. */}
-      <PublicSectionNav
+      {/* The old About sidebar, now part of the page: the same four destinations. */}          <PublicSectionNav
         eyebrow="Explore"
-        title="More about our church"
-        description="Our calendar, working with us, and how we handle the information you share."
+        title="About SDA Loma Linda"
+        description="Our story, our mission and the pages a first-time visitor reaches: the calendar, study materials and privacy."
         links={aboutSectionLinks}
         activeKey="about"
         className="border-t border-sand-line bg-white/60"

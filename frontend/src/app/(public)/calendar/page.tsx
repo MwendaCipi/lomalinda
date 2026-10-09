@@ -3,30 +3,32 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight, List, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { usePageHeader } from "@/components/app-frame";
+import {
+  CalendarViewToggle,
+  MonthGrid,
+  clockTime,
+  monthNames,
+  type CalendarView,
+} from "@/components/calendar-views";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
-import { dayFirst, localDate, weekdayOf } from "@/lib/dates";
+import { dayFirst, weekdayOf } from "@/lib/dates";
+
+import { PublicSectionNav } from "@/components/public-section-nav";
+import { publicWebsiteLinks } from "@/config/site-sections";
+
+/**
+ * The page a first-time visitor searches for and never finds: the church
+ * calendar, read as the Sabbath's own week.
+ */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /** "Saturday, 3 October 2026" — the spoken form for programs and headings. */
 const weekdayLabel = (iso: string) =>
   `${weekdayOf(iso)}, ${dayFirst(iso)}`;
-const monthNames = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-//: The week as the grid reads it, Sunday first. Short on a phone, spelled out
-//: once the columns have room.
-const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const weekdayNamesFull = [
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-];
-
-//: The week's own column — the Sabbath. The grid shades it so the church's
-//: week reads at a glance, the way a printed wall calendar rings it.
-const SABBATH_COLUMN = 6;
 
 function quarterBounds(year: number, month: number) {
   const startMonth = Math.floor(month / 3) * 3;
@@ -37,8 +39,6 @@ function quarterBounds(year: number, month: number) {
   };
 }
 
-/** How the page is read: the list of events, or the month laid out as a grid. */
-type CalendarView = "calendar" | "table";
 type CalendarPeriod = "quarter" | "all";
 
 type ChurchSettings = { address: string; latitude: string | null; longitude: string | null };
@@ -104,15 +104,6 @@ function CalendarBack() {
       <span>Back to fellowship</span>
     </Link>
   );
-}
-
-/** "14:30" spoken back as "2:30 PM", the way the desks write the time. */
-function clockTime(value?: string) {
-  const match = (value ?? "").match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return "";
-  const hours = Number(match[1]);
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  return `${hour12}:${match[2]} ${hours >= 12 ? "PM" : "AM"}`;
 }
 
 /** The row's time: a range when the event finishes on the day it starts. */
@@ -191,138 +182,6 @@ function EventActionsMenu({
   );
 }
 
-/**
- * The month as a wall calendar: one column per weekday, the Sabbath shaded,
- * and each day holding the events the ministries filed on it. Every event is
- * a chip opening the same menu the table's rows carry, so switching views
- * changes how the month is read, never what can be done with it.
- */
-function MonthGrid({
-  year, month, events, mapUrl, openActions, onToggleActions, onCloseActions, onProgram,
-}: {
-  year: number;
-  month: number;
-  events: CalendarEvent[];
-  mapUrl: string;
-  openActions: string | null;
-  onToggleActions: (key: string) => void;
-  onCloseActions: () => void;
-  onProgram: (row: CalendarEvent) => void;
-}) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  //: The first day's weekday decides how many leading days the first week borrows.
-  const leadingDays = new Date(year, month, 1).getDay();
-  const weeks = Math.ceil((leadingDays + daysInMonth) / 7);
-  const todayKey = localDate();
-  const byDate = new Map<string, CalendarEvent[]>();
-  for (const event of events) {
-    const key = (event.date ?? "").slice(0, 10);
-    if (!key) continue;
-    byDate.set(key, [...(byDate.get(key) ?? []), event]);
-  }
-  const isoDay = (day: number) =>
-    `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-
-  return (
-    <div className="overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-sand-line px-5 py-3">
-        <h2 className="text-sm font-bold text-bark">
-          {monthNames[month]} {year}
-        </h2>
-        <p className="text-xs text-moss">
-          {events.length} {events.length === 1 ? "event" : "events"} this month
-        </p>
-      </div>
-      <table className="w-full min-w-[720px] border-collapse text-left">
-        <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
-          <tr>
-            {weekdayNames.map((short, weekday) => (
-              <th
-                key={short}
-                scope="col"
-                className={`px-3 py-2 font-semibold ${weekday === SABBATH_COLUMN ? "bg-mist-soft" : ""}`}
-              >
-                <span className="sm:hidden">{short}</span>
-                <span className="hidden sm:inline">{weekdayNamesFull[weekday]}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-sand-wash">
-          {Array.from({ length: weeks }, (_, week) => (
-            <tr key={week} className="align-top">
-              {weekdayNames.map((short, weekday) => {
-                // Days before the 1st and after the month's end borrow their
-                // number from the neighbouring month and hold nothing: the
-                // grid keeps its weeks square without inventing events.
-                const day = week * 7 + weekday - leadingDays + 1;
-                const withinMonth = day >= 1 && day <= daysInMonth;
-                const key = isoDay(day);
-                const dayEvents = withinMonth ? byDate.get(key) ?? [] : [];
-                const isToday = withinMonth && key === todayKey;
-                // A menu near the foot of the grid opens upwards, so the last
-                // weeks' events are not pushed out of the viewport.
-                const opensUpwards = week >= weeks - 2;
-                return (
-                  <td
-                    key={short}
-                    className={`h-24 w-[14.28%] border-l border-sand-wash px-2 py-2 align-top first:border-l-0 ${
-                      weekday === SABBATH_COLUMN ? "bg-sand-linen" : ""
-                    } ${isToday ? "bg-mist-tint" : ""}`}
-                  >
-                    <div
-                      className={`mb-1 text-xs font-semibold ${
-                        isToday ? "text-ember" : withinMonth ? "text-moss-dark" : "text-moss-faint"
-                      }`}
-                    >
-                      {new Date(year, month, day).getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {dayEvents.map((row) => {
-                        const actionKey = `${row.date}-${row.id}`;
-                        return (
-                          <div key={actionKey} data-calendar-action-menu className="relative">
-                            <button
-                              type="button"
-                              aria-expanded={openActions === actionKey}
-                              onClick={() => onToggleActions(actionKey)}
-                              title={`${row.title}${row.department_name ? ` — ${row.department_name}` : ""}`}
-                              className="w-full rounded-md border-l-2 border-ember bg-sand-plate px-1.5 py-1 text-left transition hover:bg-sand-wash"
-                            >
-                              <span className="block truncate text-[10px] font-semibold text-bark">{row.title}</span>
-                              {row.time && (
-                                <span className="block truncate text-[10px] text-moss">{clockTime(row.time)}</span>
-                              )}
-                            </button>
-                            {openActions === actionKey && (
-                              <div
-                                className={`absolute left-0 z-30 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
-                                  opensUpwards ? "bottom-full mb-1" : "top-full mt-1"
-                                }`}
-                              >
-                                <EventActionsMenu
-                                  row={row}
-                                  mapUrl={mapUrl}
-                                  variant="row"
-                                  onClose={onCloseActions}
-                                  onProgram={onProgram}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 /** The calendar's own controls — the year, the month, the search and the print — in one cluster. Signed in they ride the shell's header beside the page's name (the way every other desk places its search); signed out they sit beside the page's own heading, where a visitor still reaches them. */
 function PeriodButtons({
@@ -366,31 +225,6 @@ function PeriodButtons({
   );
 }
 
-function CalendarViewToggle({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
-  // A phone reads the year's events as cards — never a table it has to scroll
-  // sideways — so this view is "List" there and "Table" once the columns have
-  // room. It leads the toggle row and is the read picked by default.
-  return (
-    <div role="group" aria-label="Calendar view" className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white p-1">
-      {([
-        ["table", "List", "Table", List],
-        ["calendar", "Calendar", "Calendar", CalendarDays],
-      ] as const).map(([value, phoneLabel, deskLabel, Icon]) => (
-        <button
-          key={value}
-          type="button"
-          aria-pressed={view === value}
-          onClick={() => onChange(value)}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === value ? "bg-bark text-white" : "text-moss hover:bg-sand"}`}
-        >
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" />{" "}
-          <span className="sm:hidden">{phoneLabel}</span>
-          <span className="hidden sm:inline">{deskLabel}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function CalendarPageContent() {
   // Signed in, the page lives in the app shell — the strip at the top names
@@ -423,6 +257,18 @@ function CalendarPageContent() {
   const [period, setPeriod] = useState<CalendarPeriod>("quarter");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
+  // On a wide screen the toggles ride the page's heading row (the shell's
+  // header when signed in, the marketing heading when not); on a phone they
+  // sit in the content, because a phone spends its height on the page rather
+  // than on a parked strip of chrome.
+  const [isPc, setIsPc] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsPc(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const shiftMonth = (amount: number) => {
     setMonthDate((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
@@ -486,13 +332,49 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [events, monthIndex, monthYear, search]);
 
+  // The one cluster of controls — view, period and search — memoised so the
+  // header-injection effect below only re-runs when a control actually
+  // changes, not on every render.
+  const controls = useMemo(
+    () => (
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <CalendarViewToggle view={view} onChange={setView} />
+        <PeriodButtons period={period} onPeriod={setPeriod} />
+        <div className="relative w-full sm:w-56">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search event, ministry, or date…"
+            aria-label="Search the church calendar"
+            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+          />
+        </div>
+      </div>
+    ),
+    [view, period, search]
+  );
+
+  // Signed in on a wide screen, the controls ride the shell header beside the
+  // page's name — the space the heading leaves open. On a phone they stay in
+  // the content, so nothing is parked over the calendar.
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    if (signedIn && isPc) {
+      setHeaderRightAction(<div className="w-full sm:w-auto">{controls}</div>);
+    } else {
+      setHeaderRightAction(null);
+    }
+    return () => setHeaderRightAction(null);
+  }, [signedIn, isPc, controls, setHeaderRightAction]);
+
   function openProgram(row: CalendarEvent) {
     const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null;
     setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true });
   }
 
   return (
-    <main className={signedIn ? "h-full min-h-0 bg-sand text-bark" : "min-h-screen bg-sand text-bark"}>
+    <main className={signedIn ? "flex h-full min-h-0 flex-col overflow-hidden bg-sand text-bark" : "min-h-screen bg-sand text-bark"}>
       <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
         <div className="mx-auto max-w-6xl">
           <CalendarBack />
@@ -501,46 +383,41 @@ function CalendarPageContent() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Church life</p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Church Calendar</h1>
               <p className="mt-4 text-base leading-8 text-moss">
-                Sabbaths, vespers, programmes and special events across the church year.
+                Every Sabbath School, vespers, programme and special event the church holds through the year, in one week-by-week view.
               </p>
             </div>
+        <PublicSectionNav
+          eyebrow="Explore"
+          title="The church at a glance"
+          description="Sabbath worship, study materials, prayer and care, giving, and the fellowship we share between Sabbaths."
+          links={publicWebsiteLinks}
+          activeKey="calendar"
+          className="border-t border-sand-line bg-white/60"
+        />
           </div>
         </div>
       </section>
 
-      <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
-        {/* One row of controls in the page's own flow — the view, the period
-            and the search together, never a strip parked over the content.
-            The view leads (List/Table first, then Calendar), beside the
-            quarter and whole-year toggles; the month arrows join them only
-            when the month grid is what is being read. */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarViewToggle view={view} onChange={setView} />
-            <PeriodButtons period={period} onPeriod={setPeriod} />
+      <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "flex-1 min-h-0 overflow-y-auto py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
+        {/* Signed in on a wide screen, the controls have ridden up into the
+            shell header; everywhere else they sit here in the content, beside
+            the month arrows when the grid is open. */}
+        {(!(signedIn && isPc) || view === "calendar") && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {!(signedIn && isPc) && controls}
+            {view === "calendar" && (
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <span className="min-w-32 text-center text-sm font-semibold text-bark">{monthNames[monthIndex]} {monthYear}</span>
+                <button type="button" onClick={() => shiftMonth(1)} aria-label="Next month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
-          {view === "calendar" && (
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <span className="min-w-32 text-center text-sm font-semibold text-bark">{monthNames[monthIndex]} {monthYear}</span>
-              <button type="button" onClick={() => shiftMonth(1)} aria-label="Next month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          )}
-          <div className="relative w-full sm:ml-auto sm:w-64">
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search event, ministry, or date…"
-              aria-label="Search the church calendar"
-              className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-            />
-          </div>
-        </div>
+        )}
 
         {/* Table view — wide screens only; a phone reads the cards below. */}
         <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
@@ -663,11 +540,18 @@ function CalendarPageContent() {
             year={monthYear}
             month={monthIndex}
             events={monthRows}
-            mapUrl={mapUrl}
             openActions={openActions}
             onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
             onCloseActions={() => setOpenActions(null)}
-            onProgram={openProgram}
+            renderMenu={(row, onClose) => (
+              <EventActionsMenu
+                row={row}
+                mapUrl={mapUrl}
+                variant="row"
+                onClose={onClose}
+                onProgram={openProgram}
+              />
+            )}
           />
         )}
 

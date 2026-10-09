@@ -21,6 +21,8 @@ import {
   ArrowUpRight,
   Baby,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Church,
   Clock,
   HandHeart,
@@ -61,6 +63,13 @@ import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
+import {
+  CalendarViewToggle,
+  MonthGrid,
+  clockTime,
+  monthNames,
+  type CalendarView,
+} from "@/components/calendar-views";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -1594,19 +1603,19 @@ function ChoirPanel({
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      showAlert("Singer added", `${member.name} now sings with the ensemble.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      showAlert("Singer added", `${member.name} now sings with the church choir.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       setShowAdd(false);
       loadChoir();
       onChanged();
     } else {
-      showAlert("Could not add", data.detail || "The member could not be added to the ensemble.", "error");
+      showAlert("Could not add", data.detail || "The member could not be added to the church choir.", "error");
     }
   };
 
   const removeSinger = async (singer: ChoirMember) => {
     const result = await showAlert(
-      "Remove from ensemble",
-      `Take ${singer.name} off the ensemble's roll? Their membership in the church is not affected.`,
+      "Remove from the church choir",
+      `Take ${singer.name} off the church choir's roll? Their membership in the church is not affected.`,
       "question",
       { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
     );
@@ -1616,11 +1625,11 @@ function ChoirPanel({
       headers: authHeaders(),
     });
     if (res.ok) {
-      showAlert("Removed", `${singer.name} is off the ensemble's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      showAlert("Removed", `${singer.name} is off the church choir's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
       loadChoir();
       onChanged();
     } else {
-      showAlert("Could not remove", "The member could not be removed from the ensemble.", "error");
+      showAlert("Could not remove", "The member could not be removed from the church choir.", "error");
     }
   };
 
@@ -1632,7 +1641,7 @@ function ChoirPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-        <h3 className="text-sm font-bold text-bark">Ensemble</h3>
+        <h3 className="text-sm font-bold text-bark">Church Choir</h3>
         {canManage && (
           <button
             type="button"
@@ -1645,14 +1654,14 @@ function ChoirPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
         {loading ? (
-          <p className="py-8 text-center text-xs text-moss">Loading the ensemble…</p>
+          <p className="py-8 text-center text-xs text-moss">Loading the church choir…</p>
         ) : visibleChoir.length === 0 ? (
           <p className="py-8 text-center text-xs text-moss">
             {members.length === 0
               ? canManage
-                ? "Nobody is on the ensemble's roll yet. Use “Add singer” to build it."
-                : "Nobody is on the ensemble's roll yet."
-              : "No ensemble member matches that search."}
+                ? "Nobody is on the church choir's roll yet. Use “Add singer” to build it."
+                : "Nobody is on the church choir's roll yet."
+              : "No choir member matches that search."}
           </p>
         ) : (
           <table className="w-full text-left text-xs">
@@ -1698,10 +1707,10 @@ function ChoirPanel({
       {showAdd && (
         <AddMemberModal
           departmentLabel={departmentLabel}
-          title="Add singers to the ensemble"
+          title="Add singers to the church choir"
           rollIds={new Set<number>()}
           excludeIds={new Set(members.map((m) => m.id))}
-          takenLabel="Already in the ensemble"
+          takenLabel="Already in the choir"
           onClose={() => setShowAdd(false)}
           onAdd={addSinger}
         />
@@ -3538,6 +3547,27 @@ function DepartmentDetail({
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
+  // The calendar reads as the church's does: the list leads (cards on a
+  // phone, a table on a desk), and the month wall-grid is one toggle away.
+  const [calendarView, setCalendarView] = useState<CalendarView>("table");
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [openGridAction, setOpenGridAction] = useState<string | null>(null);
+  const shiftCalendarMonth = (amount: number) =>
+    setCalendarMonth((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
+  // The list's rows and the grid's month both honour the desk's search.
+  const filteredEvents = useMemo(() => {
+    const needle = eventSearch.trim().toLowerCase();
+    return events.filter((event) =>
+      `${event.title} ${event.date} ${event.location || ""} ${event.notes || ""}`.toLowerCase().includes(needle),
+    );
+  }, [events, eventSearch]);
+  const monthEvents = useMemo(() => {
+    const prefix = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, "0")}-`;
+    return filteredEvents.filter((event) => (event.date ?? "").startsWith(prefix));
+  }, [filteredEvents, calendarMonth]);
   const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
@@ -3580,14 +3610,14 @@ function DepartmentDetail({
         />
       );
     } else if (subTab === "choir") {
-      // The ensemble's roll searches from the same place every other view's
-      // does — the shell's header band, beside the page's name.
+      // The church choir's roll searches from the same place every other
+      // view's does — the shell's header band, beside the page's name.
       setHeaderRightAction(
         <input
           type="text"
           value={choirSearch}
           onChange={(e) => setChoirSearch(e.target.value)}
-          placeholder="Search the ensemble…"
+          placeholder="Search the church choir…"
           className={inputCls}
         />
       );
@@ -3687,7 +3717,7 @@ function DepartmentDetail({
       ...(names.length === 0 ? [{ key: "members", label: "All Members", short: "Members", icon: Users }] : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll.
-      ...(isMusic ? [{ key: "choir", label: "Ensemble", icon: Music }] : []),
+      ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
@@ -4360,15 +4390,41 @@ function DepartmentDetail({
       )}
       {subTab === "calendar" && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-sm font-bold text-bark">Department calendar</h3>
-            <button
-              type="button"
-              onClick={() => setShowAddEvent(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-            >
-              <CalendarDays className="h-3.5 w-3.5" /> Add event
-            </button>
+            <div className="flex items-center gap-2">
+              <CalendarViewToggle view={calendarView} onChange={setCalendarView} />
+              {calendarView === "calendar" && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => shiftCalendarMonth(-1)}
+                    aria-label="Previous month"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="min-w-24 text-center text-xs font-semibold text-bark">
+                    {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => shiftCalendarMonth(1)}
+                    aria-label="Next month"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowAddEvent(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <CalendarDays className="h-3.5 w-3.5" /> Add event
+              </button>
+            </div>
           </div>
           {loadingEvents ? (
             <p className="py-8 text-center text-xs text-moss">Loading the calendar…</p>
@@ -4376,9 +4432,37 @@ function DepartmentDetail({
             <p className="py-8 text-center text-xs text-moss">
               Nothing on the calendar yet. Events added here are stored and can be published to the congregation.
             </p>
+          ) : calendarView === "calendar" ? (
+            <div className="mt-3">
+              <MonthGrid
+                year={calendarMonth.getFullYear()}
+                month={calendarMonth.getMonth()}
+                events={monthEvents}
+                openActions={openGridAction}
+                onToggleActions={(key) => setOpenGridAction(openGridAction === key ? null : key)}
+                onCloseActions={() => setOpenGridAction(null)}
+                renderMenu={(event, onClose) => (
+                  <div className="text-xs">
+                    <p className="px-3 py-2 font-semibold text-bark">{event.title}</p>
+                    <p className="px-3 pb-2 text-moss">
+                      {dayFirst(event.date)}
+                      {event.time ? ` · ${clockTime(event.time)}` : ""}
+                      {event.location ? ` · ${event.location}` : ""}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { onClose(); removeEvent(event); }}
+                      className="block w-full rounded-lg px-3 py-2 text-left text-red-600 hover:bg-sand"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              />
+            </div>
           ) : (
             <div className="mt-3 divide-y divide-sand-soft">
-              {events.filter((event) => `${event.title} ${event.date} ${event.location || ""} ${event.notes || ""}`.toLowerCase().includes(eventSearch.trim().toLowerCase())).map((event) => (
+              {filteredEvents.map((event) => (
                 <div key={event.id} className="flex items-start justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-bark">{event.title}</p>
@@ -4398,6 +4482,9 @@ function DepartmentDetail({
                   </button>
                 </div>
               ))}
+              {filteredEvents.length === 0 && (
+                <p className="py-6 text-center text-xs text-moss">No events match your search.</p>
+              )}
             </div>
           )}
         </div>
