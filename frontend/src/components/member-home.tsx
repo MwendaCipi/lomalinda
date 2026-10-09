@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, UserRoundCheck, type LucideIcon } from "lucide-react";
+import { ClipboardList, Landmark, UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigation";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
@@ -12,6 +12,7 @@ import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
+import { useTreasuryAwaitingCounts } from "@/hooks/use-treasury-awaiting-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -31,6 +32,10 @@ type Tile = {
   icon: LucideIcon;
   /** How much is waiting behind it — only the Requests desk carries one. */
   badge?: number;
+  /** The badge's own wording, when the default ("requests awaiting review") is not what it counts. */
+  badgeTitle?: string;
+  /** A card that fills its row rather than sharing one — the treasurer's tile reads both of its queues on one line. */
+  wide?: boolean;
 };
 
 /** One everyday place, as a card. */
@@ -39,7 +44,7 @@ function QuickTile({ tile }: { tile: Tile }) {
   return (
     <Link
       href={tile.href}
-      className="group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
+      className={`group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md${tile.wide ? " col-span-2" : ""}`}
     >
       <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-mist-select text-bark transition group-hover:bg-gold">
         <Icon className="h-4 w-4" />
@@ -48,7 +53,7 @@ function QuickTile({ tile }: { tile: Tile }) {
         <h3 className="text-sm font-bold text-bark">{tile.label}</h3>
         {tile.badge ? (
           <span
-            title={`${tile.badge} request${tile.badge === 1 ? "" : "s"} awaiting review`}
+            title={tile.badgeTitle ?? `${tile.badge} request${tile.badge === 1 ? "" : "s"} awaiting review`}
             className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
           >
             {tile.badge}
@@ -78,7 +83,9 @@ function QuickTile({ tile }: { tile: Tile }) {
  * The everyday destinations sit beside the week's announcements as four quick
  * tiles — announcements, giving, requests and the calendar — with no heading,
  * since four named cards do not need one to be read. On a phone they drop
- * beneath the announcement card. Everything else the page says is what only
+ * beneath the announcement card. The treasurer's own tile joins them as a
+ * fifth, full-row card saying what is still waiting on their decision — the
+ * two queues nobody else is allowed to see counted. Everything else the page says is what only
  * this page can say: the week, what is waiting on you, and how the church you
  * serve is doing.
  *
@@ -147,6 +154,11 @@ export function MemberHome() {
   // badge and the Requests manager read — the three can never disagree.
   const pendingRequests = usePendingRequestCounts(isDesk);
 
+  // What is still waiting on the treasurer: department withdrawal requests and
+  // fund drives awaiting the treasurer's approval. Only the treasurer and
+  // administrators reach this — same gate as the analytics panel.
+  const treasuryAwaiting = useTreasuryAwaitingCounts(keepsTheBooks);
+
   // ── The quick tiles ──────────────────────────────────────────────────────
   // The four everyday actions, beside the week's announcements. Requests keeps
   // its two faces — the desk for the offices that answer requests, the forms
@@ -176,6 +188,42 @@ export function MemberHome() {
       icon: dest.icon,
     };
   });
+
+  // The treasurer's own tile, beside the four everyday ones: both queues the
+  // desk keeps — the department withdrawal requests and the fund drives — as
+  // one card saying how many of each are still waiting on this officer's
+  // decision. The gate mirrors the endpoint's exactly: the tile appears only
+  // for the roles the API answers, so no member is ever shown a card that
+  // could only come back refused. It fills its row rather than leaving a
+  // fifth card alone in a half-empty one.
+  if (keepsTheBooks) {
+    const awaitingTotal = treasuryAwaiting.withdrawal_requests + treasuryAwaiting.fund_drives;
+    quickTiles.push({
+      href: "/administration?tab=accounts&view=withdrawals",
+      label: "Treasury",
+      desc: treasuryAwaiting.loading
+        ? "Withdrawal requests and fund drives waiting on you."
+        : awaitingTotal === 0
+          ? "No withdrawal requests or fund drives waiting."
+          : [
+              treasuryAwaiting.withdrawal_requests > 0
+                ? `${treasuryAwaiting.withdrawal_requests} withdrawal request${treasuryAwaiting.withdrawal_requests === 1 ? "" : "s"}`
+                : null,
+              treasuryAwaiting.fund_drives > 0
+                ? `${treasuryAwaiting.fund_drives} fund drive${treasuryAwaiting.fund_drives === 1 ? "" : "s"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" and ") + " waiting on you",
+      icon: Landmark,
+      badge: awaitingTotal > 0 ? awaitingTotal : undefined,
+      badgeTitle:
+        awaitingTotal > 0
+          ? `${awaitingTotal} item${awaitingTotal === 1 ? "" : "s"} awaiting your decision`
+          : undefined,
+      wide: true,
+    });
+  }
 
   // ── The areas this member belongs to ────────────────────────────────────
   // Two sources, one list: the leadership table names the offices a member

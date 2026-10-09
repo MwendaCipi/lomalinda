@@ -7630,6 +7630,38 @@ class TreasuryAccountTransactionListView(APIView):
         return Response(serializer.data)
 
 
+class TreasuryAwaitingView(APIView):
+    """What is still waiting on the treasurer: department withdrawal requests
+    and fund drives awaiting approval.
+
+    Two queues, one place: the requests the treasurer still has to approve or
+    decline, and the fund drives that are still awaiting the treasurer's
+    approval. Only the treasurer and administrators reach this endpoint.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            return Response(
+                {'detail': 'Only treasurers or administrators can see what is waiting on the treasury.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        withdrawal_requests = DepartmentWithdrawalRequest.objects.filter(
+            status__in=['pending', 'elder_approved'],
+        ).count()
+
+        fund_drives = FundraisingCampaign.objects.filter(
+            approval_status='pending',
+        ).count()
+
+        return Response({
+            'withdrawal_requests': withdrawal_requests,
+            'fund_drives': fund_drives,
+        })
+
+
 class ExpenditureListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 

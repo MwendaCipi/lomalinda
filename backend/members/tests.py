@@ -10072,3 +10072,68 @@ class TreasuryTransactionGiverDescriptionTests(APITestCase):
 
         enriched = enrich_transaction_descriptions([tx])
         self.assertEqual(enriched[0].description, 'Jane Smith — M-Pesa (Local Church Budget)')
+
+
+class TreasuryAwaitingViewTests(APITestCase):
+    """The treasurer's home tile reads its two queues from one endpoint.
+
+    The dashboard tile says how many withdrawal requests and fund drives are
+    still waiting on the treasurer, so the endpoint must count exactly the
+    undecided rows of each queue — neither the decided rows nor somebody
+    outside treasury may reach it.
+    """
+
+    def setUp(self):
+        from .models import DepartmentWithdrawalRequest
+
+        self.treasurer = User.objects.create_user('await.treasurer', 'await.treasurer@example.com', 'StrongPass#2026', first_name='Tam', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.member = User.objects.create_user('await.member', 'await.member@example.com', 'StrongPass#2026', first_name='Mela', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+        music = Department.objects.get(code='music')
+        account = TreasuryAccount.objects.create(
+            name='MusicAwaitFund', description='Music Ministry',
+            balance=Decimal('500.00'), department=music,
+        )
+        # Two still in the queue: one waiting on an elder's blessing, one
+        # cleared and now waiting on the treasurer. Two are already decided
+        # and must not be counted as waiting on anybody.
+        DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('120.00'),
+            reason='Strings and picks', requested_by=self.member,
+        )
+        DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('80.00'),
+            reason='Amplifier service', requested_by=self.member,
+            status='elder_approved',
+        )
+        DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('40.00'),
+            reason='New banners', requested_by=self.member, status='approved',
+        )
+        DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('60.00'),
+            reason='Refreshments', requested_by=self.member, status='declined',
+        )
+        # One fund drive awaiting the treasurer's approval, one already
+        # approved (the model defaults to approved).
+        FundraisingCampaign.objects.create(
+            name='Awaiting Drive', target_amount=Decimal('1000.00'),
+            approval_status='pending',
+        )
+        FundraisingCampaign.objects.create(
+            name='Running Drive', target_amount=Decimal('2000.00'),
+        )
+
+    def test_counts_both_queues_for_the_treasurer(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/treasury/awaiting/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['withdrawal_requests'], 2)
+        self.assertEqual(response.data['fund_drives'], 1)
+
+    def test_a_member_is_refused(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/treasury/awaiting/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
