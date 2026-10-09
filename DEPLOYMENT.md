@@ -83,6 +83,36 @@ venv/bin/python manage.py send_test_email --to you@example.com --announcement  #
 
 The command prints which host answered, so a mistyped token or an unverified sender is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
 
+## M-Pesa: reading every paybill transaction
+
+The C2B confirmation callbacks only arrive for a payment the site initiated, and only while Safaricom's always-on delivery is on. The **Pull Transactions API** is the other direction: the church asks the shortcode what it received, and every receipt the ledger has never seen — a member who walked up to the paybill and typed the reference by hand, included — is recorded once, through the same recorder the callback uses. Re-pulling a window records nothing twice, so it is safe to press whenever.
+
+Two variables, in `backend/.env` next to the other `MPESA_*` ones:
+
+```text
+MPESA_PULL_NOMINATED_NUMBER=07XXXXXXXX       # the Safaricom MSISDN on the church's organisation account
+MPESA_PULL_CALLBACK_URL=https://sdalomalinda.or.ke/api/members/payments/mpesa/pull/
+```
+
+Then register the shortcode **once per environment** — the query endpoint answers only a shortcode that has been registered first:
+
+```bash
+cd backend
+venv/bin/python manage.py register_mpesa_pull_url
+```
+
+The register call is idempotent (every run after the first answers "Shortcode already Registered"), so re-running it is harmless. Until it has been run, both the reconciliation page's Pull button and the command below are answered with `No records found or Organization Name not available` — Safaricom's sentence for a shortcode nobody enabled Pull for, which the app now reports verbatim with the fix named.
+
+Verify from the server itself, then pull from the reconciliation page or the command line:
+
+```bash
+cd backend
+venv/bin/python manage.py pull_mpesa_transactions --days 2 --dry-run   # list what would be recorded
+venv/bin/python manage.py pull_mpesa_transactions --days 2             # record it
+```
+
+The API keeps only 48 hours of transactions and refuses a window longer than that, so the page asks for the last two days and the command warns rather than inventing rows. Payments whose typed reference matched no treasury account land in the Unassigned tab for the treasurer to assign — the money is already in the ledger either way.
+
 ## Chat: the live transport
 
 Chat's messages have two doors. The REST endpoints under `/api/members/chat/` write and read them, and a WebSocket on `/ws/chat/<conversation_id>/` carries them the moment they are written. Both doors end in the same service layer, and a REST write broadcasts to every open socket, so nothing is only live if it was sent over the socket.

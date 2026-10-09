@@ -53,6 +53,27 @@ class Command(BaseCommand):
         try:
             while True:
                 page = pull_paybill_transactions(start_str, end_str, offset=offset)
+                # Safaricom answers a window it holds no rows for — or a
+                # shortcode nobody enabled Pull for — with a code and a
+                # sentence of its own rather than an error status.
+                code = str(page.get('ResponseCode') or '')
+                if code and code != '1000':
+                    message = str(page.get('ResponseMessage') or 'Safaricom returned no transactions.')
+                    lowered = message.lower()
+                    if 'not have any available' in lowered or 'not available' in lowered:
+                        # Not an empty window — a shortcode Pull was never
+                        # turned on for. Reporting "0 pulled" here would send
+                        # the desk looking at the wrong thing, so the command
+                        # names the fix instead.
+                        raise CommandError(
+                            f'{message} — this usually means the shortcode has '
+                            'never been registered for Pull. Run '
+                            '`manage.py register_mpesa_pull_url` once, then pull again.'
+                        )
+                    # An empty window is a normal answer, not a failure; say
+                    # so rather than reporting a silent zero.
+                    self.stdout.write(self.style.WARNING(f'Safaricom answered: {message}'))
+                    break
                 result = page.get('Result') or []
                 if not isinstance(result, list):
                     result = [result]
