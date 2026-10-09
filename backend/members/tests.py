@@ -729,6 +729,68 @@ class PullMpesaTransactionsCommandTests(APITestCase):
         self.assertFalse(Contribution.objects.filter(mpesa_receipt_number='PUL87NEW42').exists())
 
 
+class MpesaPullTransactionsAPITests(APITestCase):
+    """The treasurer presses Pull in the browser; the server asks Safaricom
+    and records what the ledger has never seen."""
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('pull.treasurer', 'pull.treasurer@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.member = User.objects.create_user('pull.member', 'pull.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member')
+
+    ENV = {
+        'MPESA_CONSUMER_KEY': 'key',
+        'MPESA_CONSUMER_SECRET': 'secret',
+        'MPESA_SHORTCODE': '600000',
+    }
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_treasurer_pulls_and_new_receipts_are_recorded(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'ResultCode': 0,
+            'Result': [{
+                'TransID': 'WEB99PULL1', 'TransAmount': '800',
+                'BillRefNumber': 'Tithe', 'MSISDN': '254733000333',
+                'FirstName': 'Peter', 'LastName': 'Njoroge',
+            }],
+        }
+
+        self.client.force_authenticate(user=self.treasurer)
+        with patch.dict('os.environ', self.ENV):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 7}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pulled'], 1)
+        self.assertEqual(response.data['recorded'], 1)
+        contribution = Contribution.objects.get(mpesa_receipt_number='WEB99PULL1')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.amount, Decimal('800'))
+        self.assertEqual(contribution.purpose, 'Tithe')
+
+        # A second press for the same window finds the receipt already in the
+        # ledger and records nothing new.
+        with patch.dict('os.environ', self.ENV):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 7}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['recorded'], 0)
+
+    def test_ordinary_member_cannot_pull(self):
+        self.client.force_authenticate(user=self.member)
+        response = self.client.post('/api/members/payments/mpesa/pull/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_cannot_pull(self):
+        response = self.client.post('/api/members/payments/mpesa/pull/', {}, format='json')
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+
 class MpesaRefundAPITests(APITestCase):
     def setUp(self):
         self.treasurer = User.objects.create_user(username='refund_treasurer', password='secure-password')

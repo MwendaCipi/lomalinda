@@ -168,7 +168,13 @@ def register_c2b_urls(validation_url=None, confirmation_url=None):
         'ValidationURL': val_url,
         'ConfirmationURL': conf_url,
     }
-    response = requests.post(f'{base_url}/mpesa/c2b/v1/registerurl', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
+    # v2, not v1: the v1 endpoint answers 401 for apps Safaricom has moved
+    # onto the current C2B registration API — same request shape, current
+    # door. Falls back to v1 for an installation still authorised there.
+    url = environ.get('MPESA_C2B_REGISTER_URL') or f'{base_url}/mpesa/c2b/v2/registerurl'
+    response = requests.post(url, json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
+    if response.status_code == 401 and 'v2' in url:
+        response = requests.post(f'{base_url}/mpesa/c2b/v1/registerurl', json=payload, headers={'Authorization': f'Bearer {access_token}'}, timeout=15)
     response.raise_for_status()
     return response.json()
 

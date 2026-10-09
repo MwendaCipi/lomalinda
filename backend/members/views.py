@@ -43,7 +43,7 @@ from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, pull_paybill_transactions
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
@@ -4481,6 +4481,73 @@ class MpesaC2BConfirmationView(APIView):
     def post(self, request):
         record_direct_paybill_payment(request.data or {})
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+class MpesaPullTransactionsView(APIView):
+    """Treasurer-triggered pull of the paybill's transactions from Safaricom.
+
+    The Pull API asks Safaricom what the paybill received for a window —
+    manual "send money to paybill" gifts included — and every receipt the
+    ledger has never seen is recorded here, once, through the same recorder
+    the C2B confirmation callback uses. Idempotent: re-pulling the same
+    window records nothing new.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can pull M-Pesa transactions.')
+
+        days = request.data.get('days', 1)
+        try:
+            days = max(1, min(int(days), 90))
+        except (TypeError, ValueError):
+            days = 1
+        nairobi = timezone.localtime().tzinfo
+        end = timezone.now()
+        start = end - timedelta(days=days)
+        fmt = '%Y-%m-%d %H:%M:%S'
+        start_str = start.astimezone(nairobi).strftime(fmt)
+        end_str = end.astimezone(nairobi).strftime(fmt)
+
+        rows, offset = [], 0
+        try:
+            while True:
+                page = pull_paybill_transactions(start_str, end_str, offset=offset)
+                result = page.get('Result') or []
+                if not isinstance(result, list):
+                    result = [result]
+                rows.extend(result)
+                # The API caps each response; an empty or short page ends the
+                # window, otherwise the next slice starts at the next offset.
+                if not result or len(result) < 100:
+                    break
+                offset += len(result)
+        except MpesaConfigurationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except (requests.RequestException, ValueError, KeyError) as exc:
+            return Response(
+                {'detail': f'M-Pesa did not answer the pull: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        recorded = 0
+        for row in rows:
+            trans_id = row.get('TransID') or row.get('TransactionID')
+            if not trans_id:
+                continue
+            if Contribution.objects.filter(mpesa_receipt_number=trans_id).exists():
+                continue
+            if record_direct_paybill_payment(row) is not None:
+                recorded += 1
+
+        return Response({
+            'pulled': len(rows),
+            'recorded': recorded,
+            'start': start_str,
+            'end': end_str,
+        })
 
 
 class MpesaB2CResultView(APIView):
