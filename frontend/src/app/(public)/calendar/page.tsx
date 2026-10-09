@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, List, Printer } from "lucide-react";
-import { usePageHeader } from "@/components/app-frame";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, localDate, weekdayOf } from "@/lib/dates";
@@ -367,40 +366,16 @@ function PeriodButtons({
   );
 }
 
-/** Search and period filters; signed-in, these sit beside the page heading. */
-function CalendarFilters({
-  search, onSearch, period, onPeriod, className,
-}: {
-  search: string;
-  onSearch: (value: string) => void;
-  period: CalendarPeriod;
-  onPeriod: (value: CalendarPeriod) => void;
-  className?: string;
-}) {
-  return (
-    <div className={`flex flex-col gap-2 sm:flex-row sm:items-center ${className ?? ""}`}>
-      <PeriodButtons period={period} onPeriod={onPeriod} />
-      <div className="relative w-full sm:w-64">
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search event, ministry, or date…"
-          aria-label="Search the church calendar"
-          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-        />
-      </div>
-    </div>
-  );
-}
-
 function CalendarViewToggle({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
+  // A phone reads the year's events as cards — never a table it has to scroll
+  // sideways — so this view is "List" there and "Table" once the columns have
+  // room. It leads the toggle row and is the read picked by default.
   return (
     <div role="group" aria-label="Calendar view" className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white p-1">
       {([
-        ["calendar", "Calendar", CalendarDays],
-        ["table", "Table", List],
-      ] as const).map(([value, label, Icon]) => (
+        ["table", "List", "Table", List],
+        ["calendar", "Calendar", "Calendar", CalendarDays],
+      ] as const).map(([value, phoneLabel, deskLabel, Icon]) => (
         <button
           key={value}
           type="button"
@@ -408,7 +383,9 @@ function CalendarViewToggle({ view, onChange }: { view: CalendarView; onChange: 
           onClick={() => onChange(value)}
           className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === value ? "bg-bark text-white" : "text-moss hover:bg-sand"}`}
         >
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {label}
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />{" "}
+          <span className="sm:hidden">{phoneLabel}</span>
+          <span className="hidden sm:inline">{deskLabel}</span>
         </button>
       ))}
     </div>
@@ -435,7 +412,9 @@ function CalendarPageContent() {
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
   const searchParams = useSearchParams();
-  const [view, setView] = useState<CalendarView>(() => searchParams.get("view") === "table" ? "table" : "calendar");
+  // The list leads: a phone reads cards, a desk reads the table, and the
+  // month grid is the second view anyone can switch to.
+  const [view, setView] = useState<CalendarView>(() => searchParams.get("view") === "calendar" ? "calendar" : "table");
   const [monthDate, setMonthDate] = useState(() => new Date(currentYear, currentMonth, 1));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
@@ -444,24 +423,6 @@ function CalendarPageContent() {
   const [period, setPeriod] = useState<CalendarPeriod>("quarter");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
-  const { setHeaderRightAction } = usePageHeader();
-
-  useEffect(() => {
-    if (!signedIn) {
-      setHeaderRightAction(null);
-      return;
-    }
-    setHeaderRightAction(
-      <CalendarFilters
-        search={search}
-        onSearch={setSearch}
-        period={period}
-        onPeriod={setPeriod}
-        className="sm:justify-end"
-      />
-    );
-    return () => setHeaderRightAction(null);
-  }, [search, period, setHeaderRightAction, signedIn]);
 
   const shiftMonth = (amount: number) => {
     setMonthDate((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
@@ -543,16 +504,21 @@ function CalendarPageContent() {
                 Sabbaths, vespers, programmes and special events across the church year.
               </p>
             </div>
-            {!signedIn && (
-              <CalendarFilters search={search} onSearch={setSearch} period={period} onPeriod={setPeriod} className="lg:mb-1" />
-            )}
           </div>
         </div>
       </section>
 
       <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CalendarViewToggle view={view} onChange={setView} />
+        {/* One row of controls in the page's own flow — the view, the period
+            and the search together, never a strip parked over the content.
+            The view leads (List/Table first, then Calendar), beside the
+            quarter and whole-year toggles; the month arrows join them only
+            when the month grid is what is being read. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarViewToggle view={view} onChange={setView} />
+            <PeriodButtons period={period} onPeriod={setPeriod} />
+          </div>
           {view === "calendar" && (
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
@@ -564,10 +530,20 @@ function CalendarPageContent() {
               </button>
             </div>
           )}
+          <div className="relative w-full sm:ml-auto sm:w-64">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search event, ministry, or date…"
+              aria-label="Search the church calendar"
+              className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+            />
+          </div>
         </div>
 
-        {/* Table view */}
-        <div className={`${view === "table" ? "block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
+        {/* Table view — wide screens only; a phone reads the cards below. */}
+        <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
               <tr>
