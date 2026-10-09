@@ -30,6 +30,26 @@ def normalize_mpesa_phone(value):
     return phone
 
 
+def safe_mpesa_phone(value, max_length=20):
+    """Coerce a Safaricom-supplied phone into the 2547… form, never raising.
+
+    The C2B confirmation's MSISDN is untrusted text: it may carry a leading
+    plus or zero, stray separators, or junk. The stored column is bounded, so
+    a value longer than the column would crash the whole save and drop the
+    payment — this normalises to digits and truncates rather than losing the
+    gift. Returns '' when nothing phone-shaped remains.
+    """
+    digits = re.sub(r'\D', '', str(value or ''))
+    if digits.startswith('254'):
+        pass
+    elif digits.startswith('0') and len(digits) >= 10:
+        digits = f'254{digits[1:]}'
+    elif len(digits) == 9:
+        digits = f'254{digits}'
+    # A phone is 12 digits; keep at most that many, then clamp to the column.
+    return digits[:12][:max_length] if digits else ''
+
+
 def account_reference_for_purpose(purpose):
     """Create Safaricom's short account reference from the giving purpose."""
     reference = re.sub(r'[^A-Za-z0-9]', '', str(purpose or '')).upper()

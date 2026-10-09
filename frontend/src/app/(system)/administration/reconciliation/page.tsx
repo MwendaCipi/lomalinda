@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { ContactModal } from "@/components/contact-modal";
 import { TreasuryNav } from "@/components/treasury-nav";
+import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
@@ -106,10 +107,6 @@ export default function ReconciliationPage() {
 
   const { setHeaderRightAction, setCustomToggles, setCustomHeader } = usePageHeader();
   const [searchQuery, setSearchQuery] = useState("");
-  // Pulling the paybill's transactions from Safaricom: manual "send money to
-  // paybill" gifts land in the ledger without anyone typing them. Idempotent
-  // on the server, so a double-press records nothing twice.
-  const [pulling, setPulling] = useState(false);
 
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
@@ -158,34 +155,14 @@ export default function ReconciliationPage() {
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
           />
         </div>
-        <button
-          type="button"
-          onClick={pullMpesaTransactions}
-          disabled={pulling}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60"
-          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 30 days)."
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-          {pulling ? "Pulling…" : "Pull M-Pesa"}
-        </button>
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
           <label className="text-xs font-medium text-moss flex items-center gap-1">
             <span>From</span>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(event) => changeFromDate(event.target.value)}
-              className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
-            />
+            <DateField value={fromDate} onChange={changeFromDate} label="Ledger from date" />
           </label>
           <label className="text-xs font-medium text-moss flex items-center gap-1">
             <span>To</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(event) => changeToDate(event.target.value)}
-              className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
-            />
+            <DateField value={toDate} onChange={changeToDate} label="Ledger to date" />
           </label>
         </div>
       </div>
@@ -207,6 +184,8 @@ export default function ReconciliationPage() {
             loadAllGivings();
           } else if (view === "summary") {
             setViewMode("summary");
+          } else if (view === "unassigned") {
+            router.push("/administration?tab=accounts&view=unassigned");
           } else if (view === "accounts") {
             router.push("/administration?tab=accounts&view=accounts");
           } else if (view === "drives") {
@@ -300,37 +279,6 @@ export default function ReconciliationPage() {
 
   async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
   async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
-
-  // Pull the paybill's transactions from Safaricom, so a manual "send money to
-  // paybill" gift lands in the ledger without anyone typing it. The server is
-  // idempotent by receipt number, so a double-press records nothing twice —
-  // and the same pull runs on a daily cron, which is why the button only has
-  // to say what it found.
-  async function pullMpesaTransactions() {
-    setPulling(true);
-    try {
-      const res = await fetch(`${API_URL}/api/members/payments/mpesa/pull/`, {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ days: 30 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setMessage(data.detail || "Could not reach M-Pesa. Please try again.");
-        return;
-      }
-      setMessage(
-        data.recorded > 0
-          ? `Pulled ${data.pulled} M-Pesa payment(s); ${data.recorded} new gift(s) recorded.`
-          : `Pulled ${data.pulled} M-Pesa payment(s); nothing new to record.`
-      );
-      await load(fromDate, toDate);
-    } catch {
-      setMessage("Could not reach M-Pesa. Please try again.");
-    } finally {
-      setPulling(false);
-    }
-  }
 
   const toggleExpandPurpose = async (purposeName: string) => {
     if (expandedPurpose === purposeName) {
@@ -587,7 +535,7 @@ export default function ReconciliationPage() {
         
         {/* SINGLE CARD TOUCHING MARGINS (ZERO MARGIN/PADDING) */}
         <div className="flex-1 min-w-0 p-0 h-full flex flex-col overflow-hidden md:pb-0">
-          <div className="w-full h-full flex flex-col rounded-none bg-white p-3 pb-0 sm:p-4 md:pb-4 border-l border-sand-line overflow-hidden">
+          <div className="w-full h-full flex flex-col rounded-none bg-white px-3 pt-1 pb-3 sm:px-4 sm:pt-1.5 md:pb-4 border-l border-sand-line overflow-hidden">
             
             {message && (
               <p className="shrink-0 mt-2 rounded-xl bg-sand px-4 py-2 text-xs text-moss border border-sand-line">
@@ -596,7 +544,7 @@ export default function ReconciliationPage() {
             )}
 
             {/* MAIN CONTENT TABLE CONTAINER (Flex-1, Non-scrollable outer page, scrollable table rows, fixed totals) */}
-            <div className="flex-1 min-h-0 flex flex-col mt-3 overflow-hidden rounded-xl border border-sand-line bg-white">
+            <div className="flex-1 min-h-0 flex flex-col mt-1.5 overflow-hidden rounded-xl border border-sand-line bg-white">
               
               {/* VIEW 1: SUMMARY BREAKDOWN TABLE VIEW */}
               {/* VIEW 1: SUMMARY BREAKDOWN TABLE VIEW */}

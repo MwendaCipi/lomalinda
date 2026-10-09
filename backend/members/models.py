@@ -1093,6 +1093,15 @@ class Contribution(models.Model):
     paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     receipt_sent_at = models.DateTimeField(null=True, blank=True)
+    # A paybill payment whose account reference matched no treasury account
+    # (a typo, a ministry the church keeps outside the treasury, a blank).
+    # The money is safely recorded but credited to nothing until a treasurer
+    # assigns it an account — so it is held, visibly, rather than silently
+    # landing in no account at all. Cleared on assignment.
+    needs_review = models.BooleanField(
+        default=False,
+        help_text="A paybill payment whose reference matched no account; awaiting a treasurer's assignment.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

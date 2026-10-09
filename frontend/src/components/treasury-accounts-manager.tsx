@@ -7,6 +7,8 @@ import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphon
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
+import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
+import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, firstDayOfMonth, localDate } from "@/lib/dates";
@@ -609,15 +611,15 @@ function WithdrawalRequestsPanel({
   );
 }
 
-type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals";
+type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals" | "unassigned";
 
 /**
- * The desk answers three views. Anything else in the address bar — an old
+ * The desk answers four views. Anything else in the address bar — an old
  * `?view=income` link, say — opens Church Accounts rather than a view that no
  * longer exists.
  */
 const deskViewOf = (value?: string): TreasuryDeskView =>
-  value === "expenditure" || value === "withdrawals" ? value : "accounts";
+  value === "expenditure" || value === "withdrawals" || value === "unassigned" ? value : "accounts";
 
 export function TreasuryAccountsManager({ initialView }: { initialView?: TreasuryDeskView } = {}) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
@@ -641,10 +643,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
-        active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : "requests"}
+        active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : view === "unassigned" ? "unassigned" : "requests"}
         onSelect={(next) => {
           if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
           else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
+          else if (next === "unassigned") setView("unassigned");
           else if (next === "accounts") setView("accounts");
           else if (next === "drives") router.push("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
@@ -664,6 +667,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
         accounts: { label: "Church Accounts", description: "The church's treasury accounts, their balances and their movements." },
         expenditure: { label: "Expenses", description: "Spending recorded against the church's accounts." },
         withdrawals: { label: "Requests", description: "The departments' asks for money from their funds." },
+        unassigned: { label: "Unassigned Payments", description: "Paybill gifts whose reference named no account, waiting for one." },
       }[view]
     );
     return () => setCustomHeader(null);
@@ -830,6 +834,12 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // header beside the page's name, so the heading and its search share a row
   // and the toggles sit below both.
   useEffect(() => {
+    if (view === "unassigned") {
+      // The queue carries its own assignment controls; the header keeps only
+      // the page's name.
+      setHeaderRightAction(null);
+      return () => setHeaderRightAction(null);
+    }
     if (view === "withdrawals") {
       setHeaderRightAction(
         <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -873,23 +883,11 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           <div className="flex items-center justify-between gap-2 sm:justify-start">
             <label className="flex items-center gap-1 text-xs font-medium text-moss">
               <span>From</span>
-              <input
-                type="date"
-                value={expenseFrom}
-                onChange={(e) => setExpenseFrom(e.target.value)}
-                className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
-                aria-label="Expenditures from date"
-              />
+              <DateField value={expenseFrom} onChange={setExpenseFrom} label="Expenditures from date" />
             </label>
             <label className="flex items-center gap-1 text-xs font-medium text-moss">
               <span>To</span>
-              <input
-                type="date"
-                value={expenseTo}
-                onChange={(e) => setExpenseTo(e.target.value)}
-                className="rounded-xl border border-sand-mute bg-white px-2 py-1 text-xs outline-none focus:border-ember"
-                aria-label="Expenditures to date"
-              />
+              <DateField value={expenseTo} onChange={setExpenseTo} label="Expenditures to date" />
             </label>
           </div>
         </div>
@@ -1200,6 +1198,8 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
+        ) : view === "unassigned" ? (
+          <UnassignedPaymentsPanel />
         ) : (
         /* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */
         <RecordList

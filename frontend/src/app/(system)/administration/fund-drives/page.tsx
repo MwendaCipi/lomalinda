@@ -32,6 +32,7 @@ export default function FundDrivesPage() {
         onSelect={(next) => {
           if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
           else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
+          else if (next === "unassigned") router.push("/administration?tab=accounts&view=unassigned");
           else if (next === "accounts") router.push("/administration?tab=accounts&view=accounts");
           else if (next === "expenses") router.push("/administration?tab=accounts&view=expenditure");
           else if (next === "requests") router.push("/administration?tab=accounts&view=withdrawals");

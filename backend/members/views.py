@@ -43,7 +43,7 @@ from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, pull_paybill_transactions
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, pull_paybill_transactions, safe_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
@@ -57,7 +57,7 @@ from .pledges import (
 )
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
 from .requests import notify_request_safely, send_membership_approval_email
-from .treasury import credit_account, credit_contribution_lines, enrich_transaction_descriptions
+from .treasury import account_for_purpose, apply_credit, credit_account, credit_contribution_lines, enrich_transaction_descriptions
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -4423,7 +4423,7 @@ def record_direct_paybill_payment(payload):
     last_name = (payload.get('LastName') or '').strip()
     full_name = ' '.join(filter(None, [first_name, middle_name, last_name]))
 
-    msisdn = str(payload.get('MSISDN') or '').strip()
+    msisdn = safe_mpesa_phone(payload.get('MSISDN'))
     amount_raw = payload.get('TransAmount', 0)
     try:
         amount = Decimal(str(amount_raw))
@@ -4464,12 +4464,23 @@ def record_direct_paybill_payment(payload):
             if not contribution.donor_email and matched_user.email:
                 contribution.donor_email = matched_user.email
 
+    # A reference that names no treasury account (a typo, a blank, a ministry
+    # kept outside the treasury) is held for a treasurer rather than credited
+    # to nothing: the money is safely in the ledger, flagged "needs review",
+    # and the Unassigned tab is where it waits for the account it belongs to.
+    # The flag is set only when the row is first recorded — a re-delivered
+    # confirmation must never undo an assignment the treasurer already made.
+    if was_new_record:
+        contribution.needs_review = account_for_purpose(purpose) is None
+
     contribution.save()
     send_contribution_receipt(contribution)
     # The paybill money is in; the account it names moves too. A repeated
     # confirmation finds the saved row first and never reaches a second
-    # credit, because the credit only follows a fresh completion.
-    if was_new_record:
+    # credit, because the credit only follows a fresh completion. Unassigned
+    # gifts are held — not credited — until a treasurer assigns an account
+    # from the Unassigned tab.
+    if was_new_record and not contribution.needs_review:
         credit_contribution_lines(contribution)
     return contribution
 
@@ -4548,6 +4559,86 @@ class MpesaPullTransactionsView(APIView):
             'start': start_str,
             'end': end_str,
         })
+
+
+class TreasuryUnassignedView(APIView):
+    """Paybill payments whose reference matched no treasury account.
+
+    The money is safely in the ledger but credited to nothing; this is the
+    treasurer's work queue — each row shows what the member actually typed,
+    so the desk can name the account it belongs to.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can review unassigned payments.')
+        rows = Contribution.objects.filter(needs_review=True, status='completed').order_by('-paid_at', '-created_at')
+        return Response([
+            {
+                'id': row.id,
+                'amount': str(row.amount),
+                'currency': row.currency,
+                'typed_reference': row.purpose,
+                'mpesa_receipt_number': row.mpesa_receipt_number or '',
+                'donor_name': row.donor_name,
+                'phone_number': row.phone_number,
+                'paid_at': (row.paid_at or row.created_at).isoformat(),
+            }
+            for row in rows
+        ])
+
+
+class AssignContributionAccountView(APIView):
+    """Credit an unassigned payment to the account a treasurer names.
+
+    One press credits the account at the payment's own timestamp — so the
+    month the money arrived stays right, however late the assignment — and
+    clears the review flag. A repeated press finds the flag already cleared
+    and refuses, so a payment can never be credited twice.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can assign payments.')
+        contribution = generics.get_object_or_404(Contribution, pk=pk)
+        if contribution.status != 'completed':
+            return Response({'detail': 'Only completed payments can be assigned.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not contribution.needs_review:
+            return Response({'detail': 'This payment has already been assigned.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        account = generics.get_object_or_404(TreasuryAccount, pk=request.data.get('account_id'))
+        reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
+        giver = giver_display_name(
+            contribution.donor_name,
+            member=contribution.member,
+            email=contribution.donor_email,
+            phone=contribution.phone_number,
+        )
+        method_display = contribution.get_payment_method_display()
+        description = f"{giver or 'Contribution'} — {method_display} ({account.name})"
+
+        row = apply_credit(
+            account=account,
+            amount=contribution.amount,
+            description=description,
+            reference=reference,
+            created_by=request.user,
+            at=contribution.paid_at,
+        )
+        if row is None:
+            return Response({'detail': 'That account could not be credited.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        contribution.needs_review = False
+        # The ledger now reads the account the desk assigned, not the guess
+        # the member typed — the typed reference stays in the transaction's
+        # own description for the statement's audit trail.
+        contribution.purpose = account.name
+        contribution.save(update_fields=['needs_review', 'purpose'])
+        return Response({'detail': f'Credited to {account.name}.', 'account': account.name})
 
 
 class MpesaB2CResultView(APIView):

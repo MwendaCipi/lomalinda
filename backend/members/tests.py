@@ -542,6 +542,71 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.status, 'completed')
         self.assertEqual(contribution.payment_method, 'mpesa')
 
+    def test_c2b_unknown_reference_is_held_for_review_not_credited(self):
+        # "THITH" names no treasury account: the money must be recorded and
+        # held — flagged for the treasurer's Unassigned tab — not credited to
+        # nothing and not lost.
+        payload = {
+            'TransID': 'REV11TEST',
+            'TransAmount': '10.00',
+            'BillRefNumber': 'THITH',
+            'MSISDN': '254792007989',
+            'FirstName': 'Test',
+            'LastName': 'Giver',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='REV11TEST')
+        self.assertTrue(contribution.needs_review)
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.amount, Decimal('10.00'))
+        # Nothing was credited: no treasury transaction names this receipt.
+        from .models import TreasuryAccountTransaction
+        self.assertFalse(TreasuryAccountTransaction.objects.filter(reference='REV11TEST').exists())
+
+        # A re-delivered confirmation must not crash or duplicate the row.
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='REV11TEST').count(), 1)
+
+    def test_c2b_known_reference_is_credited_and_not_flagged(self):
+        account = TreasuryAccount.objects.create(name='TITHE', description='Tithe', account_type='mobile_money')
+        payload = {
+            'TransID': 'REV12TEST',
+            'TransAmount': '500.00',
+            'BillRefNumber': 'Tithe',
+            'MSISDN': '254711000111',
+            'FirstName': 'Known',
+            'LastName': 'Giver',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='REV12TEST')
+        self.assertFalse(contribution.needs_review)
+        from .models import TreasuryAccountTransaction
+        self.assertTrue(TreasuryAccountTransaction.objects.filter(account=account, reference='REV12TEST').exists())
+
+    def test_c2b_overlong_msisdn_is_normalised_not_fatal(self):
+        # Safaricom's C2B confirmations can carry a phone string longer than
+        # the column — one such payment crashed the save and was never
+        # recorded. The recorder must coerce it, not lose the gift.
+        payload = {
+            'TransID': 'REV13TEST',
+            'TransAmount': '10.00',
+            'BillRefNumber': 'Tithe',
+            'MSISDN': '+254 792 007 989 extra junk that once overflowed the column',
+            'FirstName': 'Long',
+            'LastName': 'Phone',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='REV13TEST')
+        self.assertEqual(contribution.phone_number, '254792007989')
+        self.assertEqual(contribution.status, 'completed')
+
     def test_c2b_confirmation_ignores_amounts_matching_no_receipt(self):
         # The old flow matched pending rows by phone and amount; there are no
         # pending rows anymore, and unknown confirmations must not adopt one.
@@ -571,6 +636,73 @@ class MpesaC2BAPITests(APITestCase):
         contribution = Contribution.objects.get(mpesa_receipt_number='XYZ98765')
         self.assertEqual(contribution.status, 'completed')
         self.assertEqual(contribution.donor_name, 'Samuel Oti Otieno')
+
+
+class UnassignedPaymentsApiTests(APITestCase):
+    """The treasurer's work queue: paybill payments whose reference named no
+    account, and the one press that credits the account they belong to."""
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('unass.treasurer', 'unass.treasurer@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.member = User.objects.create_user('unass.member', 'unass.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member')
+        self.held = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='HELD99PAY1', amount=Decimal('350.00'),
+            purpose='youth trip', phone_number='254701000101', needs_review=True,
+            paid_at=timezone.now(),
+        )
+
+    def test_unassigned_list_shows_only_held_payments(self):
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.get('/api/members/treasury/unassigned/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['mpesa_receipt_number'], 'HELD99PAY1')
+        self.assertEqual(rows[0]['typed_reference'], 'youth trip')
+        self.assertEqual(rows[0]['amount'], '350.00')
+
+    def test_assign_credits_account_once_and_clears_flag(self):
+        account = TreasuryAccount.objects.create(name='AYM', description='Adventist Youth Ministry', account_type='mobile_money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'account_id': account.id}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('AYM', response.data['account'])
+
+        self.held.refresh_from_db()
+        self.assertFalse(self.held.needs_review)
+        from .models import TreasuryAccountTransaction
+        credits = TreasuryAccountTransaction.objects.filter(account=account, reference='HELD99PAY1')
+        self.assertEqual(credits.count(), 1)
+        self.assertEqual(credits.first().amount, Decimal('350.00'))
+
+        # A second press refuses — a payment can never be credited twice.
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'account_id': account.id}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(TreasuryAccountTransaction.objects.filter(account=account, reference='HELD99PAY1').count(), 1)
+
+    def test_ordinary_member_cannot_review_or_assign(self):
+        self.client.force_authenticate(user=self.member)
+        self.assertEqual(
+            self.client.get('/api/members/treasury/unassigned/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        account = TreasuryAccount.objects.create(name='AYM', description='Adventist Youth Ministry', account_type='mobile_money')
+        self.assertEqual(
+            self.client.post(
+                f'/api/members/treasury/contributions/{self.held.id}/assign/',
+                {'account_id': account.id}, format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
 
 
 class RegisterMpesaC2BUrlsCommandTests(TestCase):
