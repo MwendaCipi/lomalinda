@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft, Download, Loader2, X } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { ContactModal } from "@/components/contact-modal";
 import { TreasuryNav } from "@/components/treasury-nav";
@@ -82,6 +82,21 @@ type IndividualGiving = {
   item_description?: string;
 };
 
+/**
+ * A finished report, held for the desk to look at before it decides to save
+ * it — sometimes one wants to read the document first. The PDF is drawn as
+ * itself; a spreadsheet is shown as the rows it carries, because a browser
+ * has no page on which to render a workbook.
+ */
+type ReportPreview = {
+  kind: "pdf" | "spreadsheet";
+  title: string;
+  filename: string;
+  range: string;
+  url: string;
+  grid: string[][];
+};
+
 export default function ReconciliationPage() {
   // The ledger reads the month so far: the 1st, not the first Sabbath — a
   // from-date of the 3rd had the treasurer asking why receipts had vanished.
@@ -107,6 +122,15 @@ export default function ReconciliationPage() {
 
   const { setHeaderRightAction, setCustomToggles, setCustomHeader } = usePageHeader();
   const [searchQuery, setSearchQuery] = useState("");
+  // Pulling the paybill's transactions from Safaricom: manual "send money to
+  // paybill" gifts land in the ledger without anyone typing them. Idempotent
+  // on the server, so a double-press records nothing twice.
+  const [pulling, setPulling] = useState(false);
+  // A report is generated on demand, so the desk is told the document is being
+  // prepared rather than left staring at an unchanged screen; the finished
+  // document opens in the preview below — viewed first, downloaded from there.
+  const [preparing, setPreparing] = useState<null | "pdf" | "spreadsheet">(null);
+  const [preview, setPreview] = useState<ReportPreview | null>(null);
 
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
@@ -155,6 +179,16 @@ export default function ReconciliationPage() {
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
           />
         </div>
+        <button
+          type="button"
+          onClick={pullMpesaTransactions}
+          disabled={pulling}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60"
+          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
+          {pulling ? "Pulling…" : "Pull M-Pesa"}
+        </button>
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
           <label className="text-xs font-medium text-moss flex items-center gap-1">
             <span>From</span>
@@ -167,7 +201,7 @@ export default function ReconciliationPage() {
         </div>
       </div>
     );
-  }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
+  }, [setHeaderRightAction, searchQuery, pulling, fromDate, toDate]);
 
   // The treasury's views, as one line. The ledger owns Individual Givings and
   // Summary in place; the other three walk to the accounts desk, which is
@@ -227,6 +261,20 @@ export default function ReconciliationPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeActionMenuId]);
 
+  // Escape closes the document preview, the way the desk's other overlays
+  // close — the report was only being looked at.
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        window.URL.revokeObjectURL(preview.url);
+        setPreview(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [preview]);
+
   // After the shared Add Receipt modal saves, refresh the ledgers and show
   // the honest delivery feedback line (same banner as before the extraction).
   async function handleReceiptSaved(deliveryMessage: string, receipt: { received_on: string }) {
@@ -280,6 +328,46 @@ export default function ReconciliationPage() {
   async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
   async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
 
+  // The window every report on this page is cut to — and the one the preview
+  // is named with, so a document opened for the 8th to the 9th says so.
+  const rangeLabel = fromDate === toDate ? fromDate : `${fromDate} → ${toDate}`;
+
+  // Pull the paybill's transactions from Safaricom, so a manual "send money to
+  // paybill" gift lands in the ledger without anyone typing it. The server is
+  // idempotent by receipt number, so a double-press records nothing twice —
+  // and the Pull API keeps only 48 hours of transactions, which is the whole
+  // window it will read, so that is what is asked for.
+  async function pullMpesaTransactions() {
+    setPulling(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/payments/mpesa/pull/`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ days: 2 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(data.detail || "Could not reach M-Pesa. Please try again.");
+        return;
+      }
+      // load() clears the banner first, so the ledger is reloaded before the
+      // finding is written — otherwise the pull's own answer is wiped by the
+      // reload it triggers (the same order the receipt save uses below).
+      await load(fromDate, toDate);
+      setMessage(
+        data.detail
+          ? data.detail
+          : data.recorded > 0
+            ? `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; ${data.recorded} new gift(s) recorded.`
+            : `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; nothing new to record.`
+      );
+    } catch {
+      setMessage("Could not reach M-Pesa. Please try again.");
+    } finally {
+      setPulling(false);
+    }
+  }
+
   const toggleExpandPurpose = async (purposeName: string) => {
     if (expandedPurpose === purposeName) {
       setExpandedPurpose(null);
@@ -306,8 +394,12 @@ export default function ReconciliationPage() {
   };
 
   const handleDownloadBackendPdf = async (includeIndividual: boolean = false, purposeName?: string | null) => {
+    if (preparing) return;
+    setPreparing("pdf");
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      // The report is cut to the dates on screen — always both ends of the
+      // selected range, never the month the range happens to sit in.
       const params = new URLSearchParams();
       if (fromDate) params.append("start_date", fromDate);
       if (toDate) params.append("end_date", toDate);
@@ -319,22 +411,24 @@ export default function ReconciliationPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      if (res.ok) {
-        const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        const tag = purposeName ? `_${purposeName}` : "";
-        a.download = `Financial_Reconciliation${tag}_${fromDate || "all"}_to_${toDate || "all"}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(blobUrl);
-      } else {
+      if (!res.ok) {
         window.print();
+        return;
       }
+      const blob = await res.blob();
+      const tag = purposeName ? `_${purposeName.replace(/[^\w-]+/g, "_")}` : "";
+      setPreview({
+        kind: "pdf",
+        title: purposeName ? `Reconciliation — ${purposeName}` : "Financial Reconciliation report",
+        filename: `Financial_Reconciliation${tag}_${fromDate || "all"}_to_${toDate || "all"}.pdf`,
+        range: rangeLabel,
+        url: window.URL.createObjectURL(blob),
+        grid: [],
+      });
     } catch {
       window.print();
+    } finally {
+      setPreparing(null);
     }
   };
 
@@ -447,38 +541,59 @@ export default function ReconciliationPage() {
   const selectedGivings = expandedPurpose ? purposeGivings[expandedPurpose] || [] : [];
   const selectedPurposeTotal = selectedGivings.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
-  const handleExportSpreadsheet = async () => {
-    if (viewMode === "all_givings") {
-      // Client-side CSV for individual givings
-      const headers = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)"];
-      const rows = allGivingsList.map((g, idx) => [
-        idx + 1,
-        `"${(g.received_at || "").replace(/"/g, '""')}"`,
-        `"${(g.donor_name || "Anonymous").replace(/"/g, '""')}"`,
-        `"${(g.purpose || "").replace(/"/g, '""')}"`,
-        `"${(g.giver_phone || g.giver_email || "").replace(/"/g, '""')}"`,
-        `"${(g.payment_method || g.giving_type || "").replace(/"/g, '""')}"`,
-        `"${(g.receipt_number || "").replace(/"/g, '""')}"`,
-        `"${(g.item_description || "").replace(/"/g, '""')}"`,
-        g.amount || 0,
-      ]);
-      const totalAmt = allGivingsList.reduce((acc, g) => acc + Number(g.amount || 0), 0);
-      const totalRow = ["TOTAL", "", "All Givings", "", "", "", "", "", totalAmt];
-      const csvContent = [headers.join(","), ...rows.map((r) => r.join(",")), totalRow.join(",")].join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `individual_givings_${fromDate}_to_${toDate}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      return;
-    }
+  /** The summary as the rows the workbook carries: what the preview shows
+   *  and what the CSV fallback writes, both for the selected range only. */
+  const summaryGrid = (): string[][] => {
+    const head = ["#", "Giving Purpose", "M-Pesa (KES)", "Bank-to-Bank (KES)", "Cheque (KES)", "Cash (KES)", "Total (KES)"];
+    const rows = displayedRows.map((row, idx) => [
+      String(idx + 1),
+      `"${row.purpose.replace(/"/g, '""')}"`,
+      String(row.mpesa),
+      String(row.bank_transfer),
+      String(row.cheque),
+      String(row.cash),
+      String(row.total),
+    ]);
+    const totalRow = ["TOTAL", `"All Accounts"`, String(totals.mpesa), String(totals.bank_transfer), String(totals.cheque), String(totals.cash), String(totals.total)];
+    return [head, ...rows, totalRow];
+  };
 
-    // Summary view: download NEKF xlsx from backend
+  const csvOf = (grid: string[][]) => new Blob([grid.map((row) => row.join(",")).join("\n")], { type: "text/csv;charset=utf-8;" });
+
+  const handleExportSpreadsheet = async () => {
+    if (preparing) return;
+    setPreparing("spreadsheet");
     try {
+      if (viewMode === "all_givings") {
+        // Client-side CSV for individual givings — the rows the ledger loaded
+        // for the selected range, previewed before they are saved.
+        const head = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)"];
+        const rows = allGivingsList.map((g, idx) => [
+          String(idx + 1),
+          `"${(g.received_at || "").replace(/"/g, '""')}"`,
+          `"${(g.donor_name || "Anonymous").replace(/"/g, '""')}"`,
+          `"${(g.purpose || "").replace(/"/g, '""')}"`,
+          `"${(g.giver_phone || g.giver_email || "").replace(/"/g, '""')}"`,
+          `"${(g.payment_method || g.giving_type || "").replace(/"/g, '""')}"`,
+          `"${(g.receipt_number || "").replace(/"/g, '""')}"`,
+          `"${(g.item_description || "").replace(/"/g, '""')}"`,
+          String(g.amount || 0),
+        ]);
+        const totalAmt = allGivingsList.reduce((acc, g) => acc + Number(g.amount || 0), 0);
+        const grid = [head, ...rows, ["TOTAL", "", `"All Givings"`, "", "", "", "", "", String(totalAmt)]];
+        setPreview({
+          kind: "spreadsheet",
+          title: "Individual givings",
+          filename: `individual_givings_${fromDate}_to_${toDate}.csv`,
+          range: rangeLabel,
+          url: window.URL.createObjectURL(csvOf(grid)),
+          grid,
+        });
+        return;
+      }
+
+      // Summary view: the NEKF workbook from the backend, cut to the same
+      // dates the ledger on screen is showing.
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
       const params = new URLSearchParams();
       if (fromDate) params.append("start_date", fromDate);
@@ -488,45 +603,57 @@ export default function ReconciliationPage() {
       });
       if (res.ok) {
         const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = `NEKF_Report_${fromDate || "all"}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(blobUrl);
-      } else {
-        // Fallback to CSV
-        const headers = ["#", "Giving Purpose", "M-Pesa (KES)", "Bank-to-Bank (KES)", "Cheque (KES)", "Cash (KES)", "Total (KES)"];
-        const rows = displayedRows.map((row, idx) => [idx + 1, `"${row.purpose.replace(/"/g, '""')}"`, row.mpesa, row.bank_transfer, row.cheque, row.cash, row.total]);
-        const totalRow = ["TOTAL", "All Accounts", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
-        const csvContent = [headers.join(","), ...rows.map((r) => r.join(",")), totalRow.join(",")].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `reconciliation_summary_${fromDate}_to_${toDate}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        setPreview({
+          kind: "spreadsheet",
+          title: "NEKF cash count & offering report",
+          filename: `NEKF_Report_${fromDate || "all"}_to_${toDate || "all"}.xlsx`,
+          range: rangeLabel,
+          url: window.URL.createObjectURL(blob),
+          grid: summaryGrid(),
+        });
+        return;
       }
+      // The workbook could not be made: the same rows, as a CSV instead.
+      const grid = summaryGrid();
+      setPreview({
+        kind: "spreadsheet",
+        title: "Reconciliation summary",
+        filename: `reconciliation_summary_${fromDate}_to_${toDate}.csv`,
+        range: rangeLabel,
+        url: window.URL.createObjectURL(csvOf(grid)),
+        grid,
+      });
     } catch {
-      const headers = ["#", "Giving Purpose", "M-Pesa (KES)", "Bank-to-Bank (KES)", "Cheque (KES)", "Cash (KES)", "Total (KES)"];
-      const rows = displayedRows.map((row, idx) => [idx + 1, `"${row.purpose.replace(/"/g, '""')}"`, row.mpesa, row.bank_transfer, row.cheque, row.cash, row.total]);
-      const totalRow = ["TOTAL", "All Accounts", totals.mpesa, totals.bank_transfer, totals.cheque, totals.cash, totals.total];
-      const csvContent = [headers.join(","), ...rows.map((r) => r.join(",")), totalRow.join(",")].join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `reconciliation_summary_${fromDate}_to_${toDate}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const grid = summaryGrid();
+      setPreview({
+        kind: "spreadsheet",
+        title: "Reconciliation summary",
+        filename: `reconciliation_summary_${fromDate}_to_${toDate}.csv`,
+        range: rangeLabel,
+        url: window.URL.createObjectURL(csvOf(grid)),
+        grid,
+      });
+    } finally {
+      setPreparing(null);
     }
+  };
+
+  /** Closing the preview lets the object URL go: the desk has either saved
+   *  the document by then or decided against it. */
+  const closePreview = () => {
+    if (preview) window.URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+
+  /** The document, saved — the same bytes that were just on screen. */
+  const downloadPreview = () => {
+    if (!preview) return;
+    const a = document.createElement("a");
+    a.href = preview.url;
+    a.download = preview.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   return (
@@ -778,18 +905,28 @@ export default function ReconciliationPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadBackendPdf(true, expandedPurpose)}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
+                                  disabled={preparing !== null}
+                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
                                 >
-                                  <Printer className="h-4 w-4 text-ember" />
-                                  <span>PDF Report</span>
+                                  {preparing === "pdf" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
+                                  ) : (
+                                    <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
+                                  )}
+                                  <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={handleExportSpreadsheet}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
+                                  disabled={preparing !== null}
+                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap disabled:opacity-60"
                                 >
-                                  <FileSpreadsheet className="h-4 w-4 text-sage-light" />
-                                  <span>Spreadsheet</span>
+                                  {preparing === "spreadsheet" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-sage-light" aria-hidden="true" />
+                                  ) : (
+                                    <FileSpreadsheet className="h-4 w-4 text-sage-light" aria-hidden="true" />
+                                  )}
+                                  <span>{preparing === "spreadsheet" ? "Preparing…" : "Spreadsheet"}</span>
                                 </button>
                               </div>
                             </div>
@@ -940,18 +1077,28 @@ export default function ReconciliationPage() {
                           <button
                             type="button"
                             onClick={() => handleDownloadBackendPdf(false)}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
+                            disabled={preparing !== null}
+                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
                           >
-                            <Printer className="h-4 w-4 text-ember" />
-                            <span>PDF Report</span>
+                            {preparing === "pdf" ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
+                            ) : (
+                              <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
+                            )}
+                            <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                           </button>
                           <button
                             type="button"
                             onClick={handleExportSpreadsheet}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
+                            disabled={preparing !== null}
+                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap disabled:opacity-60"
                           >
-                            <FileSpreadsheet className="h-4 w-4 text-sage-light" />
-                            <span>Spreadsheet</span>
+                            {preparing === "spreadsheet" ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-sage-light" aria-hidden="true" />
+                            ) : (
+                              <FileSpreadsheet className="h-4 w-4 text-sage-light" aria-hidden="true" />
+                            )}
+                            <span>{preparing === "spreadsheet" ? "Preparing…" : "Spreadsheet"}</span>
                           </button>
                         </div>
                       </div>
@@ -1197,18 +1344,28 @@ export default function ReconciliationPage() {
                             <button
                               type="button"
                               onClick={() => handleDownloadBackendPdf(true)}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap"
+                              disabled={preparing !== null}
+                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
                             >
-                              <Printer className="h-4 w-4 text-ember" />
-                              <span>PDF Report</span>
+                              {preparing === "pdf" ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
+                              ) : (
+                                <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
+                              )}
+                              <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                             </button>
                             <button
                               type="button"
                               onClick={handleExportSpreadsheet}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap"
+                              disabled={preparing !== null}
+                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap disabled:opacity-60"
                             >
-                              <FileSpreadsheet className="h-4 w-4 text-sage-light" />
-                              <span>Spreadsheet</span>
+                              {preparing === "spreadsheet" ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-sage-light" aria-hidden="true" />
+                              ) : (
+                                <FileSpreadsheet className="h-4 w-4 text-sage-light" aria-hidden="true" />
+                              )}
+                              <span>{preparing === "spreadsheet" ? "Preparing…" : "Spreadsheet"}</span>
                             </button>
                           </div>
                         </div>
@@ -1277,6 +1434,125 @@ export default function ReconciliationPage() {
         onClose={() => setIsModalOpen(false)}
         onSaved={handleReceiptSaved}
       />
+
+      {/* Preparing the document: generation runs on the server and can take a
+          moment, so the desk is told what is being made and for which dates
+          rather than left wondering whether the click registered. */}
+      {preparing && !preview && (
+        <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 print:hidden">
+          <div className="flex items-center gap-2.5 rounded-2xl bg-bark px-4 py-3 text-xs font-semibold text-white shadow-xl">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <span>
+              Preparing the {preparing === "pdf" ? "PDF report" : "spreadsheet"} for {rangeLabel}…
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* The finished document, read before it is saved — a lightbox over the
+          ledger, so the report never leaves the page it was asked from. */}
+      {preview && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-bark/60 p-3 sm:p-6 print:hidden"
+          onMouseDown={(event) => event.target === event.currentTarget && closePreview()}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={preview.title}
+            className="flex h-full max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+          >
+            <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-sand-line px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-bark">{preview.title}</p>
+                <p className="mt-0.5 truncate text-[11px] text-moss">
+                  {preview.range} • {preview.kind === "pdf" ? "PDF" : "Spreadsheet"} • {preview.filename}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadPreview}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  aria-label="Close preview"
+                  className="rounded-xl p-2 text-moss transition hover:bg-sand hover:text-bark"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-auto bg-sand-soft p-3 sm:p-4">
+              {preview.kind === "pdf" ? (
+                <iframe
+                  src={preview.url}
+                  title={preview.title}
+                  className="h-full min-h-[60vh] w-full rounded-xl border border-sand-line bg-white"
+                />
+              ) : (
+                /* A workbook has no page a browser can draw, so the preview is
+                   the report's own rows for the selected range — the file
+                   saved from here is the formatted document. */
+                <div className="space-y-2">
+                  <p className="text-[11px] text-moss">
+                    {preview.filename.endsWith(".xlsx")
+                      ? "The report's figures for this range, as rows. Download saves them in the church's NEKF workbook."
+                      : "Exactly the rows the download saves."}
+                  </p>
+                  <div className="overflow-x-auto rounded-xl border border-sand-line bg-white">
+                    <table className="w-full min-w-[640px] text-left text-xs">
+                      <tbody>
+                        {preview.grid.map((row, rowIdx) => (
+                          <tr
+                            key={rowIdx}
+                            className={rowIdx === 0 ? "bg-sand text-bark" : rowIdx === preview.grid.length - 1 ? "bg-sand-soft font-bold text-bark" : "text-moss-dark"}
+                          >
+                            {row.map((cell, cellIdx) => (
+                              <td key={cellIdx} className={`whitespace-nowrap border-b border-sand-line px-3 py-2 ${rowIdx === 0 ? "font-semibold" : ""} ${cellIdx === 0 ? "w-10 text-moss" : ""}`}>
+                                {String(cell).replace(/^"|"$/g, "")}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-4 py-3 sm:px-5">
+              <p className="text-[11px] text-moss">
+                Cut to {preview.range}. {preview.kind === "pdf" ? "What you see is the file you save." : "The download carries the same range."}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:bg-sand"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadPreview}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  Download
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

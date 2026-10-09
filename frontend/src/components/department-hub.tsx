@@ -2821,7 +2821,7 @@ export function DepartmentAccountsPanel({
   search = "",
   typeFilter = "all",
   showInlineControls = false,
-  className = "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm h-full",
+  className = "flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm h-full sm:overflow-hidden",
 }: {
   department: { code: string; label: string };
   onChanged?: () => void;
@@ -3143,7 +3143,7 @@ export function DepartmentAccountsPanel({
         <>
           {/* Optional inline search and filter row for standalone/mobile views */}
           {showInlineControls && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line bg-sand/20 px-4 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-2xl border-b border-sand-line bg-sand/20 px-4 py-2.5">
               <div className="relative flex-1 min-w-[180px]">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-moss" />
                 <input
@@ -3170,7 +3170,7 @@ export function DepartmentAccountsPanel({
 
           {/* Account Filter Switcher Tabs: when more than 1 account is accessible */}
           {accounts.length > 1 && (
-            <div className="flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto">
+            <div className={`flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto ${showInlineControls ? "" : "rounded-t-2xl"}`}>
               <span className="text-[11px] font-bold uppercase tracking-wider text-moss mr-1 shrink-0">
                 Account:
               </span>
@@ -3213,26 +3213,26 @@ export function DepartmentAccountsPanel({
           )}
 
           {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll */}
-          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto custom-table-scrollbar">
+          <div className={`flex-1 min-h-0 overflow-x-auto overflow-y-auto custom-table-scrollbar ${showInlineControls || accounts.length > 1 ? "" : "rounded-t-2xl"}`}>
             {unifiedItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
             ) : visibleItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transaction matches that filter or search.</p>
             ) : (
-              <table className="w-full min-w-[520px] sm:min-w-full text-left text-xs">
+              <table className="w-full text-left text-xs sm:min-w-[520px]">
                 <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
                   <tr>
-                    <th className="px-4 py-3">Date</th>
+                    <th className="hidden px-4 py-3 sm:table-cell">Date</th>
                     <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Reference / Type</th>
+                    <th className="hidden px-4 py-3 sm:table-cell">Reference / Type</th>
                     <th className="px-4 py-3 text-right">Amount (KES)</th>
-                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="hidden px-4 py-3 text-center sm:table-cell">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-soft bg-white">
                   {visibleItems.map((item) => (
                     <tr key={item.key} className="transition hover:bg-sand-linen/60">
-                      <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
+                      <td className={`hidden whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px] sm:table-cell`}>
                         {dayFirstTime(item.date)}
                       </td>
                       <td className={`px-4 ${rowPad} font-medium text-bark`}>
@@ -3252,10 +3252,18 @@ export function DepartmentAccountsPanel({
                             {item.reply && (item.status === "declined" || item.status === "approved") && (
                               <p className="text-[10px] italic text-moss-faint">{item.reply}</p>
                             )}
+                            {/* Phone: the date, reference and status fold under
+                                the description — the row's other columns stand
+                                aside so nothing is cut off widthwise. */}
+                            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-normal text-moss-faint sm:hidden">
+                              <span>{dayFirstTime(item.date)}</span>
+                              <span className="font-mono">{item.reference}</span>
+                              {statusBadge(item.status)}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className={`whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px]`}>
+                      <td className={`hidden whitespace-nowrap px-4 ${rowPad} text-moss-faint text-[11px] sm:table-cell`}>
                         <div className="flex flex-col gap-0.5">
                           <span className="font-mono">{item.reference}</span>
                           {accounts.length > 1 && item.accountName && (
@@ -3269,7 +3277,7 @@ export function DepartmentAccountsPanel({
                         {item.isOutflow ? "−" : "+"}KES{" "}
                         {item.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
+                      <td className={`hidden whitespace-nowrap px-4 ${rowPad} text-center sm:table-cell`}>
                         {statusBadge(item.status)}
                       </td>
                     </tr>
@@ -3279,8 +3287,11 @@ export function DepartmentAccountsPanel({
             )}
           </div>
 
-          {/* Bottom footer — balance + pagination in middle + request button (single row) */}
-          <div className="shrink-0 border-t border-sand-line bg-white px-4 py-2.5 sm:px-6">
+          {/* Bottom footer — balance + pagination in middle + request button
+              (single row). On a phone it stays put: sticky against the scroll
+              it sits in (lifted clear of the bottom tab bar), so the Drive and
+              Withdraw buttons never scroll out of reach behind the ledger. */}
+          <div className="sticky bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] z-20 shrink-0 rounded-b-2xl border-t border-sand-line bg-white px-4 py-2.5 md:bottom-0 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Left — balance */}
               <div className="flex min-w-0 items-center gap-x-2 text-xs text-moss">
@@ -3333,7 +3344,7 @@ export function DepartmentAccountsPanel({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep sm:px-4"
                   >
                     <Megaphone className="h-4 w-4" />
-                    <span className="sm:hidden">Drive</span>
+                    <span className="sm:hidden">Fund Drive</span>
                     <span className="hidden sm:inline">Start fund drive</span>
                   </button>
                 )}

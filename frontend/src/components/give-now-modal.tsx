@@ -406,16 +406,23 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
               goes to. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {methodOfGiving === "mpesa" && (
-              <label className="flex cursor-pointer items-center gap-2 self-start rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark">
-                <input
-                  type="checkbox"
-                  id="give-anonymously"
-                  checked={anonymous}
-                  onChange={(event) => setAnonymous(event.target.checked)}
-                  className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
-                />
-                <span className="text-sm">Give anonymously</span>
-              </label>
+              /* Labelled and stacked exactly like the field beside it: the
+                 box sat where the other row's label sits, so the two never
+                 lined up. Privacy names the row's own concern — what of the
+                 giver is kept. */
+              <div className="block self-start text-sm font-medium text-bark">
+                <span>Privacy</span>
+                <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark">
+                  <input
+                    type="checkbox"
+                    id="give-anonymously"
+                    checked={anonymous}
+                    onChange={(event) => setAnonymous(event.target.checked)}
+                    className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
+                  />
+                  <span className="text-sm">Give anonymously</span>
+                </label>
+              </div>
             )}
 
             <label className="block self-start text-sm font-medium text-bark">

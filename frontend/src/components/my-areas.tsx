@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Info, Plus, Search, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, CalendarDays, Info, Mail, MessageSquare, Phone, Plus, Search, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
@@ -10,11 +11,27 @@ import { useAllDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { dayFirst } from "@/lib/dates";
 import { DepartmentAccountsPanel } from "@/components/department-hub";
+import { openConversation } from "@/lib/chat";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-/** One person on an area's roll, as the desk's own endpoint reports them. */
-type RollRow = { id: number; name: string; unit: string; via: string; role?: string };
+/**
+ * One person on an area's roll, as the desk's own endpoint reports them —
+ * with the contact details each member card's actions need (call, WhatsApp,
+ * chat, email), the same four the roster offers on PC.
+ */
+type RollRow = {
+  id: number;
+  name: string;
+  unit: string;
+  via: string;
+  role?: string;
+  username?: string;
+  email?: string;
+  phone_number?: string;
+  whatsapp_number?: string;
+};
 
 /** One entry of an area's calendar. */
 type AreaEvent = {
@@ -380,6 +397,7 @@ export function MyAreas() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [areaReload, setAreaReload] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     if (!openArea) return;
@@ -479,9 +497,22 @@ export function MyAreas() {
     } finally {
       setJoining(null);
     }
-  }
-
-  // ── One area, read-only ────────────────────────────────────────────────
+  }  // ── One area, read-only ──────────────────────────────────────────
+  // A roll row's contact actions — the roster's own four, offered straight
+  // from the card so a phone reader can chat, WhatsApp, call or email a
+  // member without hunting through a menu. The chat flow is ContactMemberModal's:
+  // open the DM, then land in it.
+  const chatWith = async (member: RollRow) => {
+    try {
+      await openConversation({ kind: "dm", member_id: member.id });
+      router.push(`/chat?dm=${member.id}`);
+    } catch (error) {
+      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+  // WhatsApp reaches the member by whatever number the church holds for them,
+  // digits only — the same reading the roster's contact sheet does.
+  const waNumber = (member: RollRow) => (member.whatsapp_number || member.phone_number || "").replace(/\D/g, "");
   if (openArea) {
     const canManageCurrentArea = manageAreaCode === openArea.code && canManageArea;
     const leaders = openArea.holders.filter((holder) => holder.kind === "leader");
@@ -573,7 +604,7 @@ export function MyAreas() {
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember" aria-hidden="true">
                         {member.name.slice(0, 1) || "?"}
                       </span>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-bark">{member.name}</p>
                         {(member.role || member.unit || member.via) && (
                           <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-moss">
@@ -581,6 +612,51 @@ export function MyAreas() {
                             {member.unit && <span>{member.unit}</span>}
                             {member.via && <span>Through {member.via}</span>}
                           </div>
+                        )}
+                      </div>
+                      {/* The member's contact actions — one tap each, the same
+                          four the PC roster offers through its Contact sheet. */}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => chatWith(member)}
+                          aria-label={`Chat with ${member.name}`}
+                          title="Chat here"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
+                        >
+                          <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        {waNumber(member) && (
+                          <a
+                            href={`https://wa.me/${waNumber(member)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`WhatsApp ${member.name}`}
+                            title="WhatsApp"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white transition hover:bg-sand"
+                          >
+                            <WhatsAppIcon className="h-4 w-4" />
+                          </a>
+                        )}
+                        {member.phone_number && (
+                          <a
+                            href={`tel:${member.phone_number}`}
+                            aria-label={`Call ${member.name}`}
+                            title="Call"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
+                          >
+                            <Phone className="h-4 w-4" aria-hidden="true" />
+                          </a>
+                        )}
+                        {member.email && (
+                          <a
+                            href={`mailto:${member.email}`}
+                            aria-label={`Email ${member.name}`}
+                            title="Email"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
+                          >
+                            <Mail className="h-4 w-4" aria-hidden="true" />
+                          </a>
                         )}
                       </div>
                     </article>
@@ -655,7 +731,7 @@ export function MyAreas() {
                   showInlineControls
                   search=""
                   typeFilter="all"
-                  className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-sand-linen/30 h-full"
+                  className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-sand-linen/30 h-full sm:overflow-hidden"
                 />
               </div>
             </section>

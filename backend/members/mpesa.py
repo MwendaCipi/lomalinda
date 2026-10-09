@@ -199,6 +199,59 @@ def register_c2b_urls(validation_url=None, confirmation_url=None):
     return response.json()
 
 
+def register_pull_url(nominated_number=None, callback_url=None):
+    """Turn the Pull Transactions API on for the church's shortcode.
+
+    Safaricom answers `pulltransactions/v1/query` only for a shortcode that
+    has been registered here first — the register call is a one-off (code
+    1001, "ShortCode already Registered", on every run after the first),
+    so it lives behind its own command instead of inside a pull. That
+    registration is why an unregistered shortcode answers a query with
+    "No records found or Organization Name not available": nothing was
+    ever enabled to be found.
+
+    NominatedNumber is the Safaricom MSISDN on the church's organisation
+    account (07XXXXXXXX or 2547XXXXXXX); CallBackURL is where pull
+    notifications are delivered. MPESA_PULL_REGISTER_URL overrides the
+    door — the sandbox and production hosts register separately.
+    """
+    consumer_key = _setting('MPESA_CONSUMER_KEY')
+    consumer_secret = _setting('MPESA_CONSUMER_SECRET')
+    shortcode = _setting('MPESA_SHORTCODE')
+    base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
+
+    nominated = (nominated_number or environ.get('MPESA_PULL_NOMINATED_NUMBER') or '').strip()
+    callback = (callback_url or environ.get('MPESA_PULL_CALLBACK_URL') or '').strip()
+    if not nominated:
+        raise MpesaConfigurationError('Missing MPESA_PULL_NOMINATED_NUMBER.')
+    if not callback:
+        raise MpesaConfigurationError('Missing MPESA_PULL_CALLBACK_URL.')
+
+    token_response = requests.get(
+        f'{base_url}/oauth/v1/generate?grant_type=client_credentials',
+        auth=(consumer_key, consumer_secret),
+        timeout=15,
+    )
+    token_response.raise_for_status()
+    access_token = token_response.json()['access_token']
+
+    payload = {
+        'ShortCode': shortcode,
+        'RequestType': 'Pull',
+        'NominatedNumber': nominated,
+        'CallBackURL': callback,
+    }
+    url = environ.get('MPESA_PULL_REGISTER_URL') or f'{base_url}/pulltransactions/v1/register'
+    response = requests.post(
+        url,
+        json=payload,
+        headers={'Authorization': f'Bearer {access_token}'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def pull_paybill_transactions(start_date, end_date, offset=0):
     """Pull the paybill's transactions for a window, straight from Safaricom.
 
@@ -211,7 +264,10 @@ def pull_paybill_transactions(start_date, end_date, offset=0):
 
     Dates are 'YYYY-MM-DD HH:MM:SS' strings in Nairobi time; OffSetValue
     pages through a long window (the API caps each response, returning the
-    next slice from the given offset).
+    next slice from the given offset). The API itself only keeps 48 hours
+    of transactions and refuses a window longer than that, so callers ask
+    for at most two days — the shortcode must first be registered with
+    register_pull_url, or the query answers that it found nothing.
     """
     consumer_key = _setting('MPESA_CONSUMER_KEY')
     consumer_secret = _setting('MPESA_CONSUMER_SECRET')

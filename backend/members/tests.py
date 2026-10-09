@@ -870,6 +870,60 @@ class PullMpesaTransactionsCommandTests(APITestCase):
         self.assertFalse(Contribution.objects.filter(mpesa_receipt_number='PUL87NEW42').exists())
 
 
+class RegisterMpesaPullUrlCommandTests(TestCase):
+    """Safaricom answers a pull query only for a shortcode that has been
+    registered for Pull — once, per environment."""
+
+    ENV = {
+        'MPESA_CONSUMER_KEY': 'key',
+        'MPESA_CONSUMER_SECRET': 'secret',
+        'MPESA_SHORTCODE': '600000',
+        'MPESA_PULL_NOMINATED_NUMBER': '0712345678',
+        'MPESA_PULL_CALLBACK_URL': 'https://church.example/api/members/payments/mpesa/pull/',
+    }
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_registers_the_shortcode_for_pull(self, mock_post, mock_get):
+        from django.core.management import call_command
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'Response Status': '1001',
+            'Response Description': 'ShortCode already Registered',
+        }
+
+        out = StringIO()
+        with patch.dict('os.environ', self.ENV):
+            call_command('register_mpesa_pull_url', stdout=out)
+
+        self.assertIn('Shortcode registered for M-Pesa pulls.', out.getvalue())
+        self.assertTrue(mock_post.call_args.args[0].endswith('/pulltransactions/v1/register'))
+        payload = mock_post.call_args.kwargs['json']
+        self.assertEqual(payload['ShortCode'], '600000')
+        self.assertEqual(payload['RequestType'], 'Pull')
+        self.assertEqual(payload['NominatedNumber'], '0712345678')
+        self.assertEqual(payload['CallBackURL'], 'https://church.example/api/members/payments/mpesa/pull/')
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_a_missing_nominated_number_is_named_rather_than_guessed(self, mock_post, mock_get):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        env = {k: v for k, v in self.ENV.items() if k != 'MPESA_PULL_NOMINATED_NUMBER'}
+        with patch.dict('os.environ', env, clear=True):
+            with self.assertRaises(CommandError) as caught:
+                call_command('register_mpesa_pull_url', stdout=StringIO())
+
+        self.assertIn('MPESA_PULL_NOMINATED_NUMBER', str(caught.exception))
+        mock_post.assert_not_called()
+
+
 class MpesaPullTransactionsAPITests(APITestCase):
     """The treasurer presses Pull in the browser; the server asks Safaricom
     and records what the ledger has never seen."""
@@ -926,6 +980,53 @@ class MpesaPullTransactionsAPITests(APITestCase):
         self.client.force_authenticate(user=self.member)
         response = self.client.post('/api/members/payments/mpesa/pull/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_the_window_asked_for_is_the_48_hours_safaricom_keeps(self, mock_post, mock_get):
+        """The query reads a period of at most 48 hours and keeps 48 hours of
+        transactions; a treasurer asking for more gets that window, not a
+        wide one Safaricom would answer with "No records found"."""
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {'ResultCode': 0, 'Result': []}
+
+        self.client.force_authenticate(user=self.treasurer)
+        with patch.dict('os.environ', self.ENV):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 30}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        fmt = '%Y-%m-%d %H:%M:%S'
+        window = datetime.strptime(response.data['end'], fmt) - datetime.strptime(response.data['start'], fmt)
+        self.assertLessEqual(window, timedelta(days=2))
+        # The body Safaricom was handed says the same thing.
+        body = mock_post.call_args.kwargs['json']
+        self.assertEqual(body['StartDate'], response.data['start'])
+        self.assertEqual(body['EndDate'], response.data['end'])
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_safaricom_says_so_when_the_window_holds_nothing(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'Null, No transactions available for the selected time period.',
+        }
+
+        self.client.force_authenticate(user=self.treasurer)
+        with patch.dict('os.environ', self.ENV):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 2}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pulled'], 0)
+        self.assertIn('No transactions available', response.data['detail'])
 
     def test_anonymous_cannot_pull(self):
         response = self.client.post('/api/members/payments/mpesa/pull/', {}, format='json')
@@ -1275,6 +1376,52 @@ class PdfGenerationAPITests(APITestCase):
         acc1_reloaded = TreasuryAccount.objects.get(pk=acc1_id)
         self.assertEqual(acc1_reloaded.balance, Decimal('57000.00'))
 
+
+
+class ReconciliationSpreadsheetRangeTests(APITestCase):
+    """The workbook is cut to the dates the treasurer selected — not to the
+    month the range happens to sit in."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sheet.treasurer', 'sheet.treasurer@sda.org', 'password123')
+        MemberProfile.objects.create(user=self.user, role='treasurer')
+        self.client.force_authenticate(user=self.user)
+
+        # Two Tithe gifts, both in the Sat–Fri week that opens October 2026
+        # (the 3rd): one before the range the desk asks for, one inside it.
+        Contribution.objects.create(
+            member=self.user,
+            amount=Decimal('1111.00'),
+            purpose='Tithe',
+            status='completed',
+            payment_method='mpesa',
+            paid_at=timezone.make_aware(datetime(2026, 10, 1, 9, 0)),
+        )
+        Contribution.objects.create(
+            member=self.user,
+            amount=Decimal('2222.00'),
+            purpose='Tithe',
+            status='completed',
+            payment_method='mpesa',
+            paid_at=timezone.make_aware(datetime(2026, 10, 9, 9, 0)),
+        )
+
+    def _tithe_for_week(self, query):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = self.client.get(f'/api/members/reports/reconciliation/spreadsheet/?{query}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sheet = load_workbook(BytesIO(response.content)).active
+        # Row 22 is the Trust Fund's Tithe line; column B is the week of the 3rd.
+        return float(sheet['B22'].value or 0)
+
+    def test_only_the_selected_range_is_reported(self):
+        self.assertEqual(self._tithe_for_week('start_date=2026-10-08&end_date=2026-10-09'), 2222.0)
+
+    def test_the_whole_month_still_carries_both_gifts(self):
+        self.assertEqual(self._tithe_for_week('start_date=2026-10-01&end_date=2026-10-31'), 3333.0)
 
 
 class ProfileAreaPickerTests(APITestCase):

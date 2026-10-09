@@ -4515,6 +4515,11 @@ class MpesaPullTransactionsView(APIView):
             days = max(1, min(int(days), 90))
         except (TypeError, ValueError):
             days = 1
+        # Safaricom keeps 48 hours of transactions and refuses to read a
+        # window longer than that — asking for more is answered with "No
+        # records found", so whatever the desk asked for, the pull is the
+        # last two days.
+        days = min(days, 2)
         nairobi = timezone.localtime().tzinfo
         end = timezone.now()
         start = end - timedelta(days=days)
@@ -4522,10 +4527,17 @@ class MpesaPullTransactionsView(APIView):
         start_str = start.astimezone(nairobi).strftime(fmt)
         end_str = end.astimezone(nairobi).strftime(fmt)
 
-        rows, offset = [], 0
+        rows, offset, note = [], 0, ''
         try:
             while True:
                 page = pull_paybill_transactions(start_str, end_str, offset=offset)
+                # Safaricom answers a window it holds no rows for — or a
+                # shortcode nobody enabled Pull for — with a code and a
+                # sentence of its own rather than an error status.
+                code = str(page.get('ResponseCode') or '')
+                if code and code != '1000':
+                    note = str(page.get('ResponseMessage') or 'Safaricom returned no transactions.')
+                    break
                 result = page.get('Result') or []
                 if not isinstance(result, list):
                     result = [result]
@@ -4537,6 +4549,14 @@ class MpesaPullTransactionsView(APIView):
                 offset += len(result)
         except MpesaConfigurationError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except requests.HTTPError as exc:
+            body = ''
+            if exc.response is not None:
+                body = (exc.response.text or '')[:400]
+            return Response(
+                {'detail': f'M-Pesa did not answer the pull: {body or exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         except (requests.RequestException, ValueError, KeyError) as exc:
             return Response(
                 {'detail': f'M-Pesa did not answer the pull: {exc}'},
@@ -4553,12 +4573,28 @@ class MpesaPullTransactionsView(APIView):
             if record_direct_paybill_payment(row) is not None:
                 recorded += 1
 
-        return Response({
+        # An empty window is normal; an unregistered shortcode is not, and
+        # the desk should be told which one it is looking at.
+        detail = ''
+        if not rows and note:
+            detail = note
+            lowered = note.lower()
+            if 'not have any available' in lowered or 'not available' in lowered:
+                detail += (
+                    ' — this usually means the shortcode has never been '
+                    'registered for Pull. Run `manage.py register_mpesa_pull_url` '
+                    'once, then pull again.'
+                )
+
+        payload = {
             'pulled': len(rows),
             'recorded': recorded,
             'start': start_str,
             'end': end_str,
-        })
+        }
+        if detail:
+            payload['detail'] = detail
+        return Response(payload)
 
 
 class TreasuryUnassignedView(APIView):
@@ -7317,19 +7353,27 @@ def _gather_weekly_contributions(start_date, end_date):
     - saturdays: list of Saturday dates in the month
     - weekly_data: {saturday_date: {purpose: {mpesa, bank_transfer, cheque, cash}}}
     - overall_purpose_map: {purpose: {mpesa, bank_transfer, cheque, cash, total}}
+
+    The week grid is the whole month (so the Saturday columns read as the
+    month they name), but the money in it is only what the selected range
+    covers — a treasurer who asked for the 8th to the 9th gets those two
+    days, not the month the range happens to sit in.
     """
     saturdays = _get_saturdays_in_month(start_date)
     if not saturdays:
         saturdays = [start_date]
 
-    # Determine the month boundaries
-    month_start = saturdays[0] if saturdays[0].day <= 7 else date(start_date.year, start_date.month, 1)
+    # Determine the month boundaries: the grid is the month the range names,
+    # the money in it is only the range itself.
     last_sat = saturdays[-1]
     # Week ends the Friday after the last Saturday
     month_end = last_sat + timedelta(days=6)
     # But cap at end_date if user specified a range
     if end_date < month_end:
         month_end = end_date
+    # …and open at start_date, so a range that starts on the 8th does not
+    # carry the 1st to the 7th with it.
+    month_start = start_date
 
     # Query all contributions in range
     digital_filter = Q(status='completed', giving_type='financial') & (
@@ -7514,11 +7558,20 @@ class ReconciliationSpreadsheetView(APIView):
             claimed_lower.update(names)
 
         # Helper: sum totals for a set of purpose names in a week's data dict
+        def _purpose_total(buckets):
+            """One purpose's money in a week: the four payment buckets summed.
+
+            The weekly dict keeps the buckets and no total of its own (only
+            the month-wide map carries one), so asking a week for its 'total'
+            answered 0 and every purpose row of the grid read empty.
+            """
+            return sum(float(buckets.get(name, 0) or 0) for name in ('mpesa', 'bank_transfer', 'cheque', 'cash'))
+
         def _week_sum(week_purposes, purpose_names):
             total = 0.0
             for k, v in week_purposes.items():
                 if k.lower() in purpose_names:
-                    total += v.get('total', 0)
+                    total += _purpose_total(v)
             return total
 
         # Fill static purpose→row mappings (write 0 instead of None when empty)
@@ -7552,7 +7605,7 @@ class ReconciliationSpreadsheetView(APIView):
                 continue
             week_purposes = weekly_data.get(saturdays[i], {})
             others = sum(
-                v.get('total', 0)
+                _purpose_total(v)
                 for k, v in week_purposes.items()
                 if k.lower() not in claimed_lower
             )
@@ -8752,6 +8805,7 @@ class DepartmentMembersView(APIView):
                 'username': user.get_username(),
                 'email': user.email or '',
                 'phone_number': (profile.phone_number if profile else '') or '',
+                'whatsapp_number': (profile.whatsapp_number if profile else '') or '',
                 'gender': (profile.gender if profile else '') or '',
                 'unit': unit_value,
                 'via': via,
