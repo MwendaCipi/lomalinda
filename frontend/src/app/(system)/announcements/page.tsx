@@ -165,7 +165,7 @@ export default function AnnouncementsPage() {
     <main className="min-h-screen bg-white text-bark">
       <div className="flex h-full md:h-full md:overflow-hidden">
         <div className="flex-1 min-w-0 h-full md:h-full bg-white px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-5 lg:px-10 lg:pb-10 lg:pt-6 md:overflow-y-auto custom-hover-scrollbar">
-          <div className="max-w-5xl mx-auto space-y-4">
+          <div className="max-w-7xl mx-auto space-y-4">
             {/* The cards themselves are compact — there is no comfortable/
                 compact toggle here, the feed is a notice board and reads best
                 tight. */}
@@ -173,7 +173,7 @@ export default function AnnouncementsPage() {
             {loading ? <p className="text-sm text-moss">Loading announcements…</p> : visibleItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-sand-mute bg-white p-10 text-center text-moss">No announcements found.</div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {visibleItems.map((item) => {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;

@@ -144,7 +144,7 @@ export const destinations = {
     href: "/chat",
     label: "Chat",
     short: "Chat",
-    description: "Your area rooms, direct messages, and a line to the church office.",
+    description: "Your ministry and department rooms, direct messages, and a line to the church office.",
     icon: MessagesSquare,
     area: "fellowship",
     match: ["/chat"],
@@ -634,7 +634,7 @@ export const eldershipItems: RailRow[] = [
     roles: ELDERSHIP_ROLES,
     // The one-worder rides a phone; the desk's full name rides everywhere else.
     short: "Leadership",
-    description: "The church's offices and its areas, with each leader and assistant.",
+    description: "The church's offices, ministries and departments, with each leader and assistant.",
   }),
   officeTab("settings", "Church Settings", Settings, {
     roles: ELDERSHIP_ROLES,
@@ -776,7 +776,7 @@ export const treasuryItems: RailRow[] = [
   officeTab("budget", "Church Budget", BarChart3, {
     roles: ["treasurer", "admin"],
     short: "Budget",
-    description: "The church's annual budgets and how the areas plan to use them.",
+    description: "The church's annual budgets and how the ministries and departments plan to use them.",
   }),
   officeTab("refunds", "M-Pesa Refunds", Undo2, {
     roles: ["treasurer", "admin"],

@@ -9199,7 +9199,7 @@ class DepartmentJoinRequestView(APIView):
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         kind = str(request.data.get('kind') or 'join')
         if kind not in ('join', 'singing_group'):
-            return Response({'kind': 'Ask to join the area or to register a singing group.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'kind': 'Ask to join the ministry or department, or to register a singing group.'}, status=status.HTTP_400_BAD_REQUEST)
         if kind == 'join' and DepartmentMembership.objects.filter(member=request.user, department=department).exists():
             return Response({'detail': 'You are already on this roll.'}, status=status.HTTP_400_BAD_REQUEST)
         # One open ask per member per area, whatever kind — the desk answers
@@ -9662,13 +9662,16 @@ def _withdrawal_review_row(row):
 class DepartmentWithdrawalReviewView(APIView):
     """The two-step review of a department's withdrawal ask.
 
-    GET  — returns all non-reversed requests across every department, with
-           enough detail for both the elder gate and the treasurer's queue.
+    GET  — returns every request across every department, with enough detail
+           for both the elder gate and the treasurer's queue. Reversed rows
+           are kept in the list: the treasurer answers them again by
+           approving the request afresh.
     POST — handles four actions via the ``action`` field:
            • ``elder_approve`` (elder or admin only) — blesses the request so
              the treasurer can then act on it.
            • ``approve`` (treasurer or admin only) — requires the request to
-             be ``elder_approved``; debits the fund.
+             be ``elder_approved`` (or ``reversed``, releasing it a second
+             time); debits the fund, never below zero.
            • ``decline`` (elder or treasurer) — declines with a reply.
            • ``reverse`` (treasurer or admin only) — credits the fund back
              and marks the request ``reversed``.
@@ -9726,11 +9729,15 @@ class DepartmentWithdrawalReviewView(APIView):
         if action == 'approve':
             if not is_treasurer_or_admin(request.user):
                 return Response({'detail': 'Only church treasurers or administrators can approve withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
+            # A reversed request may be approved again: the reversal credited
+            # the fund back, so releasing it a second time is a fresh debit —
+            # still gated by the balance check below, so the fund can never
+            # go below zero however many times a request swings.
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
-                pk=row_id, status='elder_approved',
+                pk=row_id, status__in=['elder_approved', 'reversed'],
             ).first()
             if row is None:
-                return Response({'detail': 'That request has not been cleared by an elder yet, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'detail': 'That request is not waiting on approval, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             if row.amount > row.account.balance:
                 return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
             reply = str(request.data.get('reply') or '').strip()[:255]
@@ -9892,11 +9899,7 @@ class WithdrawalRequestsPdfView(APIView):
                 continue
             data.append(item)
 
-        try:
-            church_obj = ChurchSettings.objects.first()
-            church_name = (church_obj.church_name if church_obj else None) or 'SDA Church'
-        except Exception:
-            church_name = 'SDA Church'
+        church_name = current_church_name()
 
         from .pdf_generator import generate_withdrawal_requests_pdf
         pdf_bytes = generate_withdrawal_requests_pdf(
@@ -9948,11 +9951,7 @@ class WithdrawalRequestPdfView(APIView):
         if row is None:
             return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            church_obj = ChurchSettings.objects.first()
-            church_name = (church_obj.church_name if church_obj else None) or 'SDA Church'
-        except Exception:
-            church_name = 'SDA Church'
+        church_name = current_church_name()
 
         from .pdf_generator import generate_withdrawal_request_pdf
         pdf_bytes = generate_withdrawal_request_pdf(church_name, _withdrawal_review_row(row))

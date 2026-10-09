@@ -143,12 +143,13 @@ function WithdrawalFilterPopover({
 }
 
 /**
- * The departments' withdrawal queue — showing all non-reversed requests across
- * every department in a structured, actionable table.
+ * The departments' withdrawal queue — showing every request across every
+ * department in a structured, actionable table.
  * Approval is a two-step process:
  *   1. An elder clears the request ("Elder Approve")
  *   2. The treasurer then approves (debiting the fund and reflecting in Expenses) or declines
- * Approved requests remain visible so the treasurer can reverse them if needed.
+ * Approved requests remain visible so the treasurer can reverse them if needed,
+ * and a reversed one can be approved again while the account still covers it.
  */
 function WithdrawalRequestsPanel({
   search = "",
@@ -422,14 +423,20 @@ function WithdrawalRequestsPanel({
 
       {/* Action modal: one request's decisions, and nowhere else. An elder
           clears a pending ask, the treasury then releases or declines it, and
-          a released withdrawal can be reversed. A settled request reads back
-          what was decided. */}
+          a released withdrawal can be reversed — a reversed one may then be
+          approved again while the account still covers it. A settled request
+          reads back what was decided. */}
       {openAction !== null && (() => {
         const target = rows.find((r) => r.id === openAction);
         if (!target) return null;
         const awaitingElder = target.status === "pending";
         const awaitingTreasurer = target.status === "elder_approved";
         const canReverse = target.status === "approved";
+        const isReversed = target.status === "reversed";
+        // Approving a reversed request debits the fund a second time, so the
+        // option is offered only while the account still covers the ask — the
+        // API enforces the same rule; this keeps the button honest.
+        const reversedCovered = Number(target.account_balance) >= Number(target.amount);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
@@ -453,11 +460,20 @@ function WithdrawalRequestsPanel({
                       ? "Cleared by an elder — the treasury releases or declines it now."
                       : canReverse
                         ? `Released by ${target.decided_by ?? "the treasury"}. Reversing credits the fund back and removes the expense.`
-                        : `Decided by ${target.decided_by ?? "the office"}${target.reply ? ` — “${target.reply}”` : ""}.`}
+                        : isReversed
+                          ? "Reversed — the fund was credited back. It can be approved again while the account covers it."
+                          : `Decided by ${target.decided_by ?? "the office"}${target.reply ? ` — “${target.reply}”` : ""}.`}
                 </p>
+                {isReversed && !reversedCovered && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-red-600">
+                    {target.account_name} holds KES {Number(target.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} —
+                    less than the KES {Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} asked for, so it cannot be
+                    approved yet.
+                  </p>
+                )}
               </div>
 
-              {(awaitingElder || awaitingTreasurer) && (
+              {(awaitingElder || awaitingTreasurer || isReversed) && (
                 <textarea
                   rows={3}
                   maxLength={255}
@@ -478,7 +494,7 @@ function WithdrawalRequestsPanel({
                   }}
                   className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
                 >
-                  {awaitingElder || awaitingTreasurer ? "Cancel" : "Close"}
+                  {awaitingElder || awaitingTreasurer || isReversed ? "Cancel" : "Close"}
                 </button>
 
                 {awaitingElder && (
@@ -511,6 +527,17 @@ function WithdrawalRequestsPanel({
                     className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
                   >
                     {busy ? "Saving…" : "Approve request"}
+                  </button>
+                )}
+
+                {isReversed && reversedCovered && (
+                  <button
+                    type="button"
+                    onClick={() => act(target.id, "approve", reply)}
+                    disabled={busy}
+                    className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                  >
+                    {busy ? "Saving…" : "Approve again"}
                   </button>
                 )}
 

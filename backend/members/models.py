@@ -480,7 +480,7 @@ class DepartmentJoinRequest(models.Model):
     """
 
     KIND_CHOICES = [
-        ('join', 'Join the area'),
+        ('join', 'Join the ministry or department'),
         ('singing_group', 'Register a singing group'),
     ]
     STATUS_CHOICES = [
@@ -2001,7 +2001,9 @@ class DepartmentWithdrawalRequest(models.Model):
       2. The treasurer then approves (debiting the fund) or declines.
 
     Once approved, the treasurer may also reverse the debit — returning the
-    money to the fund and marking the request ``reversed``.
+    money to the fund and marking the request ``reversed``. A reversed
+    request can then be approved again (the fund is debited a second time),
+    so a reversal is a correction rather than a dead end.
     """
 
     STATUS_CHOICES = [

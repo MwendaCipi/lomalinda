@@ -90,7 +90,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             return
         posted = await database_sync_to_async(self._post)(body)
         if not posted:
-            await self.send_json({'type': 'error', 'detail': 'Only this area\u2019s leaders may post here.'})
+            await self.send_json({'type': 'error', 'detail': 'Only this ministry\u2019s or department\u2019s leaders may post here.'})
 
     async def chat_message(self, event):
         """A message landed in the room — from any door, including this one."""

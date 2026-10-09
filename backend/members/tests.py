@@ -1126,6 +1126,17 @@ class WithdrawalRequestsPdfTests(APITestCase):
         for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
             self.assertNotIn(label, text)
 
+    def test_the_printed_name_includes_the_word_church(self):
+        """Every PDF names the church in full — "SDA Church Loma Linda,
+        Meru", not the short form the app stores for emails and screens."""
+        self.client.force_authenticate(self.treasurer)
+
+        report = self.client.get('/api/members/department-withdrawals/pdf/')
+        self.assertIn(b'SDA CHURCH LOMA LINDA, MERU', self._pdf_text(report.content))
+
+        sheet = self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/')
+        self.assertIn(b'SDA CHURCH LOMA LINDA, MERU', self._pdf_text(sheet.content))
+
     def test_one_request_prints_on_its_own_signable_sheet(self):
         self.client.force_authenticate(self.treasurer)
         response = self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/')
@@ -9336,6 +9347,8 @@ class DepartmentFundTests(APITestCase):
     def setUp(self):
         self.treasurer = User.objects.create_user('fund.treasurer', 'fund.treasurer@example.com', 'StrongPass#2026', first_name='Tess', last_name='Treasurer')
         MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.elder = User.objects.create_user('fund.elder', 'fund.elder@example.com', 'StrongPass#2026', first_name='Eli', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
         self.leader = User.objects.create_user('fund.leader', 'fund.leader@example.com', 'StrongPass#2026', first_name='Larry', last_name='Leader')
         MemberProfile.objects.create(user=self.leader, role='member', roles='member')
         self.member = User.objects.create_user('fund.member', 'fund.member@example.com', 'StrongPass#2026', first_name='Marta', last_name='Member')
@@ -9490,11 +9503,17 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/departments/music/account/', {
             'amount': '200', 'reason': 'Buses to the camporee',
         }, format='json')
+        # The elder gate first: nothing reaches the treasurer uncleared.
+        self.client.force_authenticate(self.elder)
+        bless = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'elder_approve',
+        }, format='json')
+        self.assertEqual(bless.status_code, status.HTTP_200_OK)
         self.client.force_authenticate(self.treasurer)
         queue = self.client.get('/api/members/department-withdrawals/review/')
         self.assertEqual([row['reason'] for row in queue.data['requests']], ['Buses to the camporee'])
         response = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': queue.data['requests'][0]['id'], 'approve': True,
+            'id': queue.data['requests'][0]['id'], 'action': 'approve',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         account.refresh_from_db()
@@ -9508,16 +9527,24 @@ class DepartmentFundTests(APITestCase):
         account = self._fund()
         self.client.force_authenticate(self.leader)
         self.client.post('/api/members/departments/music/account/', {
-            'amount': '900', 'reason': 'Too much',
+            'amount': '400', 'reason': 'Nearly all of it',
         }, format='json')
+        self.client.force_authenticate(self.elder)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'elder_approve',
+        }, format='json')
+        # The ask was within the balance when it was made; the fund has
+        # shrunk by the time the treasurer answers it.
+        account.balance = Decimal('150.00')
+        account.save()
         self.client.force_authenticate(self.treasurer)
         response = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self._pending().id, 'approve': True,
+            'id': self._pending().id, 'action': 'approve',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         account.refresh_from_db()
-        self.assertEqual(account.balance, Decimal('500.00'))
-        self.assertEqual(self._pending().status, 'pending')
+        self.assertEqual(account.balance, Decimal('150.00'))
+        self.assertEqual(self._pending().status, 'elder_approved')
 
     def test_the_treasurer_declines_with_a_word_back(self):
         account = self._fund()
@@ -9527,7 +9554,7 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.client.force_authenticate(self.treasurer)
         response = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self._pending().id, 'approve': False, 'reply': 'Wait for the board',
+            'id': self._pending().id, 'action': 'decline', 'reply': 'Wait for the board',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         account.refresh_from_db()
@@ -9550,10 +9577,81 @@ class DepartmentFundTests(APITestCase):
         )
         self.assertEqual(
             self.client.post('/api/members/department-withdrawals/review/', {
-                'id': self._pending().id, 'approve': True,
+                'id': self._pending().id, 'action': 'approve',
             }, format='json').status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_a_reversed_withdrawal_can_be_approved_again(self):
+        """A reversal is a correction, not a dead end: the treasurer may
+        release the same request a second time — the fund is debited again,
+        the expense record comes back, and the swing never dips below zero."""
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        row = self._pending()
+        self.client.force_authenticate(self.elder)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'elder_approve',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'reverse',
+        }, format='json')
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+
+        response = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'approved')
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('300.00'))
+        # The second release is a fresh debit; the reversal sits between them.
+        self.assertEqual(TreasuryAccountTransaction.objects.filter(transaction_type='debit').count(), 2)
+        self.assertEqual(TreasuryAccountTransaction.objects.filter(transaction_type='credit').count(), 1)
+        # The expense the reversal removed is back on the books.
+        self.assertTrue(Expenditure.objects.filter(receipt_number=f'WD-{row.id}').exists())
+
+    def test_releasing_a_reversed_withdrawal_still_cannot_overdraw(self):
+        """However many times a request swings, the fund never goes below
+        zero — the second release is checked against the balance it finds."""
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        row = self._pending()
+        self.client.force_authenticate(self.elder)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'elder_approve',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'reverse',
+        }, format='json')
+        # The fund has been spent elsewhere before the second release.
+        account.balance = Decimal('150.00')
+        account.save()
+
+        response = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('150.00'))
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'reversed')
 
 
 class SeededDepartmentFundTests(APITestCase):

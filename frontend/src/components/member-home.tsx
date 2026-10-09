@@ -382,7 +382,7 @@ export function MemberHome() {
           {myAreas.length > 0 && (
             <section aria-labelledby="your-areas">
               <h2 id="your-areas" className="text-base font-bold text-bark">
-                Your areas
+                Your departments &amp; ministries
               </h2>
               <p className="mt-1 text-[11px] text-moss">
                 The departments and ministries you belong to, and how they are doing.

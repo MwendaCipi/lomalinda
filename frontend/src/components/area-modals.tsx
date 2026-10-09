@@ -117,7 +117,7 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <h3 id="area-join-title" className="text-lg font-bold text-bark">
-            Request to join {area?.toLowerCase() ?? "an area"}
+            Request to join {area?.toLowerCase() ?? "a ministry or department"}
           </h3>
           <button type="button" onClick={onClose} aria-label="Close" className="text-xl leading-none text-moss hover:text-bark">
             <X size={18} aria-hidden="true" />
@@ -127,7 +127,7 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
           {error && <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
           <div>
             <label className="block text-xs font-semibold text-bark" htmlFor="area-join-select">
-              Which area? *
+              Which ministry or department? *
             </label>
             <select
               id="area-join-select"
@@ -136,7 +136,7 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
               onChange={(event) => setChosen(event.target.value)}
               className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-sm focus:border-ember focus:outline-none"
             >
-              <option value="">Choose an area…</option>
+              <option value="">Choose a ministry or department…</option>
               {areas.map((a) => (
                 <option key={a.code} value={a.code}>{a.label}</option>
               ))}
@@ -213,7 +213,7 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
           <p className="text-[11px] leading-5 text-moss">
             {chosen === "music" && askKind === "singing_group"
               ? "Your proposal goes to the music desk's leadership and the elders' desk. If it is approved, the group is registered and you are its first singer."
-              : "Your request goes to the area&apos;s leader and assistants, and to the elders&apos; desk. When it is answered in church, the reply appears on your rail."}
+              : "Your request goes to the ministry or department&apos;s leader and assistants, and to the elders&apos; desk. When it is answered in church, the reply appears on your rail."}
           </p>
           <button
             type="submit"

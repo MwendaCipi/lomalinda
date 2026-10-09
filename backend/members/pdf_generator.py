@@ -175,6 +175,21 @@ def format_money(val):
         return "0.00"
 
 
+def pdf_church_name(church_name):
+    """The name as it must read on paper: with the word "Church" in it.
+
+    The app stores the short form ("SDA Loma Linda, Meru") for screens,
+    emails and SMS, but printed documents carry the full name —
+    "SDA Church Loma Linda, Meru". Names that already say "Church" and
+    names without the SDA prefix pass through untouched, so an admin who
+    renames the church keeps whatever wording they chose.
+    """
+    text = str(church_name or "").strip()
+    if not text or "church" in text.lower():
+        return text
+    return re.sub(r"^SDA\b", "SDA Church", text, flags=re.IGNORECASE)
+
+
 def generate_reconciliation_pdf(
     church_name,
     start_date,
@@ -192,6 +207,7 @@ def generate_reconciliation_pdf(
     """
     Generates NEKF-format Cash Count & Offering Report Summary PDF.
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -689,6 +705,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     """
     Generates Member Official Contribution Statement PDF.
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -827,6 +844,7 @@ def generate_business_meeting_pdf(church_name, meeting_title, meeting_date, loca
     """
     Generates PDF packet for Business Meeting Agenda & Minutes.
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -935,6 +953,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     Generate a PDF member directory list.
     members: list of dicts with keys: name, phone, email, role, is_disfellowshipped
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1064,6 +1083,7 @@ def generate_contribution_thermal_receipt_pdf(
     lines print itemised with a total; a single line prints like the simple
     receipts a treasurer's book keeps.
     """
+    church_name = pdf_church_name(church_name)
     issued_at = issued_at or timezone.now()
     receipt_no = ""
     for row in contributions:
@@ -1181,6 +1201,7 @@ def generate_in_kind_thermal_receipt_pdf(
     items rather than account amounts: there is no currency to total, so
     each item simply lists, and the purpose names what the gift was for.
     """
+    church_name = pdf_church_name(church_name)
     issued_at = issued_at or timezone.now()
 
     WIDTH = 80 * mm
@@ -1266,6 +1287,7 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     the sentence under the table says how the total is read, so the paper
     teaches the same arithmetic the app does.
     """
+    church_name = pdf_church_name(church_name)
 
     def _escape(text):
         return str(text or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -1469,6 +1491,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     signature slots: a signed copy belongs to one request, not to a list —
     that is what ``generate_withdrawal_request_pdf`` draws.
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1646,6 +1669,7 @@ def generate_withdrawal_request_pdf(church_name, row) -> bytes:
     it. It closes with the three signature slots — the authorizing officer,
     the one issuing, and the receiver.
     """
+    church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,

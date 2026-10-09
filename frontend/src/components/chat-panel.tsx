@@ -448,7 +448,7 @@ export function ChatPanel() {
                 </p>
                 {roomsLoaded && (
                   <p className="mt-1 text-xs text-moss">
-                    Your areas and the church family read here.
+                    Your ministries and departments — and the church family — read here.
                   </p>
                 )}
               </>
@@ -662,7 +662,7 @@ export function ChatPanel() {
               </div>
             ) : (
               <p className="py-1.5 text-center text-xs text-moss">
-                Only this area&apos;s leaders may post here. You can read along.
+                Only this ministry&apos;s or department&apos;s leaders may post here. You can read along.
               </p>
             )}
           </div>

@@ -365,7 +365,7 @@ export function MyAreas() {
             label: "Ministry",
             description:
               tab === "mine"
-                ? "The areas you are part of or serve in."
+                ? "The ministries and departments you are part of or serve in."
                 : "Other ministries and departments you can ask to join.",
           }
     );
@@ -611,7 +611,9 @@ export function MyAreas() {
               {loading && events.length === 0 ? (
                 <p className="mt-4 text-xs text-moss">Loading the calendar…</p>
               ) : events.length === 0 ? (
-                <p className="mt-4 text-xs text-moss">Nothing is on this area&apos;s calendar yet.</p>
+                <p className="mt-4 text-xs text-moss">
+                  Nothing is on this {openArea.group === "ministry" ? "ministry" : "department"}&apos;s calendar yet.
+                </p>
               ) : (
                 <ul className="mt-4 space-y-2">
                   {events.map((event) => (
@@ -661,8 +663,8 @@ export function MyAreas() {
 
           <p className="flex items-start gap-2 rounded-xl border border-sand-line bg-sand-linen px-4 py-3 text-[11px] leading-5 text-moss">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-moss" aria-hidden="true" />
-            This is the church&apos;s own record of {openArea.label}. To change anything, ask the
-            area&apos;s leadership or the church office.
+            This is the church&apos;s own record of {openArea.label}. To change anything, ask the{" "}
+            {openArea.group === "ministry" ? "ministry's" : "department's"} leadership or the church office.
           </p>
           {showAddMember && (
             <AddAreaMemberModal
@@ -690,7 +692,7 @@ export function MyAreas() {
         <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-sand-line px-5 py-12 text-center">
           <Users className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold text-bark">
-            {rows.length === 0 ? "Loading the church's areas…" : "Nothing here yet"}
+            {rows.length === 0 ? "Loading the church's ministries and departments…" : "Nothing here yet"}
           </p>
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
@@ -745,7 +747,7 @@ export function MyAreas() {
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
-                    View area
+                    {area.group === "ministry" ? "View ministry" : "View department"}
                   </button>
                   {!inArea && canJoin(area.code) && (
                     <button

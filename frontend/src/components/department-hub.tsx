@@ -2803,7 +2803,8 @@ type UnifiedAccountItem = {
  * The department's own fund — the Account & Withdrawals view of its desk.
  *
  * Displays both financial movements (contributions & debits) and withdrawal requests
- * with real-time status badges (Pending, Elder Approved, Approved, Declined, Reversed).
+ * with real-time status badges (Pending, Elder Approved, Approved, Declined —
+ * and a reversal reads here as Rejected, the department never having kept the money).
  */
 export function DepartmentAccountsPanel({
   department,
@@ -3087,13 +3088,17 @@ export function DepartmentAccountsPanel({
   const displayedBalance = selectedAccountInfo ? Number(selectedAccountInfo.balance) : totalBalance;
 
   const statusBadge = (status: UnifiedAccountItem["status"]) => {
+    // The department reads a reversal as a rejection: from its side of the
+    // counter the money never stayed released, so the ask was turned down —
+    // the treasury's own desk keeps the word "Reversed", which is what its
+    // action was called there.
     const map: Record<string, string> = {
       completed: "bg-sand text-moss",
       pending: "bg-amber-50 text-amber-800",
       elder_approved: "bg-mist-select text-bark",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
-      reversed: "bg-sand text-moss",
+      reversed: "bg-red-50 text-red-700",
     };
     const labels: Record<string, string> = {
       completed: "Completed",
@@ -3101,7 +3106,7 @@ export function DepartmentAccountsPanel({
       elder_approved: "Elder Approved",
       approved: "Approved",
       declined: "Declined",
-      reversed: "Reversed",
+      reversed: "Rejected",
     };
     return (
       <span
@@ -4512,7 +4517,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
         type="text"
         value={directorySearch}
         onChange={(e) => setDirectorySearch(e.target.value)}
-        placeholder="Search areas or the people leading them…"
+        placeholder="Search ministries and departments, or the people leading them…"
         aria-label="Search the leadership directory"
         className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64"
       />
@@ -4568,7 +4573,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
       <div className="shrink-0 md:hidden">
         <h2 className="text-lg font-bold text-bark">Leadership</h2>
         <p className="mt-0.5 text-xs text-moss">
-          Every leadership area — the church's offices and each department — with its leader and assistants.
+          Every ministry and department — the church&apos;s offices among them — with its leader and assistants.
         </p>
       </div>
 
@@ -4655,7 +4660,8 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
             right — communication goes through announcements. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
           <p className="text-xs text-moss">
-            {visibleDepartments.length} of {departments.length} leadership area{departments.length === 1 ? "" : "s"}
+            {visibleDepartments.length} of {departments.length}{" "}
+            {departments.length === 1 ? "ministry or department" : "ministries and departments"}
           </p>
           <button
             type="button"

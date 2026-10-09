@@ -167,7 +167,7 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   dedication: { label: "Child dedications", badge: "bg-bark/10 text-bark" },
   welfare: { label: "Welfare & support", badge: "bg-gold-deep/10 text-gold-shadow" },
   transfer: { label: "Membership transfer", badge: "bg-moss/10 text-moss-mid" },
-  area: { label: "Area requests", badge: "bg-blue-50 text-blue-800" },
+  area: { label: "Ministry requests", badge: "bg-blue-50 text-blue-800" },
   property: { label: "Property requests", badge: "bg-amber-50 text-amber-800" },
 };
 
@@ -272,7 +272,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     const deskOpts: { value: KindFilter; label: string }[] = [
       { value: "all", label: "All requests" },
       { value: "join", label: "Join" },
-      { value: "area", label: "Area" },
+      { value: "area", label: "Ministry" },
       { value: "prayer", label: "Prayer" },
       { value: "visitation", label: "Visitation" },
       { value: "dedication", label: "Dedication" },
@@ -521,7 +521,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     const confirmText = decision === "approved"
       ? isGroup
         ? `Approve "${area.group_name}"? The group is registered under ${area.department.replace(/_/g, " ")} and ${area.member_name} becomes its first singer.`
-        : "Approve this request? The member is added to the area's roll."
+        : "Approve this request? The member is added to the ministry or department's roll."
       : isGroup
         ? `Decline the proposal for "${area.group_name}"?`
         : "Decline this join request?";
@@ -548,7 +548,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               ? `"${area.group_name}" is registered, and ${area.member_name} is its first singer.`
               : "The proposal was declined."
             : decision === "approved"
-              ? "The member is now on the area's roll."
+              ? "The member is now on the ministry or department's roll."
               : "The request was declined.",
           "success"
         );
@@ -790,7 +790,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       <h3 className="mt-3 text-lg font-semibold text-bark">No requests found</h3>
       <p className="mt-1 text-sm text-moss">
         {rows.length === 0
-          ? "Join, area, prayer, visitation, dedication, welfare and transfer requests will appear here."
+          ? "Join, ministry, prayer, visitation, dedication, welfare and transfer requests will appear here."
           : "Try a different search or clear the filter."}
       </p>
     </div>
@@ -843,7 +843,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const filterOptions: { value: KindFilter; label: string }[] = [
     { value: "all", label: "All requests" },
     { value: "join", label: "Join requests" },
-    { value: "area", label: "Area requests" },
+    { value: "area", label: "Ministry requests" },
     { value: "prayer", label: "Prayer requests" },
     { value: "visitation", label: "Visitation" },
     { value: "dedication", label: "Child dedications" },
