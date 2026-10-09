@@ -66,6 +66,18 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: "admin", label: "Administrator", group: "Administrators", system: true },
 ];
 
+/**
+ * The role codes the Departments & Ministries desk assigns — hidden from the
+ * church-wide role pickers (the roster's and Role Management's) so no role
+ * ends up assigned in two places. Everything else is editable from those
+ * pickers.
+ */
+export const DEPARTMENT_MANAGED_ROLE_CODES = [
+  "first_elder", "second_elder", "third_elder", "clerk", "head_deacon", "head_deaconess",
+  "men_ministry", "women_ministry", "youth_leader", "children_ministry",
+  "ambassadors_leader", "apm_leader", "chaplaincy",
+];
+
 /** One role as the church currently holds it. */
 export type RoleRegisterRow = {
   code: string;

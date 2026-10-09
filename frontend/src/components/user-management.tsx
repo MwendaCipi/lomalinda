@@ -8,6 +8,7 @@ import {
   accountTypeLabel,
   ACCOUNT_TYPE_OPTIONS,
   type AccountTypeOption,
+  DEPARTMENT_MANAGED_ROLE_CODES,
   formatRoles,
   NO_ROLE_LABEL,
   leadershipRoles,
@@ -28,15 +29,6 @@ import { useDepartments } from "@/hooks/use-departments";
 import { DepartmentPicker, MinistriesPicker, type AreaOption } from "./area-pickers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-/** The church-wide role codes the Departments & Ministries desk assigns —
-    hidden from the roster's role picker so no role ends up assigned in two
-    places. Everything else here is editable from this desk. */
-const DEPARTMENT_MANAGED_ROLE_CODES = [
-  "first_elder", "second_elder", "third_elder", "clerk", "head_deacon", "head_deaconess",
-  "men_ministry", "women_ministry", "youth_leader", "children_ministry",
-  "ambassadors_leader", "apm_leader", "chaplaincy",
-];
 
 /**
  * Column widths, declared once and applied to both the header and the cells.

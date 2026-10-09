@@ -4,7 +4,7 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { AccessibilityProvider } from "@/context/accessibility-context";
 import { brand } from "@/lib/brand";
-import { themeInitScript } from "@/lib/theme";
+import { authInitScript, themeInitScript } from "@/lib/theme";
 
 export const viewport: Viewport = {
   themeColor: brand.bark,
@@ -56,6 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             gets the dark palette on the very first frame rather than a white
             flash that the provider corrects a moment later. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* Before the first paint: a signed-in member never catches a frame of
+            the marketing section grids that the authenticated shell hides. */}
+        <script dangerouslySetInnerHTML={{ __html: authInitScript }} />
       </head>
       <body className="h-full flex flex-col">
         <AccessibilityProvider>

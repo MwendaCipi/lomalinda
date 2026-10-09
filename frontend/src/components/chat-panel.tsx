@@ -343,7 +343,13 @@ export function ChatPanel() {
   const totalUnread = rooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
   // Each tab counts its own rooms: the badge on Groups is the areas talking,
   // the one on Inbox is a member's private threads.
-  const inboxRooms = rooms.filter((room) => room.kind === "dm" || room.kind === "office");
+  // A direct message with nothing said in it yet is not in the inbox —
+  // searching someone must not stick them in the list. The room being written
+  // in is the one exception; the moment it carries a message it stays for
+  // good (the server lists it the same way).
+  const inboxRooms = rooms.filter(
+    (room) => room.kind === "office" || (room.kind === "dm" && (room.last_message || room.id === activeId))
+  );
   const groupRooms = rooms.filter((room) => room.kind === "group");
   const inboxUnread = inboxRooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
   const groupsUnread = groupRooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);

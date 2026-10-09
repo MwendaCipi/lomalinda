@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
+import { Armchair, BadgeCheck, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -9,6 +9,7 @@ import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
+import { RoleManagement } from "@/components/role-management";
 import { DepartmentHub } from "@/components/department-hub";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
@@ -73,6 +74,7 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
+  "role-management": "the role register",
   leaders: "church departments",
   meetings: "meetings",
   board: "meetings",
@@ -283,7 +285,7 @@ function AdministrationContent() {
    */
   const activeTab = searchTab ? (searchTab === "expenditures" ? "accounts" : searchTab) : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
+  const tableContainedTabs = ["users", "role-management", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -326,6 +328,7 @@ function AdministrationContent() {
           description: "The church's members, their roles and the church's own settings.",
           cards: [
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register — every member, the roles they hold and their standing.", href: "/administration?tab=users" },
+            { icon: <BadgeCheck size={20} aria-hidden="true" />, label: "Role Management", description: "Hand a church-wide office to a member, or take one back.", href: "/administration?tab=role-management" },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
         }
@@ -445,7 +448,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Clerk Approval Notice */}
-            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "role-management", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Church Clerk Access:</span>
@@ -457,6 +460,10 @@ function AdministrationContent() {
 
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
+
+            {/* Role Management — the register of who holds which office.
+                The roster keeps the record; this desk is only the roles. */}
+            {activeTab === "role-management" && (isClerk || isElder || isAdmin) && <RoleManagement />}
 
             {/* Leadership — the directory of the church's areas, opened on
                 one of them when a rail row (or a link) names it. The API

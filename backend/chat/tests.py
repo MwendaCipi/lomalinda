@@ -52,6 +52,23 @@ class ChatDirectMessageTests(APITestCase):
         response = self.client.post('/api/members/chat/conversations/', {'kind': 'dm', 'member_id': self.alice.id}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_opening_a_direct_message_sticks_it_in_nobodys_list_until_said_in(self):
+        """Searching someone must not leave an empty thread in either inbox."""
+        room_id = self.client.post('/api/members/chat/conversations/', {'kind': 'dm', 'member_id': self.bob.id}, format='json').data['id']
+        alice_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertFalse([room for room in alice_list if room['kind'] == 'dm'])
+        self.client.force_authenticate(self.bob)
+        bob_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertFalse([room for room in bob_list if room['kind'] == 'dm'])
+        # The first message is what makes it a conversation — then it stays.
+        self.client.force_authenticate(self.alice)
+        self.client.post(f'/api/members/chat/conversations/{room_id}/messages/', {'body': 'Hello Bob.'}, format='json')
+        alice_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertEqual([room['id'] for room in alice_list if room['kind'] == 'dm'], [room_id])
+        self.client.force_authenticate(self.bob)
+        bob_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertEqual([room['id'] for room in bob_list if room['kind'] == 'dm'], [room_id])
+
     def test_a_third_member_cannot_read_someone_elses_direct_message(self):
         room_id = self.client.post('/api/members/chat/conversations/', {'kind': 'dm', 'member_id': self.bob.id}, format='json').data['id']
         self.client.force_authenticate(self.carol)

@@ -1223,6 +1223,33 @@ class WithdrawalRequestsPdfTests(APITestCase):
         )
 
 
+class AmountInWordsTests(TestCase):
+    """The withdrawal PDF spells the amount out with its unit.
+
+    The rendered line reads "Amount in words: ... only.", so the helper must
+    supply everything between — including "shillings" and the "and" before a
+    trailing short group.
+    """
+
+    def test_round_values(self):
+        from .pdf_generator import amount_in_words
+
+        self.assertEqual(amount_in_words('8010'), 'eight thousand and ten shillings')
+        self.assertEqual(amount_in_words('200'), 'two hundred shillings')
+        self.assertEqual(amount_in_words('8000'), 'eight thousand shillings')
+        self.assertEqual(amount_in_words('1000010'), 'one million and ten shillings')
+
+    def test_cents_and_singular(self):
+        from .pdf_generator import amount_in_words
+
+        self.assertEqual(
+            amount_in_words('8123.50'),
+            'eight thousand one hundred and twenty-three shillings and fifty cents',
+        )
+        self.assertEqual(amount_in_words('1'), 'one shilling')
+        self.assertEqual(amount_in_words('0.50'), 'zero shillings and fifty cents')
+
+
 class FundDriveApprovalTests(APITestCase):
     """A department desk starts a drive; the treasurer posts it.
 

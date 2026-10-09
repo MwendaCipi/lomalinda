@@ -1611,7 +1611,11 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
 
 
 def amount_in_words(amount) -> str:
-    """A money value spelled out, for the signable withdrawal form."""
+    """A money value spelled out with its unit, for the signable withdrawal form.
+
+    Reads the way it would be said at the counter: "eight thousand and ten
+    shillings", singular for one, cents trailing after the shillings.
+    """
     try:
         value = Decimal(str(amount))
     except Exception:
@@ -1649,10 +1653,16 @@ def amount_in_words(amount) -> str:
                 q, n = divmod(n, divisor)
                 parts.append(f"{spell(q)} {name}")
         if n:
+            # Spoken money joins the last short group with "and" — "eight
+            # thousand and ten" — while the hundreds keep their own ("one
+            # hundred and twenty-three").
+            if parts and n < 100:
+                return f"{' '.join(parts)} and {below_thousand(n)}"
             parts.append(below_thousand(n))
         return " ".join(parts)
 
     words = spell(shillings)
+    words += " shilling" if shillings == 1 else " shillings"
     if cents:
         words += f" and {below_hundred(cents)} cents"
     if negative:

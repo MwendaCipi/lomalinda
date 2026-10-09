@@ -295,12 +295,20 @@ def conversations_for(user):
 
     A member reads the rooms they are in; the office reads every office thread
     as well, so a question raised while nobody was looking is still waiting.
+
+    A direct message nobody has spoken in is not a conversation yet: opening
+    one from the roster or the search picker only says who *might* be talked
+    to, and that must not leave an empty thread sticking in either member's
+    list forever. It joins both lists the moment its first message lands.
+    Groups and office threads are rooms the church gives rather than ones a
+    search conjures, so they stand even while quiet.
     """
     rooms = Conversation.objects.filter(participants__member=user)
     if is_office_holder(user):
         rooms = Conversation.objects.filter(
             Q(participants__member=user) | Q(kind=Conversation.KIND_OFFICE)
         )
+    rooms = rooms.filter(~Q(kind=Conversation.KIND_DM) | Q(messages__isnull=False))
     return rooms.distinct().order_by('-last_message_at', '-created_at', '-id')
 
 

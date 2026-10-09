@@ -39,3 +39,23 @@ export type ThemeChoice = "system" | "light" | "dark";
  * storage, malformed JSON) leaves the light palette rather than throwing.
  */
 export const themeInitScript = `(function(){try{var p=JSON.parse(localStorage.getItem("${A11Y_STORAGE_KEY}")||"{}");var t=p&&p.theme;var q=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");if(t==="dark"||((!t||t==="system")&&q&&q.matches)){document.documentElement.setAttribute("data-theme","dark");}}catch(e){}})();`;
+
+/**
+ * The marketing grids (`.public-section-nav`) are a first-time visitor's map of
+ * the site. A signed-in member already has the app's rail and top bar, so for
+ * them the grids read as a marketing interlude wedged inside the app — the
+ * give page's own comment has always said "the authenticated shell hides it."
+ *
+ * The hiding lives entirely in the CSS rule in globals.css, and this script is
+ * what makes it safe to do there: it reads the token and stamps `data-auth` on
+ * <html> before the first paint — the same way `themeInitScript` closes the
+ * light-flash — so the rule holds the grids back from that very first frame
+ * onward. PublicSectionNav itself stays a server component with no token logic;
+ * that is what lets the pages pass lucide icon components through as props.
+ *
+ * It is deliberately tiny and dependency-free, and it must stay that way: it
+ * runs on the critical path before paint. Any failure (no storage) leaves the
+ * attribute off, which is the signed-out appearance — the grids show, exactly
+ * as a visitor should see them.
+ */
+export const authInitScript = `(function(){try{if(localStorage.getItem("access_token")){document.documentElement.setAttribute("data-auth","in");}}catch(e){}})();`;
