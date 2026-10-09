@@ -4000,11 +4000,26 @@ class ResendContributionReceiptView(APIView):
             donor_name = contribution.donor_name or (contribution.member.get_full_name() if contribution.member else 'Church Member')
             # A digital gift's receipt belongs to the giver's own verified
             # address and phone — never a third party typed into this dialog.
+            # The one exception is a gift that has no address at all: a
+            # paybill payment Safaricom reported with an obfuscated number
+            # matches no account, so the ledger holds the money tied to
+            # nobody and no address exists to protect. Like a desk receipt,
+            # it can be finished here — the treasurer, who knows the giver
+            # at the desk, supplies the address and it is kept on the row.
             email = contribution.donor_email or (contribution.member.email if contribution.member else '')
             phone = contribution.phone_number or ''
             if not phone and contribution.member:
                 profile = getattr(contribution.member, 'member_profile', None)
                 phone = getattr(profile, 'phone_number', '') or ''
+            supplied_email = (request.data.get('email') or '').strip()
+            if not email and supplied_email:
+                try:
+                    validate_email(supplied_email)
+                except Exception:
+                    return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+                contribution.donor_email = supplied_email
+                contribution.save(update_fields=['donor_email'])
+                email = supplied_email
             if send_email and not email:
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -4386,8 +4401,7 @@ class MpesaCallbackView(APIView):
         if member_id:
             matched_user = User.objects.filter(pk=member_id).first()
         if not matched_user and msisdn:
-            normalized_digits = msisdn[-9:] if len(msisdn) >= 9 else msisdn
-            matched_user = User.objects.filter(username__icontains=normalized_digits).first()
+            matched_user = member_for_msisdn(msisdn)
         if matched_user:
             contribution.member = matched_user
             if not contribution.donor_email and matched_user.email:
@@ -4402,6 +4416,31 @@ class MpesaC2BValidationView(APIView):
 
     def post(self, request):
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+def member_for_msisdn(msisdn):
+    """The member account behind a giving phone, or None.
+
+    A paybill payment arrives with only the payer's MSISDN — no session, no
+    form — so the phone is the only thread back to the giver's account, and
+    every thread that leads there must be followed or the gift is receipted
+    to nobody. The username is tried first (a member who registered with
+    their number carries it there), then the profile's own phone and
+    WhatsApp numbers, compared on the last nine digits so 07… and 254…
+    forms meet — the same comparison giver_display_name() already uses to
+    greet the giver.
+    """
+    digits = ''.join(ch for ch in (msisdn or '') if ch.isdigit())
+    if len(digits) < 9:
+        return None
+    tail = digits[-9:]
+    matched_user = User.objects.filter(username__icontains=tail).first()
+    if matched_user:
+        return matched_user
+    profile = MemberProfile.objects.filter(
+        Q(phone_number__endswith=tail) | Q(whatsapp_number__endswith=tail)
+    ).select_related('user').first()
+    return profile.user if profile else None
 
 
 def record_direct_paybill_payment(payload):
@@ -4457,8 +4496,7 @@ def record_direct_paybill_payment(payload):
 
     # Link to member user if exists and not set
     if not contribution.member and msisdn:
-        normalized_digits = msisdn[-9:] if len(msisdn) >= 9 else msisdn
-        matched_user = User.objects.filter(username__icontains=normalized_digits).first()
+        matched_user = member_for_msisdn(msisdn)
         if matched_user:
             contribution.member = matched_user
             if not contribution.donor_email and matched_user.email:

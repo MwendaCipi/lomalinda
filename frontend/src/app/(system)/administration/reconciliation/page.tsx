@@ -347,22 +347,38 @@ export default function ReconciliationPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage(data.detail || "Could not reach M-Pesa. Please try again.");
+        // A dialog, not the banner: the pull's answer is the whole point of
+        // the press, and Safaricom's own sentences (an unregistered shortcode,
+        // a bad credential) name the fix — the treasurer should not have to
+        // spot a line of text under a long ledger.
+        await showAlert(
+          "M-Pesa pull failed",
+          data.detail || "Could not reach M-Pesa. Please try again.",
+          "error"
+        );
         return;
       }
       // load() clears the banner first, so the ledger is reloaded before the
       // finding is written — otherwise the pull's own answer is wiped by the
-      // reload it triggers (the same order the receipt save uses below).
+      // reload it triggers. A dialog outlives that reload.
       await load(fromDate, toDate);
-      setMessage(
-        data.detail
-          ? data.detail
-          : data.recorded > 0
-            ? `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; ${data.recorded} new gift(s) recorded.`
-            : `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; nothing new to record.`
-      );
+      if (data.detail) {
+        await showAlert("M-Pesa pull", data.detail, "warning");
+      } else if (data.recorded > 0) {
+        await showAlert(
+          "M-Pesa pull complete",
+          `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; ${data.recorded} new gift(s) recorded.`,
+          "success"
+        );
+      } else {
+        await showAlert(
+          "M-Pesa pull complete",
+          `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; nothing new to record.`,
+          "info"
+        );
+      }
     } catch {
-      setMessage("Could not reach M-Pesa. Please try again.");
+      await showAlert("M-Pesa pull failed", "Could not reach M-Pesa. Please try again.", "error");
     } finally {
       setPulling(false);
     }
@@ -434,9 +450,11 @@ export default function ReconciliationPage() {
 
   const handleResendReceipt = async (giving: IndividualGiving) => {
     // One dialog for every resend: pick the channel — email, SMS, or both,
-    // both on by default. A desk receipt saved without the giver's address
-    // also asks for it here (the receipt is the treasurer's own entry).
-    const needsEmail = giving.source === "cash" && !giving.giver_email;
+    // both on by default. A receipt saved without the giver's address — a
+    // desk entry, or a paybill payment Safaricom reported with an obfuscated
+    // number that matched no account — also asks for it here, so the desk can
+    // finish a receipt that would otherwise be stuck at "pending" forever.
+    const needsEmail = !giving.giver_email;
     const escape = (value: string) =>
       value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const result = await showAlert("Resend receipt", "", "question", {

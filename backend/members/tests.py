@@ -637,6 +637,55 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.status, 'completed')
         self.assertEqual(contribution.donor_name, 'Samuel Oti Otieno')
 
+    def test_c2b_confirmation_links_a_member_by_profile_phone_and_emails_the_receipt(self):
+        # A member whose username is not their number — the usual account —
+        # was never found by the username-only lookup, so the gift was
+        # recorded tied to nobody and the receipt had no address to go to.
+        # The profile's own phone must close the loop.
+        from django.core import mail
+
+        member = User.objects.create_user('onjwayow', 'onjwayowilliam@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=member, role='member', phone_number='0732962303')
+        payload = {
+            'TransID': 'PHN45MATCH',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '254732962303',
+            'FirstName': 'William',
+            'LastName': 'Onjwayo',
+        }
+        mail.outbox.clear()
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='PHN45MATCH')
+        self.assertEqual(contribution.member, member)
+        self.assertEqual(contribution.donor_email, 'onjwayowilliam@example.com')
+        self.assertTrue(any(member.email in message.to for message in mail.outbox))
+        self.assertIsNotNone(contribution.receipt_sent_at)
+
+    def test_c2b_confirmation_also_matches_the_profile_whatsapp_number(self):
+        from django.core import mail
+
+        member = User.objects.create_user('wa.giver', 'wa.giver@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=member, role='member', whatsapp_number='0799000111')
+        payload = {
+            'TransID': 'WAP77MATCH',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '254799000111',
+            'FirstName': 'Wa',
+            'LastName': 'Giver',
+        }
+        mail.outbox.clear()
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='WAP77MATCH')
+        self.assertEqual(contribution.member, member)
+        self.assertEqual(contribution.donor_email, 'wa.giver@example.com')
+        self.assertTrue(any(member.email in message.to for message in mail.outbox))
+
 
 class UnassignedPaymentsApiTests(APITestCase):
     """The treasurer's work queue: paybill payments whose reference named no
@@ -868,6 +917,54 @@ class PullMpesaTransactionsCommandTests(APITestCase):
         self.assertIn('would record PUL87NEW42', out)
         self.assertIn('1 would be recorded', out)
         self.assertFalse(Contribution.objects.filter(mpesa_receipt_number='PUL87NEW42').exists())
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_an_unregistered_shortcode_names_the_fix(self, mock_post, mock_get):
+        """Safaricom answers a shortcode Pull was never enabled for with its
+        own sentence, not an error status — the command must not report that
+        as a quiet "0 pulled".
+        """
+        from django.core.management.base import CommandError
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'No records found or Organization Name not available',
+        }
+
+        with patch.dict('os.environ', self.ENV):
+            with self.assertRaises(CommandError) as caught:
+                self._run('--days', '2')
+
+        self.assertIn('No records found', str(caught.exception))
+        self.assertIn('register_mpesa_pull_url', str(caught.exception))
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_an_empty_window_is_said_out_loud_but_is_not_a_failure(self, mock_post, mock_get):
+        """No transactions in the window is a normal answer — the command
+        still finishes, and says what Safaricom said.
+        """
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'Null, No transactions available for the selected time period.',
+        }
+
+        with patch.dict('os.environ', self.ENV):
+            out, _ = self._run('--days', '2')
+
+        self.assertIn('No transactions available', out)
+        self.assertIn('Pulled 0 transaction(s)', out)
 
 
 class RegisterMpesaPullUrlCommandTests(TestCase):
@@ -7134,7 +7231,10 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
     resend refused (no destination), so the row promised a delivery nothing
     could make. The treasurer — whose own entry the receipt is — may supply
     the address on resend, which is kept on the row. Digital gifts keep their
-    stored, verified address: the finance desk cannot redirect them.
+    stored, verified address: the finance desk cannot redirect them. A
+    digital gift with no address at all — a paybill payment Safaricom
+    reported with an obfuscated number, so no account matched — may be given
+    one the same way, because there is no stored address to protect.
     """
 
     def setUp(self):
@@ -7232,6 +7332,55 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(mail.outbox[0].to, ['rr.giver@example.com'])
+
+    def test_a_treasurer_can_finish_an_unattributed_digital_gift(self):
+        """A pulled paybill payment whose Safaricom MSISDN was obfuscated
+        matches no account: the money is in the ledger tied to nobody, with
+        no address to resend to — and the treasurer's resend was refused
+        every time. Like a desk receipt, it may be given the address the
+        desk knows at the counter, and the row is finished for good."""
+        from django.core import mail
+
+        contribution = Contribution.objects.create(
+            amount=Decimal('5.00'), giving_type='financial', purpose='lcb',
+            status='completed', payment_method='mpesa',
+            mpesa_receipt_number='UJ9KB98YQ4', phone_number='683344662296',
+            donor_name='William', donor_email='',
+        )
+        mail.outbox.clear()
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': contribution.id, 'email': 'onjwayowilliam@gmail.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        contribution.refresh_from_db()
+        self.assertEqual(contribution.donor_email, 'onjwayowilliam@gmail.com')
+        self.assertIsNotNone(contribution.receipt_sent_at)
+        self.assertEqual(mail.outbox[0].to, ['onjwayowilliam@gmail.com'])
+
+    def test_a_malformed_address_for_a_digital_gift_is_refused(self):
+        from django.core import mail
+
+        contribution = Contribution.objects.create(
+            amount=Decimal('5.00'), giving_type='financial', purpose='lcb',
+            status='completed', payment_method='mpesa',
+            mpesa_receipt_number='UJ9KB98YQ5', phone_number='683344662297',
+            donor_name='William', donor_email='',
+        )
+        mail.outbox.clear()
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': contribution.id, 'email': 'not-an-address'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(mail.outbox, [])
+        contribution.refresh_from_db()
+        self.assertEqual(contribution.donor_email, '')
+        self.assertIsNone(contribution.receipt_sent_at)
 
     @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
     @patch('members.views.requests.post')
