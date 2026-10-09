@@ -299,18 +299,26 @@ function AdministrationContent() {
   // outranks it (see `activeTab` above), so this never delays a toggle.
   useEffect(() => {
     if (searchTab) return;
-    setDefaultTab(
-      typeof window !== "undefined" && window.innerWidth >= 1024
-        ? isClerk
-          ? "users"
-          : isElder
-            ? "announcements"
-            : isFinance
-              ? "accounts"
-              : "settings"
-        : "overview"
-    );
-  }, [searchTab, isClerk, isElder, isFinance]);
+    const onDesk = typeof window !== "undefined" && window.innerWidth >= 1024;
+    const fallback = onDesk
+      ? isClerk
+        ? "users"
+        : isElder
+          ? "announcements"
+          : isFinance
+            ? "accounts"
+            : "settings"
+      : "overview";
+    setDefaultTab(fallback);
+    // A bare /administration — the account menu's link — is written as the
+    // desk the role opens on, so the rail's row lights, the section strip
+    // draws and the heading names the desk, exactly as they do when the same
+    // page is opened from the rail's own row. Without the tab the URL claims
+    // no rail row at all, and the console rendered unframed beside it.
+    if (onDesk && status === "authorized") {
+      router.replace(`/administration?tab=${fallback}`, { scroll: false });
+    }
+  }, [searchTab, isClerk, isElder, isFinance, status, router]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { usePageHeader } from "@/components/app-frame";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "@/components/record-list";
 import {
@@ -38,6 +39,7 @@ function rolesOf(member: RoleRow): string[] {
  * from two desks.
  */
 export function RoleManagement() {
+  const { setHeaderRightAction } = usePageHeader();
   const [members, setMembers] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -99,6 +101,24 @@ export function RoleManagement() {
       .finally(() => setSavingId(null));
   };
 
+  // The search rides the shell's header, beside the page's name — the same
+  // slot every other desk keeps its search in (User Management, Requests,
+  // Treasury), so the control reads in one place across the console.
+  useEffect(() => {
+    setHeaderRightAction(
+      <div className="w-56 sm:w-64">
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by name, email or username"
+          className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+        />
+      </div>
+    );
+    return () => setHeaderRightAction(null);
+  }, [query, setHeaderRightAction]);
+
   /** The roster, narrowed by name, email or username. */
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -131,17 +151,6 @@ export function RoleManagement() {
           Hand a church-wide office to a member, or take one back. Elder seats, the clerk and the department
           leaders are appointed in Departments &amp; Ministries.
         </p>
-        {/* ── Search ── */}
-        <div className="relative w-full sm:max-w-sm">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-moss" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search members by name, email or username"
-            className="w-full rounded-xl border border-sand-line bg-sand-plate py-2 pl-9 pr-3 text-xs text-bark placeholder:text-moss focus:border-ember focus:outline-none"
-          />
-        </div>
       </div>
 
       {/* ── Scrollable list ── */}
