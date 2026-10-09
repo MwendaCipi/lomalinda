@@ -57,6 +57,11 @@ urlpatterns = [
     path('payments/mpesa/callback/', MpesaCallbackView.as_view(), name='mpesa-callback'),
     path('payments/mpesa/c2b/validation/', MpesaC2BValidationView.as_view(), name='mpesa-c2b-validation'),
     path('payments/mpesa/c2b/confirmation/', MpesaC2BConfirmationView.as_view(), name='mpesa-c2b-confirmation'),
+    # The URLs actually registered with Safaricom: their validator rejects any
+    # callback URL containing the word "MPESA", so the registered paths drop
+    # it. Same views as above — only the spelling differs.
+    path('payments/c2b/validation/', MpesaC2BValidationView.as_view(), name='c2b-validation'),
+    path('payments/c2b/confirmation/', MpesaC2BConfirmationView.as_view(), name='c2b-confirmation'),
     path('payments/mpesa/b2c/result/', MpesaB2CResultView.as_view(), name='mpesa-b2c-result'),
     path('payments/mpesa/pull/', MpesaPullTransactionsView.as_view(), name='mpesa-pull'),
     path('treasury/refunds/', MpesaRefundListView.as_view(), name='mpesa-refunds'),

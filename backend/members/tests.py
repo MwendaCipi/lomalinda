@@ -509,6 +509,15 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, {'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
+    def test_registered_c2b_paths_answer_without_mpesa_in_url(self):
+        # Safaricom rejects any callback URL containing the word "MPESA", so
+        # the paths actually registered with them drop it. Both spellings must
+        # reach the same views or a registered callback would 404.
+        for path in ('/api/members/payments/c2b/validation/', '/api/members/payments/c2b/confirmation/'):
+            response = self.client.post(path, {}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_200_OK, path)
+            self.assertEqual(response.data, {'ResultCode': 0, 'ResultDesc': 'Accepted'}, path)
+
     def test_c2b_confirmation_creates_completed_contribution_with_all_names(self):
         payload = {
             'TransactionType': 'Pay Bill',
