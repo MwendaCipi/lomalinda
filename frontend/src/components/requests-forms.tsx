@@ -450,9 +450,11 @@ export function VisitationRequestForm({
               onChange={(e) => setVisitationForm({ ...visitationForm, visitation_type: e.target.value })}
               className="mt-1.5 w-full rounded-xl border border-sand-mute bg-sand px-4 py-2.5 text-sm outline-none focus:border-ember"
             >
+              {/* The model's own choices: `family` and `sick`, not the
+                  nicer-sounding "home"/"hospital" — an unlisted value is a 400. */}
               <option value="pastoral">Pastoral Visit</option>
-              <option value="home">Home / Family Visit</option>
-              <option value="hospital">Hospital / Sick Visit</option>
+              <option value="family">Home / Family Visit</option>
+              <option value="sick">Hospital / Sick Visit</option>
               <option value="bereavement">Bereavement Support</option>
               <option value="other">Other Concern</option>
             </select>

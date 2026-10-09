@@ -55,7 +55,7 @@ export function CalendarViewToggle({
   onChange: (view: CalendarView) => void;
 }) {
   return (
-    <div role="group" aria-label="Calendar view" className="inline-flex items-center gap-1 rounded-xl border border-sand-line bg-white p-1">
+    <div role="group" aria-label="Calendar view" className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-sand-line bg-white p-1">
       {([
         ["table", "List", "Table", List],
         ["calendar", "Calendar", "Calendar", CalendarDays],
@@ -65,9 +65,11 @@ export function CalendarViewToggle({
           type="button"
           aria-pressed={view === value}
           onClick={() => onChange(value)}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === value ? "bg-bark text-white" : "text-moss hover:bg-sand"}`}
+          className={`inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition sm:px-3 sm:text-xs ${view === value ? "bg-bark text-white" : "text-moss hover:bg-sand"}`}
         >
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" />{" "}
+          {/* A phone names the view in words; the icon would only cost the width
+              the period buttons beside it need to share the row. */}
+          <Icon className="hidden h-3.5 w-3.5 sm:block" aria-hidden="true" />{" "}
           <span className="sm:hidden">{phoneLabel}</span>
           <span className="hidden sm:inline">{deskLabel}</span>
         </button>

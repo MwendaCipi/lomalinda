@@ -195,13 +195,13 @@ function PeriodButtons({
     <div
       role="group"
       aria-label="Calendar period"
-      className="flex items-center gap-1 rounded-xl border border-sand-mute bg-white p-0.5"
+      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-sand-mute bg-white p-0.5"
     >
       <button
         type="button"
         aria-pressed={period === "quarter"}
         onClick={() => onPeriod("quarter")}
-        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+        className={`whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-semibold transition sm:px-2.5 sm:text-xs ${
           period === "quarter"
             ? "bg-ember text-white"
             : "text-moss-dark hover:text-bark"
@@ -213,7 +213,7 @@ function PeriodButtons({
         type="button"
         aria-pressed={period === "all"}
         onClick={() => onPeriod("all")}
-        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+        className={`whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-semibold transition sm:px-2.5 sm:text-xs ${
           period === "all"
             ? "bg-ember text-white"
             : "text-moss-dark hover:text-bark"
@@ -338,8 +338,13 @@ function CalendarPageContent() {
   const controls = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <CalendarViewToggle view={view} onChange={setView} />
-        <PeriodButtons period={period} onPeriod={setPeriod} />
+        {/* The two switches share one line on a phone — view first, period
+            beside it — rather than each claiming a row of its own. They are
+            never allowed to wrap between them; only the search may drop. */}
+        <div className="flex flex-nowrap items-center gap-1.5 max-[340px]:flex-wrap sm:gap-3">
+          <CalendarViewToggle view={view} onChange={setView} />
+          <PeriodButtons period={period} onPeriod={setPeriod} />
+        </div>
         <div className="relative w-full sm:w-56">
           <input
             type="search"

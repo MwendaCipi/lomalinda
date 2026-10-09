@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { HandHelping } from "lucide-react";
 
-import { RequestsModal } from "@/components/requests-modal";
+import { RequestsModal, type RequestType } from "@/components/requests-modal";
 
 const REQUEST_TYPES = [
   { value: "prayer", label: "Prayer Request", description: "Send a prayer request to the pastoral team." },
@@ -14,6 +14,9 @@ const REQUEST_TYPES = [
 
 export default function RequestsPage() {
   const [open, setOpen] = useState(false);
+  // Which desk the card opened: clicking Child Dedication must land on the
+  // dedication form, not on the prayer one and a re-pick.
+  const [picked, setPicked] = useState<RequestType>("prayer");
 
   return (
     <main className="min-h-screen bg-white text-bark">
@@ -35,7 +38,10 @@ export default function RequestsPage() {
             <button
               key={type.value}
               type="button"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                setPicked(type.value);
+                setOpen(true);
+              }}
               className="group rounded-2xl border border-sand-line bg-white p-6 text-left shadow-sm transition hover:border-ember/30 hover:shadow-md"
             >
               <div className="flex items-center gap-3">
@@ -49,7 +55,7 @@ export default function RequestsPage() {
         </div>
       </div>
 
-      <RequestsModal open={open} onClose={() => setOpen(false)} />
+      <RequestsModal open={open} initialType={picked} onClose={() => setOpen(false)} />
     </main>
   );
 }
