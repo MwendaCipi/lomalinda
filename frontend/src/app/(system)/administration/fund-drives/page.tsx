@@ -36,6 +36,7 @@ export default function FundDrivesPage() {
           else if (next === "accounts") router.push("/administration?tab=accounts&view=accounts");
           else if (next === "expenses") router.push("/administration?tab=accounts&view=expenditure");
           else if (next === "requests") router.push("/administration?tab=accounts&view=withdrawals");
+          else if (next === "failed") router.push("/administration/reconciliation?mode=failed");
         }}
       />
     );

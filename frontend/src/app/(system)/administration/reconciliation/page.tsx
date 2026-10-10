@@ -82,6 +82,9 @@ type IndividualGiving = {
   item_description?: string;
 };
 
+/** Money that actually arrived — completed digital gifts and recorded cash. */
+const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
+
 /**
  * A finished report, held for the desk to look at before it decides to save
  * it — sometimes one wants to read the document first. The PDF is drawn as
@@ -117,6 +120,8 @@ export default function ReconciliationPage() {
       setViewMode("summary");
     } else if (modeParam === "all_givings") {
       setViewMode("all_givings");
+    } else if (modeParam === "failed") {
+      setViewMode("failed_givings");
     }
   }, [modeParam]);
 
@@ -134,7 +139,7 @@ export default function ReconciliationPage() {
 
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"summary" | "all_givings">("all_givings");
+  const [viewMode, setViewMode] = useState<"summary" | "all_givings" | "failed_givings">("all_givings");
   const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>([]);
   const [loadingAllGivings, setLoadingAllGivings] = useState(false);
   const [purposeGivings, setPurposeGivings] = useState<Record<string, IndividualGiving[]>>({});
@@ -152,7 +157,7 @@ export default function ReconciliationPage() {
     setLoadingAllGivings(true);
     try {
       const res = await fetch(
-        `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}`,
+        `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}&include_failed=1`,
         { headers: headers() }
       );
       if (res.ok) {
@@ -203,18 +208,22 @@ export default function ReconciliationPage() {
     );
   }, [setHeaderRightAction, searchQuery, pulling, fromDate, toDate]);
 
-  // The treasury's views, as one line. The ledger owns Individual Givings and
+  // The treasury's views, as one line. The ledger owns Completed Givings and
   // Summary in place; the other three walk to the accounts desk, which is
   // where those views live. The shell's header band draws it — one strip for
   // the whole treasury, never a second row under this page's own header.
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
-        active={viewMode === "summary" ? "summary" : "givings"}
+        active={viewMode === "summary" ? "summary" : viewMode === "failed_givings" ? "failed" : "givings"}
         onSelect={(view) => {
           if (view === "givings") {
             setExpandedPurpose(null);
             setViewMode("all_givings");
+            loadAllGivings();
+          } else if (view === "failed") {
+            setExpandedPurpose(null);
+            setViewMode("failed_givings");
             loadAllGivings();
           } else if (view === "summary") {
             setViewMode("summary");
@@ -237,13 +246,15 @@ export default function ReconciliationPage() {
   // This desk answers two of the treasury's six views under one route, and
   // the rail row that led here is named "Contributions Ledger" — which is the
   // ledger's own name, not the view's. Naming the active view keeps the
-  // heading honest, so pressing Individual Givings does not leave the page
+  // heading honest, so pressing Completed Givings does not leave the page
   // titled after the ledger it sits in.
   useEffect(() => {
     setCustomHeader(
       viewMode === "summary"
         ? { label: "Summary Contributions", description: "Each purpose's giving, totalled by how it came in." }
-        : { label: "Individual Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
+        : viewMode === "failed_givings"
+          ? { label: "Failed Givings", description: "Attempts that never completed — recorded for the desk, credited to nothing." }
+          : { label: "Completed Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
     );
     return () => setCustomHeader(null);
   }, [setCustomHeader, viewMode]);
@@ -605,11 +616,14 @@ export default function ReconciliationPage() {
     if (preparing) return;
     setPreparing("spreadsheet");
     try {
-      if (viewMode === "all_givings") {
-        // Client-side CSV for individual givings — the rows the ledger loaded
-        // for the selected range, previewed before they are saved.
-        const head = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)"];
-        const rows = allGivingsList.map((g, idx) => [
+      if (viewMode !== "summary") {
+        // Client-side CSV — the rows the ledger loaded for the selected
+        // range, previewed before they are saved. The strip above decides
+        // which side of the money comes out: arrived, or never arrived.
+        const failedView = viewMode === "failed_givings";
+        const exported = allGivingsList.filter((g) => (failedView ? !isReceivedGiving(g) : isReceivedGiving(g)));
+        const head = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)", "Status"];
+        const rows = exported.map((g, idx) => [
           String(idx + 1),
           `"${(g.received_at || "").replace(/"/g, '""')}"`,
           `"${(g.donor_name || "Anonymous").replace(/"/g, '""')}"`,
@@ -619,13 +633,14 @@ export default function ReconciliationPage() {
           `"${(g.receipt_number || "").replace(/"/g, '""')}"`,
           `"${(g.item_description || "").replace(/"/g, '""')}"`,
           String(g.amount || 0),
+          g.status || "Completed",
         ]);
-        const totalAmt = allGivingsList.reduce((acc, g) => acc + Number(g.amount || 0), 0);
-        const grid = [head, ...rows, ["TOTAL", "", `"All Givings"`, "", "", "", "", "", String(totalAmt)]];
+        const totalAmt = exported.reduce((acc, g) => acc + Number(g.amount || 0), 0);
+        const grid = [head, ...rows, ["TOTAL", "", failedView ? `"Failed Givings"` : `"Completed Givings"`, "", "", "", "", "", String(totalAmt), ""]];
         setPreview({
           kind: "spreadsheet",
-          title: "Individual givings",
-          filename: `individual_givings_${fromDate}_to_${toDate}.csv`,
+          title: failedView ? "Failed givings" : "Completed givings",
+          filename: `${failedView ? "failed" : "completed"}_givings_${fromDate}_to_${toDate}.csv`,
           range: rangeLabel,
           url: window.URL.createObjectURL(csvOf(grid)),
           grid,
@@ -1152,7 +1167,11 @@ export default function ReconciliationPage() {
                 <>
                   {(() => {
                     const searchQueryLower = searchQuery.trim().toLowerCase();
+                    // The strip above picks the view: completed givings, or
+                    // the attempts that never arrived.
+                    const showFailed = viewMode === "failed_givings";
                     const listToDisplay = allGivingsList.filter((g) => {
+                      if (showFailed ? isReceivedGiving(g) : !isReceivedGiving(g)) return false;
                       if (!searchQueryLower) return true;
                       return (
                         g.donor_name.toLowerCase().includes(searchQueryLower) ||
@@ -1174,7 +1193,7 @@ export default function ReconciliationPage() {
                             </div>
                           ) : listToDisplay.length === 0 ? (
                             <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                              No individual member givings recorded for the selected date range.
+                              {showFailed ? "No failed transactions in the selected date range." : "No completed givings recorded for the selected date range."}
                             </div>
                           ) : (
                             listToDisplay.map((giving, idx) => (
@@ -1210,9 +1229,13 @@ export default function ReconciliationPage() {
                                 )}
 
                                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-sand-soft">
-                                  <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : "text-ember"}`}>
-                                    {giving.receipt_sent_at ? "Sent" : "Failed"}
-                                  </span>
+                                  {isReceivedGiving(giving) ? (
+                                    <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : "text-ember"}`}>
+                                      {giving.receipt_sent_at ? "Sent" : "Failed"}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-semibold text-moss">No receipt — payment failed</span>
+                                  )}
                                   <div className="flex items-center gap-2">
                                     {(giving.giver_phone || giving.giver_email) && (
                                       <button
@@ -1223,14 +1246,16 @@ export default function ReconciliationPage() {
                                         Contact
                                       </button>
                                     )}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleResendReceipt(giving)}
-                                      disabled={resendingId === giving.id}
-                                      className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark"
-                                    >
-                                      {resendingId === giving.id ? "Sending..." : "Resend Receipt"}
-                                    </button>
+                                    {isReceivedGiving(giving) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResendReceipt(giving)}
+                                        disabled={resendingId === giving.id}
+                                        className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark"
+                                      >
+                                        {resendingId === giving.id ? "Sending..." : "Resend Receipt"}
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1246,7 +1271,7 @@ export default function ReconciliationPage() {
                             </div>
                           ) : listToDisplay.length === 0 ? (
                             <div className="py-16 text-center text-sm text-moss">
-                              No individual member givings recorded for the selected date range.
+                              {showFailed ? "No failed transactions in the selected date range." : "No completed givings recorded for the selected date range."}
                             </div>
                           ) : (
                             <table className="w-full text-left text-xs">
@@ -1290,7 +1315,9 @@ export default function ReconciliationPage() {
                                       {money(giving.amount)}
                                     </td>
                                     <td className="px-3 py-3">
-                                      {giving.receipt_sent_at ? (
+                                      {!isReceivedGiving(giving) ? (
+                                        <span className="text-[11px] text-moss">—</span>
+                                      ) : giving.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Sent
@@ -1328,22 +1355,24 @@ export default function ReconciliationPage() {
                                             className={`absolute right-0 z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
                                             onClick={(e) => e.stopPropagation()}
                                           >
-                                            <button
-                                              type="button"
-                                              disabled={resendingId === giving.id}
-                                              onClick={() => {
-                                                setActiveActionMenuId(null);
-                                                handleResendReceipt(giving);
-                                              }}
-                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark hover:bg-sand transition disabled:opacity-50"
-                                            >
-                                              {resendingId === giving.id ? (
-                                                <RotateCw className="h-3.5 w-3.5 animate-spin text-ember" />
-                                              ) : (
-                                                <Send className="h-3.5 w-3.5 text-ember" />
-                                              )}
-                                              <span>Resend Receipt</span>
-                                            </button>
+                                            {isReceivedGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={resendingId === giving.id}
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  handleResendReceipt(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark hover:bg-sand transition disabled:opacity-50"
+                                              >
+                                                {resendingId === giving.id ? (
+                                                  <RotateCw className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Send className="h-3.5 w-3.5 text-ember" />
+                                                )}
+                                                <span>Resend Receipt</span>
+                                              </button>
+                                            )}
 
                                             <button
                                               type="button"
@@ -1370,7 +1399,15 @@ export default function ReconciliationPage() {
                         {/* Fixed Child Table Footer — sits flush on the tab bar. */}
                         <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-4 py-2.5 font-semibold text-xs text-bark flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
                           <span className="text-moss">
-                            Total Rows Available: <strong className="text-bark">{listToDisplay.length}</strong> • <span className="font-bold text-ember">KES {money(displayTotal)}</span>
+                            {showFailed ? (
+                              <>
+                                Failed attempts: <strong className="text-bark">{listToDisplay.length}</strong> • <span className="font-bold text-ember">KES {money(displayTotal)} never arrived</span>
+                              </>
+                            ) : (
+                              <>
+                                Total Rows Available: <strong className="text-bark">{listToDisplay.length}</strong> • <span className="font-bold text-ember">KES {money(displayTotal)}</span>
+                              </>
+                            )}
                           </span>
 
                           <div className="flex items-center gap-2">

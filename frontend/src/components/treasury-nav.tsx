@@ -13,17 +13,17 @@ const fundAuthHeaders = (): Record<string, string> => {
  * The treasury's views, as one line of toggles.
  *
  * The ledger (reconciliation), the accounts desk and the drives page all show
- * this same strip — Individual Givings, Summary Contributions, Church
- * Accounts, Fund Drives, Expenses and Requests — so the treasurer meets one
+ * this same strip — Completed Givings, Summary Contributions, Church
+ * Accounts, Fund Drives, Expenses, Requests and Failed — so the treasurer meets one
  * navigation wherever in the treasury they stand. Each page renders it into
  * the shell's header band
  * (`usePageHeader().setCustomToggles`), which is what keeps it a single line:
  * the band shows either this strip or the section's own pages, never both.
  */
-export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests";
+export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests" | "failed";
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
-  { key: "givings", label: "Individual Givings", short: "Givings" },
+  { key: "givings", label: "Completed Givings", short: "Completed" },
   { key: "summary", label: "Summary Contributions", short: "Summary" },
   // Paybill payments whose reference named no account wait here: the money
   // is safely in the ledger, and this is where the treasurer names the
@@ -35,6 +35,9 @@ const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
   { key: "drives", label: "Fund Drives", short: "Drives" },
   { key: "expenses", label: "Expenses", short: "Expenses" },
   { key: "requests", label: "Requests", short: "Requests" },
+  // Giving attempts that never completed: recorded so the desk can see what
+  // never arrived, credited to nothing, receipted never.
+  { key: "failed", label: "Failed", short: "Failed" },
 ];
 
 export function TreasuryNav({

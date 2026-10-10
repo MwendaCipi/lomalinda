@@ -195,6 +195,59 @@ class ContributionReconciliationAPITests(APITestCase):
         response = self.client.get('/api/members/treasury/reconciliation/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_purpose_contributions_shows_failed_only_when_asked(self):
+        # The ledger's Failed toggle: ordinary reads see only money that
+        # arrived; asking for include_failed also returns what never did,
+        # each row labelled by its own status.
+        Contribution.objects.create(
+            amount=Decimal('50.00'),
+            purpose='13th Sabbath',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+            donor_name='Received Giver',
+        )
+        Contribution.objects.create(
+            amount=Decimal('20.00'),
+            purpose='13th Sabbath',
+            status='failed',
+            payment_method='mpesa',
+            donor_name='Failed Giver',
+        )
+        url = (
+            '/api/members/treasury/purpose-contributions/'
+            f'?from_date={self.today.isoformat()}&to_date={self.today.isoformat()}'
+        )
+        plain = self.client.get(url)
+        self.assertEqual(plain.status_code, status.HTTP_200_OK)
+        self.assertEqual({item['donor_name'] for item in plain.data}, {'Received Giver'})
+
+        flagged = self.client.get(f'{url}&include_failed=1')
+        self.assertEqual(flagged.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item['donor_name']: item['status'] for item in flagged.data},
+            {'Received Giver': 'Completed', 'Failed Giver': 'Failed'},
+        )
+
+    def test_receipt_cannot_be_resent_for_a_payment_that_never_completed(self):
+        # The Failed view puts these rows one click from the resend button;
+        # a payment that never completed has no receipt to re-tell, so the
+        # refusal lives server-side as well.
+        failed = Contribution.objects.create(
+            amount=Decimal('20.00'),
+            purpose='Tithe',
+            status='failed',
+            payment_method='mpesa',
+            donor_name='Never Paid',
+        )
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': failed.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('completed payment', str(response.data))
+
 
 class MpesaPurposeReferenceTests(TestCase):
     def test_account_reference_uses_compact_purpose(self):
@@ -821,6 +874,66 @@ class MpesaC2BAPITests(APITestCase):
         self.assertIsNone(contribution.member)
         self.assertEqual(contribution.donor_email, '')
         self.assertEqual(contribution.donor_name, 'Totally Unknown Person')
+
+
+class PaymentCallbackAlertTests(APITestCase):
+    """A callback that crashes must reach a human, not just the journal."""
+
+    def setUp(self):
+        self.office = User.objects.create_superuser(
+            username='alertboss', email='treasury@example.com', password='secure-password',
+        )
+        self.client.force_authenticate(self.office)
+
+    def _post(self):
+        return self.client.post(
+            '/api/members/payments/c2b/confirmation/',
+            {
+                'TransID': 'ALERT01',
+                'TransAmount': '10.00',
+                'BillRefNumber': 'LCB',
+                'MSISDN': '254712345678',
+                'FirstName': 'Crash',
+                'LastName': 'Test',
+            },
+            format='json',
+        )
+
+    @patch('members.views.record_direct_paybill_payment', side_effect=ValueError('simulated crash'))
+    def test_crashing_confirmation_alerts_the_office_and_still_fails(self, mock_record):
+        raised = False
+        try:
+            self._post()
+        except ValueError:
+            raised = True
+        # The 500 must stand: Safaricom's retry schedule reads the response.
+        self.assertTrue(raised)
+
+        note = ChurchNotification.objects.get()
+        self.assertEqual(note.user, self.office)
+        self.assertIn('Payment callback failed', note.title)
+        self.assertIn('simulated crash', note.message)
+        self.assertIn('ALERT01', note.message)
+        self.assertEqual(note.link, '/administration/reconciliation')
+        self.assertEqual([m.to for m in mail.outbox], [['treasury@example.com']])
+
+        # Safaricom retries the same callback: one crash, one alert.
+        try:
+            self._post()
+        except ValueError:
+            pass
+        self.assertEqual(ChurchNotification.objects.count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_healthy_callback_sends_no_alert(self):
+        response = self.client.post(
+            '/api/members/payments/c2b/confirmation/',
+            {'TransID': 'ALERT02', 'TransAmount': '10.00', 'BillRefNumber': 'LCB', 'MSISDN': '254712345678'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 class UnassignedPaymentsApiTests(APITestCase):
@@ -11243,3 +11356,26 @@ class TreasuryAwaitingViewTests(APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.get('/api/members/treasury/awaiting/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class DevelopmentAndDorcasLeadershipSeatsTests(APITestCase):
+    """Every area carries the two seats the leadership modal reads.
+
+    The migration that seeded Development and Dorcas created the department
+    rows with no roles at all, so the modal had nothing to render a Set
+    leader / Set assistant button from — those two ministries never offered
+    the buttons. The repair seeds the default pair and gives Development
+    its short name.
+    """
+
+    def test_both_ministries_carry_the_seeded_seats(self):
+        for code in ('development', 'dorcas'):
+            department = Department.objects.get(code=code, is_active=True)
+            self.assertEqual(
+                list(department.roles.values_list('name', flat=True)),
+                ['Leader', 'Assistant'],
+                f'{code} should start with a Leader and an Assistant seat',
+            )
+
+    def test_development_is_read_by_its_short_name(self):
+        self.assertEqual(Department.objects.get(code='development').name, 'Development')

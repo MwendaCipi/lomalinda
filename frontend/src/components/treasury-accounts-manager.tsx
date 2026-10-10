@@ -651,6 +651,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           else if (next === "accounts") setView("accounts");
           else if (next === "drives") router.push("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
+          else if (next === "failed") router.push("/administration/reconciliation?mode=failed");
           else setView("withdrawals");
         }}
       />

@@ -20,6 +20,7 @@ import logging
 import uuid
 import re
 import json
+from functools import wraps
 import os
 import io
 import secrets
@@ -3257,6 +3258,13 @@ class PurposeContributionsView(APIView):
         if not is_finance_manager(request.user):
             raise PermissionDenied('Only finance managers can view contribution details.')
 
+        # The ledger's Failed toggle: failed and cancelled attempts are the
+        # story of what never arrived, so the desk asks for them explicitly;
+        # every other caller (the summary drill-down, the department ledger)
+        # keeps reading only money that actually came in.
+        include_failed = request.query_params.get('include_failed') == '1'
+        digital_statuses = ('completed', 'failed', 'cancelled') if include_failed else ('completed',)
+
         purpose = request.query_params.get('purpose', '').strip()
         from_val = request.query_params.get('from_date') or request.query_params.get('from')
         to_val = request.query_params.get('to_date') or request.query_params.get('to')
@@ -3283,7 +3291,7 @@ class PurposeContributionsView(APIView):
         if start_date > end_date:
             start_date, end_date = end_date, start_date
 
-        digital_filter = Q(status__iexact='completed', giving_type='financial') & (
+        digital_filter = Q(status__in=digital_statuses, giving_type='financial') & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
             Q(paid_at__isnull=True, created_at__date__gte=start_date, created_at__date__lte=end_date)
         )
@@ -3327,7 +3335,7 @@ class PurposeContributionsView(APIView):
                 'receipt_number': c.mpesa_receipt_number or c.paystack_reference or f"REC-DIG-{c.id}",
                 'received_at': c.paid_at.isoformat() if c.paid_at else c.created_at.isoformat(),
                 'receipt_sent_at': c.receipt_sent_at.isoformat() if c.receipt_sent_at else None,
-                'status': 'Completed',
+                'status': c.get_status_display(),
             })
 
         for c in cash_qs:
@@ -4007,6 +4015,14 @@ class ResendContributionReceiptView(APIView):
             contribution = Contribution.objects.filter(id=raw_id).first()
             if not contribution:
                 return Response({'detail': 'Contribution record not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if contribution.status != 'completed':
+                # A payment that never completed has no receipt to re-tell —
+                # and the ledger's Failed view puts these rows one click from
+                # the resend button, so the refusal lives server-side too.
+                return Response(
+                    {'detail': 'Only a completed payment has a receipt to resend.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             receipt_ref = contribution.mpesa_receipt_number or contribution.paystack_reference or f"REC-{contribution.id}"
             donor_name = contribution.donor_name or (contribution.member.get_full_name() if contribution.member else 'Church Member')
@@ -4308,6 +4324,106 @@ class InitiateContributionView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def finance_alert_audience():
+    """Accounts that must hear when money fails to land on the ledger.
+
+    The treasurer and administrator roles answer for the money, and every
+    system account that owns the installation is told as well — an
+    installation whose only treasurer is a superuser must still hear.
+    """
+    role_holders = set()
+    for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+        if set(profile.get_roles()) & {'treasurer', 'admin'}:
+            role_holders.add(profile.user_id)
+    return User.objects.filter(
+        Q(id__in=role_holders) | Q(is_superuser=True) | Q(is_staff=True),
+        is_active=True,
+    ).distinct()
+
+
+def alert_payment_callback_failure(label, payload, exc):
+    """Tell the finance office that a payment callback crashed — never raising.
+
+    A crashed callback is silent by nature: the money left the giver's phone,
+    Safaricom got a 500, and nothing in the app says so — the gift only turns
+    up at the next pull, if then. The desk hears about it the same three ways
+    the request notices travel (bell, letter, phone), and the alert itself
+    may never change the callback's response, which Safaricom's retry
+    schedule reads. Safaricom retries a failed callback several times, so the
+    same crash is reported once an hour, not once per retry.
+    """
+    try:
+        title = f'Payment callback failed — {label}'
+        try:
+            excerpt = json.dumps(payload, default=str, ensure_ascii=False)
+        except Exception:
+            excerpt = str(payload)
+        excerpt = (excerpt or '')[:500]
+        # The stable part identifies the crash across retries: the minute of
+        # the attempt differs on every retry, so it may not enter the key.
+        stable = f'Error: {type(exc).__name__}: {exc}\nPayload: {excerpt}'
+        already_told = ChurchNotification.objects.filter(
+            title=title,
+            message__contains=stable,
+            created_at__gte=timezone.now() - timedelta(hours=1),
+        ).exists()
+        if already_told:
+            return
+        when = timezone.localtime().strftime('%d %b %Y, %H:%M')
+        body = (
+            f'Safaricom called back at {when} and the server could not record the payment.\n\n'
+            f'{stable}\n\n'
+            'The gift never reached the ledger. Safaricom will retry; if every retry fails, '
+            'find the payment on the M-Pesa statement and record it by hand.'
+        )
+        recipients = list(finance_alert_audience())
+        link = '/administration/reconciliation'
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=user, title=title, message=body, link=link)
+            for user in recipients
+        ])
+        sent = set()
+        for user in recipients:
+            address = (user.email or '').strip()
+            if not address or address.lower() in sent:
+                continue
+            sent.add(address.lower())
+            send_mail(title, body, settings.DEFAULT_FROM_EMAIL, [address], fail_silently=True)
+        try:
+            from .push import push_to_user, vapid_keys_ready
+            if vapid_keys_ready():
+                for user in recipients:
+                    push_to_user(user, title=title, body=body[:300], link=link)
+        except Exception:
+            pass
+    except Exception:
+        # The alert may never become the thing that breaks the callback.
+        logger.exception('Payment callback alert (%s) failed to send.', label)
+
+
+def payment_callback_alerts(label):
+    """Report a crashing payment callback to the finance office, then re-raise.
+
+    The exception leaves the view exactly as it arrived: the response stays a
+    500, Safaricom keeps its retry schedule, and the journal keeps its
+    traceback — this only makes sure a human hears about it too.
+    """
+    def decorator(view_post):
+        @wraps(view_post)
+        def post(api_view, request, *args, **kwargs):
+            try:
+                return view_post(api_view, request, *args, **kwargs)
+            except Exception as exc:
+                try:
+                    payload = request.data or {}
+                except Exception:
+                    payload = {}
+                alert_payment_callback_failure(label, payload, exc)
+                raise
+        return post
+    return decorator
+
+
 class MpesaCallbackView(APIView):
     """Receives Daraja's STK result and creates the contribution if money moved.
 
@@ -4321,6 +4437,7 @@ class MpesaCallbackView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @payment_callback_alerts('M-Pesa STK push result')
     def post(self, request):
         callback = request.data.get('Body', {}).get('stkCallback', {})
         result_code = callback.get('ResultCode')
@@ -4609,6 +4726,7 @@ class MpesaC2BConfirmationView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @payment_callback_alerts('M-Pesa paybill confirmation')
     def post(self, request):
         record_direct_paybill_payment(request.data or {})
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
@@ -4842,6 +4960,7 @@ class MpesaB2CResultView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @payment_callback_alerts('M-Pesa refund result')
     def post(self, request):
         payload = request.data or {}
         originator_conversation_id = payload.get('OriginatorConversationID', '')
