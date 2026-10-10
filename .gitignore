@@ -58,3 +58,6 @@ backend/media/
 # Saved browser pages (portal research artifacts) are not repo content.
 Dashboard _ Daraja Developers' Portal.html
 Dashboard _ Daraja Developers' Portal_files/
+
+# Local verification scratch (sqlite override for a throwaway check)
+backend/vfy_settings.py
