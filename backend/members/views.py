@@ -4520,11 +4520,21 @@ def record_direct_paybill_payment(payload):
     if not trans_id:
         return None
 
+    # Every string column this save touches is bounded, and a value past its
+    # width would crash the save and drop the payment — exactly what an
+    # over-long MSISDN once did to a live confirmation. Safaricom's free-text
+    # fields (reference, sender name, transaction id) are untrusted here, so
+    # each is trimmed to the column it is about to be written to: the gift is
+    # always recorded; a trimmed reference that names no account is simply
+    # held in the Unassigned queue.
+    trans_id = str(trans_id)[:Contribution._meta.get_field('mpesa_receipt_number').max_length]
+
     # Extract all name components from Safaricom C2B payload
     first_name = (payload.get('FirstName') or '').strip()
     middle_name = (payload.get('MiddleName') or '').strip()
     last_name = (payload.get('LastName') or '').strip()
     full_name = ' '.join(filter(None, [first_name, middle_name, last_name]))
+    full_name = full_name[:Contribution._meta.get_field('donor_name').max_length]
 
     msisdn = safe_mpesa_phone(payload.get('MSISDN'))
     amount_raw = payload.get('TransAmount', 0)
@@ -4534,6 +4544,7 @@ def record_direct_paybill_payment(payload):
         amount = Decimal('0')
 
     purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
+    purpose = purpose[:Contribution._meta.get_field('purpose').max_length]
 
     # Check if already recorded
     # A split STK gift shares one receipt number across its account lines;

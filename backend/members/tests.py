@@ -607,6 +607,39 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.phone_number, '254792007989')
         self.assertEqual(contribution.status, 'completed')
 
+    def test_c2b_overlong_text_fields_are_trimmed_not_fatal(self):
+        # The MSISDN overflow was one instance of a wider rule: every string
+        # column the save touches is bounded, and anything past its width
+        # would 500 the callback and drop the gift. The free-text fields
+        # Safaricom echoes back — reference, sender name, transaction id —
+        # must be trimmed to their columns instead, and the money held for
+        # the treasurer when the trimmed reference names no account.
+        payload = {
+            'TransID': 'L' * 100,
+            'TransAmount': '10.00',
+            'BillRefNumber': 'x' * 200,
+            'MSISDN': '254712345678',
+            'FirstName': 'N' * 100,
+            'LastName': 'M' * 100,
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        contribution = Contribution.objects.get()
+        self.assertEqual(len(contribution.mpesa_receipt_number), 64)
+        self.assertEqual(len(contribution.purpose), 120)
+        self.assertEqual(len(contribution.donor_name), 160)
+        self.assertEqual(contribution.status, 'completed')
+        # The trimmed reference matches no treasury account, so the gift is
+        # recorded and held — never credited to nothing, never lost.
+        self.assertTrue(contribution.needs_review)
+
+        # A re-delivered confirmation finds the same row rather than failing.
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Contribution.objects.count(), 1)
+
     def test_c2b_confirmation_ignores_amounts_matching_no_receipt(self):
         # The old flow matched pending rows by phone and amount; there are no
         # pending rows anymore, and unknown confirmations must not adopt one.
