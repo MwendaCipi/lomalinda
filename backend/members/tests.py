@@ -7398,12 +7398,13 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
     A receipt saved without an email sat at "Receipt pending" forever: the
     resend refused (no destination), so the row promised a delivery nothing
-    could make. The treasurer — whose own entry the receipt is — may supply
-    the address on resend, which is kept on the row. Digital gifts keep their
-    stored, verified address: the finance desk cannot redirect them. A
-    digital gift with no address at all — a paybill payment Safaricom
-    reported with an obfuscated number, so no account matched — may be given
-    one the same way, because there is no stored address to protect.
+    could make. The treasurer — whose own entry the receipt is, and who
+    hears at the counter that "my email has changed" — may supply or
+    correct either contact on resend, and what is typed is kept on the
+    row. Digital gifts were once locked to their stored address; the desk
+    now corrects those too, while a gift whose Safaricom MSISDN came back
+    obfuscated (so no account matched) can finally be given the address
+    the desk knows.
     """
 
     def setUp(self):
@@ -7481,9 +7482,10 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(mail.outbox[0].to, ['already@example.com'])
 
-    def test_a_digital_gift_cannot_be_redirected_by_the_desk(self):
-        """The desk's typed address is ignored: a digital gift's receipt goes
-        to the giver's own stored address, never to a third party."""
+    def test_a_digital_gift_address_can_be_corrected_at_the_desk(self):
+        """The desk's typed address replaces the stored one and is kept on
+        the row: the giver says "my email has changed" at the counter, and
+        the correction must hold for this resend and every later one."""
         from django.core import mail
 
         giver = User.objects.create_user('rr.giver', 'rr.giver@example.com', 'ChurchPass#2026')
@@ -7495,12 +7497,15 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
         response = self.client.post(
             '/api/members/treasury/resend-receipt/',
-            {'source': 'digital', 'id': contribution.id, 'email': 'someone.else@example.com'},
+            {'source': 'digital', 'id': contribution.id, 'email': 'new.address@example.com'},
             format='json',
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertEqual(mail.outbox[0].to, ['rr.giver@example.com'])
+        self.assertEqual(mail.outbox[0].to, ['new.address@example.com'])
+        contribution.refresh_from_db()
+        self.assertEqual(contribution.donor_email, 'new.address@example.com')
+        self.assertIsNotNone(contribution.receipt_sent_at)
 
     def test_a_treasurer_can_finish_an_unattributed_digital_gift(self):
         """A pulled paybill payment whose Safaricom MSISDN was obfuscated
@@ -7550,6 +7555,77 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         contribution.refresh_from_db()
         self.assertEqual(contribution.donor_email, '')
         self.assertIsNone(contribution.receipt_sent_at)
+
+    @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
+    @patch('members.views.requests.post')
+    def test_the_phone_can_be_supplied_or_corrected_on_resend(self, sms_post):
+        """The SMS number is editable exactly like the email: entered when
+        the row has none, corrected when the one on file is stale — and the
+        corrected number goes on the row and out the gateway."""
+        sms_post.return_value.raise_for_status.return_value = None
+        contribution = Contribution.objects.create(
+            amount=Decimal('5.00'), giving_type='financial', purpose='lcb',
+            status='completed', payment_method='mpesa',
+            mpesa_receipt_number='PHNEDIT01', phone_number='',
+            donor_name='Phoneless Giver', donor_email='phoneless@example.com',
+        )
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': contribution.id, 'phone': '0712345678'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0712345678')
+        contribution.refresh_from_db()
+        self.assertEqual(contribution.phone_number, '0712345678')
+        self.assertIsNotNone(contribution.receipt_sent_at)
+
+    def test_a_junk_phone_is_refused_before_anything_is_sent(self):
+        from django.core import mail
+
+        contribution = Contribution.objects.create(
+            amount=Decimal('5.00'), giving_type='financial', purpose='lcb',
+            status='completed', payment_method='mpesa',
+            mpesa_receipt_number='PHNEDIT02', phone_number='254700000000',
+            donor_name='Some Giver', donor_email='some@example.com',
+        )
+        mail.outbox.clear()
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': contribution.id, 'phone': 'call-me-maybe'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone', response.data['detail'].lower())
+        self.assertEqual(mail.outbox, [])
+        contribution.refresh_from_db()
+        self.assertEqual(contribution.phone_number, '254700000000')
+        self.assertIsNone(contribution.receipt_sent_at)
+
+    @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
+    @patch('members.views.requests.post')
+    def test_a_cash_receipts_contacts_can_be_corrected_too(self, sms_post):
+        from django.core import mail
+
+        sms_post.return_value.raise_for_status.return_value = None
+        cash = self._cash(giver_phone='0791000746', giver_email='old@example.com')
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'email': 'new@example.com', 'phone': '0722000111'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(mail.outbox[0].to, ['new@example.com'])
+        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0722000111')
+        cash.refresh_from_db()
+        self.assertEqual(cash.giver_email, 'new@example.com')
+        self.assertEqual(cash.giver_phone, '0722000111')
+        self.assertIsNotNone(cash.receipt_sent_at)
 
     @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
     @patch('members.views.requests.post')

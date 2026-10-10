@@ -450,11 +450,11 @@ export default function ReconciliationPage() {
 
   const handleResendReceipt = async (giving: IndividualGiving) => {
     // One dialog for every resend: pick the channel — email, SMS, or both,
-    // both on by default. A receipt saved without the giver's address — a
-    // desk entry, or a paybill payment Safaricom reported with an obfuscated
-    // number that matched no account — also asks for it here, so the desk can
-    // finish a receipt that would otherwise be stuck at "pending" forever.
-    const needsEmail = !giving.giver_email;
+    // both on by default — with the giver's contacts shown and editable.
+    // The desk hears "my email has changed" at the counter, and a pulled
+    // paybill gift can carry no contacts at all (Safaricom obfuscates the
+    // number); either way what is typed here goes on the row, so the
+    // correction holds for this resend and every later one.
     const escape = (value: string) =>
       value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const result = await showAlert("Resend receipt", "", "question", {
@@ -464,10 +464,11 @@ export default function ReconciliationPage() {
           <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="resend-channel-email" checked style="width:16px;height:16px" /> Email
           </label>
+          <input id="resend-email-value" class="swal2-input" style="margin-top:0" placeholder="name@example.com" value="${escape(giving.giver_email || "")}" />
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="resend-channel-sms" checked style="width:16px;height:16px" /> SMS
           </label>
-          ${needsEmail ? '<input id="resend-email-value" class="swal2-input" style="margin-top:14px" placeholder="name@example.com" />' : ""}
+          <input id="resend-phone-value" class="swal2-input" style="margin-top:0" placeholder="07XXXXXXXX" value="${escape(giving.giver_phone || "")}" />
         </div>
       `,
       showCancelButton: true,
@@ -480,12 +481,11 @@ export default function ReconciliationPage() {
           Swal.showValidationMessage("Select email, SMS, or both.");
           return false;
         }
-        const typedEmail = needsEmail
-          ? ((document.getElementById("resend-email-value") as HTMLInputElement | null)?.value || "").trim()
-          : "";
-        if (useEmail && needsEmail) {
+        const typedEmail = ((document.getElementById("resend-email-value") as HTMLInputElement | null)?.value || "").trim();
+        const typedPhone = ((document.getElementById("resend-phone-value") as HTMLInputElement | null)?.value || "").trim();
+        if (useEmail) {
           if (!typedEmail) {
-            Swal.showValidationMessage("This giver has no email on file — enter one to send by email.");
+            Swal.showValidationMessage("Enter the email address to send the receipt to.");
             return false;
           }
           if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(typedEmail)) {
@@ -493,14 +493,24 @@ export default function ReconciliationPage() {
             return false;
           }
         }
+        if (useSms) {
+          const digits = typedPhone.replace(/\D/g, "");
+          if (!typedPhone || digits.length < 9 || digits.length > 15) {
+            Swal.showValidationMessage("Enter a valid phone number — 9 to 15 digits.");
+            return false;
+          }
+        }
         return {
           channels: [...(useEmail ? ["email"] : []), ...(useSms ? ["sms"] : [])],
           email: typedEmail,
+          phone: typedPhone,
         };
       },
     });
     if (!result.isConfirmed || !result.value) return;
-    const { channels, email: suppliedEmail } = result.value as { channels: string[]; email: string };
+    const { channels, email: suppliedEmail, phone: suppliedPhone } = result.value as {
+      channels: string[]; email: string; phone: string;
+    };
 
     setResendingId(giving.id);
     try {
@@ -512,6 +522,7 @@ export default function ReconciliationPage() {
           id: giving.raw_id,
           channels,
           ...(suppliedEmail ? { email: suppliedEmail } : {}),
+          ...(suppliedPhone ? { phone: suppliedPhone } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -519,12 +530,16 @@ export default function ReconciliationPage() {
         showAlert("Could not resend receipt", data.detail || "The receipt could not be resent.", "error");
         return;
       }
+      // Corrected contacts are kept on the row even when a channel refused
+      // to send, so the list shows what the ledger now holds either way.
+      const contactPatch = {
+        ...(suppliedEmail ? { giver_email: suppliedEmail } : {}),
+        ...(suppliedPhone ? { giver_phone: suppliedPhone } : {}),
+      };
       if (data.sent) {
         showAlert("Receipt sent", data.detail || "Receipt resent successfully.", "success");
         setMessage("");
-        const nowStr = data.receipt_sent_at || new Date().toISOString();
-        // The address supplied for an addressless receipt is now on the row.
-        const patch = { receipt_sent_at: nowStr, ...(suppliedEmail ? { giver_email: suppliedEmail } : {}) };
+        const patch = { receipt_sent_at: data.receipt_sent_at || new Date().toISOString(), ...contactPatch };
         setPurposeGivings((prev) => {
           const currentList = prev[giving.purpose] || [];
           const updated = currentList.map((g) => (g.id === giving.id ? { ...g, ...patch } : g));
@@ -533,6 +548,14 @@ export default function ReconciliationPage() {
         setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...patch } : g)));
       } else {
         showAlert("Receipt not sent", data.detail || "Nothing was sent.", "warning");
+        if (Object.keys(contactPatch).length > 0) {
+          setPurposeGivings((prev) => {
+            const currentList = prev[giving.purpose] || [];
+            const updated = currentList.map((g) => (g.id === giving.id ? { ...g, ...contactPatch } : g));
+            return { ...prev, [giving.purpose]: updated };
+          });
+          setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...contactPatch } : g)));
+        }
       }
     } catch {
       showAlert("Could not resend receipt", "Network error. Please try again.", "error");
