@@ -55,12 +55,16 @@ export function writeGivingsVisibility(next: boolean): void {
 }
 
 /** One money row from /members/contributions/ — the label givers read and the
-    short account name M-Pesa shows. */
+    short account name M-Pesa shows. A gift given FOR someone carries the
+    honoree's name and the relationship, so a spouse's tithe reads as such on
+    both records it lands on. */
 type MyGiving = {
   id: number;
   amount: string | number;
   currency?: string;
   purpose: string;
+  honoree_name?: string;
+  relationship?: string;
   payment_method: string;
   status: string;
   mpesa_receipt_number?: string;
@@ -250,7 +254,7 @@ export function MyGivings() {
     const status = (g.status || "").toLowerCase();
     if (statusFilter === "successful" && status !== "completed") continue;
     if (statusFilter === "failed" && status !== "failed" && status !== "cancelled") continue;
-    if (q && !`${g.purpose} ${g.payment_method} ${g.mpesa_receipt_number || ""}`.toLowerCase().includes(q)) continue;
+    if (q && !`${g.purpose} ${g.honoree_name || ""} ${g.payment_method} ${g.mpesa_receipt_number || ""}`.toLowerCase().includes(q)) continue;
     entries.push({ key: `m-${g.id}`, kind: "money", day, at: g.paid_at || g.created_at || "", gift: g });
   }
   for (const r of inKind) {
@@ -377,6 +381,12 @@ export function MyGivings() {
                   </>
                 )}
               </p>
+              {g.honoree_name && (
+                <p className="mt-0.5 text-[11px] font-semibold text-ember">
+                  For {g.honoree_name}
+                  {g.relationship ? ` · your ${g.relationship}` : ""}
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <p className="whitespace-nowrap text-sm font-bold text-ember">KES {Number(g.amount || 0).toLocaleString()}</p>

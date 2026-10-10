@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -1001,6 +1001,69 @@ class UnassignedPaymentsApiTests(APITestCase):
             ).status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_assign_splits_payment_across_multiple_accounts(self):
+        tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', account_type='mobile_money')
+        combined = TreasuryAccount.objects.create(name='CombinedOffering', description='Combined Offering', account_type='mobile_money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {
+                'allocations': [
+                    {'account_id': tithe.id, 'amount': '200.00'},
+                    {'account_id': combined.id, 'amount': '150.00'},
+                ]
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Credited across 2 account(s)', response.data['detail'])
+        self.assertEqual(len(response.data['accounts']), 2)
+
+        self.held.refresh_from_db()
+        self.assertFalse(self.held.needs_review)
+        from .models import TreasuryAccountTransaction
+        credits = TreasuryAccountTransaction.objects.filter(reference='HELD99PAY1')
+        self.assertEqual(credits.count(), 2)
+        self.assertEqual(credits.filter(account=tithe).first().amount, Decimal('200.00'))
+        self.assertEqual(credits.filter(account=combined).first().amount, Decimal('150.00'))
+
+        # A second press refuses — already assigned.
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'allocations': [{'account_id': tithe.id, 'amount': '350.00'}]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already been assigned', response.data['detail'])
+
+        # Amounts that don't add up are rejected before anything is credited.
+        another = TreasuryAccount.objects.create(name='AYM2', description='AYM 2', account_type='mobile_money')
+        fresh = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='HELD99PAY2', amount=Decimal('350.00'),
+            purpose='charity drive', phone_number='254701000202', needs_review=True,
+            paid_at=timezone.now(),
+        )
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{fresh.id}/assign/',
+            {'allocations': [{'account_id': another.id, 'amount': '100.00'}]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('must add up', response.data['detail'])
+
+    def test_assign_single_account_still_works_for_backwards_compatibility(self):
+        account = TreasuryAccount.objects.create(name='LCB', description='Local Church Budget', account_type='mobile_money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'account_id': account.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.held.refresh_from_db()
+        self.assertFalse(self.held.needs_review)
 
 
 class RegisterMpesaC2BUrlsCommandTests(TestCase):
@@ -6871,6 +6934,49 @@ class TreasuryAutoCreditTests(APITestCase):
         self.assertEqual(self.tithe.balance, Decimal('3500.00'))
         self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
 
+    def test_c2b_confirmation_for_a_receipt_already_used_by_a_split_stk_gift_creates_no_duplicate(self):
+        # A giver split one STK payment across Tithe and Combined Offering — the
+        # STK callback creates two rows sharing one receipt number and a
+        # payment_group. If Safaricom also delivers that same transaction as a
+        # C2B confirmation (or a pull re-encounters it), the recorder must find
+        # the existing gift and not create a third row — the old check only
+        # looked for an unsplit row, so a split gift whose receipt number then
+        # arrived via C2B produced a duplicate. The names on the two paths can
+        # differ (the giver typed "Rehema" on the form, Safaricom recorded
+        # "Rehema Moraa" in the C2B payload), which is what surfaces as two
+        # givings with different name spellings in the member's record.
+        #
+        # Use the STK callback to create the split gift the way the app really
+        # does — that credits through credit_contribution_lines and avoids any
+        # model-level quirks that direct Contribution.objects.create() can hit.
+        group_id = uuid.uuid4()
+        self._callback({
+            'amount': '500.00', 'purpose': 'Tithe', 'phone_number': '254712345678',
+            'allocations': [
+                {'purpose': 'Tithe', 'account': 'Tithe', 'amount': '300.00'},
+                {'purpose': 'Combined Offering', 'account': 'CombinedOff', 'amount': '200.00'},
+            ],
+        }, checkout_id='ws_CO_split')
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 2)
+
+        # Replay the same STK result as a C2B confirmation carrying the same
+        # receipt number. The C2B path reads the receipt from CallbackMetadata
+        # but here we force it to the same value the STK callback wrote, so the
+        # dedup check sees an existing split gift.
+        payload = {
+            'TransID': 'SAA9QKAUTO', 'TransAmount': '500.00', 'BillRefNumber': 'Tithe',
+            'MSISDN': '254712345678', 'FirstName': 'Rehema', 'LastName': 'Moraa',
+        }
+        tx_before = TreasuryAccountTransaction.objects.count()
+        response = self.client.post('/api/members/payments/mpesa/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Still exactly two rows sharing this receipt — no duplicate created.
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 2,
+                         'C2B confirmation for an already-recorded split gift must not create a duplicate row.')
+        # The C2B path credits only new records, so no new treasury transaction.
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), tx_before,
+                         'C2B confirmation for an already-recorded gift must not credit again.')
+
     # -- Paystack webhook --------------------------------------------------
 
     def test_paystack_success_credits_the_account(self):
@@ -11472,3 +11578,250 @@ class DepartmentRollRemovalTests(APITestCase):
             for holder in role.get('holders') or []
         ]
         self.assertNotIn(self.leader.get_username(), holders)
+
+
+class GiveForSomeoneTests(APITestCase):
+    """Giving in another member's name, and asking a member to give.
+
+    A gift may be given FOR someone: the payer stays the payer, the gift is
+    written on the honoree's record too, and their account hears about it by
+    letter. The mirror ask — requesting a person to give — is delivered to
+    their own address and closed by a gift made through its link.
+    """
+
+    INITIATE_URL = '/api/members/contributions/initiate/'
+    CALLBACK_URL = '/api/members/payments/mpesa/callback/'
+    SEARCH_URL = '/api/members/lookup/names/'
+    REQUESTS_URL = '/api/members/giving-requests/'
+
+    def setUp(self):
+        self.payer = User.objects.create_user('for.payer', 'for.payer@example.com', 'StrongPass#2026', first_name='Faith', last_name='Payer')
+        MemberProfile.objects.create(user=self.payer, role='member', roles='member')
+        self.spouse = User.objects.create_user('for.spouse', 'for.spouse@example.com', 'StrongPass#2026', first_name='Florence', last_name='Spouse')
+        MemberProfile.objects.create(user=self.spouse, role='member', roles='member')
+
+    def _callback_payload(self, checkout_id='ws_CO_FOR'):
+        return {
+            'Body': {
+                'stkCallback': {
+                    'MerchantRequestID': '29115-34620561-9',
+                    'CheckoutRequestID': checkout_id,
+                    'ResultCode': 0,
+                    'CallbackMetadata': {
+                        'Item': [
+                            {'Name': 'Amount', 'Value': 500.00},
+                            {'Name': 'MpesaReceiptNumber', 'Value': 'FOR001A'},
+                            {'Name': 'PhoneNumber', 'Value': 254712345678},
+                            {'Name': 'FirstName', 'Value': 'Faith'},
+                        ]
+                    },
+                }
+            }
+        }
+
+    def test_a_bank_gift_for_a_member_lands_on_their_record_and_letters_them(self):
+        mail.outbox.clear()
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+            'relationship': 'spouse',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        gift = Contribution.objects.get()
+        # The payer's own record keeps the gift — the money left their hands.
+        self.assertEqual(gift.member, self.payer)
+        # And it is written on the honoree's record too.
+        self.assertEqual(gift.honoree, self.spouse)
+        self.assertEqual(gift.relationship, 'spouse')
+        self.assertEqual(gift.honoree_name, 'Florence Spouse')
+        # The honoree's letter goes to their own account address.
+        self.assertTrue(any(self.spouse.email in message.to for message in mail.outbox))
+        honoree_letters = [m for m in mail.outbox if self.spouse.email in m.to]
+        self.assertIn('Florence', honoree_letters[0].body)
+        self.assertIn('spouse', honoree_letters[0].body)
+        self.assertIn('500.00', honoree_letters[0].body)
+        self.assertIsNotNone(gift.honoree_receipt_sent_at)
+
+    def test_a_gift_for_someone_without_a_relationship_is_refused(self):
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('relationship', str(response.data))
+        self.assertEqual(Contribution.objects.count(), 0)
+
+    def test_a_name_alone_carries_the_gift_when_no_account_matches(self):
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Combined Offering', 'amount': '300.00'}],
+            'phone_number': '',
+            'honoree_name': 'Auntie Mercy',
+            'relationship': 'other',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        gift = Contribution.objects.get()
+        self.assertIsNone(gift.honoree)
+        self.assertEqual(gift.honoree_name, 'Auntie Mercy')
+        self.assertEqual(gift.relationship, 'other')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_an_mpesa_gift_for_someone_carries_them_through_the_push(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'mpesa',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '0712345678',
+            'honoree_id': self.spouse.pk,
+            'relationship': 'spouse',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Nothing is written before the money arrives — the honoree rides
+        # the signed context like everything else.
+        self.assertEqual(Contribution.objects.count(), 0)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        self.assertEqual(context['honoree_id'], self.spouse.pk)
+        self.assertEqual(context['honoree_name'], 'Florence Spouse')
+        self.assertEqual(context['relationship'], 'spouse')
+
+    def test_the_callback_writes_the_honoree_and_letters_them(self):
+        mail.outbox.clear()
+        from .mpesa_tokens import pack_callback_context
+        context = {
+            'amount': '500.00',
+            'purpose': 'Tithe',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '254712345678',
+            'honoree_id': self.spouse.pk,
+            'honoree_name': 'Florence Spouse',
+            'relationship': 'spouse',
+        }
+        token = pack_callback_context(context)
+        response = self.client.post(f'{self.CALLBACK_URL}?ctx={token}', self._callback_payload(), format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        gift = Contribution.objects.get()
+        self.assertEqual(gift.honoree, self.spouse)
+        self.assertEqual(gift.relationship, 'spouse')
+        self.assertTrue(any(self.spouse.email in message.to for message in mail.outbox))
+
+    def test_an_anonymous_gift_for_someone_letters_them_without_naming_the_giver(self):
+        mail.outbox.clear()
+        self.client.force_authenticate(self.payer)
+        self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Combined Offering', 'amount': '200.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'anonymous': True,
+        }, format='json')
+
+        gift = Contribution.objects.get()
+        honoree_letters = [m for m in mail.outbox if self.spouse.email in m.to]
+        self.assertTrue(honoree_letters)
+        # The letter honours without betraying: no payer's name anywhere.
+        self.assertNotIn('Faith', honoree_letters[0].body)
+        self.assertIn('A gift has been given for you', honoree_letters[0].body)
+        # And no honoree's letter goes out twice.
+        sent_at = gift.honoree_receipt_sent_at
+        from .views import send_honoree_receipt
+        send_honoree_receipt(gift)
+        gift.refresh_from_db()
+        self.assertEqual(gift.honoree_receipt_sent_at, sent_at)
+
+    def test_the_name_search_needs_a_session_and_names_no_ones_address(self):
+        # The roll is a member's to read, never the public's.
+        response = self.client.get(f'{self.SEARCH_URL}?q=flo')
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+        self.client.force_authenticate(self.payer)
+        response = self.client.get(f'{self.SEARCH_URL}?q=floren')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['name'] for row in response.data['matches']], ['Florence Spouse'])
+        # A search result is a name to pick, not a contact card to harvest.
+        self.assertEqual(set(response.data['matches'][0].keys()), {'id', 'name'})
+
+    def test_a_request_is_delivered_to_the_targets_own_address_and_closed_by_a_gift(self):
+        mail.outbox.clear()
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'message': 'Please give the budget offering this month.',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        giving_request = GivingRequest.objects.get()
+        self.assertEqual(giving_request.requester, self.payer)
+        self.assertEqual(giving_request.target, self.spouse)
+        # Delivered to the target's own account address — the form never
+        # names where it goes.
+        self.assertTrue(any(self.spouse.email in message.to for message in mail.outbox))
+        letter = [m for m in mail.outbox if self.spouse.email in m.to][0]
+        self.assertIn('Faith', letter.body)
+        self.assertIn('/give?request=', letter.body)
+        # The bell rings too.
+        self.assertTrue(ChurchNotification.objects.filter(user=self.spouse, link=f'/give?request={giving_request.pk}').exists())
+
+        # A gift made through the request's own link closes it.
+        self.client.force_authenticate(self.spouse)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Local Church Budget', 'amount': '1000.00'}],
+            'phone_number': '',
+            'giving_request_id': giving_request.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        giving_request.refresh_from_db()
+        self.assertEqual(giving_request.status, 'fulfilled')
+        self.assertIsNotNone(giving_request.fulfilled_at)
+
+    def test_a_member_may_not_ask_themselves_and_a_strangers_id_is_refused(self):
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.payer.pk,
+            'relationship': 'friend',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(GivingRequest.objects.count(), 0)
+
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': 999999,
+            'relationship': 'friend',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_the_requests_link_tells_the_recipient_what_was_asked(self):
+        self.client.force_authenticate(self.payer)
+        self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'sibling',
+            'message': 'Kindly give towards camp.',
+        }, format='json')
+        giving_request = GivingRequest.objects.get()
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f'{self.REQUESTS_URL}{giving_request.pk}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['requester_name'], 'Faith Payer')
+        self.assertEqual(response.data['relationship_display'], 'Sibling')
+        self.assertEqual(response.data['status'], 'pending')

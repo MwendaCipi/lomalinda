@@ -2,7 +2,7 @@
 
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Landmark, Smartphone, X } from "lucide-react";
+import { ChevronDown, Landmark, Search, Smartphone, UserRound, X } from "lucide-react";
 import { localDate } from "@/lib/dates";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -25,6 +25,101 @@ const defaultPurposes = [
 ];
 
 type MethodOfGiving = "mpesa" | "bank_transfer";
+
+/** How the person a gift is for (or asked to give) relates to the one
+    giving or asking. The church's short list — anything rarer is Other. */
+const relationships = [
+  { value: "spouse", label: "Spouse" },
+  { value: "sibling", label: "Sibling" },
+  { value: "child", label: "Child" },
+  { value: "friend", label: "Friend" },
+  { value: "other", label: "Other" },
+];
+
+/** One person from the roll: an account id when the picker found them, and
+    always the name the gift should read. */
+type PickedPerson = { id?: number; name: string };
+
+/** The person field both new modals share: search the roll while a session
+    lasts, fall back to the name typed alone for a visitor. */
+function PersonField({
+  signedIn, query, matches, picked, onQuery, onPick,
+}: {
+  signedIn: boolean;
+  query: string;
+  matches: { id: number; name: string }[];
+  picked: PickedPerson | null;
+  onQuery: (value: string) => void;
+  onPick: (person: PickedPerson) => void;
+}) {
+  if (picked) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-ember/40 bg-mist-select px-4 py-3 text-sm">
+        <UserRound size={16} className="shrink-0 text-ember" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate font-semibold text-bark">{picked.name}</span>
+        <button
+          type="button"
+          onClick={() => onQuery("")}
+          aria-label="Choose someone else"
+          className="shrink-0 rounded-lg p-1 text-moss transition hover:text-ember"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-moss" aria-hidden="true" />
+      <input
+        type="text"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+        placeholder={signedIn ? "Type a name from the roll…" : "Their name, as the gift should read…"}
+        className="w-full rounded-xl border border-sand-mute py-3 pl-10 pr-4 text-sm outline-none focus:border-ember"
+      />
+      {matches.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-40 mt-1.5 max-h-52 overflow-y-auto rounded-2xl border border-sand-line bg-white p-2 shadow-xl">
+          {matches.map((person) => (
+            <button
+              key={person.id}
+              type="button"
+              onClick={() => onPick(person)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-moss-dark transition hover:bg-sand hover:text-bark"
+            >
+              <UserRound size={14} className="shrink-0 text-moss" aria-hidden="true" />
+              <span className="min-w-0 truncate">{person.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!signedIn && (
+        <p className="mt-1.5 text-[11px] text-moss">
+          Sign in to search the roll by name. A member in our system receives their letter by email.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The relationship choice both modals carry. */
+function RelationshipField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="block text-sm font-medium text-bark">
+      Relationship
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+      >
+        <option value="">-- select --</option>
+        {relationships.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /** One row from /giving-accounts/: the label givers read and the short account name M-Pesa shows. */
 type GivingAccountOption = {
@@ -99,6 +194,134 @@ function GivePageContent() {
   // Giving form modal (opened via Give Now or a ?purpose= deep link)
   const [showGiveModal, setShowGiveModal] = useState(false);
 
+  // ── Giving for someone, and asking someone to give ─────────────────────
+  // Both begin the same way — the person, and how they relate — and part
+  // ways at the end: one is a gift written on that person's record too, the
+  // other is a letter asking them to give one.
+  const [showForModal, setShowForModal] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [honoree, setHonoree] = useState<{ id?: number; name: string; relationship: string } | null>(null);
+  const [personQuery, setPersonQuery] = useState("");
+  const [personMatches, setPersonMatches] = useState<{ id: number; name: string }[]>([]);
+  const [pickedPerson, setPickedPerson] = useState<PickedPerson | null>(null);
+  const [forRelationship, setForRelationship] = useState("");
+  const [requestRelationship, setRequestRelationship] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [sendingRequest, setSendingRequest] = useState(false);
+  // A request arrived by its own link: this gift, if made through it, closes
+  // that request. Fetched from the id in the address bar.
+  const [askingRequest, setAskingRequest] = useState<{ id: number; requesterName: string; message: string } | null>(null);
+
+  /** Debounced roll search. The timer lives in a ref and the fetching is
+      done here rather than in an effect: a keystroke schedules the search,
+      the previous one is cancelled, and nothing sets state while rendering
+      settles. A visitor has no session to search with, so their typing only
+      ever fills the name. */
+  const searchTimer = useRef<number | null>(null);
+  const searchPerson = (raw: string) => {
+    setPersonQuery(raw);
+    setPickedPerson(null);
+    if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    const query = raw.trim();
+    if (query.length < 2 || !signedIn) {
+      setPersonMatches([]);
+      return;
+    }
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setPersonMatches([]);
+      return;
+    }
+    searchTimer.current = window.setTimeout(() => {
+      fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : { matches: [] }))
+        .then((data) => setPersonMatches(Array.isArray(data.matches) ? data.matches : []))
+        .catch(() => setPersonMatches([]));
+    }, 250);
+  };
+
+  const pickPerson = (person: PickedPerson) => {
+    setPickedPerson(person);
+    setPersonQuery(person.name);
+    setPersonMatches([]);
+  };
+
+  const resetPersonField = () => {
+    setPickedPerson(null);
+    setPersonQuery("");
+    setPersonMatches([]);
+    setForRelationship("");
+    setRequestRelationship("");
+    setRequestMessage("");
+  };
+
+  const openForModal = () => {
+    resetPersonField();
+    setShowForModal(true);
+  };
+
+  const openRequestModal = () => {
+    resetPersonField();
+    setShowRequestModal(true);
+  };
+
+  // A request's own link opens the giving form with the ask waiting on it:
+  // the recipient reads who asked before deciding anything.
+  const rawRequestParam = searchParams.get("request");
+  useEffect(() => {
+    if (!rawRequestParam) return;
+    fetch(`${API_URL}/api/members/giving-requests/${rawRequestParam}/`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.status === "pending") {
+          setAskingRequest({ id: data.id, requesterName: data.requester_name, message: data.message || "" });
+          setShowGiveModal(true);
+        }
+      })
+      .catch(() => {});
+  }, [rawRequestParam]);
+
+  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) {
+      showAlert("Sign in first", "Only a member can ask another member to give — the request carries your name.", "warning");
+      return;
+    }
+    const targetId = pickedPerson?.id;
+    if (!targetId) {
+      showAlert("Choose the person", "Pick the one you are asking from the list as you type their name.", "warning");
+      return;
+    }
+    if (!requestRelationship) {
+      showAlert("Relationship needed", "Say how they relate to you — spouse, sibling, child, friend or other.", "warning");
+      return;
+    }
+    setSendingRequest(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/giving-requests/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          target_id: targetId,
+          relationship: requestRelationship,
+          message: requestMessage.trim(),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || Object.values(data).flat().join(" ") || "The request could not be sent.");
+      }
+      setShowRequestModal(false);
+      showAlert("Request sent", data.detail || "Your request has been sent.", "success");
+    } catch (error) {
+      showAlert("Request failed", error instanceof Error ? error.message : "Unable to send the request.", "error");
+    } finally {
+      setSendingRequest(false);
+    }
+  }
 
   // ── Who is giving ────────────────────────────────────────────────────────────
   // The record itself lives on its own route now (/member/givings, linked
@@ -343,6 +566,18 @@ function GivePageContent() {
         // The stamp that keeps this gift off the giver's own record: the
         // backend drops the name and email when it sees it.
         ...(anonymous ? { anonymous: true } : {}),
+        // A gift given FOR someone: the account the picker found (or the
+        // name alone for a visitor) and how they relate to the giver. The
+        // person in our system receives their letter by email.
+        ...(honoree
+          ? {
+              ...(honoree.id ? { honoree_id: honoree.id } : {}),
+              honoree_name: honoree.name,
+              relationship: honoree.relationship,
+            }
+          : {}),
+        // A gift made through a request's own link closes that request.
+        ...(askingRequest ? { giving_request_id: askingRequest.id } : {}),
       };
       // Neither name nor email rides the payload: a signed-in gift is recorded
       // against the member's account, and an anonymous one against the phone
@@ -427,11 +662,38 @@ function GivePageContent() {
               </p>
               <button
                 type="button"
-                onClick={() => setShowGiveModal(true)}
+                onClick={() => {
+                  // Give Now is the giver's own gift; the honoree travels
+                  // only through "Give for someone". A request's link keeps
+                  // its ask attached, which is exactly why it was opened.
+                  setHonoree(null);
+                  setShowGiveModal(true);
+                }}
                 className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
               >
                 Give Now
               </button>
+              {/* The two ways giving reaches past oneself: honour someone
+                  with a gift, or ask someone to give one. */}
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHonoree(null);
+                    openForModal();
+                  }}
+                  className="rounded-full border border-ember/50 bg-white px-6 py-2.5 text-sm font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
+                >
+                  Give for someone
+                </button>
+                <button
+                  type="button"
+                  onClick={openRequestModal}
+                  className="rounded-full border border-sand-line bg-white px-6 py-2.5 text-sm font-semibold text-moss-dark transition hover:border-bark hover:text-bark"
+                >
+                  Request for someone
+                </button>
+              </div>
               {signedIn && (
                 <Link href="/member/givings" className="text-xs font-semibold text-ember hover:underline">
                   View my givings
@@ -521,7 +783,9 @@ function GivePageContent() {
               <div>
                 {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
                 <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
-                <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
+                <h3 id="give-modal-title" className="text-lg font-bold text-bark">
+                  {honoree ? "Give for someone" : "Give Now"}
+                </h3>
               </div>
               <button
                 type="button"
@@ -532,6 +796,42 @@ function GivePageContent() {
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
+
+            {/* Who this gift is for, and who asked for it — named before
+                the money is, so the record and the letter agree. */}
+            {honoree && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-ember/30 bg-mist-select px-4 py-3">
+                <UserRound size={16} className="mt-0.5 shrink-0 text-ember" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-bark">For {honoree.name}</p>
+                  <p className="text-[11px] text-moss">
+                    Your {relationships.find((option) => option.value === honoree.relationship)?.label.toLowerCase() || honoree.relationship}
+                    {honoree.id ? " — in our system, so their letter goes by email." : "."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHonoree(null)}
+                  aria-label="Give for myself instead"
+                  className="shrink-0 rounded-lg p-1 text-moss transition hover:text-ember"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+            )}
+            {askingRequest && (
+              <div className="mt-4 rounded-2xl border border-sage-strong/40 bg-sage-strong/10 px-4 py-3 text-sm text-bark">
+                <p className="font-semibold">
+                  {askingRequest.requesterName} has asked you to give.
+                </p>
+                {askingRequest.message && (
+                  <p className="mt-1 break-words text-xs text-moss">&ldquo;{askingRequest.message}&rdquo;</p>
+                )}
+                <p className="mt-1 text-[11px] text-moss">
+                  A gift through this form closes their request. Nothing here is a debt.
+                </p>
+              </div>
+            )}
 
             <form
               id="give-form"
@@ -780,6 +1080,144 @@ function GivePageContent() {
                   {submitButtonText}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Give for someone modal ──
+          The person and the relationship come first; the rest of the form
+          is the same one Give Now opens, carrying them along. */}
+      {showForModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="for-modal-title"
+            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+          >
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <div>
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
+                <h3 id="for-modal-title" className="text-lg font-bold text-bark">Give for someone</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForModal(false)}
+                className="text-xl leading-none text-moss hover:text-bark"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm text-moss">
+              A gift in another member&apos;s name is written on their record too, and
+              they receive their letter by email — a spouse&apos;s tithe counts on the
+              spouse&apos;s statement.
+            </p>
+
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const name = (pickedPerson?.name || personQuery).trim();
+                if (!name) {
+                  showAlert("Name needed", "Type the name of the person this gift is for.", "warning");
+                  return;
+                }
+                if (!forRelationship) {
+                  showAlert("Relationship needed", "Say how they relate to you — spouse, sibling, child, friend or other.", "warning");
+                  return;
+                }
+                setHonoree({ id: pickedPerson?.id, name, relationship: forRelationship });
+                setShowForModal(false);
+                setShowGiveModal(true);
+              }}
+            >
+              <div>
+                <p className="mb-2 text-sm font-medium text-bark">Who is it for?</p>
+                <PersonField
+                  signedIn={signedIn}
+                  query={personQuery}
+                  matches={personMatches}
+                  picked={pickedPerson}
+                  onQuery={searchPerson}
+                  onPick={pickPerson}
+                />
+              </div>
+              <RelationshipField value={forRelationship} onChange={setForRelationship} />
+              <button
+                disabled={loading}
+                className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
+              >
+                Continue to the gift
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Request for someone modal ──
+          A member asks a member: the request carries the asker's name, so
+          only a session may send one, and it arrives at the target's own
+          address. */}
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-modal-title"
+            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+          >
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <div>
+                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
+                <h3 id="request-modal-title" className="text-lg font-bold text-bark">Request for someone</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRequestModal(false)}
+                disabled={sendingRequest}
+                className="text-xl leading-none text-moss hover:text-bark"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm text-moss">
+              Ask a member to give — by email, carrying your name and theirs. A
+              request is an invitation, never a debt.
+            </p>
+
+            <form onSubmit={submitRequest} className="mt-5 space-y-4">
+              <div>
+                <p className="mb-2 text-sm font-medium text-bark">Who are you asking?</p>
+                <PersonField
+                  signedIn={signedIn}
+                  query={personQuery}
+                  matches={personMatches}
+                  picked={pickedPerson}
+                  onQuery={searchPerson}
+                  onPick={pickPerson}
+                />
+              </div>
+              <RelationshipField value={requestRelationship} onChange={setRequestRelationship} />
+              <label className="block text-sm font-medium text-bark">
+                Message <span className="font-normal text-moss">(optional)</span>
+                <textarea
+                  value={requestMessage}
+                  onChange={(event) => setRequestMessage(event.target.value)}
+                  rows={3}
+                  placeholder="e.g. Please give the budget offering this month."
+                  className="mt-2 w-full resize-none rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
+                />
+              </label>
+              <button
+                disabled={sendingRequest}
+                className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
+              >
+                {sendingRequest ? "Sending…" : "Send the request"}
+              </button>
             </form>
           </div>
         </div>

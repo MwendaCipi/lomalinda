@@ -1057,6 +1057,18 @@ class ChurchEventMedia(models.Model):
         return f"{self.file.name} in {self.event.title}"
 
 
+# How the person a gift is given for (or asked to give) relates to the one
+# giving or asking. The list is short and church-shaped on purpose: anything
+# rarer reads as "Other" and the desk can ask.
+GIFT_RELATIONSHIP_CHOICES = [
+    ('spouse', 'Spouse'),
+    ('sibling', 'Sibling'),
+    ('child', 'Child'),
+    ('friend', 'Friend'),
+    ('other', 'Other'),
+]
+
+
 class Contribution(models.Model):
     GIVING_TYPE_CHOICES = [('financial', 'Financial')]
     STATUS_CHOICES = [('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')]
@@ -1091,6 +1103,22 @@ class Contribution(models.Model):
     )
     merchant_request_id = models.CharField(max_length=128, blank=True)
     paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    # A gift given FOR someone else: the payer stays the payer (the money
+    # left their phone and their statement shows it), but the gift is also
+    # written on the honoree's record and a letter goes to their account.
+    # ``honoree_name`` keeps the name as typed when the person holds no
+    # account — the relationship still tells the desk who they are.
+    honoree = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gifts_given_for',
+    )
+    honoree_name = models.CharField(max_length=160, blank=True)
+    relationship = models.CharField(max_length=20, choices=GIFT_RELATIONSHIP_CHOICES, blank=True)
+    honoree_receipt_sent_at = models.DateTimeField(null=True, blank=True)
+    # The giver asked not to be tied to the gift. Kept on the row rather than
+    # inferred from a blank name: the honoree's letter must never guess the
+    # payer from an account that anonymity merely left unblurred.
+    anonymous = models.BooleanField(default=False)
     paid_at = models.DateTimeField(null=True, blank=True)
     receipt_sent_at = models.DateTimeField(null=True, blank=True)
     # A paybill payment whose account reference matched no treasury account
@@ -1371,6 +1399,36 @@ class CampaignPledge(models.Model):
 
     def __str__(self):
         return f"{self.member} pledged {self.amount} to {self.campaign}"
+
+
+class GivingRequest(models.Model):
+    """A member's ask that another member give.
+
+    The mirror of giving for someone: instead of giving in a person's name,
+    you ask a person (a spouse, a sibling, a friend) to give in yours. The
+    request is delivered by email and kept here; when the person asked gives
+    through the link, the gift closes the request.
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('fulfilled', 'Fulfilled')]
+
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='giving_requests_made',
+    )
+    target = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='giving_requests_received',
+    )
+    relationship = models.CharField(max_length=20, choices=GIFT_RELATIONSHIP_CHOICES)
+    message = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.requester} asks {self.target} to give ({self.relationship})"
 
 
 class ChurchFinancialReport(models.Model):

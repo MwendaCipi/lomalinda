@@ -43,7 +43,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -470,6 +470,54 @@ def send_grouped_contribution_receipts(group):
     if delivery['email_sent'] or delivery['sms_sent']:
         Contribution.objects.filter(id__in=[row.id for row in completed]).update(receipt_sent_at=timezone.now())
     return delivery
+
+
+def send_honoree_receipt(contribution):
+    """The letter that tells the person a gift was given for them.
+
+    The payer's own receipt rides the phone they gave from; this one is
+    addressed to the honoree's account, because the gift is written on their
+    record too — a spouse's tithe counts on the spouse's statement. It goes
+    by email only: the phone on the payment is the payer's, not theirs. An
+    anonymous gift still honours its honoree, but the letter never says who
+    gave.
+    """
+    if contribution.honoree_receipt_sent_at or contribution.status != 'completed':
+        return
+    honoree = contribution.honoree
+    if honoree is None or not (honoree.email or '').strip():
+        return
+    amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
+    receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
+    date_display = timezone.localtime(contribution.paid_at or timezone.now()).strftime('%d %B %Y, %H:%M')
+    if contribution.anonymous:
+        giver_line = 'A gift has been given for you'
+    elif contribution.donor_name:
+        giver_line = f"{contribution.donor_name} has given this gift for you"
+    elif contribution.member_id:
+        given_by = contribution.member.get_full_name() or contribution.member.username
+        giver_line = f"{given_by} has given this gift for you"
+    else:
+        giver_line = 'A gift has been given for you'
+    relationship = (contribution.get_relationship_display() or '').lower()
+    as_your = f" as your {relationship}" if relationship else ''
+    body = (
+        f"Dear {honoree.get_full_name() or honoree.username},\n\n"
+        f"{giver_line}{as_your}: {amount_display} towards {contribution.purpose}.\n\n"
+        f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
+        "The gift is written on your giving record as well as the payer's.\n\n"
+        f"{receipt_email_signature()}"
+    )
+    sent = send_mail(
+        f"A gift has been given for you — {contribution.purpose}",
+        body,
+        settings.DEFAULT_FROM_EMAIL,
+        [honoree.email],
+        fail_silently=True,
+    )
+    if sent:
+        contribution.honoree_receipt_sent_at = timezone.now()
+        contribution.save(update_fields=['honoree_receipt_sent_at'])
 
 
 def send_cash_receipt(cash, *, send_sms=True, send_email=True):
@@ -2807,11 +2855,15 @@ class MyContributionsView(generics.ListAPIView):
         # failed M-Pesa attempts are terminal records of prompts that never
         # became money: they never read as pending and default views exclude
         # them, but the give page opts in with ?include_failed=1 for
-        # transparency.
+        # transparency. Gifts given FOR the member are part of their record
+        # too — a spouse's tithe counts on the spouse's statement.
         statuses = ['completed']
         if self.request.query_params.get('include_failed') in ('1', 'true'):
             statuses = ['completed', 'failed', 'cancelled']
-        return Contribution.objects.filter(member=self.request.user, status__in=statuses)
+        return Contribution.objects.filter(
+            Q(member=self.request.user) | Q(honoree=self.request.user),
+            status__in=statuses,
+        ).order_by('-created_at')
 
 
 class MemberThermalReceiptView(APIView):
@@ -2834,7 +2886,9 @@ class MemberThermalReceiptView(APIView):
 
         profile = getattr(request.user, 'member_profile', None)
         is_office = bool(profile and profile.has_role('admin', 'treasurer', 'elder'))
-        if row.member_id != request.user.id and not is_office:
+        # The honoree may fetch it too: the gift is written on their record,
+        # and the letter that told them so now needs the paper to match.
+        if row.member_id != request.user.id and row.honoree_id != request.user.id and not is_office:
             return Response({'detail': 'This receipt belongs to another giver.'}, status=status.HTTP_404_NOT_FOUND)
 
         # One payment may be several ledger lines (a split gift): every line
@@ -4210,7 +4264,13 @@ class InitiateContributionView(APIView):
             # blanked by the serializer, so nothing of the giver's is written
             # to the ledger — the phone it was paid from carries the gift.
             contribution = Contribution.objects.create(
-                member=request.user if request.user.is_authenticated else None,
+                # An anonymous gift is nobody's record: the phone it was paid
+                # from carries it, exactly as the callback path records it.
+                member=(
+                    request.user
+                    if request.user.is_authenticated and not serializer.validated_data.get('anonymous')
+                    else None
+                ),
                 amount=row['amount'],
                 giving_type=serializer.validated_data['giving_type'],
                 purpose=row['purpose'],
@@ -4220,6 +4280,11 @@ class InitiateContributionView(APIView):
                 item_description=serializer.validated_data.get('item_description', ''),
                 payment_method=method,
                 payment_group=group,
+                # A gift given for someone is also written on their record.
+                honoree=serializer.validated_data.get('honoree'),
+                honoree_name=serializer.validated_data.get('honoree_name', ''),
+                relationship=serializer.validated_data.get('relationship', ''),
+                anonymous=bool(serializer.validated_data.get('anonymous')),
             )
             if contribution.payment_method in ['cash', 'cheque', 'bank_transfer']:
                 contribution.status = 'completed'
@@ -4231,9 +4296,20 @@ class InitiateContributionView(APIView):
                 # here and now.
                 if not group:
                     send_contribution_receipt(contribution)
+                # The honoree's own letter never waits on the group: it is
+                # addressed to a different person than the payer's receipt.
+                send_honoree_receipt(contribution)
             created.append(contribution)
         if group and any(row.status == 'completed' for row in created):
             send_grouped_contribution_receipts(group)
+            for row in created:
+                send_honoree_receipt(row)
+        # A gift made through a request's own link closes that request.
+        giving_request = serializer.validated_data.get('giving_request')
+        if giving_request is not None and any(row.status == 'completed' for row in created):
+            giving_request.status = 'fulfilled'
+            giving_request.fulfilled_at = timezone.now()
+            giving_request.save(update_fields=['status', 'fulfilled_at'])
         # Cash, cheque and bank gifts recorded here are received money: their
         # accounts move now. (M-Pesa waits for Safaricom's callback, which
         # credits through the same door.)
@@ -4293,6 +4369,18 @@ class InitiateContributionView(APIView):
         item_description = (data.get('item_description') or '').strip()
         if item_description:
             context['item_description'] = item_description
+        # Giving for someone travels the same way: the callback writes the
+        # gift on the honoree's record and letters their account when the
+        # money lands — never before.
+        if data.get('honoree') is not None:
+            context['honoree_id'] = data['honoree'].pk
+        honoree_name = (data.get('honoree_name') or '').strip()
+        if honoree_name:
+            context['honoree_name'] = honoree_name
+        if data.get('relationship'):
+            context['relationship'] = data['relationship']
+        if data.get('giving_request') is not None:
+            context['giving_request_id'] = data['giving_request'].pk
         referral_token = request.data.get('referral_token') if isinstance(request.data, dict) else None
         if referral_token:
             context['referral_token'] = str(referral_token)
@@ -4478,6 +4566,11 @@ class MpesaCallbackView(APIView):
                 )
             receipt_number = metadata.get('MpesaReceiptNumber')
             phone = str(metadata.get('PhoneNumber', context['phone_number']))
+            # A gift given for someone: the account they hold (packed at push
+            # time), their name as typed, and how they relate to the payer.
+            honoree = None
+            if context.get('honoree_id'):
+                honoree = User.objects.filter(pk=context['honoree_id'], is_active=True).first()
             lines = allocation_lines(context)
             group = uuid.uuid4() if len(lines) > 1 else None
             for row in lines:
@@ -4497,6 +4590,10 @@ class MpesaCallbackView(APIView):
                     checkout_request_id=checkout_request_id,
                     payment_group=group,
                     paid_at=timezone.now(),
+                    honoree=honoree,
+                    honoree_name=(context.get('honoree_name') or '').strip(),
+                    relationship=(context.get('relationship') or '').strip(),
+                    anonymous=bool(context.get('anonymous')),
                 )
                 self._link_giver(contribution, context)
             # One gift, one receipt: a split payment sends one letter listing
@@ -4505,6 +4602,17 @@ class MpesaCallbackView(APIView):
                 send_grouped_contribution_receipts(group)
             else:
                 send_contribution_receipt(contribution)
+            # The honoree's letter is their own — one per line is one per
+            # account, each written on their record.
+            for row in Contribution.objects.filter(
+                Q(checkout_request_id=checkout_request_id) if checkout_request_id else Q(pk=contribution.pk)
+            ):
+                send_honoree_receipt(row)
+            # A gift made through a request's own link closes that request.
+            if context.get('giving_request_id'):
+                GivingRequest.objects.filter(
+                    pk=context['giving_request_id'], status='pending'
+                ).update(status='fulfilled', fulfilled_at=timezone.now())
             # The money is in; the account it names moves too. One credit per
             # payment, split the way the giver split it.
             credit_contribution_lines(contribution)
@@ -4663,11 +4771,14 @@ def record_direct_paybill_payment(payload):
     purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
     purpose = purpose[:Contribution._meta.get_field('purpose').max_length]
 
-    # Check if already recorded
-    # A split STK gift shares one receipt number across its account lines;
-    # a C2B paybill payment is always a single line, so only unsplit rows can
-    # be the payment this confirmation is about.
-    contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id, payment_group__isnull=True).first()
+    # Check if already recorded.
+    # A receipt number may already belong to a split STK gift (several rows
+    # sharing one payment_group) or to a single unsplit row. Either way a
+    # re-delivered C2B confirmation — or a paybill payment that Safaricom
+    # also delivered as an STK result for the same transaction — must not
+    # create a second gift. Look for any row that already carries this
+    # receipt number; only when none exists is this a new payment.
+    contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
     was_new_record = contribution is None
     if not contribution:
         contribution = Contribution(
@@ -4904,12 +5015,14 @@ class TreasuryUnassignedView(APIView):
 
 
 class AssignContributionAccountView(APIView):
-    """Credit an unassigned payment to the account a treasurer names.
+    """Credit an unassigned payment to one or more accounts a treasurer names.
 
-    One press credits the account at the payment's own timestamp — so the
-    month the money arrived stays right, however late the assignment — and
-    clears the review flag. A repeated press finds the flag already cleared
-    and refuses, so a payment can never be credited twice.
+    One press credits the payment at its own timestamp — so the month the
+    money arrived stays right, however late the assignment — and clears the
+    review flag. A payment can be split across several treasury accounts by
+    sending a list of {account_id, amount} objects; the amounts must add up
+    to the payment's full amount. A repeated press finds the flag already
+    cleared and refuses, so a payment can never be credited twice.
     """
 
     permission_classes = [IsAuthenticated]
@@ -4923,35 +5036,82 @@ class AssignContributionAccountView(APIView):
         if not contribution.needs_review:
             return Response({'detail': 'This payment has already been assigned.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        account = generics.get_object_or_404(TreasuryAccount, pk=request.data.get('account_id'))
-        reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
-        giver = giver_display_name(
-            contribution.donor_name,
-            member=contribution.member,
-            email=contribution.donor_email,
-            phone=contribution.phone_number,
-        )
-        method_display = contribution.get_payment_method_display()
-        description = f"{giver or 'Contribution'} — {method_display} ({account.name})"
+        allocations = request.data.get('allocations')
+        # Backwards-compatible single-account path: {account_id: <id>}
+        if allocations is None:
+            account_id = request.data.get('account_id')
+            if account_id is None:
+                return Response({'detail': 'Supply account_id or allocations.'}, status=status.HTTP_400_BAD_REQUEST)
+            account = generics.get_object_or_404(TreasuryAccount, pk=account_id)
+            reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
+            giver = giver_display_name(
+                contribution.donor_name,
+                member=contribution.member,
+                email=contribution.donor_email,
+                phone=contribution.phone_number,
+            )
+            method_display = contribution.get_payment_method_display()
+            description = f"{giver or 'Contribution'} — {method_display} ({account.name})"
+            row = apply_credit(
+                account=account,
+                amount=contribution.amount,
+                description=description,
+                reference=reference,
+                created_by=request.user,
+                at=contribution.paid_at,
+            )
+            if row is None:
+                return Response({'detail': 'That account could not be credited.'}, status=status.HTTP_400_BAD_REQUEST)
+            contribution.needs_review = False
+            contribution.purpose = account.name
+            contribution.save(update_fields=['needs_review', 'purpose'])
+            return Response({'detail': f'Credited to {account.name}.', 'account': account.name})
 
-        row = apply_credit(
-            account=account,
-            amount=contribution.amount,
-            description=description,
-            reference=reference,
+        # Multi-account split: [{account_id, amount}, ...]
+        if not isinstance(allocations, list) or not allocations:
+            return Response({'detail': 'allocations must be a non-empty list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Resolve all accounts first so a bad id fails before anything is credited.
+        resolved = []
+        total = Decimal('0')
+        for entry in allocations:
+            account_id = entry.get('account_id')
+            amount = entry.get('amount')
+            if account_id is None or amount is None:
+                return Response({'detail': 'Each allocation needs account_id and amount.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                return Response({'detail': f'Invalid amount for account {account_id}.'}, status=status.HTTP_400_BAD_REQUEST)
+            account = generics.get_object_or_404(TreasuryAccount, pk=account_id)
+            resolved.append((account, amount))
+            total += amount
+
+        if total != contribution.amount:
+            return Response(
+                {'detail': f'Allocation amounts (KES {total:,.2f}) must add up to the payment amount (KES {contribution.amount:,.2f}).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
+        credited = credit_contribution_lines(
+            contribution,
+            allocations=[(account.name, amount) for account, amount in resolved],
             created_by=request.user,
-            at=contribution.paid_at,
         )
-        if row is None:
-            return Response({'detail': 'That account could not be credited.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not credited:
+            return Response({'detail': 'No account could be credited.'}, status=status.HTTP_400_BAD_REQUEST)
 
         contribution.needs_review = False
-        # The ledger now reads the account the desk assigned, not the guess
-        # the member typed — the typed reference stays in the transaction's
-        # own description for the statement's audit trail.
-        contribution.purpose = account.name
+        # The typed reference is no longer the ledger's truth — the desk chose
+        # the accounts. Store the first assigned account name as the purpose
+        # (single string column); the full split lives in the transaction
+        # descriptions.
+        contribution.purpose = resolved[0][0].name
         contribution.save(update_fields=['needs_review', 'purpose'])
-        return Response({'detail': f'Credited to {account.name}.', 'account': account.name})
+        return Response(
+            {'detail': f'Credited across {len(credited)} account(s).', 'accounts': [c.account.name for c in credited]},
+        )
 
 
 class MpesaB2CResultView(APIView):
@@ -7340,6 +7500,170 @@ class MemberLookupView(APIView):
             'gender': gender,
             'sex': gender,
             'role': profile.role if profile else '',
+        })
+
+
+class MemberNameSearchView(APIView):
+    """Name search over the roll — the picker behind "give for someone".
+
+    The gift form's person field searches as the giver types, so this returns
+    a short list of id-and-name matches and nothing else: the roll is a
+    member's to read, never the public's, so it needs a session; and a search
+    result is a name to pick, not a contact card to harvest — no emails, no
+    phone numbers. The gift's own receipt goes to the account the id points
+    at, resolved on the server where the address never leaves it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = (request.query_params.get('q') or request.query_params.get('query') or '').strip()
+        if len(query) < 2:
+            return Response({'matches': []})
+        matches = User.objects.filter(is_active=True).filter(
+            Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(username__icontains=query)
+        ).order_by('first_name', 'last_name', 'username')[:8]
+        return Response({'matches': [
+            {'id': user.id, 'name': (user.get_full_name() or user.username).strip()}
+            for user in matches
+        ]})
+
+
+class GivingRequestView(APIView):
+    """Ask a member to give: the request, and its delivery.
+
+    The mirror of giving for someone — instead of giving in a person's name,
+    you ask a person to give in yours. The request is emailed to the person
+    named (their account address — never one typed into the form) with a link
+    that opens the giving page; a gift made through that link closes the
+    request. Only members may ask: a request without a name behind it is
+    nothing the recipient could act on.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        mine = GivingRequest.objects.filter(requester=request.user).select_related('target')[:50]
+        return Response({'requests': [
+            {
+                'id': row.id,
+                'target_name': row.target.get_full_name() or row.target.username,
+                'relationship': row.relationship,
+                'relationship_display': row.get_relationship_display(),
+                'message': row.message,
+                'status': row.status,
+                'fulfilled_at': row.fulfilled_at,
+                'created_at': row.created_at,
+            }
+            for row in mine
+        ]})
+
+    def post(self, request):
+        target_id = request.data.get('target_id')
+        relationship = (request.data.get('relationship') or '').strip()
+        message = (request.data.get('message') or '').strip()
+
+        target = User.objects.filter(pk=target_id, is_active=True).first() if target_id else None
+        if target is None:
+            return Response(
+                {'detail': 'Choose the person you are asking from the list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target.pk == request.user.pk:
+            return Response(
+                {'detail': 'You cannot ask yourself to give — use Give Now.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if relationship not in dict(GIFT_RELATIONSHIP_CHOICES):
+            return Response(
+                {'relationship': 'Say how they relate to you — spouse, sibling, child, friend or other.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        giving_request = GivingRequest.objects.create(
+            requester=request.user,
+            target=target,
+            relationship=relationship,
+            message=message[:1000],
+        )
+
+        # The letter: to the target's own account address, so a request can
+        # never be steered into a stranger's inbox. It carries the link that
+        # opens the giving page — a gift through it closes the request.
+        target_email = (target.email or '').strip()
+        if target_email:
+            requester_name = request.user.get_full_name() or request.user.username
+            relationship_label = (dict(GIFT_RELATIONSHIP_CHOICES).get(relationship) or 'friend').lower()
+            give_link = f"{settings.FRONTEND_URL}/give?request={giving_request.pk}"
+            lines = [
+                f"Dear {target.get_full_name() or target.username},\n\n",
+                f"{requester_name}, your {relationship_label}, has asked you to give.\n\n",
+            ]
+            if message:
+                lines.append(f'"{message}"\n\n')
+            lines.extend([
+                f"Give when you are ready: {give_link}\n\n",
+                "Nothing here is a debt — a request is an invitation, and the "
+                "church is grateful either way.\n\n",
+                f"Yours in Christ,\n{current_church_name()} Stewardship",
+            ])
+            send_mail(
+                f"{requester_name} has asked you to give",
+                ''.join(lines),
+                settings.DEFAULT_FROM_EMAIL,
+                [target_email],
+                fail_silently=True,
+            )
+        try:
+            ChurchNotification.objects.create(
+                user=target,
+                title=f"{request.user.get_full_name() or request.user.username} asks you to give",
+                message=message or 'A member has asked you to give.',
+                link=f'/give?request={giving_request.pk}',
+            )
+        except Exception:
+            # The bell is a courtesy; the request stands without it.
+            logger.exception('Giving request notification (%s) failed.', giving_request.pk)
+
+        return Response(
+            {
+                'detail': (
+                    f'Your request has been sent to {target.get_full_name() or target.username}.'
+                    if target_email else
+                    f'{target.get_full_name() or target.username} has no email on their account, so the request was recorded but not delivered.'
+                ),
+                'id': giving_request.pk,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class GivingRequestDetailView(APIView):
+    """One request, read through its own link.
+
+    The emailed link is the credential: whoever holds it may read the few
+    lines that tell them what was asked (who asked, how they relate, the
+    note) — the recipient is not asked to sign in before they know what they
+    are being asked for. Only the address bar carries the id; nothing else
+    about either person leaves the server.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        row = GivingRequest.objects.select_related('requester').filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That request no longer exists.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'id': row.id,
+            'requester_id': row.requester_id,
+            'requester_name': row.requester.get_full_name() or row.requester.username,
+            'relationship': row.relationship,
+            'relationship_display': row.get_relationship_display(),
+            'message': row.message,
+            'status': row.status,
         })
 
 

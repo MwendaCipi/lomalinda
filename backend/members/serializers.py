@@ -8,7 +8,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, Department, EnrollmentRequest, FundraisingCampaign, Invitation,
+    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, Department, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
@@ -647,7 +647,9 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 class ContributionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contribution
-        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
+        # honoree_name/relationship name the person a gift was given FOR, so
+        # a spouse's tithe reads as such on both records it lands on.
+        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'honoree_name', 'relationship', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
 
 
@@ -811,6 +813,17 @@ class ContributionInitiateSerializer(serializers.Serializer):
     # Anonymous givers stamp the request; the ledger records the gift under
     # the phone it was paid from, never under this person's name.
     anonymous = serializers.BooleanField(default=False)
+    # Giving FOR someone: the account they hold in the roll (or the name as
+    # typed when they hold none), and how they relate to the giver. The payer
+    # is unchanged — this only decides whose record the gift is also written
+    # on and whose account hears about it by letter.
+    honoree_id = serializers.IntegerField(required=False, allow_null=True)
+    honoree_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    relationship = serializers.ChoiceField(
+        choices=GIFT_RELATIONSHIP_CHOICES, required=False, allow_blank=True,
+    )
+    # A gift made through a request's own link closes that request.
+    giving_request_id = serializers.IntegerField(required=False, allow_null=True)
     payment_method = serializers.ChoiceField(
         choices=['cash', 'mpesa', 'bank_transfer', 'cheque'],
         default='mpesa'
@@ -826,6 +839,42 @@ class ContributionInitiateSerializer(serializers.Serializer):
         # body — see receipt_email_for(). Applied before anything is written or
         # packed into an M-Pesa push, so the callback and the ledger agree.
         attrs['donor_email'] = receipt_email_for(getattr(self.context.get('request'), 'user', None))
+
+        # Giving for someone: the person may be named by their account id (the
+        # form found them in the roll) or by the name alone (a visitor typed
+        # it). Either way the relationship is required — "for someone" with no
+        # stated relation reads as an error on the ledger, not a gift.
+        honoree_id = attrs.get('honoree_id')
+        honoree_name = (attrs.get('honoree_name') or '').strip()
+        relationship = attrs.get('relationship') or ''
+        if honoree_id:
+            honoree = User.objects.filter(pk=honoree_id, is_active=True).first()
+            if honoree is None:
+                raise serializers.ValidationError(
+                    {'honoree_id': 'No member account matches that person.'}
+                )
+            attrs['honoree'] = honoree
+            if not honoree_name:
+                attrs['honoree_name'] = honoree.get_full_name() or honoree.username
+        if honoree_id or honoree_name:
+            if not relationship:
+                raise serializers.ValidationError(
+                    {'relationship': 'Say how they relate to you — spouse, sibling, child, friend or other.'}
+                )
+        elif relationship:
+            raise serializers.ValidationError(
+                {'relationship': 'Name the person this gift is for first.'}
+            )
+
+        giving_request = None
+        giving_request_id = attrs.get('giving_request_id')
+        if giving_request_id:
+            giving_request = GivingRequest.objects.filter(pk=giving_request_id).first()
+            if giving_request is None:
+                raise serializers.ValidationError(
+                    {'giving_request_id': 'That giving request no longer exists.'}
+                )
+            attrs['giving_request'] = giving_request
 
         from .treasury import account_reference_for
 
