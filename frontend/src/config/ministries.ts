@@ -136,7 +136,7 @@ export const MINISTRIES: Ministry[] = [
   },
   {
     slug: "development",
-    title: "Church Development & Building",
+    title: "Development",
     givingPurpose: "Development",
     description: "Planning, acquiring, and constructing church land, sanctuary infrastructure, and development projects.",
     department: "Development",

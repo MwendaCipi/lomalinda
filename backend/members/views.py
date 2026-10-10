@@ -9061,6 +9061,44 @@ class DepartmentLeadershipView(APIView):
         return Response({'id': role.id, 'name': role.name, 'has_assistant': role.has_assistant}, status=status.HTTP_201_CREATED)
 
 
+def drop_area_filing(user, code):
+    """Take the office's filing of this person out of one area.
+
+    ``member_tie_codes`` reads the roll and the seats beside three filings
+    the profile itself carries: ``ministry`` and ``department`` (the church's
+    way of filing its people by sex and age), the department row they point
+    at, and the ministries the profile lists. A member stepping off a roll
+    one of those filings names would otherwise stay filed there — their card
+    would sit in "My Ministry" after they had left — so leaving an area
+    clears every tie to it. Leaders removing someone else leave the office's
+    filing alone; that record is the office's to change, not the desk's.
+    """
+    profile = getattr(user, 'member_profile', None)
+    if profile is None:
+        return False
+    filed_as = {
+        'ministry': {'adventist_men': 'amm', 'adventist_women': 'awm', 'young_adults': 'aym', 'ambassadors': 'ambassadors'},
+        'department': {'children': 'children', 'young_adults': 'aym'},
+    }
+    changed = []
+    if filed_as['ministry'].get(getattr(profile, 'ministry', '') or '') == code:
+        profile.ministry = ''
+        changed.append('ministry')
+    if filed_as['department'].get(getattr(profile, 'department', '') or '') == code:
+        profile.department = ''
+        changed.append('department')
+    if profile.department_ref_id and profile.department_ref.code == code:
+        profile.department_ref = None
+        changed.append('department_ref')
+    if changed:
+        profile.save(update_fields=changed)
+    department = Department.objects.filter(code=code).first()
+    if department is not None and profile.ministries.filter(pk=department.pk).exists():
+        profile.ministries.remove(department)
+        changed.append('ministries')
+    return bool(changed)
+
+
 class DepartmentMembersView(APIView):
     """A department's roll: read it, add to it, remove from it."""
 
@@ -9214,13 +9252,30 @@ class DepartmentMembersView(APIView):
         return Response({'detail': 'Member added to the roll.', 'membership_id': membership.id}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, department, member_id=None):
+        """Take a member off the roll.
+
+        A leader or the church office may take anyone off; a member may always
+        take *themselves* off — leaving an area is their own call and needs no
+        officer's hand. With no name given at all the caller is the one
+        stepping away, which is how the ministry card's Leave reads it.
+
+        The roll row and any seat in the same department go together: nobody
+        keeps leading an area they have left, and a removed leader does not
+        stay on the leadership table after leaving the roll. A member leaving
+        also drops the profile's own filing of them into that area, so the map
+        files them out at once rather than keeping the card under
+        "My Ministry".
+        """
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
+        target_id = member_id if member_id is not None else (request.data.get('member_id') or request.user.pk)
+        leaving_self = str(target_id) == str(request.user.pk)
+        if not leaving_self and not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can remove members.'}, status=status.HTTP_403_FORBIDDEN)
-        target_id = member_id or request.data.get('member_id')
         deleted, _ = DepartmentMembership.objects.filter(department=department, member_id=target_id).delete()
-        if not deleted:
+        DepartmentAssignment.objects.filter(department__code=department, member_id=target_id).delete()
+        unfiled = drop_area_filing(request.user, department) if leaving_self else False
+        if not deleted and not unfiled:
             return Response({'detail': 'That member is not on this roll.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Member removed from the roll.'})
 

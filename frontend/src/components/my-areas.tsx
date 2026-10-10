@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, Info, Mail, MessageSquare, Phone, Plus, Search, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Info, LogOut, Mail, MessageSquare, MoreVertical, Phone, Plus, Search, UserMinus, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
+import { isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
-import { useAllDepartments, useMyTies } from "@/hooks/use-departments";
+import { brand } from "@/lib/brand";
+import { invalidateDepartments, useAllDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { dayFirst } from "@/lib/dates";
 import { DepartmentAccountsPanel } from "@/components/department-hub";
@@ -26,6 +28,10 @@ type RollRow = {
   name: string;
   unit: string;
   via: string;
+  /** The membership row behind this one — absent on the rows the music
+      register unions in from the choir or a singing group, which the desk
+      cannot take off here. */
+  membership_id?: number | null;
   role?: string;
   username?: string;
   email?: string;
@@ -50,20 +56,174 @@ function authHeaders(): Record<string, string> {
 
 type AreaCandidate = { id: number; name: string; username: string };
 
+/** One person's contact details, as the cards read them — the roll's own
+    fields, or the leadership row's id where the holder has no roll entry. */
+type ContactTarget = {
+  name: string;
+  /** The account to open a DM with; absent when nothing identifies one. */
+  chatId?: number;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+};
+
+/**
+ * A person's contact actions — the roster's own four (chat, WhatsApp, call,
+ * email), wherever the person appears: a roll card or the leadership row.
+ *
+ * A wide card shows them one tap each, as the roll always has; a phone folds
+ * them behind one Actions button that opens a popover, so four icon buttons
+ * never squeeze a name off its own card. Only the doors the person's details
+ * actually open are listed, and the popover closes on any pick or a click
+ * away from it.
+ */
+function ContactActions({
+  target,
+  onChat,
+}: {
+  target: ContactTarget;
+  onChat: (memberId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // A click outside the control closes it — the same read the desks' row
+  // menus use, so the popover behaves like every other menu in the system.
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      const el = event.target as HTMLElement | null;
+      if (el?.closest?.("[data-action-menu]")) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  // WhatsApp reaches them by whatever number the church holds, digits only.
+  const wa = (target.whatsapp || target.phone || "").replace(/\D/g, "");
+  type Action = { key: string; label: string; icon: React.ReactNode; href?: string; run?: () => void };
+  const actions: Action[] = [];
+  if (target.chatId) {
+    actions.push({
+      key: "chat",
+      label: "Chat here",
+      icon: <MessageSquare className="h-4 w-4" aria-hidden="true" />,
+      run: () => {
+        setOpen(false);
+        onChat(target.chatId as number);
+      },
+    });
+  }
+  if (wa) {
+    actions.push({ key: "wa", label: "WhatsApp", icon: <WhatsAppIcon className="h-4 w-4" />, href: `https://wa.me/${wa}` });
+  }
+  if (target.phone) {
+    actions.push({ key: "call", label: "Call", icon: <Phone className="h-4 w-4" aria-hidden="true" />, href: `tel:${target.phone}` });
+  }
+  if (target.email) {
+    actions.push({ key: "email", label: "Email", icon: <Mail className="h-4 w-4" aria-hidden="true" />, href: `mailto:${target.email}` });
+  }
+  if (actions.length === 0) return null;
+
+  const iconBtn = "flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand";
+  const menuItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand";
+
+  return (
+    <div className="relative shrink-0" data-action-menu>
+      {/* A wide card has room for the four, one tap each. */}
+      <div className="hidden items-center gap-1.5 sm:flex">
+        {actions.map((action) =>
+          action.href ? (
+            <a
+              key={action.key}
+              href={action.href}
+              target={action.href.startsWith("http") ? "_blank" : undefined}
+              rel={action.href.startsWith("http") ? "noreferrer" : undefined}
+              aria-label={`${action.label} ${target.name}`}
+              title={action.label}
+              className={iconBtn}
+            >
+              {action.icon}
+            </a>
+          ) : (
+            <button
+              key={action.key}
+              type="button"
+              onClick={action.run}
+              aria-label={`${action.label} ${target.name}`}
+              title={action.label}
+              className={iconBtn}
+            >
+              {action.icon}
+            </button>
+          ),
+        )}
+      </div>
+
+      {/* A phone folds them behind one Actions popover. */}
+      <div className="sm:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          aria-label={`Actions for ${target.name}`}
+          title="Actions"
+          className={iconBtn}
+        >
+          <MoreVertical className="h-4 w-4 text-moss" aria-hidden="true" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
+            {actions.map((action) =>
+              action.href ? (
+                <a
+                  key={action.key}
+                  href={action.href}
+                  target={action.href.startsWith("http") ? "_blank" : undefined}
+                  rel={action.href.startsWith("http") ? "noreferrer" : undefined}
+                  onClick={() => setOpen(false)}
+                  className={menuItem}
+                >
+                  {action.icon}
+                  {action.label}
+                </a>
+              ) : (
+                <button key={action.key} type="button" onClick={action.run} className={menuItem}>
+                  {action.icon}
+                  {action.label}
+                </button>
+              ),
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddAreaMemberModal({
   departmentLabel,
+  rollIds,
   onClose,
-  onAdd,
+  onBatchAdd,
 }: {
   departmentLabel: string;
+  /** Already on this roll — the search marks them, the desk can't pick them twice. */
+  rollIds: Set<number>;
   onClose: () => void;
-  onAdd: (member: AreaCandidate) => Promise<boolean>;
+  /** Sends every picked name at once; resolves false when the send was
+      refused, so the modal keeps the picks for a retry. */
+  onBatchAdd: (members: AreaCandidate[]) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AreaCandidate[]>([]);
   const [resultsForQuery, setResultsForQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [addingId, setAddingId] = useState<number | null>(null);
+  // The batch list: picked names wait here until Add members sends them all —
+  // the same picker the Church Leadership desk's roll already uses.
+  const [picked, setPicked] = useState<AreaCandidate[]>([]);
+  const [sending, setSending] = useState(false);
+  const pickedIds = new Set(picked.map((member) => member.id));
 
   const visibleResults = query.trim().length >= 2 && resultsForQuery === query.trim() ? results : [];
 
@@ -136,31 +296,79 @@ function AddAreaMemberModal({
           {!searching && query.trim().length >= 2 && results.length === 0 && (
             <p className="py-4 text-center text-xs text-moss">No members match that search.</p>
           )}
-          {!searching && visibleResults.map((member) => (
-            <button
-              key={member.id}
-              type="button"
-              disabled={addingId !== null}
-              onClick={async () => {
-                setAddingId(member.id);
-                const added = await onAdd(member);
-                if (added) onClose();
-                setAddingId(null);
-              }}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-sand-line px-3.5 py-3 text-left transition hover:border-ember hover:bg-sand-linen disabled:opacity-60"
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember" aria-hidden="true">
-                  {member.name.slice(0, 1) || "?"}
+          {!searching && visibleResults.map((member) => {
+            const onRoll = rollIds.has(member.id) || pickedIds.has(member.id);
+            return (
+              <button
+                key={member.id}
+                type="button"
+                disabled={onRoll}
+                onClick={() => {
+                  setPicked((current) => [...current, member]);
+                  setQuery("");
+                  setResults([]);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl border border-sand-line px-3.5 py-3 text-left transition ${
+                  onRoll ? "cursor-not-allowed border-dashed opacity-60" : "hover:border-ember hover:bg-sand-linen"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember" aria-hidden="true">
+                    {member.name.slice(0, 1) || "?"}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-bark">{member.name}</span>
+                    <span className="block truncate text-[11px] text-moss">@{member.username}</span>
+                  </span>
                 </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-bark">{member.name}</span>
-                  <span className="block truncate text-[11px] text-moss">@{member.username}</span>
-                </span>
-              </span>
-              <span className="shrink-0 text-xs font-semibold text-ember">{addingId === member.id ? "Adding…" : "Add"}</span>
-            </button>
-          ))}
+                <span className="shrink-0 text-xs font-semibold text-ember">{onRoll ? "On this roll" : "Pick"}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* The batch list: picked names gather here and one button sends
+            them all — a roll built a class at a time, not a name at a time. */}
+        <div className="mt-4 border-t border-sand-line pt-3">
+          {picked.length === 0 ? (
+            <p className="text-center text-[11px] text-moss">Search and pick everyone to add, then send them to the roll together.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {picked.map((member) => (
+                <li key={member.id} className="flex items-center justify-between gap-2 rounded-xl bg-sand px-3 py-2">
+                  <span className="min-w-0 truncate text-xs font-semibold text-bark">{member.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPicked((current) => current.filter((p) => p.id !== member.id))}
+                    aria-label={`Remove ${member.name} from the list`}
+                    className="shrink-0 text-[11px] font-semibold text-moss transition hover:text-ember"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            disabled={picked.length === 0 || sending}
+            onClick={async () => {
+              setSending(true);
+              try {
+                // Only a successful send empties the list — a refused batch
+                // keeps the picks so the desk can retry as-is.
+                const added = await onBatchAdd(picked);
+                if (added) {
+                  setPicked([]);
+                  onClose();
+                }
+              } finally {
+                setSending(false);
+              }
+            }}
+            className="mt-3 w-full rounded-xl bg-ember px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+          >
+            {sending ? "Adding…" : `Add ${picked.length > 0 ? picked.length : ""} member${picked.length === 1 ? "" : "s"}`.trim()}
+          </button>
         </div>
       </div>
     </div>
@@ -287,11 +495,34 @@ export function MyAreas() {
   const ties = useMyTies();
   const { me } = useHeaderData();
   const sex = (me?.gender || "").trim().toLowerCase();
+  const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
+  // The office oversees every area — the two sex-only fellowships among
+  // them — so those are only ever withheld from a member who may not ask
+  // to join them.
+  const staff = isStaffRole(roles);
 
   const [tab, setTab] = useState<AreaTab>("mine");
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts">("members");
   const [joining, setJoining] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
+  /** Whether the screen is wide enough for the leadership card. A phone
+      reads the area as one list — every leader is a member row wearing their
+      role badge — so the second card only exists where it earns its space.
+      Read synchronously from the media query rather than set in an effect:
+      the area view only ever renders after a tap, so there is no markup to
+      disagree with. */
+  const [wide, setWide] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 640px)").matches : true
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const onChange = (event: MediaQueryListEvent) => setWide(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
   const legacyDepartmentCode = (me?.department || "").trim();
   const ownDepartmentCode = (me?.department_ref || LEGACY_DEPARTMENT_CODES[legacyDepartmentCode] || legacyDepartmentCode).trim();
 
@@ -315,19 +546,23 @@ export function MyAreas() {
         .filter((area) => {
           const mine = isMyMinistry(area);
           if (tab === "mine") return mine;
-          return !mine && !ties.includes(area.code) && canJoin(area.code);
+          return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
         })
         .sort((a, b) => {
           if (tab === "mine") {
             const departmentA = a.code === ownDepartmentCode ? 0 : 1;
             const departmentB = b.code === ownDepartmentCode ? 0 : 1;
             if (departmentA !== departmentB) return departmentA - departmentB;
+            const groupA = a.group === "ministry" ? 0 : 1;
+            const groupB = b.group === "ministry" ? 0 : 1;
+            return groupA - groupB || a.label.localeCompare(b.label);
           }
-          const groupA = a.group === "ministry" ? 0 : 1;
-          const groupB = b.group === "ministry" ? 0 : 1;
-          return groupA - groupB || a.label.localeCompare(b.label);
+          // Other Ministries reads as one A–Z list, the way the rail files
+          // it: nobody should step past every ministry before the first
+          // department appears.
+          return a.label.localeCompare(b.label);
         }),
-    [canJoin, isMyMinistry, ownDepartmentCode, rows, tab, ties],
+    [canJoin, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
   );
 
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
@@ -429,17 +664,26 @@ export function MyAreas() {
     };
   }, [openArea, areaReload]);
 
-  async function addAreaMember(member: AreaCandidate): Promise<boolean> {
-    if (!openArea) return false;
+  // The batch add: one request carries every picked name — the endpoint
+  // accepts member_ids as a list, so the whole batch lands in one send.
+  async function addAreaMembers(members: AreaCandidate[]): Promise<boolean> {
+    if (!openArea || members.length === 0) return false;
     try {
       const response = await fetch(`${API_URL}/api/members/departments/${openArea.code}/members/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: member.id, unit: "" }),
+        body: JSON.stringify({ member_ids: members.map((member) => member.id), unit: "" }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "The member could not be added.");
-      showAlert("Added to roll", `${member.name} now belongs to ${openArea.label}.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      if (!response.ok) throw new Error(data.detail || "The members could not be added.");
+      const names = members.map((member) => member.name);
+      const detail =
+        names.length === 1
+          ? `${names[0]} now belongs to ${openArea.label}.`
+          : names.length <= 3
+          ? `${names.join(", ")} now belong to ${openArea.label}.`
+          : `${names.length} members now belong to ${openArea.label}.`;
+      showAlert("Added to roll", detail, "success", { toast: true, timer: 5000, showConfirmButton: false });
       setAreaReload((value) => value + 1);
       return true;
     } catch (error) {
@@ -497,22 +741,84 @@ export function MyAreas() {
     } finally {
       setJoining(null);
     }
-  }  // ── One area, read-only ──────────────────────────────────────────
-  // A roll row's contact actions — the roster's own four, offered straight
-  // from the card so a phone reader can chat, WhatsApp, call or email a
-  // member without hunting through a menu. The chat flow is ContactMemberModal's:
-  // open the DM, then land in it.
-  const chatWith = async (member: RollRow) => {
+  }
+
+  /** A leader taking someone off the roll — the desk's own Remove, living
+      on the member's row. The roll row and any seat in this area go
+      together, so nobody keeps leading a place they have left. */
+  async function removeAreaMember(member: RollRow) {
+    if (!openArea) return;
+    const result = await showAlert(
+      "Remove from roll",
+      `Take ${member.name} off ${openArea.label}'s roll? They will no longer appear among its members, and any seat they hold here is released.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
+    );
+    if (!result.isConfirmed) return;
+    setRemovingId(member.id);
     try {
-      await openConversation({ kind: "dm", member_id: member.id });
-      router.push(`/chat?dm=${member.id}`);
+      const res = await fetch(`${API_URL}/api/members/departments/${openArea.code}/members/${member.id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "They could not be removed.");
+      invalidateDepartments();
+      showAlert("Removed from roll", `${member.name} is no longer on ${openArea.label}'s roll.`, "success", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
+      setAreaReload((value) => value + 1);
+    } catch (error) {
+      showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  /** A member stepping off a roll themselves — leaving needs nobody's
+      permission, and the map files them back under Other Ministries at
+      once (the ties are re-read the moment the roll changes). */
+  async function leaveArea(area: (typeof rows)[number]) {
+    const isMinistry = area.group === "ministry";
+    const result = await showAlert(
+      isMinistry ? "Leave ministry" : "Leave department",
+      `Step off ${area.label}'s roll? Its leadership will see you among its members no longer.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Leave", cancelButtonText: "Stay", confirmButtonColor: brand.ember }
+    );
+    if (!result.isConfirmed) return;
+    setLeaving(area.code);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${area.code}/members/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "You could not step off this roll.");
+      invalidateDepartments();
+      showAlert("You have left", `You are off ${area.label}'s roll.`, "success", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      showAlert("Could not leave", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setLeaving(null);
+    }
+  }  // ── One area, read-only ──────────────────────────────────────────
+  // The chat flow is ContactMemberModal's: open the DM, then land in it.
+  // The contact doors themselves live in ContactActions.
+  const chatWith = async (memberId: number) => {
+    try {
+      await openConversation({ kind: "dm", member_id: memberId });
+      router.push(`/chat?dm=${memberId}`);
     } catch (error) {
       showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
     }
   };
-  // WhatsApp reaches the member by whatever number the church holds for them,
-  // digits only — the same reading the roster's contact sheet does.
-  const waNumber = (member: RollRow) => (member.whatsapp_number || member.phone_number || "").replace(/\D/g, "");
   if (openArea) {
     const canManageCurrentArea = manageAreaCode === openArea.code && canManageArea;
     const leaders = openArea.holders.filter((holder) => holder.kind === "leader");
@@ -534,8 +840,9 @@ export function MyAreas() {
             </button>
           </div>
 
-          {/* Section 1: Leadership */}
-          {areaView === "members" && (
+          {/* Section 1: Leadership — the wide screen's card. On a phone the
+              roll carries the same people, their roles read as badges. */}
+          {areaView === "members" && wide && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
                 <UserRound className="h-4 w-4 text-ember" aria-hidden="true" />
@@ -545,23 +852,41 @@ export function MyAreas() {
                 <p className="mt-3 text-xs text-moss">No leadership is seated yet.</p>
               ) : (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {[...leaders, ...assistants].map((holder) => (
-                    <div
-                      key={`${holder.username}-${holder.role}-${holder.kind}`}
-                      className="flex items-center gap-3 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-3"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember">
-                        {holder.name.slice(0, 1) || "?"}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-bark">{holder.name}</p>
-                        <p className="truncate text-[11px] text-moss">
-                          {holder.role}
-                          {holder.kind === "assistant" ? " · Assistant" : ""}
-                        </p>
+                  {[...leaders, ...assistants].map((holder) => {
+                    // The holder's contact details: the roll carries them when
+                    // they also sit on it; an appointed holder without a roll
+                    // entry still carries their account id from the directory.
+                    const seated = roll.find((member) => member.username && member.username === holder.username);
+                    return (
+                      <div
+                        key={`${holder.username}-${holder.role}-${holder.kind}`}
+                        className="flex items-center gap-3 rounded-xl border border-sand-line bg-sand-linen px-3.5 py-3"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-card text-xs font-bold uppercase text-ember">
+                          {holder.name.slice(0, 1) || "?"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-bark">{holder.name}</p>
+                          <p className="truncate text-[11px] text-moss">
+                            {holder.role}
+                            {holder.kind === "assistant" ? " · Assistant" : ""}
+                          </p>
+                        </div>
+                        {/* The same contact actions a roll card gets — a leader
+                            is reached as readily as the members beside them. */}
+                        <ContactActions
+                          target={{
+                            name: holder.name,
+                            chatId: holder.id ?? seated?.id,
+                            phone: seated?.phone_number,
+                            whatsapp: seated?.whatsapp_number,
+                            email: seated?.email,
+                          }}
+                          onChat={chatWith}
+                        />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -576,7 +901,9 @@ export function MyAreas() {
                     <Users className="h-4 w-4 text-ember" aria-hidden="true" />
                     Members
                   </h2>
-                  <span className="mt-1 block text-[11px] font-semibold text-moss">
+                  {/* On a phone the count and Add member live in the bar at
+                      the foot of the card instead — see below. */}
+                  <span className="mt-1 hidden text-[11px] font-semibold text-moss sm:block">
                     {roll.length} {roll.length === 1 ? "person" : "people"}
                   </span>
                 </div>
@@ -584,7 +911,7 @@ export function MyAreas() {
                   <button
                     type="button"
                     onClick={() => setShowAddMember(true)}
-                    className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                    className="hidden min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:inline-flex"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" /> Add member
                   </button>
@@ -607,62 +934,70 @@ export function MyAreas() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-bark">{member.name}</p>
                         {(member.role || member.unit || member.via) && (
-                          <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-moss">
-                            {member.role && <span>{member.role}</span>}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-moss">
+                            {/* The role reads as a badge: with no leadership
+                                card on a phone, this is how a leader is told
+                                apart from the members beside them. */}
+                            {member.role && (
+                              <span className="rounded-full bg-sand-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ember">
+                                {member.role}
+                              </span>
+                            )}
                             {member.unit && <span>{member.unit}</span>}
                             {member.via && <span>Through {member.via}</span>}
                           </div>
                         )}
                       </div>
-                      {/* The member's contact actions — one tap each, the same
-                          four the PC roster offers through its Contact sheet. */}
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      {/* The member's contact actions — the roster's four; a
+                          wide card shows them one tap each, a phone folds
+                          them into one Actions popover. */}
+                      <ContactActions
+                        target={{
+                          name: member.name,
+                          chatId: member.id,
+                          phone: member.phone_number,
+                          whatsapp: member.whatsapp_number,
+                          email: member.email,
+                        }}
+                        onChat={chatWith}
+                      />
+                      {/* The leader's own Remove, on the row itself — shown
+                          only where a real membership row stands behind it:
+                          the music register's unioned rows are removed at
+                          their own desk. */}
+                      {canManageCurrentArea && Boolean(member.membership_id) && (
                         <button
                           type="button"
-                          onClick={() => chatWith(member)}
-                          aria-label={`Chat with ${member.name}`}
-                          title="Chat here"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
+                          onClick={() => void removeAreaMember(member)}
+                          disabled={removingId === member.id}
+                          aria-label={`Remove ${member.name} from the roll`}
+                          title="Remove from roll"
+                          className="shrink-0 rounded-lg p-2 text-moss transition hover:bg-sand hover:text-ember disabled:opacity-60"
                         >
-                          <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                          <UserMinus className="h-4 w-4" aria-hidden="true" />
                         </button>
-                        {waNumber(member) && (
-                          <a
-                            href={`https://wa.me/${waNumber(member)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`WhatsApp ${member.name}`}
-                            title="WhatsApp"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white transition hover:bg-sand"
-                          >
-                            <WhatsAppIcon className="h-4 w-4" />
-                          </a>
-                        )}
-                        {member.phone_number && (
-                          <a
-                            href={`tel:${member.phone_number}`}
-                            aria-label={`Call ${member.name}`}
-                            title="Call"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
-                          >
-                            <Phone className="h-4 w-4" aria-hidden="true" />
-                          </a>
-                        )}
-                        {member.email && (
-                          <a
-                            href={`mailto:${member.email}`}
-                            aria-label={`Email ${member.name}`}
-                            title="Email"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand"
-                          >
-                            <Mail className="h-4 w-4" aria-hidden="true" />
-                          </a>
-                        )}
-                      </div>
+                      )}
                     </article>
                   ))}
                 </div>
               )}
+              {/* The phone's own foot for this card: the count and the
+                  desk's Add, pinned above the tab bar so a long roll never
+                  carries them out of reach. */}
+              <div className="sticky bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] z-10 -mx-5 -mb-5 mt-4 flex items-center justify-between gap-3 border-t border-sand-line bg-white px-5 py-3 sm:hidden">
+                <span className="text-[11px] font-semibold text-moss">
+                  {roll.length} {roll.length === 1 ? "person" : "people"}
+                </span>
+                {canManageCurrentArea && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMember(true)}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Add member
+                  </button>
+                )}
+              </div>
             </section>
           )}
 
@@ -745,8 +1080,9 @@ export function MyAreas() {
           {showAddMember && (
             <AddAreaMemberModal
               departmentLabel={openArea.label}
+              rollIds={new Set(roll.map((member) => member.id))}
               onClose={() => setShowAddMember(false)}
-              onAdd={addAreaMember}
+              onBatchAdd={addAreaMembers}
             />
           )}
           {showAddEvent && (
@@ -837,6 +1173,26 @@ export function MyAreas() {
                     >
                       <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
                       {joining === area.code ? "Sending…" : "Request to join"}
+                    </button>
+                  )}
+                  {/* Leaving is the member's own door, and it sits on their
+                      own card among its actions. */}
+                  {inArea && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void leaveArea(area);
+                      }}
+                      disabled={leaving === area.code}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember disabled:opacity-60"
+                    >
+                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                      {leaving === area.code
+                        ? "Leaving…"
+                        : area.group === "ministry"
+                        ? "Leave ministry"
+                        : "Leave department"}
                     </button>
                   )}
                 </div>

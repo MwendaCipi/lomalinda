@@ -10,8 +10,12 @@ const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
   development: "Development",
 };
 
-/** One person on a department's leadership table, and the office they hold. */
-export type DepartmentHolder = { username: string; name: string; kind: "leader" | "assistant"; role: string };
+/**
+ * One person on a department's leadership table, and the office they hold.
+ * The account's id rides along where the directory reports it, so a surface
+ * can open a chat with an appointed holder even when they have no roll entry.
+ */
+export type DepartmentHolder = { id?: number; username: string; name: string; kind: "leader" | "assistant"; role: string };
 
 /**
  * A department as the church records it, with the counts its desk reports.
@@ -53,7 +57,7 @@ function mapDepartmentRows(data: unknown): DepartmentRow[] {
     group?: string;
     member_count?: number;
     event_count?: number;
-    roles?: { name?: string; holders?: { name?: string; username?: string; kind?: string }[] }[];
+    roles?: { name?: string; holders?: { id?: number; name?: string; username?: string; kind?: string }[] }[];
   }[]).map((row) => ({
     code: row.code,
     label: DEPARTMENT_LABEL_OVERRIDES[row.code] ?? row.label,
@@ -69,6 +73,7 @@ function mapDepartmentRows(data: unknown): DepartmentRow[] {
       (role.holders ?? [])
         .filter((holder) => Boolean(holder.username))
         .map((holder) => ({
+          id: holder.id && holder.id > 0 ? holder.id : undefined,
           username: String(holder.username),
           name: String((holder as { name?: string }).name ?? holder.username),
           kind: holder.kind === "assistant" ? ("assistant" as const) : ("leader" as const),
@@ -99,6 +104,18 @@ export function invalidateDepartments() {
   cache = null;
   allCache = null;
   myDepartmentsCache = null;
+  // The member's own areas ride along with the directory: someone who just
+  // left a roll (or was taken off one) should see the map file them under
+  // Other Ministries straight away. The read is repeated and every mounted
+  // hook is told — hooks mounted before the change would otherwise keep
+  // their first answer until a reload, since the effect runs only once.
+  void (async () => {
+    const next = await (myInflight ?? (myInflight = fetchMyAreas().finally(() => {
+      myInflight = null;
+    })));
+    myDepartmentsCache = { set: next, at: Date.now() };
+    myListeners.forEach((notify) => notify(next));
+  })();
 }
 
 // The signed-in member's own areas, cached like the directory: the rail asks

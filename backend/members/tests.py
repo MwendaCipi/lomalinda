@@ -11379,3 +11379,96 @@ class DevelopmentAndDorcasLeadershipSeatsTests(APITestCase):
 
     def test_development_is_read_by_its_short_name(self):
         self.assertEqual(Department.objects.get(code='development').name, 'Development')
+
+
+class DepartmentRollRemovalTests(APITestCase):
+    """Taking someone off a roll, and stepping off one's own.
+
+    The desk's Remove sits on the member's own row: a leader or the church
+    office takes anyone off. Leaving is the member's own door — the ministry
+    card's Leave names no one but the caller, so the endpoint takes the
+    bare request as "myself". The roll row and any seat in the same area go
+    together, so nobody keeps leading a place they have left.
+    """
+
+    def setUp(self):
+        self.plain = User.objects.create_user('exit.plain', 'exit.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member', ministry='adventist_women')
+        self.woman = User.objects.create_user('exit.woman', 'exit.woman@example.com', 'StrongPass#2026', first_name='Wanjiro', last_name='Woman')
+        MemberProfile.objects.create(user=self.woman, role='member', roles='member', ministry='adventist_women')
+        self.leader = User.objects.create_user('exit.leader', 'exit.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member', ministry='adventist_women')
+        self.elder = User.objects.create_user('exit.elder', 'exit.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+
+        self.awm = Department.objects.get(code='awm')
+        leader_role = DepartmentRole.objects.get(department=self.awm, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=self.awm, role=leader_role, member=self.leader, kind='leader',
+        )
+        for member in (self.plain, self.woman, self.leader):
+            DepartmentMembership.objects.create(member=member, department='awm')
+
+    def roll_ids(self):
+        self.client.force_authenticate(self.elder)
+        return {row['id'] for row in self.client.get('/api/members/departments/awm/members/').data['members']}
+
+    def test_a_leader_takes_a_member_off_the_roll(self):
+        """The Remove on a member's row: the desk's own hand, one row."""
+        self.client.force_authenticate(self.leader)
+        response = self.client.delete(f'/api/members/departments/awm/members/{self.woman.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(DepartmentMembership.objects.filter(member=self.woman, department='awm').exists())
+        self.assertNotIn(self.woman.id, self.roll_ids())
+
+    def test_a_member_may_not_take_another_off(self):
+        """Removing someone else stays the desk's and the office's hands."""
+        self.client.force_authenticate(self.plain)
+        response = self.client.delete(f'/api/members/departments/awm/members/{self.woman.id}/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(DepartmentMembership.objects.filter(member=self.woman, department='awm').exists())
+
+    def test_a_member_steps_off_their_own_roll(self):
+        """Leaving needs nobody's permission: no name given means the caller,
+        and the area drops off their map at once."""
+        self.client.force_authenticate(self.plain)
+        response = self.client.delete('/api/members/departments/awm/members/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(DepartmentMembership.objects.filter(member=self.plain, department='awm').exists())
+        self.assertNotIn('awm', self.client.get('/api/members/me/').data['my_ties'])
+
+    def test_leaving_releases_the_seat_held_in_the_area(self):
+        """The roll row and the leadership seat go together: a leader who
+        steps off does not keep leading from outside the roll."""
+        self.client.force_authenticate(self.leader)
+        response = self.client.delete('/api/members/departments/awm/members/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            DepartmentAssignment.objects.filter(
+                department__code='awm', member=self.leader,
+            ).exists()
+        )
+        self.assertFalse(DepartmentMembership.objects.filter(member=self.leader, department='awm').exists())
+
+    def test_a_name_that_is_not_on_the_roll_changes_nothing(self):
+        """The office may remove anyone — but there must be a row to remove."""
+        self.client.force_authenticate(self.elder)
+        outsider = User.objects.create_user('exit.outsider', 'exit.outsider@example.com', 'StrongPass#2026', first_name='Ota', last_name='Outsider')
+        MemberProfile.objects.create(user=outsider, role='member', roles='member')
+        response = self.client.delete(f'/api/members/departments/awm/members/{outsider.id}/')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_removing_a_seated_leader_clears_the_leadership_table(self):
+        """The leadership section reads the same rows: a removed leader is
+        gone from it too, not left naming someone off the roll."""
+        self.client.force_authenticate(self.elder)
+        response = self.client.delete(f'/api/members/departments/awm/members/{self.leader.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        directory = self.client.get('/api/members/departments/?all=true').data
+        awm = next(row for row in directory['departments'] if row['code'] == 'awm')
+        holders = [
+            holder['username']
+            for role in awm.get('roles') or []
+            for holder in role.get('holders') or []
+        ]
+        self.assertNotIn(self.leader.get_username(), holders)
