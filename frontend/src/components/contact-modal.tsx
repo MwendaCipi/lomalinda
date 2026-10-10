@@ -160,6 +160,17 @@ function memberDisplayName(member: ContactMember): string {
   return full || member.username || "member";
 }
 
+/** Kenyan phone numbers on the church's records are stored as 07... (10
+    digits). WhatsApp's wa.me link needs the international form (2547...),
+    so this normalizes the number before it is put in the href. */
+function waMeNumber(raw: string) {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0")) return "254" + digits.slice(1);
+  if (digits.startsWith("254")) return digits;
+  return digits;
+}
+
 /** The roster's standard contact sheet: Call, Chat here, WhatsApp, Email.
     Any desk holding an app member record can drop this in as-is. */
 export function ContactMemberModal({ member, onClose }: { member: ContactMember; onClose: () => void }) {
@@ -206,7 +217,7 @@ export function ContactMemberModal({ member, onClose }: { member: ContactMember;
           detail: whatsappNumber
             ? `${whatsappNumber}${member.whatsapp_number ? "" : " (phone number)"}`
             : "No number on file",
-          href: whatsappNumber ? `https://wa.me/${whatsappNumber.replace(/\D/g, "")}` : undefined,
+          href: whatsappNumber ? `https://wa.me/${waMeNumber(whatsappNumber)}` : undefined,
           disabled: !whatsappNumber,
           onClick: onClose,
         },

@@ -100,7 +100,10 @@ function ContactActions({
   }, [open]);
 
   // WhatsApp reaches them by whatever number the church holds, digits only.
-  const wa = (target.whatsapp || target.phone || "").replace(/\D/g, "");
+  // WhatsApp's wa.me link needs the international form (2547...), so
+  // convert the 07... stored on the record first.
+  const rawWa = (target.whatsapp || target.phone || "").replace(/\D/g, "");
+  const wa = rawWa.startsWith("0") ? "254" + rawWa.slice(1) : rawWa;
   type Action = { key: string; label: string; icon: React.ReactNode; href?: string; run?: () => void };
   const actions: Action[] = [];
   if (target.chatId) {
@@ -1072,11 +1075,6 @@ export function MyAreas() {
             </section>
           )}
 
-          <p className="flex items-start gap-2 rounded-xl border border-sand-line bg-sand-linen px-4 py-3 text-[11px] leading-5 text-moss">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-moss" aria-hidden="true" />
-            This is the church&apos;s own record of {openArea.label}. To change anything, ask the{" "}
-            {openArea.group === "ministry" ? "ministry's" : "department's"} leadership or the church office.
-          </p>
           {showAddMember && (
             <AddAreaMemberModal
               departmentLabel={openArea.label}
