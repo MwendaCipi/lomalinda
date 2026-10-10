@@ -74,7 +74,10 @@ export default function TestimoniesPage() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Read once at render, not inside the effect: localStorage is a
+  // synchronous external value, so it needs no effect to mirror it. Guarded
+  // for the server, which has no window during static prerender.
+  const [isLoggedIn] = useState(() => typeof window !== "undefined" && Boolean(localStorage.getItem("access_token")));
   const [shareModalOpen, setShareModalOpen] = useState(false);
   // Which thing the share sheet is collecting: a testimony of what God has
   // done, or an idea that could help the church.
@@ -89,9 +92,7 @@ export default function TestimoniesPage() {
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    const loggedIn = Boolean(token);
-    setIsLoggedIn(loggedIn);
-    if (loggedIn) {
+    if (token) {
       fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
