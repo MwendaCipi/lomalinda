@@ -169,9 +169,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 // A phone spends its height on the page, not on the chrome: the
                 // heading and its description ride the wider screens only, and a
                 // header with nothing left on a phone (no controls) steps out
-                // entirely. The row of toggles below still names the place.
+                // entirely. On a phone this band drops below the row of toggles —
+                // the strip names the place, and the search answers to it — and
+                // the wider screens keep the heading first, controls to its right.
                 <div
-                  className={`shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  className={`order-2 sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                     headerRightAction ? "" : "hidden sm:flex"
                   }`}
                 >
@@ -191,7 +193,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               {(customToggles || sectionPages.length > 1) && (
-                <div className="flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5">
+                <div className="order-1 sm:order-none flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5">
                   <div className="min-w-0 flex-1">
                     {customToggles ? (
                       <div className="pt-2">{customToggles}</div>
@@ -208,7 +210,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
               )}
-              <div className="app-panel">{children}</div>
+              <div className="app-panel order-3 sm:order-none">{children}</div>
             </div>
           </div>
         </div>
