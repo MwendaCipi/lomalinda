@@ -581,6 +581,14 @@ export default function ReconciliationPage() {
 
   const rawRows = summary?.purpose_breakdown || [];
   const displayedRows: PurposeRow[] = rawRows.filter((r) => Number(r.total || 0) > 0);
+  // What the summary table shows: the same rows, narrowed by the search box
+  // the givings views answer to. The totals row and the workbook grid keep
+  // reading displayedRows — a search finds an account, it never rewrites the
+  // month's figures.
+  const summarySearch = searchQuery.trim().toLowerCase();
+  const visibleRows: PurposeRow[] = summarySearch
+    ? displayedRows.filter((r) => r.purpose.toLowerCase().includes(summarySearch))
+    : displayedRows;
 
   const totals = {
     mpesa: summary?.totals?.mpesa ? Number(summary.totals.mpesa) : displayedRows.reduce((acc, r) => acc + Number(r.mpesa || 0), 0),
@@ -996,12 +1004,16 @@ export default function ReconciliationPage() {
                   <>
                     {/* Mobile Cards View (visible on md:hidden) */}
                     <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
-                      {displayedRows.length === 0 ? (
+                      {visibleRows.length === 0 ? (
                         <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                          No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).
+                          {summarySearch && displayedRows.length > 0 ? (
+                            <>No accounts match “{searchQuery.trim()}”.</>
+                          ) : (
+                            <>No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).</>
+                          )}
                         </div>
                       ) : (
-                        displayedRows.map((row, idx) => (
+                        visibleRows.map((row, idx) => (
                           <div
                             key={row.purpose}
                             onClick={() => toggleExpandPurpose(row.purpose)}
@@ -1059,14 +1071,18 @@ export default function ReconciliationPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-sand-soft">
-                          {displayedRows.length === 0 ? (
+                          {visibleRows.length === 0 ? (
                             <tr>
                               <td colSpan={7} className="px-4 py-12 text-center text-moss">
-                                No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).
+                                {summarySearch && displayedRows.length > 0 ? (
+                                  <>No accounts match “{searchQuery.trim()}”.</>
+                                ) : (
+                                  <>No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).</>
+                                )}
                               </td>
                             </tr>
                           ) : (
-                            displayedRows.map((row, idx) => (
+                            visibleRows.map((row, idx) => (
                               <tr
                                 key={row.purpose}
                                 onClick={() => toggleExpandPurpose(row.purpose)}
@@ -1119,7 +1135,7 @@ export default function ReconciliationPage() {
                       </table>
                       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-sand-line">
                         <span className="text-xs font-semibold text-moss">
-                          Total Rows Available: <strong className="text-bark">{displayedRows.length}</strong>
+                          Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
                         </span>
                         <div className="flex items-center gap-2">
                           <button
