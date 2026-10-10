@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from members.models import Contribution
 from members.mpesa import MpesaConfigurationError, normalize_pull_rows, pull_paybill_transactions
-from members.views import record_direct_paybill_payment
+from members.views import explain_pull_registration, record_direct_paybill_payment
 
 
 class Command(BaseCommand):
@@ -59,20 +59,21 @@ class Command(BaseCommand):
                 code = str(page.get('ResponseCode') or '')
                 if code and code != '1000':
                     message = str(page.get('ResponseMessage') or 'Safaricom returned no transactions.')
-                    lowered = message.lower()
-                    if 'not have any available' in lowered or 'not available' in lowered:
-                        # Not an empty window — a shortcode Pull was never
-                        # turned on for. Reporting "0 pulled" here would send
-                        # the desk looking at the wrong thing, so the command
-                        # names the fix instead.
-                        raise CommandError(
-                            f'{message} — this usually means the shortcode has '
-                            'never been registered for Pull. Run '
-                            '`manage.py register_mpesa_pull_url` once, then pull again.'
-                        )
+                    # Safaricom's "No records found or Organization Name not
+                    # available" covers an empty window AND a shortcode Pull
+                    # was never turned on for. The register probe (idempotent)
+                    # settles which one it is, so the desk reads the settled
+                    # answer instead of being sent to register a shortcode
+                    # that long has been.
+                    kind, note = explain_pull_registration(message)
+                    if kind == 'unknown':
+                        raise CommandError(f'{message}{note}')
+                    if kind == 'fixed':
+                        self.stdout.write(self.style.SUCCESS(f'{message}{note}'))
+                        break
                     # An empty window is a normal answer, not a failure; say
                     # so rather than reporting a silent zero.
-                    self.stdout.write(self.style.WARNING(f'Safaricom answered: {message}'))
+                    self.stdout.write(self.style.WARNING(f'{message}{note}'))
                     break
                 # The documented answer nests rows under `Response` with
                 # lowercase keys; normalize_pull_rows takes that or the

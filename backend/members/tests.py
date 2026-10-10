@@ -3,7 +3,7 @@ import csv
 from decimal import Decimal
 from io import StringIO
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import unquote
 
 from django.core import mail
@@ -1026,7 +1026,8 @@ class PullMpesaTransactionsCommandTests(APITestCase):
     def test_an_unregistered_shortcode_names_the_fix(self, mock_post, mock_get):
         """Safaricom answers a shortcode Pull was never enabled for with its
         own sentence, not an error status — the command must not report that
-        as a quiet "0 pulled".
+        as a quiet "0 pulled". This env cannot even run the register probe
+        (no nominated number), so the original instruction stands.
         """
         from django.core.management.base import CommandError
 
@@ -1046,6 +1047,79 @@ class PullMpesaTransactionsCommandTests(APITestCase):
 
         self.assertIn('No records found', str(caught.exception))
         self.assertIn('register_mpesa_pull_url', str(caught.exception))
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_a_registered_shortcode_is_not_told_to_register_again(self, mock_post, mock_get):
+        """The same Safaricom sentence also covers a window that is simply
+        empty — and a registered shortcode asking it hears the register
+        probe answer "already Registered". Blaming registration then sends
+        the desk to run a command that changes nothing, so the command
+        says what is true: the window holds no transactions.
+        """
+        query_answer = MagicMock(
+            status_code=200,
+            **{'raise_for_status.return_value': None},
+        )
+        query_answer.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'No records found or Organization Name not available',
+        }
+        register_answer = MagicMock(
+            status_code=200,
+            **{'raise_for_status.return_value': None},
+        )
+        register_answer.json.return_value = {
+            'Response Status': '1001',
+            'Response Description': 'Shortcode already Registered!',
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.side_effect = [query_answer, register_answer]
+
+        env = {**self.ENV, 'MPESA_PULL_NOMINATED_NUMBER': '254712345678',
+               'MPESA_PULL_CALLBACK_URL': 'https://church.example/pull/'}
+        with patch.dict('os.environ', env):
+            out, _ = self._run('--days', '2')
+
+        self.assertIn('No records found', out)
+        self.assertIn('IS registered for Pull', out)
+        self.assertIn('Pulled 0 transaction(s)', out)
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_the_probe_registers_a_shortcode_it_finds_unregistered(self, mock_post, mock_get):
+        """When the probe finds the shortcode really was never enabled, its
+        own call enables it — the command says so and asks for one more
+        pull, rather than sending the desk off to run a command."""
+        query_answer = MagicMock(
+            status_code=200,
+            **{'raise_for_status.return_value': None},
+        )
+        query_answer.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'No records found or Organization Name not available',
+        }
+        register_answer = MagicMock(
+            status_code=200,
+            **{'raise_for_status.return_value': None},
+        )
+        register_answer.json.return_value = {
+            'Response Status': '1000',
+            'Response Description': 'Success',
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.side_effect = [query_answer, register_answer]
+
+        env = {**self.ENV, 'MPESA_PULL_NOMINATED_NUMBER': '254712345678',
+               'MPESA_PULL_CALLBACK_URL': 'https://church.example/pull/'}
+        with patch.dict('os.environ', env):
+            out, _ = self._run('--days', '2')
+
+        self.assertIn('has registered it. Pull again', out)
 
     @patch('members.mpesa.requests.get')
     @patch('members.mpesa.requests.post')
@@ -1251,6 +1325,45 @@ class MpesaPullTransactionsAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['pulled'], 0)
         self.assertIn('No transactions available', response.data['detail'])
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_a_registered_shortcodes_empty_window_is_not_blamed_on_registration(self, mock_post, mock_get):
+        """The pull button heard Safaricom's ambiguous "No records found or
+        Organization Name not available" — which a REGISTERED shortcode
+        also hears for an empty window. The probe settles it: the register
+        call answers "already Registered", so the banner must say the
+        window is empty, not send the treasurer to run a command that
+        changes nothing.
+        """
+        query_answer = MagicMock(status_code=200, **{'raise_for_status.return_value': None})
+        query_answer.json.return_value = {
+            'ResponseCode': '1001',
+            'ResponseMessage': 'No records found or Organization Name not available',
+        }
+        register_answer = MagicMock(status_code=200, **{'raise_for_status.return_value': None})
+        register_answer.json.return_value = {
+            'Response Status': '1001',
+            'Response Description': 'Shortcode already Registered!',
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.side_effect = [query_answer, register_answer]
+
+        env = {
+            'MPESA_CONSUMER_KEY': 'key', 'MPESA_CONSUMER_SECRET': 'secret',
+            'MPESA_SHORTCODE': '600000', 'MPESA_PULL_NOMINATED_NUMBER': '254712345678',
+            'MPESA_PULL_CALLBACK_URL': 'https://church.example/pull/',
+        }
+        self.client.force_authenticate(user=self.treasurer)
+        with patch.dict('os.environ', env):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 2}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pulled'], 0)
+        self.assertIn('IS registered for Pull', response.data['detail'])
+        self.assertNotIn('register_mpesa_pull_url', response.data['detail'])
 
     @patch('members.mpesa.requests.get')
     @patch('members.mpesa.requests.post')

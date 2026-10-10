@@ -43,7 +43,7 @@ from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, safe_mpesa_phone
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
@@ -4603,6 +4603,46 @@ class MpesaC2BConfirmationView(APIView):
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
+def explain_pull_registration(message):
+    """Sort out Safaricom's ambiguous no-records sentence.
+
+    "No records found or Organization Name not available" names two very
+    different situations — a window the paybill received nothing in, and a
+    shortcode that was never enabled for Pull — and the desk cannot tell
+    them apart. The register call can: it is idempotent, answering
+    "Shortcode already Registered" on every run after the first, so it is
+    asked here which of the two is true. Returns (kind, note), where kind
+    is 'empty' (registered; the window holds nothing), 'fixed' (this probe
+    just registered the shortcode), 'unknown' (the probe could not run, so
+    the original instruction stands), or 'none' (not the ambiguous
+    sentence; no note to add).
+    """
+    lowered = (message or '').lower()
+    if 'not have any available' not in lowered and 'not available' not in lowered:
+        return 'none', ''
+    try:
+        result = register_pull_url()
+    except Exception:
+        result = None
+    description = str((result or {}).get('Response Description') or '')
+    code = str((result or {}).get('Response Status') or '')
+    if not description and not code:
+        return 'unknown', (
+            ' — this usually means the shortcode has never been '
+            'registered for Pull. Run `manage.py register_mpesa_pull_url` '
+            'once, then pull again.'
+        )
+    if 'already registered' in description.lower() or code == '1001':
+        return 'empty', (
+            ' — the shortcode IS registered for Pull (Safaricom just '
+            'confirmed it), so this window simply holds no transactions.'
+        )
+    return 'fixed', (
+        ' — the shortcode was not registered for Pull before; this check '
+        'has registered it. Pull again to read the window.'
+    )
+
+
 class MpesaPullTransactionsView(APIView):
     """Treasurer-triggered pull of the paybill's transactions from Safaricom.
 
@@ -4685,18 +4725,14 @@ class MpesaPullTransactionsView(APIView):
             if record_direct_paybill_payment(row) is not None:
                 recorded += 1
 
-        # An empty window is normal; an unregistered shortcode is not, and
-        # the desk should be told which one it is looking at.
+        # An empty window is normal; Safaricom's ambiguous "not available"
+        # sentence is not — it covers both an empty window and a shortcode
+        # nobody enabled. The register call (idempotent) settles which one
+        # it is, and the desk reads the settled answer.
         detail = ''
         if not rows and note:
-            detail = note
-            lowered = note.lower()
-            if 'not have any available' in lowered or 'not available' in lowered:
-                detail += (
-                    ' — this usually means the shortcode has never been '
-                    'registered for Pull. Run `manage.py register_mpesa_pull_url` '
-                    'once, then pull again.'
-                )
+            _kind, explanation = explain_pull_registration(note)
+            detail = note + explanation
 
         payload = {
             'pulled': len(rows),
