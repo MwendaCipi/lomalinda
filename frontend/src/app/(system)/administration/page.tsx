@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BadgeCheck, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -9,7 +9,6 @@ import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
-import { RoleManagement } from "@/components/role-management";
 import { DepartmentHub } from "@/components/department-hub";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
@@ -74,7 +73,6 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
-  "role-management": "the role register",
   leaders: "church departments",
   meetings: "meetings",
   board: "meetings",
@@ -114,7 +112,7 @@ function AdministrationContent() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   // The desk the URL falls back to when it names no tab: the phone's overview,
   // or the desk the role keeps on a desktop. The URL itself is the tab.
-  const [defaultTab, setDefaultTab] = useState<string>("overview");
+  const [defaultTab, setDefaultTab] = useState<string>("users");
 
   const router = useRouter();
 
@@ -283,9 +281,18 @@ function AdministrationContent() {
    * settled on a second press. The overview's cards write the address bar the
    * same way, through a plain link.
    */
-  const activeTab = searchTab ? (searchTab === "expenditures" ? "accounts" : searchTab) : defaultTab;
+  // Two tabs no longer name a desk of their own: an expenditure lives in
+  // the accounts tab, and the old role-management links land on the register
+  // — roles are hardcoded, and user management edits who holds them.
+  const activeTab = searchTab
+    ? searchTab === "expenditures"
+      ? "accounts"
+      : searchTab === "role-management"
+        ? "users"
+        : searchTab
+    : defaultTab;
 
-  const tableContainedTabs = ["users", "role-management", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -299,6 +306,9 @@ function AdministrationContent() {
   // outranks it (see `activeTab` above), so this never delays a toggle.
   useEffect(() => {
     if (searchTab) return;
+    // A bare /administration — the account menu's only door to the console —
+    // lands on a real desk, never the overview of cards: on a phone that is
+    // the register itself, so the console opens where the work is.
     const onDesk = typeof window !== "undefined" && window.innerWidth >= 1024;
     const fallback = onDesk
       ? isClerk
@@ -308,17 +318,19 @@ function AdministrationContent() {
           : isFinance
             ? "accounts"
             : "settings"
-      : "overview";
+      : isClerk || isElder || isAdmin
+        ? "users"
+        : isFinance
+          ? "accounts"
+          : "settings";
     setDefaultTab(fallback);
-    // A bare /administration — the account menu's link — is written as the
-    // desk the role opens on, so the rail's row lights, the section strip
-    // draws and the heading names the desk, exactly as they do when the same
-    // page is opened from the rail's own row. Without the tab the URL claims
-    // no rail row at all, and the console rendered unframed beside it.
-    if (onDesk && status === "authorized") {
+    // The desk is written into the URL on every screen now, so a reload, a
+    // shared link and the page heading all agree on the page without a
+    // second read of the role.
+    if (status === "authorized") {
       router.replace(`/administration?tab=${fallback}`, { scroll: false });
     }
-  }, [searchTab, isClerk, isElder, isFinance, status, router]);
+  }, [searchTab, isClerk, isElder, isAdmin, isFinance, status, router]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is
@@ -336,7 +348,6 @@ function AdministrationContent() {
           description: "The church's members, their roles and the church's own settings.",
           cards: [
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register — every member, the roles they hold and their standing.", href: "/administration?tab=users" },
-            { icon: <BadgeCheck size={20} aria-hidden="true" />, label: "Role Management", description: "Hand a church-wide office to a member, or take one back.", href: "/administration?tab=role-management" },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
         }
@@ -456,7 +467,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Clerk Approval Notice */}
-            {["users", "role-management", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Church Clerk Access:</span>
@@ -468,10 +479,6 @@ function AdministrationContent() {
 
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
-
-            {/* Role Management — the register of who holds which office.
-                The roster keeps the record; this desk is only the roles. */}
-            {activeTab === "role-management" && (isClerk || isElder || isAdmin) && <RoleManagement />}
 
             {/* Leadership — the directory of the church's areas, opened on
                 one of them when a rail row (or a link) names it. The API

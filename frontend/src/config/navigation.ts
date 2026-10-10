@@ -3,7 +3,6 @@ import {
   Activity,
   Armchair,
   Baby,
-  BadgeCheck,
   BarChart3,
   BookOpen,
   Boxes,
@@ -25,7 +24,6 @@ import {
   Music,
   Receipt,
   Scale,
-  Settings,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -587,38 +585,11 @@ const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
 /** The clerk's desk: the meetings' minutes and the membership transfers. */
 const CLERKSHIP_ROLES = ["clerk", "admin"];
 /**
- * The console's own desk: the roster, the roles and the church's settings.
- * Elders, clerks and administrators share it, exactly as the phone's
- * Administration overview desk does.
+ * The office console — the roster and the church's own settings — is not a
+ * rail section anymore: the account menu is its only door, so the rail
+ * carries the church's working desks and the console sits one menu away.
+ * Roles stay hardcoded in the register; there is no role desk to open.
  */
-const ADMINISTRATION_ROLES = ["elder", "clerk", "admin"];
-
-/**
- * Administration — the console's own pages: who is on the register, who
- * holds which office, and the church's own settings.
- *
- * These three used to be split across the clerk's and the elders' strips,
- * which put the same desk's pages on two different rows of the rail. They are
- * one job — the church's own records and settings — so they stand together
- * here, and the strip at the top of each shows the other two one tap away.
- */
-export const administrationItems: RailRow[] = [
-  officeTab("users", "User Management", Users, {
-    roles: ADMINISTRATION_ROLES,
-    short: "Users",
-    description: "The church's accounts, their roles and their standing.",
-  }),
-  officeTab("role-management", "Role Management", BadgeCheck, {
-    roles: ADMINISTRATION_ROLES,
-    short: "Roles",
-    description: "Hand a church-wide office to a member, or take one back.",
-  }),
-  officeTab("settings", "Church Settings", Settings, {
-    roles: ADMINISTRATION_ROLES,
-    short: "Settings",
-    description: "The church's name, contacts, giving details and the messages it sends.",
-  }),
-];
 
 /**
  * Clerkship — the clerk's desk: the minutes of the board and business
@@ -858,12 +829,11 @@ export const railEntries: RailEntry[] = [
     // what tells this row of the strip apart from In-Kind's.
     items: [page("give", { label: "Giving", short: "Money", stripLabel: "Money Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
   },
-  // The church's offices, each on the row it belongs to — the console's own
-  // records and settings (Administration), an elder's work, a clerk's work
-  // and the deacons' work are four different jobs, and the treasurer's has
-  // always stood on its own. The roster, the roles and the church's settings
-  // share one desk rather than hiding in two of the others.
-  { label: "Administration", icon: ShieldCheck, items: administrationItems, roles: ADMINISTRATION_ROLES, railMinistry: true },
+  // The church's offices, each on the row it belongs to — an elder's work, a
+  // clerk's work and the deacons' work are three different jobs, and the
+  // treasurer's has always stood on its own. The office console (the roster
+  // and the church's settings) is deliberately not here: the account menu is
+  // its only door, so the rail carries the desks of ongoing work.
   { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true },
   { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true },
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true },
