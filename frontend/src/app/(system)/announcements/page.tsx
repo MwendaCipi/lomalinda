@@ -95,19 +95,18 @@ export default function AnnouncementsPage() {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((response) => (response.ok ? response.json() : []))
-      .then((data: FeedItem[]) => setAnnouncements(Array.isArray(data) ? data : []))
-      .catch(() => setAnnouncements([]))
+      .then((data: FeedItem[]) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);
-
-  // Drives are announced through the same feed; keep the state name the rest
-  // of the page already reads.
-  const setAnnouncements = (rows: FeedItem[]) => setItems(rows);
 
   // One load: the feed, plus the departments this account belongs to (the
   // names a post's department badge reads).
   useEffect(() => {
-    loadFeed();
+    // The load's state writes ride a microtask, which keeps the effect's own
+    // synchronous body from cascading the render — the same shape the desks
+    // use for their own loads.
+    void Promise.resolve().then(loadFeed);
     const token = localStorage.getItem("access_token");
     if (!token) return;
     fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
@@ -185,7 +184,9 @@ export default function AnnouncementsPage() {
                   const itemBadge = (item.audience ?? [])
                     .map((code) => myDepartments.find((dept) => dept.audience_code === code)?.label)
                     .find(Boolean);
-                  const cardClasses = "flex flex-col justify-between rounded-2xl border border-sand-line bg-white shadow-sm p-4";
+                  // A little more room than the ledger cards: the notice
+                  // reads as a card of its own, never a squashed strip.
+                  const cardClasses = "flex min-h-40 flex-col justify-between rounded-2xl border border-sand-line bg-white p-5 shadow-sm";
                   const content = (
                     <>
                       <div>

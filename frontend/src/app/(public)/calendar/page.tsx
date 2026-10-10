@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { usePageHeader } from "@/components/app-frame";
@@ -195,13 +195,13 @@ function PeriodButtons({
     <div
       role="group"
       aria-label="Calendar period"
-      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-sand-mute bg-white p-0.5"
+      className="inline-flex h-full w-full shrink-0 items-center gap-1 rounded-xl border border-sand-mute bg-white p-1"
     >
       <button
         type="button"
         aria-pressed={period === "quarter"}
         onClick={() => onPeriod("quarter")}
-        className={`whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-semibold transition sm:px-2.5 sm:text-xs ${
+        className={`flex-1 min-h-9 whitespace-nowrap rounded-lg px-1.5 py-1 text-[10px] font-semibold transition sm:px-2.5 sm:text-xs ${
           period === "quarter"
             ? "bg-ember text-white"
             : "text-moss-dark hover:text-bark"
@@ -213,7 +213,7 @@ function PeriodButtons({
         type="button"
         aria-pressed={period === "all"}
         onClick={() => onPeriod("all")}
-        className={`whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-semibold transition sm:px-2.5 sm:text-xs ${
+        className={`flex-1 min-h-9 whitespace-nowrap rounded-lg px-1.5 py-1 text-[10px] font-semibold transition sm:px-2.5 sm:text-xs ${
           period === "all"
             ? "bg-ember text-white"
             : "text-moss-dark hover:text-bark"
@@ -270,9 +270,27 @@ function CalendarPageContent() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  const shiftMonth = (amount: number) => {
+  const shiftMonth = useCallback((amount: number) => {
     setMonthDate((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
-  };
+  }, []);
+
+  // On a phone the switches give way as soon as the list starts moving —
+  // the row they sit in is the page's tallest chrome, and a phone spends
+  // its height on the events. Scrolled back to the top, they return.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => {
+      const container = contentRef.current;
+      const y = signedIn && container ? container.scrollTop : window.scrollY;
+      setScrolled(y > 24);
+    };
+    // Signed in, the page scrolls its own panel; the public page scrolls
+    // the document.
+    const target: EventTarget = signedIn && contentRef.current ? contentRef.current : window;
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [signedIn]);
 
   useEffect(() => {
     function closeActions(event: MouseEvent) {
@@ -332,20 +350,31 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [events, monthIndex, monthYear, search]);
 
-  // The one cluster of controls — view, period and search — memoised so the
-  // header-injection effect below only re-runs when a control actually
-  // changes, not on every render.
+  // The one cluster of controls — view, period, search and (with the grid
+  // open) the month arrows — memoised so the header-injection effect below
+  // only re-runs when a control actually changes, not on every render.
   const controls = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        {/* The two switches share one line on a phone — view first, period
-            beside it — rather than each claiming a row of its own. They are
-            never allowed to wrap between them; only the search may drop. */}
-        <div className="flex flex-nowrap items-center gap-1.5 max-[340px]:flex-wrap sm:gap-3">
-          <CalendarViewToggle view={view} onChange={setView} />
-          <PeriodButtons period={period} onPeriod={setPeriod} />
+        {/* The two switches share one row, split evenly and drawn to the
+            same height — one line on a phone, its own line there. Signed in
+            they are the page's top chrome, so on a phone they give way as
+            soon as the list starts scrolling; the public page keeps them
+            (they sit below its heading, where hiding them would strand
+            them). */}
+        <div
+          className={`${signedIn && !isPc && scrolled ? "hidden" : "flex"} w-full items-stretch gap-1.5 sm:w-auto sm:flex-1 sm:gap-3`}
+        >
+          <div className="min-w-0 flex-1 [&>div]:h-full [&>div]:w-full">
+            <CalendarViewToggle view={view} onChange={setView} />
+          </div>
+          <div className="min-w-0 flex-1 [&>div]:h-full [&>div]:w-full">
+            <PeriodButtons period={period} onPeriod={setPeriod} />
+          </div>
         </div>
-        <div className="relative w-full sm:w-56">
+        {/* The search keeps the row it can have: alone in list mode, beside
+            the month arrows when the grid is open. */}
+        <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
           <input
             type="search"
             value={search}
@@ -355,9 +384,35 @@ function CalendarPageContent() {
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
           />
         </div>
+        {/* The month's own arrows ride the grid's row beside the search —
+            the month is named in the grid's heading, so a phone needs only
+            the two buttons. */}
+        {view === "calendar" && (
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              aria-label="Previous month"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember sm:h-10 sm:w-10"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span className="hidden min-w-28 text-center text-sm font-semibold text-bark sm:inline">
+              {monthNames[monthIndex]} {monthYear}
+            </span>
+            <button
+              type="button"
+              onClick={() => shiftMonth(1)}
+              aria-label="Next month"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember sm:h-10 sm:w-10"
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
     ),
-    [view, period, search]
+    [view, period, search, scrolled, isPc, signedIn, monthIndex, monthYear, shiftMonth]
   );
 
   // Signed in on a wide screen, the controls ride the shell header beside the
@@ -403,26 +458,11 @@ function CalendarPageContent() {
         </div>
       </section>
 
-      <div className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "flex-1 min-h-0 overflow-y-auto py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
+      <div ref={contentRef} className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "flex-1 min-h-0 overflow-y-auto py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
         {/* Signed in on a wide screen, the controls have ridden up into the
-            shell header; everywhere else they sit here in the content, beside
-            the month arrows when the grid is open. */}
-        {(!(signedIn && isPc) || view === "calendar") && (
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {!(signedIn && isPc) && controls}
-            {view === "calendar" && (
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <span className="min-w-32 text-center text-sm font-semibold text-bark">{monthNames[monthIndex]} {monthYear}</span>
-                <button type="button" onClick={() => shiftMonth(1)} aria-label="Next month" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember">
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+            shell header; everywhere else they sit here in the content — the
+            month arrows among them, beside the search when the grid is open. */}
+        {!(signedIn && isPc) && controls}
 
         {/* Table view — wide screens only; a phone reads the cards below. */}
         <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
@@ -564,9 +604,20 @@ function CalendarPageContent() {
           <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
         )}
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3">
+        {/* On a phone in list mode the footer stays put — pinned against
+            the scroll (lifted clear of the bottom tab bar when signed in)
+            so the count and the Print button never scroll away. */}
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3 ${
+            view === "table"
+              ? `sticky z-20 -mx-6 bg-sand px-6 md:static md:mx-0 md:px-0 ${
+                  signedIn ? "bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))]" : "bottom-0"
+                }`
+              : ""
+          }`}
+        >
           <p className="text-xs text-moss">
-            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : " this year"}, added by the ministries and departments.
+            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : " this year"}.
           </p>
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
             <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print

@@ -2809,6 +2809,38 @@ type UnifiedAccountItem = {
 };
 
 /**
+ * One ledger line as this panel reads it — the description minus what the
+ * panel already says.
+ *
+ * The opened ministry/department is named in the panel's own header, so the
+ * account name in brackets goes at every width; a withdrawal's reason goes
+ * too — the movement itself is the whole line ("Withdrawal"). A phone reads
+ * the shortest form, the giver's name alone, since its row folds the date
+ * and status beneath instead of carrying the table's separate columns.
+ */
+function ledgerLine(item: UnifiedAccountItem, wide: boolean, outflowWord = "Withdrawal"): string {
+  const text = (item.description || "").trim();
+  if (item.category === "withdrawal") {
+    // A request still waiting carries its reason as the description; the
+    // movement's own name is the whole line, the reason never being asked.
+    if (item.reference === "Withdrawal request" || item.reference === "Funding request") {
+      return outflowWord;
+    }
+    // "Withdrawal for <area>: <reason>" (and the reversal of it) → the kind.
+    const head = text.split(":")[0].replace(/\s+for\s+.+$/i, "").trim();
+    if (/^withdrawal$/i.test(head)) return outflowWord;
+    return head || outflowWord;
+  }
+  // Contribution lines read "<giver> — <method> (<account>)".
+  const dash = text.indexOf(" — ");
+  if (dash === -1) return text.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const giver = text.slice(0, dash).trim();
+  if (!wide) return giver;
+  const tail = text.slice(dash + 3).replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return tail ? `${giver} — ${tail}` : giver;
+}
+
+/**
  * The department's own fund — the Account & Withdrawals view of its desk.
  *
  * Displays both financial movements (contributions & debits) and withdrawal requests
@@ -3243,7 +3275,14 @@ export function DepartmentAccountsPanel({
                             <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
                           )}
                           <div className="min-w-0">
-                            <span className="truncate" title={item.description}>{item.description}</span>
+                            {/* The line trimmed to what this panel doesn't
+                                already say — see ledgerLine. */}
+                            <span className="hidden truncate sm:inline" title={ledgerLine(item, true, isDeaconate ? "Funding" : "Withdrawal")}>
+                              {ledgerLine(item, true, isDeaconate ? "Funding" : "Withdrawal")}
+                            </span>
+                            <span className="truncate sm:hidden">
+                              {ledgerLine(item, false, isDeaconate ? "Funding" : "Withdrawal")}
+                            </span>
                             {item.requestedBy && item.status !== "completed" && (
                               <span className="ml-1.5 text-[10px] text-moss-faint">
                                 (by {item.requestedBy})
@@ -3252,12 +3291,13 @@ export function DepartmentAccountsPanel({
                             {item.reply && (item.status === "declined" || item.status === "approved") && (
                               <p className="text-[10px] italic text-moss-faint">{item.reply}</p>
                             )}
-                            {/* Phone: the date, reference and status fold under
-                                the description — the row's other columns stand
-                                aside so nothing is cut off widthwise. */}
+                            {/* Phone: the date and status fold under the
+                                description — the row's other columns stand
+                                aside so nothing is cut off widthwise, and the
+                                reference (a receipt number) stays a wide
+                                screen's column rather than a phone's noise. */}
                             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-normal text-moss-faint sm:hidden">
                               <span>{dayFirstTime(item.date)}</span>
-                              <span className="font-mono">{item.reference}</span>
                               {statusBadge(item.status)}
                             </p>
                           </div>

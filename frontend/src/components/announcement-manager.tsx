@@ -1068,7 +1068,7 @@ export function AnnouncementManager({
           renderCard={(item) => (
             <article
               key={item.id}
-              className="flex flex-col gap-2.5 rounded-2xl border border-sand-line bg-white p-4 text-xs shadow-sm"
+              className="flex min-h-40 flex-col gap-3 rounded-2xl border border-sand-line bg-white p-5 text-xs shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
                 <h4 className="text-sm font-bold text-bark">{item.title}</h4>
