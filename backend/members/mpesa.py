@@ -222,6 +222,14 @@ def register_pull_url(nominated_number=None, callback_url=None):
 
     nominated = (nominated_number or environ.get('MPESA_PULL_NOMINATED_NUMBER') or '').strip()
     callback = (callback_url or environ.get('MPESA_PULL_CALLBACK_URL') or '').strip()
+    # Safaricom documents both spellings (07XXXXXXXX and 2547XXXXXXX) but
+    # answers the 07 form with "Bad Request - Invalid NominatedNumber" — the
+    # international form is the one it accepts, so it is written here.
+    if nominated.startswith('0') and len(nominated) == 10:
+        nominated = f'254{nominated[1:]}'
+    elif nominated.startswith('7') and len(nominated) == 9:
+        nominated = f'254{nominated}'
+
     if not nominated:
         raise MpesaConfigurationError('Missing MPESA_PULL_NOMINATED_NUMBER.')
     if not callback:
@@ -301,3 +309,52 @@ def pull_paybill_transactions(start_date, end_date, offset=0):
     response.raise_for_status()
     return response.json()
 
+
+def normalize_pull_rows(page):
+    """The rows of a Pull query answer, in the shape the C2B recorder reads.
+
+    Safaricom documents the pull answer as `Response: [[{transactionId,
+    trxDate, msisdn, sender, transactiontype, billreference, amount,
+    organizationname}]]` — a list of pages of rows, under lowercase keys —
+    while a C2B confirmation carries `TransID`/`TransAmount`/`BillRefNumber`
+    /`MSISDN`. The recorder takes one shape only, so a pull's rows are
+    translated here, once, for the browser's Pull button and the
+    reconciliation command alike. A row already in the callback shape passes
+    through untouched, so an answer in either spelling still records.
+    """
+    raw = page.get('Response')
+    if raw is None:
+        raw = page.get('Result') or []
+    entries = raw if isinstance(raw, list) else [raw]
+    rows = []
+    for entry in entries:
+        # The documented answer nests one list per page of rows; a flat list
+        # of row dicts is the other spelling Safaricom uses.
+        candidates = entry if isinstance(entry, list) else [entry]
+        for row in candidates:
+            if isinstance(row, dict):
+                rows.append(_normalize_pull_row(row))
+    return rows
+
+
+def _normalize_pull_row(row):
+    """One pull row, spelled the way record_direct_paybill_payment reads."""
+    if row.get('TransID') or row.get('TransactionID'):
+        return row
+    trans_id = row.get('transactionId') or row.get('transactionid')
+    if not trans_id:
+        return row
+    normalized = {
+        'TransID': str(trans_id),
+        'TransAmount': row.get('amount') if row.get('amount') not in (None, '') else 0,
+        'BillRefNumber': row.get('billreference') or row.get('billReference') or '',
+        # The pull's msisdn may arrive as a number, and Safaricom may hand
+        # back a masked one — safe_mpesa_phone copes with both.
+        'MSISDN': str(row.get('msisdn') or ''),
+    }
+    sender = row.get('sender')
+    if isinstance(sender, str) and sender.strip():
+        # The pull names the sender as one string; the recorder joins its
+        # name parts, so the whole of it goes in the first slot.
+        normalized['FirstName'] = sender.strip()
+    return normalized

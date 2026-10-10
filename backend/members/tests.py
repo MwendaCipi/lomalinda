@@ -686,6 +686,109 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.donor_email, 'wa.giver@example.com')
         self.assertTrue(any(member.email in message.to for message in mail.outbox))
 
+    def test_an_obfuscated_msisdn_falls_back_to_a_sender_name_that_names_one_member(self):
+        # Safaricom obfuscates the payer's number in some payloads — the
+        # phone thread is cut — but the registered sender name still
+        # arrives, and when it names exactly one member of the roll the
+        # gift is tied to that account and the receipt has an address.
+        from django.core import mail
+
+        member = User.objects.create_user('onjwayow', 'onjwayowilliam@example.com', 'StrongPass#2026')
+        member.first_name = 'William'
+        member.last_name = 'Onjwayo'
+        member.save()
+        MemberProfile.objects.create(user=member, role='member')
+        payload = {
+            'TransID': 'OBF45NAME',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '683344662296',
+            'FirstName': 'WILLIAM ONJWAYO',
+        }
+        mail.outbox.clear()
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='OBF45NAME')
+        self.assertEqual(contribution.member, member)
+        self.assertEqual(contribution.donor_email, 'onjwayowilliam@example.com')
+        self.assertTrue(any(member.email in message.to for message in mail.outbox))
+        self.assertIsNotNone(contribution.receipt_sent_at)
+
+    def test_a_sender_name_two_members_share_links_nobody(self):
+        # Two members answer to the same name: the name alone does not
+        # single out an account, so the gift stays unattributed rather
+        # than being credited and receipted to the wrong member.
+        for username in ('will.one', 'will.two'):
+            twin = User.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+            twin.first_name = 'William'
+            twin.last_name = 'Onjwayo'
+            twin.save()
+            MemberProfile.objects.create(user=twin, role='member')
+        payload = {
+            'TransID': 'AMB45NAME',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '683344662296',
+            'FirstName': 'William Onjwayo',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='AMB45NAME')
+        self.assertIsNone(contribution.member)
+        self.assertEqual(contribution.donor_email, '')
+
+    def test_a_bare_first_name_counts_only_when_it_fits_exactly_one_member(self):
+        from django.core import mail
+
+        sole = User.objects.create_user('shadrack.m', 'shadrack@example.com', 'StrongPass#2026')
+        sole.first_name = 'Shadrack'
+        sole.last_name = 'Meshach'
+        sole.save()
+        MemberProfile.objects.create(user=sole, role='member')
+        payload = {
+            'TransID': 'BARE45ONE',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '683344662297',
+            'FirstName': 'SHADRACK',
+        }
+        mail.outbox.clear()
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(mpesa_receipt_number='BARE45ONE')
+        self.assertEqual(contribution.member, sole)
+        self.assertEqual(contribution.donor_email, 'shadrack@example.com')
+
+        # A second member answering to the same first name makes it    # ambiguous — nobody is named.
+        twin = User.objects.create_user('shadrack.b', 'shadrack.b@example.com', 'StrongPass#2026')
+        twin.first_name = 'Shadrack'
+        twin.last_name = 'Abednego'
+        twin.save()
+        MemberProfile.objects.create(user=twin, role='member')
+        payload['TransID'] = 'BARE45TWO'
+        payload['MSISDN'] = '683344662298'
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(mpesa_receipt_number='BARE45TWO')
+        self.assertIsNone(contribution.member)
+
+    def test_a_name_that_fits_nobody_and_no_usable_phone_links_nobody(self):
+        payload = {
+            'TransID': 'NONE45FIT',
+            'TransAmount': '5.00',
+            'BillRefNumber': 'LCB',
+            'MSISDN': '683344662299',
+            'FirstName': 'Totally Unknown Person',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(mpesa_receipt_number='NONE45FIT')
+        self.assertIsNone(contribution.member)
+        self.assertEqual(contribution.donor_email, '')
+        self.assertEqual(contribution.donor_name, 'Totally Unknown Person')
+
 
 class UnassignedPaymentsApiTests(APITestCase):
     """The treasurer's work queue: paybill payments whose reference named no
@@ -1003,7 +1106,10 @@ class RegisterMpesaPullUrlCommandTests(TestCase):
         payload = mock_post.call_args.kwargs['json']
         self.assertEqual(payload['ShortCode'], '600000')
         self.assertEqual(payload['RequestType'], 'Pull')
-        self.assertEqual(payload['NominatedNumber'], '0712345678')
+        # The desk configured the local 07 form; Safaricom answers that with
+        # "Bad Request - Invalid NominatedNumber", so the international
+        # spelling is what goes on the wire.
+        self.assertEqual(payload['NominatedNumber'], '254712345678')
         self.assertEqual(payload['CallBackURL'], 'https://church.example/api/members/payments/mpesa/pull/')
 
     @patch('members.mpesa.requests.get')
@@ -1019,6 +1125,27 @@ class RegisterMpesaPullUrlCommandTests(TestCase):
 
         self.assertIn('MPESA_PULL_NOMINATED_NUMBER', str(caught.exception))
         mock_post.assert_not_called()
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_an_already_international_nominated_number_is_sent_unchanged(self, mock_post, mock_get):
+        from django.core.management import call_command
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'Response Status': '1001',
+            'Response Description': 'ShortCode already Registered',
+        }
+
+        env = {**self.ENV, 'MPESA_PULL_NOMINATED_NUMBER': '254712345678'}
+        with patch.dict('os.environ', env):
+            call_command('register_mpesa_pull_url', stdout=StringIO())
+
+        self.assertEqual(mock_post.call_args.kwargs['json']['NominatedNumber'], '254712345678')
 
 
 class MpesaPullTransactionsAPITests(APITestCase):
@@ -1124,6 +1251,48 @@ class MpesaPullTransactionsAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['pulled'], 0)
         self.assertIn('No transactions available', response.data['detail'])
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_the_documented_pull_answer_shape_is_recorded(self, mock_post, mock_get):
+        """Safaricom documents the pull's rows under `Response` — lowercase
+        keys, one list per page — not the C2B callback's `TransID` spelling.
+        A payment arriving in the documented shape is still recorded, not
+        silently skipped.
+        """
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {
+            'ResponseCode': '1000',
+            'ResponseMessage': 'Success',
+            'Response': [[{
+                'transactionId': 'PULLDOC123',
+                'trxDate': '2026-10-09T10:13:00Z',
+                'msisdn': 254722123456,
+                'sender': 'Jane Wanjiru',
+                'transactiontype': 'c2b-pay-bill-debit',
+                'billreference': 'Tithe',
+                'amount': '1250.00',
+                'organizationname': 'SDA Loma Linda',
+            }]],
+        }
+
+        self.client.force_authenticate(user=self.treasurer)
+        with patch.dict('os.environ', self.ENV):
+            response = self.client.post('/api/members/payments/mpesa/pull/', {'days': 2}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pulled'], 1)
+        self.assertEqual(response.data['recorded'], 1)
+        contribution = Contribution.objects.get(mpesa_receipt_number='PULLDOC123')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertEqual(contribution.amount, Decimal('1250.00'))
+        self.assertEqual(contribution.purpose, 'Tithe')
+        self.assertEqual(contribution.donor_name, 'Jane Wanjiru')
+        self.assertEqual(contribution.phone_number, '254722123456')
 
     def test_anonymous_cannot_pull(self):
         response = self.client.post('/api/members/payments/mpesa/pull/', {}, format='json')

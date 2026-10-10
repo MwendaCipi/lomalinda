@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from members.models import Contribution
-from members.mpesa import MpesaConfigurationError, pull_paybill_transactions
+from members.mpesa import MpesaConfigurationError, normalize_pull_rows, pull_paybill_transactions
 from members.views import record_direct_paybill_payment
 
 
@@ -74,9 +74,10 @@ class Command(BaseCommand):
                     # so rather than reporting a silent zero.
                     self.stdout.write(self.style.WARNING(f'Safaricom answered: {message}'))
                     break
-                result = page.get('Result') or []
-                if not isinstance(result, list):
-                    result = [result]
+                # The documented answer nests rows under `Response` with
+                # lowercase keys; normalize_pull_rows takes that or the
+                # `Result` spelling to the shape the recorder reads.
+                result = normalize_pull_rows(page)
                 rows.extend(result)
                 # The API caps each response; an empty or short page means the
                 # window is exhausted, otherwise take the next slice.

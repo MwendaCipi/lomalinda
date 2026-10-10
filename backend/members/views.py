@@ -43,7 +43,7 @@ from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, WeeklyMeeting
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, pull_paybill_transactions, safe_mpesa_phone
+from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, safe_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
@@ -3957,6 +3957,18 @@ class ChurchPulseView(APIView):
         })
 
 
+def receipt_phone_is_valid(phone):
+    """A phone shaped enough to hand to the SMS gateway.
+
+    The resend dialog lets the desk correct a giver's number, and a typo
+    would silently send the receipt to a stranger's line — so the digits
+    are counted: anything phone-shaped (9 to 15 digits, the international
+    range) passes, and junk is refused while nothing has been sent yet.
+    """
+    digits = re.sub(r'\D', '', phone or '')
+    return 9 <= len(digits) <= 15
+
+
 class ResendContributionReceiptView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -3998,28 +4010,29 @@ class ResendContributionReceiptView(APIView):
 
             receipt_ref = contribution.mpesa_receipt_number or contribution.paystack_reference or f"REC-{contribution.id}"
             donor_name = contribution.donor_name or (contribution.member.get_full_name() if contribution.member else 'Church Member')
-            # A digital gift's receipt belongs to the giver's own verified
-            # address and phone — never a third party typed into this dialog.
-            # The one exception is a gift that has no address at all: a
-            # paybill payment Safaricom reported with an obfuscated number
-            # matches no account, so the ledger holds the money tied to
-            # nobody and no address exists to protect. Like a desk receipt,
-            # it can be finished here — the treasurer, who knows the giver
-            # at the desk, supplies the address and it is kept on the row.
-            email = contribution.donor_email or (contribution.member.email if contribution.member else '')
-            phone = contribution.phone_number or ''
-            if not phone and contribution.member:
-                profile = getattr(contribution.member, 'member_profile', None)
-                phone = getattr(profile, 'phone_number', '') or ''
+            # The desk may correct either contact detail here — the giver
+            # says "my email has changed" at the counter, or the row was
+            # recorded from a paybill pull whose Safaricom MSISDN came back
+            # obfuscated and with no address at all. What the treasurer
+            # types is kept on the row, so the correction holds for every
+            # later resend; what is left blank stays as the ledger has it.
             supplied_email = (request.data.get('email') or '').strip()
-            if not email and supplied_email:
+            if supplied_email:
                 try:
                     validate_email(supplied_email)
                 except Exception:
                     return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
-                contribution.donor_email = supplied_email
-                contribution.save(update_fields=['donor_email'])
-                email = supplied_email
+            supplied_phone = (request.data.get('phone') or '').strip()
+            if supplied_phone and not receipt_phone_is_valid(supplied_phone):
+                return Response(
+                    {'detail': 'Enter a valid phone number — 9 to 15 digits.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            email = supplied_email or contribution.donor_email or (contribution.member.email if contribution.member else '')
+            phone = supplied_phone or contribution.phone_number or ''
+            if not phone and contribution.member:
+                profile = getattr(contribution.member, 'member_profile', None)
+                phone = getattr(profile, 'phone_number', '') or ''
             if send_email and not email:
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -4037,9 +4050,21 @@ class ResendContributionReceiptView(APIView):
                 mark_sent=lambda: None,
             )
             sent = bool(delivery['email_sent'] or delivery['sms_sent'])
+            # The corrected contacts are kept even if the send itself failed,
+            # so the row is finished for good and the next resend needs no
+            # typing; the sent stamp follows the delivery.
+            updates = []
+            if supplied_email and supplied_email != (contribution.donor_email or ''):
+                contribution.donor_email = supplied_email
+                updates.append('donor_email')
+            if supplied_phone and supplied_phone != (contribution.phone_number or ''):
+                contribution.phone_number = supplied_phone
+                updates.append('phone_number')
             if sent:
                 contribution.receipt_sent_at = now
-                contribution.save(update_fields=['receipt_sent_at'])
+                updates.append('receipt_sent_at')
+            if updates:
+                contribution.save(update_fields=updates)
 
         elif source == 'cash':
             cash = CashContribution.objects.filter(id=raw_id).first()
@@ -4048,23 +4073,29 @@ class ResendContributionReceiptView(APIView):
 
             receipt_ref = cash.receipt_number or f"CASH-{cash.id}"
             donor_name = cash.donor_name or 'Church Member'
-            # A desk receipt is the treasurer's own entry, so they may finish
-            # it here: when the receipt was saved without the giver's address,
-            # the resend can carry one, which is then kept on the row. Without
-            # this the row sat at "pending" forever with no way to send it.
+            # A desk receipt is the treasurer's own entry, so they may
+            # finish it here: either contact may be supplied or corrected on
+            # resend, and what is typed is kept on the row. Without this the
+            # row sat at "pending" forever with no way to send it.
             supplied_email = (request.data.get('email') or '').strip()
-            email = (cash.giver_email or '').strip() or supplied_email
-            phone = (cash.giver_phone or '').strip()
+            if supplied_email:
+                try:
+                    validate_email(supplied_email)
+                except Exception:
+                    return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+            supplied_phone = (request.data.get('phone') or '').strip()
+            if supplied_phone and not receipt_phone_is_valid(supplied_phone):
+                return Response(
+                    {'detail': 'Enter a valid phone number — 9 to 15 digits.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            email = supplied_email or (cash.giver_email or '').strip()
+            phone = supplied_phone or (cash.giver_phone or '').strip()
             if send_email and not email:
                 return Response(
                     {'detail': "This receipt has no giver's email on file. Enter one to send it."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if supplied_email and supplied_email != (cash.giver_email or '').strip():
-                try:
-                    validate_email(supplied_email)
-                except Exception:
-                    return Response({'detail': 'Enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             amount_display = f"KES {cash.amount:,.2f}"
             body = (
@@ -4080,14 +4111,16 @@ class ResendContributionReceiptView(APIView):
                 mark_sent=lambda: None,
             )
             sent = bool(delivery['email_sent'] or delivery['sms_sent'])
-            # An address typed here for an addressless receipt is kept, so the
-            # row is finished for good even if the send itself failed.
+            # A contact typed here is kept, so the row is finished for good
+            # even if the send itself failed.
             if supplied_email:
-                cash.giver_email = email
-            if supplied_email or sent:
+                cash.giver_email = supplied_email
+            if supplied_phone:
+                cash.giver_phone = supplied_phone
+            if supplied_email or supplied_phone or sent:
                 if sent:
                     cash.receipt_sent_at = now
-                cash.save(update_fields=['giver_email', 'receipt_sent_at'])
+                cash.save(update_fields=['giver_email', 'giver_phone', 'receipt_sent_at'])
         else:
             return Response({'detail': 'Invalid source.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -4443,6 +4476,37 @@ def member_for_msisdn(msisdn):
     return profile.user if profile else None
 
 
+def member_for_giver_name(safaricom_name):
+    """The member account a Safaricom sender name unambiguously names, or None.
+
+    Safaricom obfuscates the payer's number in some paybill payloads, and
+    then the phone thread is cut before it starts — the registered sender
+    name is all that is left. It is compared against the roll (first and
+    last names, case-insensitively) and ties the gift to an account only
+    when exactly ONE member fits: a name two members share names nobody,
+    because crediting and receipting a gift to the wrong member is worse
+    than leaving it to the desk. A bare first name counts only when it too
+    fits exactly one member of the roll.
+    """
+    tokens = [t for t in re.split(r'[^A-Za-z]+', (safaricom_name or '').strip()) if t]
+    if not tokens or len(tokens) > 3:
+        # Nothing name-shaped, or more parts than the roll can safely pair
+        # (suffixes, clan names) — the desk resolves those by hand.
+        return None
+    needle_first = tokens[0]
+    needle_last = tokens[-1] if len(tokens) > 1 else None
+    roll = roster_queryset()
+    if needle_last:
+        pair = list(roll.filter(first_name__iexact=needle_first, last_name__iexact=needle_last)[:2])
+        if len(pair) == 1:
+            return pair[0]
+        # Two members share the full name, or none does: either way the
+        # name alone does not single out an account.
+        return None
+    alone = list(roll.filter(Q(first_name__iexact=needle_first) | Q(last_name__iexact=needle_first))[:2])
+    return alone[0] if len(alone) == 1 else None
+
+
 def record_direct_paybill_payment(payload):
     """Record one direct paybill (C2B) payment from a Safaricom payload.
 
@@ -4495,8 +4559,15 @@ def record_direct_paybill_payment(payload):
         contribution.paid_at = timezone.now()
 
     # Link to member user if exists and not set
-    if not contribution.member and msisdn:
-        matched_user = member_for_msisdn(msisdn)
+    if not contribution.member:
+        matched_user = member_for_msisdn(msisdn) if msisdn else None
+        # Safaricom may hand back an obfuscated payer number, cutting the
+        # phone thread — the registered sender name is the remaining one,
+        # and it ties the gift down only when it names exactly one member
+        # of the roll. Either thread, when it leads somewhere, attaches the
+        # account's own address so the receipt has where to go.
+        if not matched_user and full_name:
+            matched_user = member_for_giver_name(full_name)
         if matched_user:
             contribution.member = matched_user
             if not contribution.donor_email and matched_user.email:
@@ -4576,9 +4647,12 @@ class MpesaPullTransactionsView(APIView):
                 if code and code != '1000':
                     note = str(page.get('ResponseMessage') or 'Safaricom returned no transactions.')
                     break
-                result = page.get('Result') or []
-                if not isinstance(result, list):
-                    result = [result]
+                # Safaricom documents the rows under `Response` — lowercase
+                # keys, one list per page — and answers `Result` in other
+                # deployments; normalize_pull_rows takes either spelling to
+                # the C2B shape record_direct_paybill_payment reads, so rows
+                # are recorded instead of silently skipped.
+                result = normalize_pull_rows(page)
                 rows.extend(result)
                 # The API caps each response; an empty or short page ends the
                 # window, otherwise the next slice starts at the next offset.

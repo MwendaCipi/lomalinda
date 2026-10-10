@@ -54,3 +54,7 @@ Thumbs.db
 
 # Local media uploads (test/dev artifacts); production media lives on the server
 backend/media/
+
+# Saved browser pages (portal research artifacts) are not repo content.
+Dashboard _ Daraja Developers' Portal.html
+Dashboard _ Daraja Developers' Portal_files/
