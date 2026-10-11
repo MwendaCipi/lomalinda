@@ -2156,15 +2156,20 @@ class WithdrawalRequestsPdfTests(APITestCase):
             self.assertNotIn(label, text)
 
     def test_the_printed_name_includes_the_word_church(self):
-        """Every PDF names the church in full — "SDA Church Loma Linda,
-        Meru", not the short form the app stores for emails and screens."""
+        """Every PDF carries the church's own name in its letterhead —
+        "SDA Church" over "Loma Linda, Meru" beside the mark — rather than
+        the denomination's name or the short form the app stores."""
         self.client.force_authenticate(self.treasurer)
 
         report = self.client.get('/api/members/department-withdrawals/pdf/')
-        self.assertIn(b'SDA CHURCH LOMA LINDA, MERU', self._pdf_text(report.content))
+        text = self._pdf_text(report.content)
+        self.assertIn(b'SDA Church', text)
+        self.assertIn(b'Loma Linda, Meru', text)
 
         sheet = self.client.get(f'/api/members/department-withdrawals/{self.pending.id}/pdf/')
-        self.assertIn(b'SDA CHURCH LOMA LINDA, MERU', self._pdf_text(sheet.content))
+        text = self._pdf_text(sheet.content)
+        self.assertIn(b'SDA Church', text)
+        self.assertIn(b'Loma Linda, Meru', text)
 
     def test_one_request_prints_on_its_own_signable_sheet(self):
         self.client.force_authenticate(self.treasurer)

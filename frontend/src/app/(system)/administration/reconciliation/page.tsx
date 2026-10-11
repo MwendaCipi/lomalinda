@@ -6,6 +6,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft, Download, Loader2, X } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { ContactModal } from "@/components/contact-modal";
+import { ChurchLockup } from "@/components/church-lockup";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
@@ -722,6 +723,10 @@ export default function ReconciliationPage() {
 
   return (
     <main className="min-h-screen md:h-screen bg-sand text-bark md:overflow-hidden">
+      {/* The church's letterhead, on the printed page only — the fallback
+          print (when the server PDF cannot be reached) still leaves the desk
+          with the church's own sheet rather than a bare screenshot. */}
+      <ChurchLockup className="hidden print:flex print:mb-2 print:px-4 print:pt-4" />
       <div className="flex h-full md:h-full md:overflow-hidden">
         
         {/* SINGLE CARD TOUCHING MARGINS (ZERO MARGIN/PADDING) */}

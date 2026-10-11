@@ -17,6 +17,7 @@ import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
+import { ChurchLockup } from "@/components/church-lockup";
 import { publicWebsiteLinks } from "@/config/site-sections";
 
 /**
@@ -459,6 +460,9 @@ function CalendarPageContent() {
       </section>
 
       <div ref={contentRef} className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "flex-1 min-h-0 overflow-y-auto py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
+        {/* The church's letterhead, on the printed page only — what makes
+            a printout of the calendar the church's own sheet. */}
+        <ChurchLockup className="hidden print:flex print:mb-2" />
         {/* Signed in on a wide screen, the controls have ridden up into the
             shell header; everywhere else they sit here in the content — the
             month arrows among them, beside the search when the grid is open. */}

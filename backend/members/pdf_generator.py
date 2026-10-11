@@ -2,6 +2,7 @@ import io
 import re
 from decimal import Decimal
 from datetime import datetime
+from pathlib import Path
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -19,6 +20,49 @@ from reportlab.platypus import (
 from xml.sax.saxutils import escape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
+from svglib.svglib import svg2rlg
+
+
+# The church's own mark: the SDA symbol beside the church's name, read
+# once from the SVG beside this module. Drawn as vectors rather than a
+# bitmap, so it stays sharp at any zoom and on any printer — the thing
+# that makes a printout an official record.
+_SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
+_SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
+_LOCKUP_COLOR = colors.HexColor("#5E3929")
+_LOCKUP_LINE_1 = "SDA Church"
+_LOCKUP_LINE_2 = "Loma Linda, Meru"
+
+
+def _draw_logo(c, center_x, top_y, height):
+    """Draw the church's lockup — symbol and name — centred on `center_x`,
+    its top edge at `top_y`, `height` tall."""
+    sym_w = height * _SYMBOL_RATIO
+    text_size = height * 0.40
+    line_advance = text_size * 1.15
+    c.saveState()
+    c.setFont("Helvetica-Bold", text_size)
+    line_1_w = c.stringWidth(_LOCKUP_LINE_1, "Helvetica-Bold", text_size)
+    line_2_w = c.stringWidth(_LOCKUP_LINE_2, "Helvetica-Bold", text_size)
+    gap = height * 0.16
+    total_w = sym_w + gap + max(line_1_w, line_2_w)
+    left = center_x - total_w / 2
+    # The symbol, full height, at the lockup's left edge.
+    scale = height / _SYMBOL_DRAWING.height
+    c.translate(left, top_y - height)
+    c.scale(scale, scale)
+    _SYMBOL_DRAWING.drawOn(c, 0, 0)
+    c.restoreState()
+    # The name, two lines, optically centred against the symbol.
+    c.saveState()
+    c.setFillColor(_LOCKUP_COLOR)
+    c.setFont("Helvetica-Bold", text_size)
+    block_h = text_size + line_advance
+    baseline_1 = top_y - (height - block_h) / 2 - text_size * 0.8
+    text_x = left + sym_w + gap
+    c.drawString(text_x, baseline_1, _LOCKUP_LINE_1)
+    c.drawString(text_x, baseline_1 - line_advance, _LOCKUP_LINE_2)
+    c.restoreState()
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -43,6 +87,11 @@ class NumberedCanvas(canvas.Canvas):
 
     def draw_page_decorations(self, page_count):
         self.saveState()
+        # Letterhead first: the church's own mark at the head of every
+        # page, above the margin the document's own content starts at.
+        _draw_logo(self, A4[0] / 2, A4[1] - 0.7 * cm, 9 * mm)
+        self.restoreState()
+        self.saveState()
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor("#617068"))
         
@@ -52,7 +101,7 @@ class NumberedCanvas(canvas.Canvas):
         self.line(1.5 * cm, 1.8 * cm, A4[0] - 1.5 * cm, 1.8 * cm)
         
         # Footer text
-        footer_text = "Seventh-day Adventist Church • Official Financial & Administrative Record"
+        footer_text = "SDA Church Loma Linda • Official Financial & Administrative Record"
         page_text = f"Page {self._pageNumber} of {page_count}"
         
         self.drawString(1.5 * cm, 1.2 * cm, footer_text)
@@ -153,8 +202,23 @@ def get_pdf_styles():
         alignment=2,
     )
 
+    # The document's own title, under the letterhead: big, centred, black —
+    # the line that names what the printout *is*, now that the church's name
+    # lives in the logo above it.
+    doc_title_style = ParagraphStyle(
+        "DocTitleCentered",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=20,
+        textColor=colors.black,
+        alignment=1,
+        spaceAfter=8,
+    )
+
     return {
         "title": title_style,
+        "title_big": doc_title_style,
         "subtitle": subtitle_style,
         "meta": meta_style,
         "h2": h2_style,
@@ -230,9 +294,8 @@ def generate_reconciliation_pdf(
 
     if is_individual:
         # Dedicated Individual Givings Report
-        story.append(Paragraph(f"<b>{church_name.upper()}</b>", st["title"]))
         subtitle_text = f"INDIVIDUAL CONTRIBUTIONS REPORT - {purpose_title.upper()}" if purpose_title else "INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT"
-        story.append(Paragraph(f"<b>{subtitle_text}</b>", st["subtitle"]))
+        story.append(Paragraph(subtitle_text, st["title_big"]))
         if start_date == end_date:
             date_str = f"Date: {start_date}"
         else:
@@ -376,8 +439,7 @@ def generate_reconciliation_pdf(
         return buffer.getvalue()
 
     # --- NEKF Header (Summary Breakdown Mode) ---
-    story.append(Paragraph("<b>SEVENTH DAY ADVENTIST CHURCH</b>", st["subtitle"]))
-    story.append(Paragraph(f"<b>{(field_name or 'NORTH EAST KENYA FIELD').upper()}</b>", st["title"]))
+    story.append(Paragraph((field_name or 'NORTH EAST KENYA FIELD').upper(), st["title_big"]))
     from datetime import datetime as _dt
     try:
         dt_start = _dt.strptime(start_date, "%Y-%m-%d")
@@ -719,9 +781,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     story = []
     st = get_pdf_styles()
 
-    story.append(Paragraph(f"SEVENTH-DAY ADVENTIST CHURCH", st["subtitle"]))
-    story.append(Paragraph(f"{church_name.upper()}", st["title"]))
-    story.append(Paragraph("MEMBER OFFICIAL CONTRIBUTION STATEMENT", st["subtitle"]))
+    story.append(Paragraph("MEMBER OFFICIAL CONTRIBUTION STATEMENT", st["title_big"]))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=10))
 
     # Member Info Block
@@ -858,9 +918,7 @@ def generate_business_meeting_pdf(church_name, meeting_title, meeting_date, loca
     story = []
     st = get_pdf_styles()
 
-    story.append(Paragraph(f"SEVENTH-DAY ADVENTIST CHURCH", st["subtitle"]))
-    story.append(Paragraph(f"{church_name.upper()}", st["title"]))
-    story.append(Paragraph("BUSINESS MEETING AGENDA & MINUTES PACKET", st["subtitle"]))
+    story.append(Paragraph("BUSINESS MEETING AGENDA & MINUTES PACKET", st["title_big"]))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=10))
 
     # Meeting Meta Table
@@ -967,14 +1025,9 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     st = get_pdf_styles()
     story = []
 
-    # Header — every other generator titles its page with the "title" style;
-    # this one asked for a "church_name" style that does not exist, so the whole
-    # member directory raised KeyError and returned 500 instead of a PDF.
-    story.append(Paragraph(church_name.upper(), st["title"]))
-    story.append(Spacer(1, 4))
-    # The directory heading takes the same "subtitle" style the contribution
-    # statement and meeting packet use for theirs.
-    story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["subtitle"]))
+    # Header — the letterhead above already names the church, so the page
+    # opens on the directory's own title.
+    story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["title_big"]))
     story.append(Spacer(1, 4))
     generated_date = datetime.now().strftime("%d %B %Y, %I:%M %p")
     story.append(Paragraph(f"Generated: {generated_date}", st["meta"]))
@@ -1126,7 +1179,10 @@ def generate_contribution_thermal_receipt_pdf(
     c.setFillColor(dark)
 
     # ── Header ──
-    line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
+    # The A4 letterhead leaves ~8 mm of air between the logo and the title;
+    # this 28 pt drop puts the receipt's title at the same distance below it.
+    _draw_logo(c, WIDTH / 2, y, 7 * mm)
+    y -= 7 * mm + 28
     line_out("OFFICIAL GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
     dashed()
 
@@ -1238,8 +1294,13 @@ def generate_in_kind_thermal_receipt_pdf(
     c.setFillColor(dark)
 
     # ── Header ──
-    line_out(church_name.upper(), "Helvetica-Bold", 11, "center", gap=4)
-    line_out("IN-KIND GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
+    # The A4 letterhead leaves ~8 mm of air between the logo and the title;
+    # this 28 pt drop puts the receipt's title at the same distance below it.
+    _draw_logo(c, WIDTH / 2, y, 7 * mm)
+    y -= 7 * mm + 28
+    # Both receipts are official giving receipts — the gift's kind shows in
+    # the itemised lines below, not in the title.
+    line_out("OFFICIAL GIVING RECEIPT", "Helvetica-Bold", 8, "center", gap=6)
     dashed()
 
     # ── Gift facts ──
@@ -1305,20 +1366,12 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     story = []
     st = get_pdf_styles()
 
-    # The letterhead above already names the denomination in full, so the
-    # name line drops the SDA acronym rather than saying it twice.
-    title_name = re.sub(r"\bS\.?\s?D\.?\s?A\.?\b", "", church_name, flags=re.IGNORECASE)
-    title_name = re.sub(r",\s*,", ",", title_name)
-    title_name = re.sub(r"\s{2,}", " ", title_name).strip(" ,")
-
     period = (
         f"{report.period_start.strftime('%d %b %Y')} – "
         f"{report.period_end.strftime('%d %b %Y')}"
     )
 
-    story.append(Paragraph("SEVENTH-DAY ADVENTIST CHURCH", st["subtitle"]))
-    story.append(Paragraph(title_name.upper(), st["title"]))
-    story.append(Paragraph("CHURCH FINANCIAL REPORT", st["subtitle"]))
+    story.append(Paragraph("CHURCH FINANCIAL REPORT", st["title_big"]))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=10))
 
     # The statement's particulars, in the same boxed strip the meeting packet
@@ -1505,9 +1558,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     st = get_pdf_styles()
     story = []
 
-    story.append(Paragraph(church_name.upper(), st["title"]))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("WITHDRAWAL REQUESTS REPORT", st["subtitle"]))
+    story.append(Paragraph("WITHDRAWAL REQUESTS REPORT", st["title_big"]))
     story.append(Paragraph(f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}", st["meta"]))
     filter_line = f"Shown: {status_label}"
     if search:
@@ -1693,9 +1744,7 @@ def generate_withdrawal_request_pdf(church_name, row) -> bytes:
     st = get_pdf_styles()
     story = []
 
-    story.append(Paragraph(church_name.upper(), st["title"]))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("WITHDRAWAL REQUEST", st["subtitle"]))
+    story.append(Paragraph("WITHDRAWAL REQUEST", st["title_big"]))
     story.append(Paragraph(
         f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d %B %Y, %I:%M %p')}",
         st["meta"],
