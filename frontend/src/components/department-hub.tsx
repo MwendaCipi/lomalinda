@@ -4430,7 +4430,7 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* Account & Withdrawals tab */}
+      {/* Account Status tab */}
       {subTab === "accounts" && (
         <DepartmentAccountsPanel
           department={department}

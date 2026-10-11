@@ -574,11 +574,15 @@ export function MyAreas() {
   const accountViewItems = useMemo(
     () => [
       { key: "members", label: "Members", icon: Users },
+      { key: "members", label: "Members", icon: Users },
       { key: "calendar", label: "Calendar", icon: CalendarDays },
-      { key: "accounts", label: "Account & Withdrawals", short: "Accounts", help: "Account & Withdrawals", icon: Wallet },
+      { key: "accounts", label: "Account Status", short: "Accounts", help: "Account Status", icon: Wallet },
+      { key: "lesson-requests", label: "Lesson Requests", short: "Lessons", help: "Lesson Requests", icon: MessageSquare },
     ],
     [],
   );
+
+  // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
 
   // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
   useEffect(() => {
@@ -1049,17 +1053,17 @@ export function MyAreas() {
             </section>
           )}
 
-          {/* Section 4: Account & Withdrawals */}
+          {/* Section 4: Account Status */}
           {areaView === "accounts" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div>
                   <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
                     <Wallet className="h-4 w-4 text-ember" aria-hidden="true" />
-                    Account &amp; Withdrawals
+                    Account Status
                   </h2>
                   <p className="mt-0.5 text-xs text-moss">
-                    Fund balance, transaction ledger, and withdrawal requests.
+                    Fund balance, transaction ledger, and withdrawal requests. Requests from members for the Sabbath School superintendent to teach a lesson are served from this card.
                   </p>
                 </div>
               </div>
