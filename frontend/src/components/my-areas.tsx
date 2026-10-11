@@ -1082,7 +1082,7 @@ export function MyAreas() {
             </section>
           )}
 
-          {/* Section 4: Account Status */}
+          {/* Section 4: Lesson Requests — the Sabbath School's own card. */}
           {areaView === "lesson-requests" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2 mb-4">
@@ -1101,6 +1101,7 @@ export function MyAreas() {
             </section>
           )}
 
+          {/* Section 5: Account Status */}
           {areaView === "accounts" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2 mb-4">
@@ -1110,7 +1111,7 @@ export function MyAreas() {
                     Account Status
                   </h2>
                   <p className="mt-0.5 text-xs text-moss">
-                    Fund balance, transaction ledger, and withdrawal requests. Requests from members for the Sabbath School superintendent to teach a lesson are served from this card.
+                    Fund balance, transaction ledger, and withdrawal requests.
                   </p>
                 </div>
               </div>
