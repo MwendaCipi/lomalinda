@@ -6146,6 +6146,23 @@ class GivingAccountsFromTreasuryTests(APITestCase):
 
         self.assertEqual(rows[0]['label'], 'Rent')
 
+    def test_church_accounts_carry_no_department_and_a_fund_its_id(self):
+        """``department_id`` is the split the unassigned-payments desk reads:
+        null is the church's own money, a set id a department's or ministry's
+        fund — so the desk can offer only church accounts, keeping department
+        funds at their own desks."""
+        youth = Department.objects.create(code='youth-fund-fixture', name='Youth')
+        TreasuryAccount.objects.create(name='Tithe', description='Tithe')
+        TreasuryAccount.objects.create(
+            name='YouthFund', description='Youth fund', department=youth,
+        )
+
+        rows = GivingAccountsView().get(self._dummy_request()).data
+        by_name = {row['account']: row['department_id'] for row in rows}
+
+        self.assertIsNone(by_name['Tithe'])
+        self.assertEqual(by_name['YouthFund'], youth.id)
+
     def test_a_name_past_safaricoms_twelve_characters_is_refused(self):
         self._sign_in_finance()
         response = self.client.post('/api/members/treasury/accounts/', {

@@ -5823,6 +5823,10 @@ def giving_account_options():
             'account': account.name,
             'account_type': account.account_type,
             'account_type_display': account.get_account_type_display(),
+            # Null is the church's own money; a set id is a department's or
+            # ministry's fund. The unassigned-payments desk reads only church
+            # accounts and filters on it; the giving form offers both.
+            'department_id': account.department_id,
         }
         for account in accounts
     ]
