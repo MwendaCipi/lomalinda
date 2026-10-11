@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -11825,3 +11825,109 @@ class GiveForSomeoneTests(APITestCase):
         self.assertEqual(response.data['requester_name'], 'Faith Payer')
         self.assertEqual(response.data['relationship_display'], 'Sibling')
         self.assertEqual(response.data['status'], 'pending')
+
+
+class SabbathSchoolLessonTests(APITestCase):
+    """The Sabbath School's lesson requests, and membership by default.
+
+    Every church member is on the school's roll without a row saying so:
+    the tie comes with the account, the roll reads the roster, and the
+    directory counts the roster. Members send lesson requests; the
+    superintendent (the area's Leader) serves them.
+    """
+
+    REQUESTS_URL = '/api/members/lesson-requests/'
+    ROLL_URL = '/api/members/departments/sabbath_school/members/'
+
+    def setUp(self):
+        self.member = User.objects.create_user('ss.plain', 'ss.plain@example.com', 'StrongPass#2026', first_name='Peter', last_name='Plain')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.other = User.objects.create_user('ss.other', 'ss.other@example.com', 'StrongPass#2026', first_name='Anna', last_name='Other')
+        MemberProfile.objects.create(user=self.other, role='member', roles='member')
+        self.superintendent = User.objects.create_user('ss.head', 'ss.head@example.com', 'StrongPass#2026', first_name='Sarah', last_name='Head')
+        MemberProfile.objects.create(user=self.superintendent, role='member', roles='member')
+        school = Department.objects.get(code='sabbath_school')
+        leader_role = DepartmentRole.objects.get(department=school, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=school, role=leader_role, member=self.superintendent, kind='leader',
+        )
+
+    def test_every_member_carries_the_school_as_a_tie(self):
+        """My Ministry names the school for a member with no rows at all."""
+        from .views import member_tie_codes
+        self.assertIn('sabbath_school', member_tie_codes(self.member))
+        self.assertIn('sabbath_school', member_tie_codes(self.other))
+
+    def test_the_roll_reads_the_whole_roster(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get(self.ROLL_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = {row['name'] for row in response.data['members']}
+        self.assertIn('Peter Plain', names)
+        self.assertIn('Anna Other', names)
+        # The rows this union adds carry no membership id: there is no roll
+        # row behind membership that was never filed by hand.
+        plain_row = next(row for row in response.data['members'] if row['name'] == 'Peter Plain')
+        self.assertIsNone(plain_row['membership_id'])
+        self.assertEqual(plain_row['via'], 'Church member')
+
+    def test_the_directory_counts_the_roster_not_the_rows(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/departments/?all=true')
+        school = next(row for row in response.data['departments'] if row['code'] == 'sabbath_school')
+        self.assertGreaterEqual(school['member_count'], 3)
+
+    def test_a_member_sends_a_request_and_reads_only_their_own(self):
+        self.client.force_authenticate(self.member)
+        post = self.client.post(self.REQUESTS_URL, {'lesson': 'The Ten Virgins', 'note': 'Before the quarter ends.'}, format='json')
+        self.assertEqual(post.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(LessonRequest.objects.count(), 1)
+
+        self.client.force_authenticate(self.other)
+        listed = self.client.get(self.REQUESTS_URL)
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        # Another member's request is not this member's mirror.
+        self.assertEqual(listed.data['requests'], [])
+        self.assertFalse(listed.data['can_serve'])
+
+    def test_an_empty_lesson_is_refused(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUESTS_URL, {'lesson': '   '}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(LessonRequest.objects.count(), 0)
+
+    def test_the_superintendent_reads_the_queue_and_serves_it(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUESTS_URL, {'lesson': 'Daniel 2'}, format='json')
+        row = LessonRequest.objects.get()
+
+        self.client.force_authenticate(self.superintendent)
+        listed = self.client.get(self.REQUESTS_URL)
+        self.assertTrue(listed.data['can_serve'])
+        self.assertEqual(len(listed.data['requests']), 1)
+        self.assertEqual(listed.data['requests'][0]['member_name'], 'Peter Plain')
+
+        served = self.client.post(f'{self.REQUESTS_URL}{row.id}/serve/', {}, format='json')
+        self.assertEqual(served.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'served')
+        self.assertEqual(row.served_by, self.superintendent)
+        self.assertIsNotNone(row.served_at)
+
+    def test_a_member_may_not_serve_and_a_served_request_may_return(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUESTS_URL, {'lesson': 'Revelation 12'}, format='json')
+        row = LessonRequest.objects.get()
+
+        response = self.client.post(f'{self.REQUESTS_URL}{row.id}/serve/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'pending')
+
+        self.client.force_authenticate(self.superintendent)
+        self.client.post(f'{self.REQUESTS_URL}{row.id}/serve/', {}, format='json')
+        reopened = self.client.post(f'{self.REQUESTS_URL}{row.id}/serve/', {'reopen': True}, format='json')
+        self.assertEqual(reopened.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'pending')
+        self.assertIsNone(row.served_by)

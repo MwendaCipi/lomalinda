@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarDays, Info, LogOut, Mail, MessageSquare, MoreVertical, Phone, Plus, Search, UserMinus, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
+import { LessonRequestsPanel } from "@/components/lesson-requests-panel";
 import { SubNav } from "@/components/sub-nav";
 import { isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -17,6 +18,11 @@ import { openConversation } from "@/lib/chat";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** The department code the Sabbath School carries on the desk — the same
+    string the backend's SABBATH_SCHOOL_CODE names, and the only area whose
+    toggles carry Lesson Requests. */
+const SABBATH_SCHOOL_CODE = "sabbath_school";
 
 /**
  * One person on an area's roll, as the desk's own endpoint reports them —
@@ -73,16 +79,25 @@ type ContactTarget = {
  *
  * A wide card shows them one tap each, as the roll always has; a phone folds
  * them behind one Actions button that opens a popover, so four icon buttons
- * never squeeze a name off its own card. Only the doors the person's details
- * actually open are listed, and the popover closes on any pick or a click
- * away from it.
+ * never squeeze a name off its own card. Where the desk may also take the
+ * person off the roll, `onRemove` offers that as the popover's last item —
+ * inside the other actions rather than a fifth button on the card — and the
+ * whole set folds behind one Actions button at every width, so the card
+ * stays one control wide. Only the doors the person's details actually open
+ * are listed, and the popover closes on any pick or a click away from it.
  */
 function ContactActions({
   target,
   onChat,
+  onRemove,
+  removeDisabled,
 }: {
   target: ContactTarget;
   onChat: (memberId: number) => void;
+  /** Offered only where a real membership row stands behind the card and
+      the desk may take it off the roll. */
+  onRemove?: () => void;
+  removeDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -126,15 +141,18 @@ function ContactActions({
   if (target.email) {
     actions.push({ key: "email", label: "Email", icon: <Mail className="h-4 w-4" aria-hidden="true" />, href: `mailto:${target.email}` });
   }
-  if (actions.length === 0) return null;
+  if (actions.length === 0 && !onRemove) return null;
 
   const iconBtn = "flex h-8 w-8 items-center justify-center rounded-lg border border-sand-mute bg-white text-ember transition hover:bg-sand";
   const menuItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand";
+  // Remove lives in the popover only, so a card carrying it folds behind
+  // one Actions button rather than growing a fifth icon beside the four.
+  const fold = Boolean(onRemove);
 
   return (
     <div className="relative shrink-0" data-action-menu>
       {/* A wide card has room for the four, one tap each. */}
-      <div className="hidden items-center gap-1.5 sm:flex">
+      <div className={`items-center gap-1.5 ${fold ? "hidden" : "hidden sm:flex"}`}>
         {actions.map((action) =>
           action.href ? (
             <a
@@ -163,8 +181,9 @@ function ContactActions({
         )}
       </div>
 
-      {/* A phone folds them behind one Actions popover. */}
-      <div className="sm:hidden">
+      {/* A phone — and any card that also offers Remove — folds the set
+          behind one Actions popover. */}
+      <div className={fold ? "block" : "sm:hidden"}>
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
@@ -196,6 +215,21 @@ function ContactActions({
                   {action.label}
                 </button>
               ),
+            )}
+            {/* Remove sits last and apart: it is the one item here that
+                changes the roll rather than reaching the person. */}
+            {onRemove && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onRemove();
+                }}
+                disabled={removeDisabled}
+                className="mt-1 flex w-full items-center gap-2.5 border-t border-sand-line px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+              >
+                <UserMinus className="h-4 w-4" aria-hidden="true" /> Remove
+              </button>
             )}
           </div>
         )}
@@ -506,7 +540,7 @@ export function MyAreas() {
 
   const [tab, setTab] = useState<AreaTab>("mine");
   const [openCode, setOpenCode] = useState<string | null>(null);
-  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts">("members");
+  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts" | "lesson-requests">("members");
   const [joining, setJoining] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -574,15 +608,17 @@ export function MyAreas() {
   const accountViewItems = useMemo(
     () => [
       { key: "members", label: "Members", icon: Users },
-      { key: "members", label: "Members", icon: Users },
       { key: "calendar", label: "Calendar", icon: CalendarDays },
       { key: "accounts", label: "Account Status", short: "Accounts", help: "Account Status", icon: Wallet },
-      { key: "lesson-requests", label: "Lesson Requests", short: "Lessons", help: "Lesson Requests", icon: MessageSquare },
+      // Lesson requests belong to the Sabbath School alone: every church
+      // member is on its roll by default, and its superintendent is the one
+      // who serves what they ask for.
+      ...(openArea?.code === SABBATH_SCHOOL_CODE
+        ? [{ key: "lesson-requests", label: "Lesson Requests", short: "Lessons", help: "Lesson Requests", icon: MessageSquare }]
+        : []),
     ],
-    [],
+    [openArea?.code],
   );
-
-  // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
 
   // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
   useEffect(() => {
@@ -955,9 +991,12 @@ export function MyAreas() {
                           </div>
                         )}
                       </div>
-                      {/* The member's contact actions — the roster's four; a
-                          wide card shows them one tap each, a phone folds
-                          them into one Actions popover. */}
+                      {/* The member's actions — the roster's four contacts
+                          plus, where the desk may take them off the roll,
+                          Remove inside the same Actions popover rather than a
+                          fifth button on the card. The music register's
+                          unioned rows carry no Remove: they have no membership
+                          row behind them and are removed at their own desk. */}
                       <ContactActions
                         target={{
                           name: member.name,
@@ -967,23 +1006,13 @@ export function MyAreas() {
                           email: member.email,
                         }}
                         onChat={chatWith}
+                        onRemove={
+                          canManageCurrentArea && Boolean(member.membership_id)
+                            ? () => void removeAreaMember(member)
+                            : undefined
+                        }
+                        removeDisabled={removingId === member.id}
                       />
-                      {/* The leader's own Remove, on the row itself — shown
-                          only where a real membership row stands behind it:
-                          the music register's unioned rows are removed at
-                          their own desk. */}
-                      {canManageCurrentArea && Boolean(member.membership_id) && (
-                        <button
-                          type="button"
-                          onClick={() => void removeAreaMember(member)}
-                          disabled={removingId === member.id}
-                          aria-label={`Remove ${member.name} from the roll`}
-                          title="Remove from roll"
-                          className="shrink-0 rounded-lg p-2 text-moss transition hover:bg-sand hover:text-ember disabled:opacity-60"
-                        >
-                          <UserMinus className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
                     </article>
                   ))}
                 </div>
@@ -1054,6 +1083,24 @@ export function MyAreas() {
           )}
 
           {/* Section 4: Account Status */}
+          {areaView === "lesson-requests" && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                    <MessageSquare className="h-4 w-4 text-ember" aria-hidden="true" />
+                    Lesson Requests
+                  </h2>
+                  <p className="mt-0.5 text-xs text-moss">
+                    Send a lesson you would like studied; the Sabbath School
+                    superintendent (area Leader) serves them from here.
+                  </p>
+                </div>
+              </div>
+              <LessonRequestsPanel />
+            </section>
+          )}
+
           {areaView === "accounts" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-2 mb-4">

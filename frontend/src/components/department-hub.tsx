@@ -2841,7 +2841,7 @@ function ledgerLine(item: UnifiedAccountItem, wide: boolean, outflowWord = "With
 }
 
 /**
- * The department's own fund — the Account & Withdrawals view of its desk.
+ * The department's own fund — the Account Status view of its desk.
  *
  * Displays both financial movements (contributions & debits) and withdrawal requests
  * with real-time status badges (Pending, Elder Approved, Approved, Declined —
@@ -3775,7 +3775,7 @@ function DepartmentDetail({
       // row (see MembersFilterButton).
       { key: "calendar", label: "Event Calendar", short: "Events", icon: CalendarDays },
       // The fund ledger and withdrawal requests unified under one desk.
-      { key: "accounts", label: "Account & Withdrawals", short: "Account", icon: Wallet },
+      { key: "accounts", label: "Account Status", short: "Account", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
     ];

@@ -1431,6 +1431,42 @@ class GivingRequest(models.Model):
         return f"{self.requester} asks {self.target} to give ({self.relationship})"
 
 
+class LessonRequest(models.Model):
+    """A member's ask to the Sabbath School: a lesson they would like studied.
+
+    Every church member is on the Sabbath School's roll by default, so every
+    member may ask. The request carries the member's own words; the
+    superintendent (the school's Leader, as everywhere else) reads the queue
+    and serves a request by marking it so — the mark records who served it and
+    when, because a request answered from the front is still an answer the
+    desk should be able to trace.
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('served', 'Served')]
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='lesson_requests',
+    )
+    lesson = models.CharField(
+        max_length=200,
+        help_text="The lesson or passage the member asks to have studied.",
+    )
+    note = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    served_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lesson_requests_served',
+    )
+    served_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.member} asks for the lesson: {self.lesson[:40]}"
+
+
 class ChurchFinancialReport(models.Model):
     PERIOD_TYPE_CHOICES = [('monthly', 'Monthly'), ('quarterly', 'Quarterly'), ('annual', 'Annual')]
     title = models.CharField(max_length=160)

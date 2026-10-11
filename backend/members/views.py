@@ -43,7 +43,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -284,6 +284,13 @@ def send_invitation_email(invitation):
         f"Warm regards,\n{church_name}"
     )
     send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [invitation.email], fail_silently=False)
+
+
+#: The area every church member belongs to by default: the Sabbath School
+#: is the church's own school, and membership in it needs no roll row — the
+#: tie is given with the account (see ``member_tie_codes``) and the roll
+#: reads the whole roster (see ``DepartmentMembersView.get``).
+SABBATH_SCHOOL_CODE = 'sabbath_school'
 
 
 def roster_queryset():
@@ -7667,6 +7674,104 @@ class GivingRequestDetailView(APIView):
         })
 
 
+class LessonRequestView(APIView):
+    """The Sabbath School's lesson requests: send one, read the queue.
+
+    Every church member is on the school's roll by default, so every member
+    may ask. The reader sees their own requests beside the whole queue only
+    when they hold the school's desk (its Leader — the superintendent — or
+    an officer); everyone else reads only what they themselves asked, for a
+    queue is the desk's work, not the congregation's mirror.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _row(row):
+        return {
+            'id': row.id,
+            'lesson': row.lesson,
+            'note': row.note,
+            'status': row.status,
+            'created_at': row.created_at,
+            'served_at': row.served_at,
+            'served_by_name': (
+                row.served_by.get_full_name() or row.served_by.username
+            ) if row.served_by_id else '',
+            'member_name': (
+                row.member.get_full_name() or row.member.username
+            ),
+        }
+
+    def get(self, request):
+        serves_the_desk = can_manage_department(request.user, SABBATH_SCHOOL_CODE)
+        if serves_the_desk:
+            rows = LessonRequest.objects.select_related('member', 'served_by')[:100]
+        else:
+            rows = LessonRequest.objects.filter(
+                member=request.user,
+            ).select_related('member', 'served_by')[:100]
+        queue = []
+        for row in rows:
+            item = self._row(row)
+            item['mine'] = row.member_id == request.user.id
+            queue.append(item)
+        return Response({'requests': queue, 'can_serve': serves_the_desk})
+
+    def post(self, request):
+        lesson = (request.data.get('lesson') or '').strip()
+        note = (request.data.get('note') or '').strip()
+        if not lesson:
+            return Response(
+                {'lesson': 'Name the lesson you would like studied.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        row = LessonRequest.objects.create(
+            member=request.user, lesson=lesson[:200], note=note[:1000],
+        )
+        return Response(
+            {
+                'detail': 'Your request is with the Sabbath School leadership.',
+                'request': self._row(row),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class LessonRequestServeView(APIView):
+    """Mark one request served — the school's desk, and nobody else's.
+
+    Serving is the superintendent's own act: the mark records their name and
+    the moment, so a request answered from the front is still an answer the
+    desk can trace. A served request may be returned to the queue — the desk
+    may have spoken too soon.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not can_manage_department(request.user, SABBATH_SCHOOL_CODE):
+            return Response(
+                {'detail': 'Only the Sabbath School leadership may serve requests.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        row = LessonRequest.objects.filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That request no longer exists.'}, status=status.HTTP_404_NOT_FOUND)
+        reopen = bool(request.data.get('reopen'))
+        if reopen:
+            row.status = 'pending'
+            row.served_by = None
+            row.served_at = None
+            row.save(update_fields=['status', 'served_by', 'served_at'])
+            return Response({'detail': 'The request is back in the queue.', 'status': row.status})
+        row.status = 'served'
+        row.served_by = request.user
+        row.served_at = timezone.now()
+        row.save(update_fields=['status', 'served_by', 'served_at'])
+        return Response({'detail': 'Request marked served.', 'status': row.status})
+
+
 from .pdf_generator import (
     generate_reconciliation_pdf,
     generate_member_giving_statement_pdf,
@@ -8664,6 +8769,11 @@ def member_tie_codes(user):
     the departments and ministries they are actually part of and reaches the
     rest through the rail; :func:`member_area_codes` keeps the wider
     every-area view the rail and the directory are built on.
+
+    The one area every member belongs to without a row saying so is the
+    Sabbath School: it is the church's own school, and every church member
+    is its member by default. The tie is given, not filed — which is also
+    why its roll carries no rows to remove (see the roll's own read).
     """
     if not getattr(user, 'is_active', False):
         return []
@@ -8698,6 +8808,8 @@ def member_tie_codes(user):
         own_codes |= set(
             profile.ministries.filter(is_active=True).values_list('code', flat=True)
         )
+    if Department.objects.filter(code=SABBATH_SCHOOL_CODE, is_active=True).exists():
+        own_codes.add(SABBATH_SCHOOL_CODE)
     return list(ties | roll_codes | assigned_codes | own_codes)
 
 
@@ -8835,6 +8947,11 @@ class DepartmentDirectoryView(APIView):
             row['department']: row['total']
             for row in DepartmentMembership.objects.values('department').annotate(total=Count('id'))
         }
+        # The Sabbath School's roll is the roster — every church member is on
+        # it by default, whether or not a row was ever filed — so its count
+        # reads the roster, not the rows.
+        if Department.objects.filter(code=SABBATH_SCHOOL_CODE, is_active=True).exists():
+            counts[SABBATH_SCHOOL_CODE] = roster_queryset().filter(is_active=True).count()
         event_counts = {
             row['department']: row['total']
             for row in DepartmentEvent.objects.values('department').annotate(total=Count('id'))
@@ -9485,6 +9602,18 @@ class DepartmentMembersView(APIView):
                     continue
                 seen_ids.add(user_id)
                 members.append(row_for(user, via=via))
+
+        # The Sabbath School is the church's own school: every church member
+        # is its member by default, so its roll is the roster — no rows to
+        # file, none to remove. The rows this union adds carry no membership
+        # id for the same reason the music desk's do: there is no roll row
+        # behind membership that was never filed by hand.
+        if department == SABBATH_SCHOOL_CODE and not unit:
+            for user in roster_queryset().select_related('member_profile').filter(is_active=True):
+                if user.id in seen_ids:
+                    continue
+                seen_ids.add(user.id)
+                members.append(row_for(user, via='Church member'))
 
         # Annotate each member with any role they hold in this department.
         # A member may hold more than one role (e.g. Leader + Choir Director);
