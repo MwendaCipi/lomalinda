@@ -1232,8 +1232,7 @@ def generate_contribution_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    line_out("This receipt is system generated.", "Helvetica", 6.5, "center", gap=0)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=0)
 
     c.showPage()
     c.save()
@@ -1330,8 +1329,7 @@ def generate_in_kind_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    line_out("This receipt is system generated.", "Helvetica", 6.5, "center", gap=0)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=0)
 
     c.showPage()
     c.save()
