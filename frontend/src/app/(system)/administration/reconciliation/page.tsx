@@ -87,10 +87,24 @@ type IndividualGiving = {
   receipt_sent_at?: string | null;
   status: string;
   item_description?: string;
+  /** A payment still held for the treasurer's assignment: it belongs to the
+      Unassigned desk alone and never stands in Completed Givings as if it
+      were already credited somewhere. */
+  needs_review?: boolean;
 };
 
 /** Money that actually arrived — completed digital gifts and recorded cash. */
 const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
+
+/** A payment still held for the treasurer's assignment: it lives on the
+    Unassigned desk alone, so it appears in neither the Completed list nor
+    the Failed queue — as though it were already credited nowhere. */
+const isHeldForReview = (g: IndividualGiving) => Boolean(g.needs_review);
+
+/** The whole failed backlog, whenever it was recorded: the Failed tab is a
+    queue of noise to clear, not a report over a period — so it reads every
+    failed attempt the badge counts, however old, and the two agree. */
+const FAILED_ALL_TIME = { from: "2000-01-01", to: "2099-12-31" };
 
 /**
  * A finished report, held for the desk to look at before it decides to save
@@ -159,10 +173,32 @@ export default function ReconciliationPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
+  // The Failed badge on the treasury strip: counted from the same backlog
+  // the tab lists, so the two never disagree — and recounted the moment an
+  // attempt is taken off, so the deduction shows at once.
+  const [failedCount, setFailedCount] = useState<number | null>(null);
 
   const headers = useCallback(() => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` }), []);
 
-  const loadAllGivings = useCallback(async (fDate = fromDate, tDate = toDate) => {
+  const refreshFailedCount = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/failed/`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data?.count === "number") setFailedCount(data.count);
+      }
+    } catch {
+      // The badge keeps its last count rather than lying about the queue.
+    }
+  }, [headers]);
+
+  useEffect(() => {
+    // The count rides a microtask — the same shape the desks use — so the
+    // effect's own body never writes state synchronously.
+    void Promise.resolve().then(() => refreshFailedCount());
+  }, [refreshFailedCount]);
+
+  const fetchLedgerList = useCallback(async (fDate: string, tDate: string) => {
     setLoadingAllGivings(true);
     try {
       const res = await fetch(
@@ -178,7 +214,20 @@ export default function ReconciliationPage() {
     } finally {
       setLoadingAllGivings(false);
     }
-  }, [fromDate, toDate, headers]);
+  }, [headers]);
+
+  const loadAllGivings = useCallback(
+    (fDate = fromDate, tDate = toDate) => fetchLedgerList(fDate, tDate),
+    [fromDate, toDate, fetchLedgerList],
+  );
+
+  // The Failed tab reads the whole backlog, however old: it is a queue of
+  // noise to clear, not a report over the desk's date window — and reading
+  // the same set the badge counts keeps the two from disagreeing.
+  const loadFailedGivings = useCallback(
+    () => fetchLedgerList(FAILED_ALL_TIME.from, FAILED_ALL_TIME.to),
+    [fetchLedgerList],
+  );
 
   // The desk reaches the giver the way a message actually gets read: a
   // thread in this app when they hold an account, WhatsApp, or a call.
@@ -220,7 +269,10 @@ export default function ReconciliationPage() {
         timer: 4000,
         showConfirmButton: false,
       });
-      loadAllGivings();
+      // The row leaves the queue and the badge drops with it, at once —
+      // the desk sees the deduction without reloading the page.
+      loadFailedGivings();
+      refreshFailedCount();
     } catch (error) {
       showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
@@ -275,6 +327,7 @@ export default function ReconciliationPage() {
     setCustomToggles(
       <TreasuryNav
         active={viewMode === "summary" ? "summary" : viewMode === "failed_givings" ? "failed" : "givings"}
+        failedCount={failedCount ?? undefined}
         onSelect={(view) => {
           if (view === "givings") {
             setExpandedPurpose(null);
@@ -283,7 +336,9 @@ export default function ReconciliationPage() {
           } else if (view === "failed") {
             setExpandedPurpose(null);
             setViewMode("failed_givings");
-            loadAllGivings();
+            // The Failed tab reads the whole backlog, however old — the same
+            // set the badge counts — rather than the desk's date window.
+            loadFailedGivings();
           } else if (view === "summary") {
             setViewMode("summary");
           } else if (view === "unassigned") {
@@ -300,7 +355,7 @@ export default function ReconciliationPage() {
         }}
       />
     );
-  }, [setCustomToggles, viewMode, loadAllGivings, router]);
+  }, [setCustomToggles, viewMode, loadAllGivings, loadFailedGivings, failedCount, router]);
 
   // This desk answers two of the treasury's six views under one route, and
   // the rail row that led here is named "Contributions Ledger" — which is the
@@ -688,7 +743,9 @@ export default function ReconciliationPage() {
         // range, previewed before they are saved. The strip above decides
         // which side of the money comes out: arrived, or never arrived.
         const failedView = viewMode === "failed_givings";
-        const exported = allGivingsList.filter((g) => (failedView ? !isReceivedGiving(g) : isReceivedGiving(g)));
+        const exported = allGivingsList.filter(
+          (g) => !isHeldForReview(g) && (failedView ? !isReceivedGiving(g) : isReceivedGiving(g)),
+        );
         const head = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)", "Status"];
         const rows = exported.map((g, idx) => [
           String(idx + 1),
@@ -1294,6 +1351,8 @@ export default function ReconciliationPage() {
                     // the attempts that never arrived.
                     const showFailed = viewMode === "failed_givings";
                     const listToDisplay = allGivingsList.filter((g) => {
+                      // A held payment belongs to the Unassigned desk alone.
+                      if (isHeldForReview(g)) return false;
                       if (showFailed ? isReceivedGiving(g) : !isReceivedGiving(g)) return false;
                       if (!searchQueryLower) return true;
                       return (

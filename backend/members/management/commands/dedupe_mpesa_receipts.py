@@ -13,6 +13,7 @@ design — one line per account, one payment, one receipt.
 """
 
 from collections import defaultdict
+from contextlib import nullcontext
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
@@ -46,8 +47,48 @@ class Command(BaseCommand):
             help='Report the duplicates without changing anything.',
         )
 
+    @staticmethod
+    def _church_contexts():
+        """Every church schema; a single plain pass where tenants are off.
+
+        Tenancy is detected rather than assumed: the test suite and any
+        single-schema deployment drop django_tenants entirely, and there the
+        work simply runs once, against the only schema there is.
+        """
+        try:
+            from django_tenants.utils import get_tenant_model, schema_context
+
+            tenants = list(get_tenant_model().objects.exclude(schema_name='public'))
+        except Exception:
+            return [('default', nullcontext())]
+        if not tenants:
+            return [('default', nullcontext())]
+        return [(tenant.schema_name, schema_context(tenant.schema_name)) for tenant in tenants]
+
     def handle(self, *args, **options):
         dry = options['dry_run']
+        removed_rows = 0
+        reversed_credits = 0
+        for schema, context in self._church_contexts():
+            with context:
+                schema_removed, schema_reversed = self._dedupe_schema(dry)
+            removed_rows += schema_removed
+            reversed_credits += schema_reversed
+            if schema_removed:
+                self.stdout.write(f'  ({schema})')
+
+        verb = 'would remove' if dry else 'removed'
+        summary = f'{verb} {removed_rows} duplicate row(s); {reversed_credits} duplicate credit(s) reversed.'
+        if dry:
+            self.stdout.write(self.style.WARNING(summary + ' (--dry-run: nothing changed)'))
+        else:
+            self.stdout.write(self.style.SUCCESS(summary))
+
+    def _dedupe_schema(self, dry):
+        """Run the dedupe once, inside one church's schema.
+
+        Returns (rows removed, credits reversed) for that schema.
+        """
         by_receipt = defaultdict(list)
         rows = Contribution.objects.filter(
             mpesa_receipt_number__isnull=False
@@ -78,6 +119,7 @@ class Command(BaseCommand):
                 f'{keep.purpose!r}{", held" if keep.needs_review else ""}); removing {names}'
             )
             if dry:
+                removed_rows += len(doomed)
                 continue
             with transaction.atomic():
                 for row in doomed:
@@ -87,12 +129,7 @@ class Command(BaseCommand):
                     row.delete()
                     removed_rows += 1
 
-        verb = 'would remove' if dry else 'removed'
-        summary = f'{verb} {removed_rows} duplicate row(s); {reversed_credits} duplicate credit(s) reversed.'
-        if dry:
-            self.stdout.write(self.style.WARNING(summary + ' (--dry-run: nothing changed)'))
-        else:
-            self.stdout.write(self.style.SUCCESS(summary))
+        return removed_rows, reversed_credits
 
     def _reverse_credit(self, receipt, row):
         """Take back the treasury credit this duplicate row wrote, if any.
