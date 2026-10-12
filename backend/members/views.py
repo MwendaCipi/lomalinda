@@ -10760,6 +10760,8 @@ def department_accounts(user, code):
       ministry raises a camp offering, so each reads its own fund alone.
     - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
     - Msamaria Mwema is included only for Eldership and Deaconate.
+    - The Treasury desk itself reads every account: it keeps the whole
+      treasury, not one fund of it.
     - Regular roll members see the department's primary fund(s).
     """
     can_manage = can_manage_department(user, code) or is_treasurer_or_admin(user)
@@ -10849,6 +10851,13 @@ def department_accounts(user, code):
         msamaria = msamaria_account()
         if msamaria and msamaria not in accounts:
             accounts.append(msamaria)
+
+    # 8. Treasury: the treasurer's own ministry keeps the whole treasury,
+    #    so its desk reads every account the church holds.
+    if can_manage and code == 'treasury':
+        for acc in TreasuryAccount.objects.all().order_by('id'):
+            if acc not in accounts:
+                accounts.append(acc)
 
     return accounts
 

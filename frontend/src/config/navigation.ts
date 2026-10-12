@@ -986,6 +986,10 @@ export function canSee(
  *  full names stay everywhere else (the directory, the desks, the titles). */
 const RAIL_AREA_CODES_MOVED = new Set([
   "music",
+  // The Treasury is a ministry of the church's record now, but the rail
+  // already carries it as a section of its own (treasuryItems) — so the
+  // ministries heading must not mint a second row beside it.
+  "treasury",
   "beginners",
   "kindergarten",
   "primary",

@@ -537,11 +537,12 @@ export function MyAreas() {
   // them — so those are only ever withheld from a member who may not ask
   // to join them.
   const staff = isStaffRole(roles);
-  // The Treasury is a desk of the office console, not a department of the
-  // church, so it has no row in the directory above. The rail files it under
-  // "Other Ministries" on a wide screen; the phone reads the same map, so the
-  // treasurer and the admin find it in this tab rather than nowhere at all.
-  const canOpenTreasury = useMemo(
+  // The Treasury is a ministry of the church's own record now, so it arrives
+  // with the directory rows — but it is held by office, never joined: the
+  // rail offers its desk only to the treasurer and the admin, and this list
+  // files it the same way rather than offering every member a door to knock
+  // on with a join request.
+  const holdsTreasury = useMemo(
     () => ["treasurer", "admin"].some((role) => roles.includes(role)),
     [roles]
   );
@@ -591,6 +592,9 @@ export function MyAreas() {
         .filter((area) => {
           const mine = isMyMinistry(area);
           if (tab === "mine") return mine;
+          // The treasury's desk is held by office: only the treasurer and the
+          // admin are offered it here, the same pair the rail gates it to.
+          if (area.code === "treasury" && !holdsTreasury) return false;
           return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
         })
         .sort((a, b) => {
@@ -607,7 +611,7 @@ export function MyAreas() {
           // department appears.
           return a.label.localeCompare(b.label);
         }),
-    [canJoin, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
+    [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
   );
 
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
@@ -1158,7 +1162,7 @@ export function MyAreas() {
   // ── The map: one card per area ─────────────────────────────────────────
   return (
     <div className="flex-1 min-w-0 h-full w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
-      {!openCode && visible.length === 0 && !(tab === "other" && canOpenTreasury) ? (
+      {!openCode && visible.length === 0 ? (
         <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-sand-line px-5 py-12 text-center">
           <Users className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold text-bark">
@@ -1257,51 +1261,6 @@ export function MyAreas() {
               </div>
             );
           })}
-          {/* The Treasury stands in this list the way the rail files it under
-              "Other Ministries": a desk, not an area, so it opens the console
-              rather than an area view. */}
-          {tab === "other" && canOpenTreasury && (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => router.push("/administration?tab=accounts")}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  router.push("/administration?tab=accounts");
-                }
-              }}
-              className="flex cursor-pointer flex-col rounded-2xl border border-sand-line bg-white p-5 text-left shadow-sm transition hover:border-ember hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ember/30"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-bold text-bark">Treasury</h3>
-                <span className="shrink-0 rounded-full bg-sand-card px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ember">
-                  Office
-                </span>
-              </div>
-              <p className="mt-1.5 text-xs leading-5 text-moss">
-                The church&apos;s accounts, its ledger and its fund drives — every
-                balance the treasury keeps.
-              </p>
-              <p className="mt-3 text-[11px] text-moss">
-                <span className="font-semibold text-bark">Held by:</span> Treasurer, Admin
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-sand-line pt-3">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    router.push("/administration?tab=accounts");
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
-                  Open treasury
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

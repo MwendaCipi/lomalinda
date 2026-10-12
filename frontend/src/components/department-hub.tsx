@@ -2902,10 +2902,11 @@ export function DepartmentAccountsPanel({
 
         // Initial default account filter:
         // The desks that read more than their own fund — AWM and Development,
-        // and the Eldership and Deaconate desks, whose strips carry LCB and
-        // Msamaria Mwema beside their own — are selected by default ("all").
+        // the Eldership and Deaconate desks, whose strips carry LCB and
+        // Msamaria Mwema beside their own, and the Treasury desk, which keeps
+        // every account — are selected by default ("all").
         // For other departments, their primary account is selected by default, or "all".
-        if (["awm", "development", "eldership", "deaconate"].includes(department.code)) {
+        if (["awm", "development", "eldership", "deaconate", "treasury"].includes(department.code)) {
           setAccountFilter("all");
         } else if (accList.length > 0) {
           const primary = accList.find((a) => a.is_primary) ?? accList[0];

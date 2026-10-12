@@ -10209,8 +10209,9 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['eldership']['group'], 'office')
         self.assertEqual(rows['clerkship']['group'], 'office')
         self.assertEqual(rows['deaconate']['group'], 'office')
-        # The AYM is the Young Adults under the name the church uses.
-        self.assertEqual(rows['aym']['label'], 'Young Adults')
+        # The AYM's name reads in full — the abbreviation moved out of it
+        # (0178), and the rail keeps its own short form beside the name.
+        self.assertEqual(rows['aym']['label'], 'Adventist Youth Ministry')
         # The children's bands are departments of their own now — Pathfinders
         # included — so Children keeps no sub-units; the grouping is the
         # frontend's job.
@@ -11088,6 +11089,52 @@ class DepartmentFundTests(APITestCase):
             'Msamaria Mwema',
             [row['name'] for row in response.data['accounts']],
         )
+
+    def test_the_treasury_is_a_ministry_of_the_churchs_record(self):
+        """The treasury is not a place only the rail knows: it stands in the
+        church's own record as a ministry, so every directory that lists
+        ministries carries it — the phone's Other Ministries among them."""
+        self.client.force_authenticate(self.treasurer)
+        rows = {
+            row['code']: row
+            for row in self.client.get('/api/members/departments/?all=true').data['departments']
+        }
+        self.assertIn('treasury', rows)
+        self.assertEqual(rows['treasury']['group'], 'ministry')
+
+    def test_the_treasury_desk_reads_every_account(self):
+        """The treasurer's ministry keeps the whole treasury: its desk reads
+        every account the church holds, not one fund of it."""
+        self._fund()
+        TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+        TreasuryAccount.objects.create(
+            name='Msamaria Mwema', description='Msamaria Mwema Children Home',
+            balance=Decimal('2500.00'),
+        )
+
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get('/api/members/departments/treasury/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['name'] for row in response.data['accounts']]
+        self.assertIn('MusicFund', names)
+        self.assertIn('LCB', names)
+        self.assertIn('Msamaria Mwema', names)
+
+    def test_a_plain_member_reads_no_treasury_desk(self):
+        """The treasury is held by office, never joined: a member who holds
+        no desk reads nothing of it."""
+        TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/departments/treasury/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['accounts'], [])
 
     def test_children_still_read_the_camp_funds(self):
         """The camp funds stay with the desks that raise them — Children runs
