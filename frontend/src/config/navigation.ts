@@ -475,8 +475,7 @@ export type RailItem = {
   short?: string;
   /**
    * The name this page shows in a section's strip (`SectionNav`) when that
-   * differs from its rail row and page heading — the strip may read "Money
-   * Giving" while every other surface keeps "Giving".
+   * differs from its rail row and page heading.
    */
   stripLabel?: string;
   /** One-line description the shell shows under the page's name. */
@@ -829,14 +828,14 @@ export const railEntries: RailEntry[] = [
     ],
   },
   {
-    label: "Giving",
+    label: "Stewardship",
     icon: HandHeart,
-    // The rail's row and the page heading read Giving; `page` copies the
-    // registry label, so the one row is overridden here. The strip names this
-    // page Money Giving — the one surface that says so — while its phone chip
-    // reads Money: six chips share a phone's width, and the leading "Money" is
-    // what tells this row of the strip apart from In-Kind's.
-    items: [page("give", { label: "Giving", short: "Money", stripLabel: "Money Giving" }), page("fundDrives"), page("inKind"), page("budget"), page("financial"), page("reports")],
+    // The rail's row, the strip heading and the page all read Giving for the
+    // money page — `page` copies the registry label, so no override rides
+    // here. In-Kind is no longer a chip of its own: the Giving page carries
+    // a "Give in Kind" button that opens the same form as a modal, so the
+    // destination stays in the registry for the links that name it.
+    items: [page("give"), page("fundDrives"), page("budget"), page("financial"), page("reports")],
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the
@@ -905,7 +904,7 @@ export type RailSection =
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
-  "Giving": "my-church",
+  "Stewardship": "my-church",
 };
 
 /** One heading in the rail, with the rows filed under it. */

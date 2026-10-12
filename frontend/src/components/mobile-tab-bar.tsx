@@ -118,7 +118,10 @@ export function MobileTabBar() {
   return (
     <nav
       aria-hidden={navHidden}
-      className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-around border-t border-white/15 bg-bark/95 px-1.5 py-1.5 text-white shadow-lg backdrop-blur-md pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
+      // Below every modal (z-50 and up): an overlay the phone opens must
+      // float above this bar, not hide its buttons behind it. Page content
+      // carries no z of its own, so the bar still sits above the page.
+      className={`md:hidden fixed bottom-0 left-0 right-0 z-[45] flex items-center justify-around border-t border-white/15 bg-bark/95 px-1.5 py-1.5 text-white shadow-lg backdrop-blur-md pb-[calc(0.375rem+env(safe-area-inset-bottom))] transition-transform duration-300 ease-out ${
         navHidden ? "translate-y-full pointer-events-none" : "translate-y-0"
       }`}
       aria-label="Main"

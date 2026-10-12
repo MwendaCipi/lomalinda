@@ -12,6 +12,7 @@ import { PublicSectionNav } from "@/components/public-section-nav";
 import { publicWebsiteLinks } from "@/config/site-sections";
 import { stewardshipLinks } from "@/config/site-sections";
 import { PENDING_GIVINGS_KEY } from "@/components/my-givings";
+import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -182,6 +183,11 @@ function GivePageContent() {
 
   // Giving form modal (opened via Give Now or a ?purpose= deep link)
   const [showGiveModal, setShowGiveModal] = useState(false);
+  // The in-kind form is the same modal the announcements and the in-kind
+  // page open — one form, so a gift is filed identically wherever it is
+  // given. The Giving page carries its button beside Give Money, so the
+  // shelf of ways to give needs no page of its own.
+  const [showInKindModal, setShowInKindModal] = useState(false);
 
   // ── Giving for someone, and asking someone to give ─────────────────────
   // All three ways of giving live in this one modal, picked from a combo at
@@ -713,21 +719,33 @@ function GivePageContent() {
                 Give by M-Pesa or bank transfer in a moment: the form sends the M-Pesa prompt
                 straight to your phone and records the gift against your account.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  // Give Now is the giver's own gift: the form opens with the
-                  // details shown and the payer's own prompt phone.
-                  resetPersonField();
-                  setHonoreePhone("");
-                  setRecipientMode("myself");
-                  setPhoneNumber(payerPhoneRef.current);
-                  setShowGiveModal(true);
-                }}
-                className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
-              >
-                Give Now
-              </button>
+              {/* The two ways to give itself: money, or goods, services
+                  and time. Money opens the giving form; in-kind opens the
+                  same modal the announcements and drives open. */}
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Give Money is the giver's own gift: the form opens with
+                    // the details shown and the payer's own prompt phone.
+                    resetPersonField();
+                    setHonoreePhone("");
+                    setRecipientMode("myself");
+                    setPhoneNumber(payerPhoneRef.current);
+                    setShowGiveModal(true);
+                  }}
+                  className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
+                >
+                  Give Money
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInKindModal(true)}
+                  className="rounded-full border border-ember/50 bg-white px-10 py-4 text-base font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
+                >
+                  Give in Kind
+                </button>
+              </div>
               {/* The two ways giving reaches past oneself: honour someone
                   with a gift, or ask someone to give one. Both open the same
                   form, whose combo is set to their way. */}
@@ -834,6 +852,11 @@ function GivePageContent() {
         activeKey="give"
         className="public-section-nav border-t border-sand-line bg-white/60"
       />
+
+      {/* ── Give in Kind — the same form the announcements and the in-kind
+          page open, so a goods gift is filed identically wherever it is
+          given ── */}
+      <InKindGiftModal open={showInKindModal} onClose={() => setShowInKindModal(false)} />
 
       {/* ── Give Now modal ── */}
       {showGiveModal && (
