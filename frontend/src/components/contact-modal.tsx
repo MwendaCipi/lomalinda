@@ -162,8 +162,10 @@ function memberDisplayName(member: ContactMember): string {
 
 /** Kenyan phone numbers on the church's records are stored as 07... (10
     digits). WhatsApp's wa.me link needs the international form (2547...),
-    so this normalizes the number before it is put in the href. */
-function waMeNumber(raw: string) {
+    so this normalizes the number before it is put in the href. Exported for
+    any desk that offers WhatsApp straight from a row rather than through a
+    modal. */
+export function waMeNumber(raw: string) {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("0")) return "254" + digits.slice(1);

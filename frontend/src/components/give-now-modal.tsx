@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChevronDown, Landmark, X } from "lucide-react";
+import { ChevronDown, Landmark, Search, UserRound, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { useHeaderData, patchCachedMe } from "@/hooks/use-header-data";
@@ -24,6 +24,16 @@ type GivingAccountOption = {
  * field only when it belongs to one. */
 const SAFARICOM_PREFIXES = ["070", "071", "072", "074", "079"];
 
+/** How the person a gift is for relates to the giver. The church's short
+ * list — anything rarer is Other. */
+const relationships = [
+  { value: "spouse", label: "Spouse" },
+  { value: "sibling", label: "Sibling" },
+  { value: "child", label: "Child" },
+  { value: "friend", label: "Friend" },
+  { value: "other", label: "Other" },
+];
+
 /** The member's stored phone as this field wants it (07XXXXXXXX), or "".
  *
  * Profiles carry the number in whatever shape it was collected (07…, 2547…,
@@ -38,6 +48,63 @@ function safaricomPhoneOf(raw: string): string {
     : digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1")) ? `0${digits}`
     : "";
   return local && SAFARICOM_PREFIXES.some((prefix) => local.startsWith(prefix)) ? local : "";
+}
+
+/** One person the giver chose for the gift: an optional account id when the
+ * picker found them, and always the name the gift should read. */
+type Honoree = { id?: number; name: string; relationship: string };
+
+/** The honoree card the modal shows above the form when a gift is for someone. */
+function HonoreeCard({
+  honoree,
+  phone,
+  onPhoneChange,
+  onClear,
+}: {
+  honoree: Honoree;
+  phone: string;
+  onPhoneChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex items-start gap-2.5 rounded-2xl border border-ember/30 bg-mist-select px-4 py-3">
+        <UserRound size={16} className="mt-0.5 shrink-0 text-ember" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-bark">For {honoree.name}</p>
+          <p className="text-[11px] text-moss">
+            Your {relationships.find((option) => option.value === honoree.relationship)?.label.toLowerCase() || honoree.relationship}
+            {honoree.id ? " — in our system, so their letter goes by email." : "."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Give for myself instead"
+          className="shrink-0 rounded-lg p-1 text-moss transition hover:text-ember"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+      {/* The phone of the person this is for — only when they hold no account,
+          so the row still carries a way to follow up. */}
+      {!honoree.id && (
+        <label className="block text-sm font-medium text-bark">
+          Phone number <span className="font-normal text-moss">(optional)</span>
+          <input
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]{10}"
+            maxLength={10}
+            value={phone}
+            onChange={(e) => onPhoneChange(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            placeholder="e.g. 0712345678"
+            className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+          />
+        </label>
+      )}
+    </div>
+  );
 }
 
 /** The fallback list, only reached if the accounts endpoint is unreachable. */
@@ -55,6 +122,16 @@ export type GiveNowModalProps = {
   onClose: () => void;
   /** The account a support link named, preselected in the picker. */
   presetAccount?: string;
+  /** When the gift is written on someone else's record, the person and how
+   * they relate to the giver. A truthy honoree switches the modal title and
+   * opens the field above the form; the phone travels only when the honoree
+   * holds no account in our system. */
+  honoree?: Honoree | null;
+  /** The honoree's phone, when they hold no account. */
+  honoreePhone?: string;
+  onHonoreePhoneChange?: (value: string) => void;
+  /** When the honoree is cleared from inside the modal card. */
+  onClearHonoree?: () => void;
 };
 
 /**
@@ -63,7 +140,7 @@ export type GiveNowModalProps = {
  * open it in place. Cancelling returns the member to whatever page they were
  * reading instead of navigating anywhere.
  */
-export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps) {
+export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePhone = "", onHonoreePhoneChange, onClearHonoree }: GiveNowModalProps) {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(presetAccount ? [presetAccount] : []);
   const [accountAmounts, setAccountAmounts] = useState<Record<string, string>>({});
   const [showAccountPicker, setShowAccountPicker] = useState(false);
@@ -105,6 +182,11 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
     setAnonymous(false);
     if (presetAccount) setSelectedAccounts([presetAccount]);
   }, [open, presetAccount]);
+
+  // The modal title follows the caller: a gift for someone is titled "Give
+  // for someone", everything else stays "Give Now".
+  const modalTitle = honoree ? "Give for someone" : "Give Now";
+
 
   useEffect(() => {
     if (!open || !me) return;
@@ -297,6 +379,18 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
         // The stamp that keeps this gift off the giver's own record: the
         // backend drops the name and email when it sees it.
         ...(anonymous ? { anonymous: true } : {}),
+        // A gift given FOR someone: the account the picker found (or the
+        // name alone for a visitor) and how they relate to the giver. The
+        // person in our system receives their letter by email. The phone
+        // travels only when the honoree holds no account — a way to follow up.
+        ...(honoree
+          ? {
+              ...(honoree.id ? { honoree_id: honoree.id } : {}),
+              honoree_name: honoree.name,
+              relationship: honoree.relationship,
+              honoree_phone: honoreePhone,
+            }
+          : {}),
       };
 
       const response = await fetch(`${API_URL}/api/members/contributions/initiate/`, {
@@ -356,7 +450,7 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
           <div>
             {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
             <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
-            <h3 id="give-modal-title" className="text-lg font-bold text-bark">Give Now</h3>
+            <h3 id="give-modal-title" className="text-lg font-bold text-bark">{modalTitle}</h3>
           </div>
           <button
             type="button"
@@ -377,6 +471,18 @@ export function GiveNowModal({ open, onClose, presetAccount }: GiveNowModalProps
             <div className="rounded-2xl bg-sand border border-sand-line p-4 text-xs font-semibold text-bark">
               {message}
             </div>
+          )}
+
+          {/* Who this gift is for — named before the money is, so the record
+              and the letter agree. The phone travels only when the honoree
+              holds no account in our system. */}
+          {honoree && (
+            <HonoreeCard
+              honoree={honoree}
+              phone={honoreePhone}
+              onPhoneChange={onHonoreePhoneChange ?? (() => {})}
+              onClear={onClearHonoree ?? onClose}
+            />
           )}
 
           {/* 1. Receipts — addressed from the account, not the form. A

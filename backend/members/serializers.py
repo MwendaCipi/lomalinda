@@ -824,6 +824,10 @@ class ContributionInitiateSerializer(serializers.Serializer):
     )
     # A gift made through a request's own link closes that request.
     giving_request_id = serializers.IntegerField(required=False, allow_null=True)
+    # The phone of the person the gift is being given for — used when the
+    # honoree does not hold a church account, so the receipt still carries a
+    # way to reach them (for follow-up, not as an SMS recipient).
+    honoree_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     payment_method = serializers.ChoiceField(
         choices=['cash', 'mpesa', 'bank_transfer', 'cheque'],
         default='mpesa'
@@ -858,9 +862,15 @@ class ContributionInitiateSerializer(serializers.Serializer):
                 attrs['honoree_name'] = honoree.get_full_name() or honoree.username
         if honoree_id or honoree_name:
             if not relationship:
-                raise serializers.ValidationError(
-                    {'relationship': 'Say how they relate to you — spouse, sibling, child, friend or other.'}
-                )
+                # The giving form no longer asks how they relate: the member
+                # declares relationships once, on their profile, and the gift
+                # reads the declared answer. Nothing declared reads as Other.
+                giver = getattr(self.context.get('request'), 'user', None)
+                profile = getattr(giver, 'member_profile', None) if giver and giver.is_authenticated else None
+                relationship = (
+                    profile.declared_relationship_for_person(honoree_id, honoree_name) if profile else ''
+                ) or 'other'
+                attrs['relationship'] = relationship
         elif relationship:
             raise serializers.ValidationError(
                 {'relationship': 'Name the person this gift is for first.'}

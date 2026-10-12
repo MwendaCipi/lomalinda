@@ -45,6 +45,7 @@ from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
+from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 from .pledges import (
@@ -2642,6 +2643,10 @@ class MeView(APIView):
             'department_ref': profile.department_ref.code if profile and profile.department_ref else '',
             'ministries': list(profile.ministries.values_list('code', flat=True)) if profile else [],
             'disability': profile.disability if profile else '',
+            # How this member relates to the people they give for or ask to
+            # give — declared once, here, so the giving form reads it instead
+            # of asking on every gift.
+            'declared_relationships': profile.declared_relationships if profile else [],
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
             # The departments this account belongs to — its roll memberships
@@ -2659,13 +2664,21 @@ class MeView(APIView):
         })
 
     def patch(self, request):
-        """Let a member set their email and notification preferences.
+        """Let a member set their own contact details and preferences.
 
         Gift receipts are addressed from the account, never from the giving
         form, so a member whose account has no address could never receive
         one. This is the way out of that: the address is written to the
         account first, and the next receipt follows it. An empty string clears
         it, which is how a member says they would rather have SMS only.
+
+        The phone number is the member's own to change, with the same
+        validation the office edit gets — it is their contact line, and a
+        member who has moved number should not need an appointment to say so.
+
+        ``declared_relationships`` is how they relate to the people they give
+        for or ask to give: the giving form reads it rather than asking on
+        every gift.
 
         The two switches govern mass communication only: ``announce_email``
         withholds announcement broadcasts, ``announce_push`` announcement
@@ -2678,19 +2691,73 @@ class MeView(APIView):
             request.user.email = serializer.validated_data['email']
             request.user.save(update_fields=['email'])
 
-        profile = getattr(request.user, 'member_profile', None)
-        if profile is not None:
-            changed = []
-            for field in ('announce_email', 'announce_push'):
-                if field in request.data:
-                    value = request.data[field]
-                    if value in (True, False, 'true', 'false', 'True', 'False', '1', '0', 1, 0):
-                        new_value = value in (True, 'true', 'True', '1', 1)
-                        if getattr(profile, field) != new_value:
-                            setattr(profile, field, new_value)
-                            changed.append(field)
-            if changed:
-                profile.save(update_fields=changed)
+        profile, _ = MemberProfile.objects.get_or_create(user=request.user)
+        changed = []
+
+        if 'phone_number' in request.data:
+            try:
+                new_phone = validate_phone_number(str(request.data.get('phone_number') or '').strip())
+            except ValidationError as error:
+                detail = (
+                    error.detail[0]
+                    if isinstance(error.detail, list) and error.detail
+                    else 'Enter a valid 10-digit phone number (e.g., 0712345678).'
+                )
+                return Response({'phone_number': str(detail)}, status=status.HTTP_400_BAD_REQUEST)
+            if profile.phone_number != new_phone:
+                profile.phone_number = new_phone
+                changed.append('phone_number')
+
+        if 'declared_relationships' in request.data:
+            raw_rows = request.data.get('declared_relationships')
+            if not isinstance(raw_rows, list):
+                return Response(
+                    {'declared_relationships': 'Send the people you are related to as a list.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            valid_codes = {code for code, _label in GIFT_RELATIONSHIP_CHOICES}
+            cleaned = []
+            for row in raw_rows[:50]:
+                if not isinstance(row, dict):
+                    continue
+                relationship = str(row.get('relationship') or '').strip()
+                if relationship not in valid_codes:
+                    return Response(
+                        {'declared_relationships': 'Each person needs a relationship — spouse, sibling, child, friend or other.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                person_id = row.get('person_id')
+                name = str(row.get('name') or '').strip()
+                if person_id:
+                    person = User.objects.filter(pk=person_id, is_active=True).first()
+                    if person is None or person.pk == request.user.pk:
+                        return Response(
+                            {'declared_relationships': 'Pick people from the church roll — or type a name for someone not on it.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    name = person.get_full_name() or person.username
+                elif not name:
+                    return Response(
+                        {'declared_relationships': 'Name each person you add, or pick them from the roll.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                cleaned.append(
+                    {'person_id': int(person_id) if person_id else None, 'name': name[:160], 'relationship': relationship}
+                )
+            if profile.declared_relationships != cleaned:
+                profile.declared_relationships = cleaned
+                changed.append('declared_relationships')
+
+        for field in ('announce_email', 'announce_push'):
+            if field in request.data:
+                value = request.data[field]
+                if value in (True, False, 'true', 'false', 'True', 'False', '1', '0', 1, 0):
+                    new_value = value in (True, 'true', 'True', '1', 1)
+                    if getattr(profile, field) != new_value:
+                        setattr(profile, field, new_value)
+                        changed.append(field)
+        if changed:
+            profile.save(update_fields=changed)
         return self.get(request)
 
 
@@ -3392,6 +3459,9 @@ class PurposeContributionsView(APIView):
                 'donor_name': donor_name,
                 'giver_phone': c.phone_number,
                 'giver_email': c.donor_email or (c.member.email if c.member else ''),
+                # The account behind the gift, when it is a member's: the
+                # desk's Chat action opens a direct thread with them.
+                'member_id': c.member_id,
                 'payment_method': method_display,
                 'receipt_number': c.mpesa_receipt_number or c.paystack_reference or f"REC-DIG-{c.id}",
                 'received_at': c.paid_at.isoformat() if c.paid_at else c.created_at.isoformat(),
@@ -4291,6 +4361,7 @@ class InitiateContributionView(APIView):
                 honoree=serializer.validated_data.get('honoree'),
                 honoree_name=serializer.validated_data.get('honoree_name', ''),
                 relationship=serializer.validated_data.get('relationship', ''),
+                honoree_phone=serializer.validated_data.get('honoree_phone', ''),
                 anonymous=bool(serializer.validated_data.get('anonymous')),
             )
             if contribution.payment_method in ['cash', 'cheque', 'bank_transfer']:
@@ -4579,6 +4650,29 @@ class MpesaCallbackView(APIView):
             if context.get('honoree_id'):
                 honoree = User.objects.filter(pk=context['honoree_id'], is_active=True).first()
             lines = allocation_lines(context)
+            # The same money may already be in the ledger: a treasurer's
+            # pull (or Safaricom's C2B confirmation) records the payment the
+            # moment it shows on the statement, and this result can land
+            # after that — a slow callback, or Safaricom's retry of one
+            # that failed. Recording the gift again would print one payment
+            # twice: once held in the Unassigned queue and once completed
+            # in the givings. The row the desk already sees is adopted
+            # instead — never a second one.
+            existing = (
+                Contribution.objects.filter(mpesa_receipt_number=receipt_number).first()
+                if receipt_number else None
+            )
+            if existing is not None:
+                self._adopt_recorded_payment(
+                    existing,
+                    context=context,
+                    lines=lines,
+                    checkout_request_id=checkout_request_id,
+                    phone=phone,
+                    payer_name=payer_name,
+                    honoree=honoree,
+                )
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
             group = uuid.uuid4() if len(lines) > 1 else None
             for row in lines:
                 contribution = Contribution.objects.create(
@@ -4673,6 +4767,82 @@ class MpesaCallbackView(APIView):
                 contribution.donor_email = matched_user.email
 
         contribution.save(update_fields=['campaign', 'card_assignment', 'member', 'donor_email'])
+
+    def _adopt_recorded_payment(self, contribution, *, context, lines, checkout_request_id, phone, payer_name, honoree):
+        """Fold this STK result into the row the ledger already holds.
+
+        The pull (or a C2B confirmation) recorded this payment before the
+        callback landed, so its receipt number already names one row — often
+        one waiting in the Unassigned queue, because the short prompt
+        reference is not always a name the treasury recognises. This never
+        creates a second gift: the row takes the checkout id every later
+        retry dedupes on, the giver the form named, and — while no treasurer
+        has assigned it — the account and the split its giver chose,
+        credited once. A row that was already credited (matched when
+        recorded, or assigned from the Unassigned queue) keeps the account
+        it went to; only the callback's own marks are added to it.
+        """
+        contribution.checkout_request_id = checkout_request_id
+        if phone and not contribution.phone_number:
+            contribution.phone_number = phone
+        donor_name = (context.get('donor_name') or '').strip() or payer_name
+        if donor_name and not contribution.donor_name:
+            contribution.donor_name = donor_name
+        if not contribution.donor_email:
+            contribution.donor_email = context.get('donor_email', '')
+        if not contribution.item_description:
+            contribution.item_description = context.get('item_description', '')
+        if context.get('anonymous'):
+            # The giver asked to be anonymous: the statement's registered
+            # name must not out them on the ledger.
+            contribution.anonymous = True
+            contribution.donor_name = ''
+            contribution.donor_email = ''
+
+        if not contribution.needs_review:
+            # Already credited — matched when recorded, or assigned from the
+            # Unassigned queue. The account it went to must not move under
+            # the treasurer who put it there.
+            contribution.save()
+            return
+
+        # Still held: take the account its giver chose on the form, split the
+        # way they split it, and move the money. The receipt already went out
+        # when the row was first recorded, so the giver is not written to
+        # again here.
+        first, rest = lines[0], lines[1:]
+        group = uuid.uuid4() if rest else None
+        contribution.purpose = first['purpose']
+        contribution.amount = Decimal(str(first['amount']))
+        contribution.payment_group = group
+        contribution.honoree = honoree
+        contribution.honoree_name = (context.get('honoree_name') or '').strip()
+        contribution.relationship = (context.get('relationship') or '').strip()
+        contribution.needs_review = False
+        contribution.save()
+        self._link_giver(contribution, context)
+        for row in rest:
+            sibling = Contribution.objects.create(
+                amount=Decimal(str(row['amount'])),
+                giving_type='financial',
+                purpose=row['purpose'],
+                phone_number=contribution.phone_number,
+                donor_name=contribution.donor_name,
+                donor_email=contribution.donor_email,
+                item_description=contribution.item_description,
+                payment_method='mpesa',
+                status='completed',
+                mpesa_receipt_number=contribution.mpesa_receipt_number,
+                checkout_request_id=checkout_request_id,
+                payment_group=group,
+                paid_at=contribution.paid_at,
+                honoree=honoree,
+                honoree_name=contribution.honoree_name,
+                relationship=contribution.relationship,
+                anonymous=contribution.anonymous,
+            )
+            self._link_giver(sibling, context)
+        credit_contribution_lines(contribution)
 
 
 class MpesaC2BValidationView(APIView):
@@ -4787,6 +4957,12 @@ def record_direct_paybill_payment(payload):
     # receipt number; only when none exists is this a new payment.
     contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
     was_new_record = contribution is None
+    if not was_new_record and contribution.checkout_request_id:
+        # An STK gift the push callback already recorded (split or not): this
+        # C2B twin of the same transaction must not overwrite what the
+        # giver's form chose — the amount, the account, or the receipt they
+        # were sent.
+        return contribution
     if not contribution:
         contribution = Contribution(
             payment_method='mpesa',
@@ -5019,6 +5195,47 @@ class TreasuryUnassignedView(APIView):
             }
             for row in rows
         ])
+
+
+class TreasuryFailedView(APIView):
+    """Giving attempts that never arrived — counted, and removable.
+
+    The Failed tab on the treasury strip is the story of money that never
+    came: a prompt cancelled, a PIN never entered, a window timed out. Such
+    rows are credited to nothing and receipted never — unlike real gifts
+    they can safely be taken off the ledger, so the desk clears the noise a
+    dead attempt leaves behind. The count feeds the tab's badge.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can review failed givings.')
+        count = Contribution.objects.filter(
+            status__in=('failed', 'cancelled'), giving_type='financial'
+        ).count()
+        return Response({'count': count})
+
+    def delete(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can remove failed givings.')
+        contribution = generics.get_object_or_404(Contribution, pk=pk)
+        if contribution.status not in ('failed', 'cancelled'):
+            return Response(
+                {'detail': 'Only failed attempts can be removed — a completed gift stands.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # A split attempt leaves one line per account, all sharing the
+        # payment's group; removing a single line would leave the attempt
+        # half on the ledger, so the whole payment goes at once.
+        from .treasury import ContributionSiblings
+
+        doomed = ContributionSiblings(contribution).rows()
+        removed = len(doomed)
+        Contribution.objects.filter(pk__in=[row.pk for row in doomed]).delete()
+        noun = 'transaction' if removed == 1 else 'transactions'
+        return Response({'detail': f'{removed} failed {noun} removed.'})
 
 
 class AssignContributionAccountView(APIView):
@@ -6879,6 +7096,11 @@ class UserDetailUpdateView(APIView):
         # Fields the member is asked to approve, read off the account and the
         # profile in the same shapes UserDetailSerializer returns them in.
         target_profile, _ = MemberProfile.objects.get_or_create(user=target_user)
+        # Collected first, applied at the end: the department/ministry blocks
+        # below also record their changes here, so the dict must exist before
+        # they run — it used to be built after them, and any edit touching
+        # those fields died with an UnboundLocalError.
+        changes = {}
         profile_fields = {
             'first_name': 'first_name',
             'last_name': 'last_name',
@@ -6931,7 +7153,6 @@ class UserDetailUpdateView(APIView):
                 return value or None
             return value
 
-        changes = {}
         for field in profile_fields:
             if field not in request.data:
                 continue
@@ -7543,14 +7764,17 @@ class MemberNameSearchView(APIView):
 
 
 class GivingRequestView(APIView):
-    """Ask a member to give: the request, and its delivery.
+    """Ask a member to give: the request, its prompt, and its delivery.
 
     The mirror of giving for someone — instead of giving in a person's name,
-    you ask a person to give in yours. The request is emailed to the person
-    named (their account address — never one typed into the form) with a link
-    that opens the giving page; a gift made through that link closes the
-    request. Only members may ask: a request without a name behind it is
-    nothing the recipient could act on.
+    you ask a person to give in yours. The second modal (the giving form)
+    carries the account and the amount, and submitting sends an M-Pesa prompt
+    to the phone of the person asked for exactly that gift: they choose by
+    entering their PIN, or by giving nothing. The request is also emailed to
+    the person named (their account address — never one typed into the form)
+    with a link that opens the giving page; a gift made through that link —
+    or through the prompt — closes the request. Only members may ask: a
+    request without a name behind it is nothing the recipient could act on.
     """
 
     permission_classes = [IsAuthenticated]
@@ -7564,6 +7788,8 @@ class GivingRequestView(APIView):
                 'relationship': row.relationship,
                 'relationship_display': row.get_relationship_display(),
                 'message': row.message,
+                'purpose': row.purpose,
+                'amount': format(row.amount.normalize(), 'f') if row.amount is not None else None,
                 'status': row.status,
                 'fulfilled_at': row.fulfilled_at,
                 'created_at': row.created_at,
@@ -7575,6 +7801,13 @@ class GivingRequestView(APIView):
         target_id = request.data.get('target_id')
         relationship = (request.data.get('relationship') or '').strip()
         message = (request.data.get('message') or '').strip()
+        # The gift being asked for — account, amount, and the phone the
+        # M-Pesa prompt lands on — all arrive from the giving form, the
+        # request's second modal. The phone is optional: without it the
+        # number on the person's own account is prompted instead.
+        giver_phone = (request.data.get('giver_phone') or '').strip()
+        purpose = (request.data.get('purpose') or '').strip()
+        raw_amount = request.data.get('amount')
 
         target = User.objects.filter(pk=target_id, is_active=True).first() if target_id else None
         if target is None:
@@ -7587,17 +7820,67 @@ class GivingRequestView(APIView):
                 {'detail': 'You cannot ask yourself to give — use Give Now.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not relationship:
+            # The request form no longer asks how the person relates: the
+            # member declares relationships once, on their profile, and the
+            # request reads the declared answer. Nothing declared reads as
+            # Other.
+            requester_profile = getattr(request.user, 'member_profile', None)
+            relationship = (
+                requester_profile.declared_relationship_for_person(target.pk) if requester_profile else ''
+            ) or 'other'
         if relationship not in dict(GIFT_RELATIONSHIP_CHOICES):
             return Response(
                 {'relationship': 'Say how they relate to you — spouse, sibling, child, friend or other.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not purpose:
+            return Response(
+                {'purpose': 'Choose the giving account this request is for.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            amount = Decimal(str(raw_amount)) if raw_amount not in (None, '') else None
+        except (InvalidOperation, ValueError, TypeError):
+            amount = None
+        if amount is None or amount < 1:
+            return Response(
+                {'amount': 'Enter an amount of at least KES 1.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # How the amount reads everywhere a human does: KES 1000, not 1000.00.
+        amount_text = format(amount.normalize(), 'f')
+
+        # Where the prompt goes: the phone typed into the form, or the number
+        # on the person's own account when none was. A typed number must be a
+        # Kenyan line M-Pesa can reach.
+        prompt_phone = ''
+        if giver_phone:
+            try:
+                prompt_phone = normalize_mpesa_phone(giver_phone)
+            except ValueError:
+                return Response(
+                    {'giver_phone': 'Enter a valid 10-digit phone number, for example 0712345678.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            profile_phone = MemberProfile.objects.filter(
+                user=target
+            ).values_list('phone_number', flat=True).first()
+            if profile_phone:
+                try:
+                    prompt_phone = normalize_mpesa_phone(profile_phone)
+                except ValueError:
+                    prompt_phone = ''
 
         giving_request = GivingRequest.objects.create(
             requester=request.user,
             target=target,
             relationship=relationship,
             message=message[:1000],
+            giver_phone=giver_phone,
+            amount=amount,
+            purpose=purpose,
         )
 
         # The letter: to the target's own account address, so a request can
@@ -7614,6 +7897,8 @@ class GivingRequestView(APIView):
             ]
             if message:
                 lines.append(f'"{message}"\n\n')
+            if amount is not None and purpose:
+                lines.append(f'Give KES {amount_text} toward {purpose}.\n\n')
             lines.extend([
                 f"Give when you are ready: {give_link}\n\n",
                 "Nothing here is a debt — a request is an invitation, and the "
@@ -7638,14 +7923,66 @@ class GivingRequestView(APIView):
             # The bell is a courtesy; the request stands without it.
             logger.exception('Giving request notification (%s) failed.', giving_request.pk)
 
+        # The prompt: one push to the phone of the person asked, for the
+        # amount and the account the requester chose — they give by entering
+        # their PIN, or not at all. Nothing is written until Safaricom's
+        # callback confirms the money; the request id rides the signed
+        # context, so the landing gift closes the request.
+        prompt_sent = False
+        prompt_problem = ''
+        if prompt_phone:
+            short_account = purpose
+            for option in giving_account_options():
+                if purpose.lower() in (option['label'].lower(), option['name'].lower()):
+                    short_account = option['account']
+                    break
+            context = {
+                'amount': amount_text,
+                'purpose': purpose,
+                'allocations': [
+                    {'purpose': purpose, 'account': str(short_account)[:12], 'amount': amount_text}
+                ],
+                'phone_number': prompt_phone,
+                # The person asked is the one giving: the gift lands on their
+                # record even when the prompt is paid from another line.
+                'member_id': target.pk,
+                'giving_request_id': giving_request.pk,
+            }
+            try:
+                initiate_stk_push_for_context(
+                    phone_number=prompt_phone,
+                    amount=amount,
+                    purpose=str(short_account)[:12],
+                    context_token=pack_callback_context(context),
+                )
+                prompt_sent = True
+            except MpesaConfigurationError as error:
+                prompt_problem = str(error)
+            except Exception as error:
+                prompt_problem = f'We could not send the M-Pesa prompt: {error}'
+        else:
+            prompt_problem = 'there is no phone number we could send an M-Pesa prompt to'
+
+        target_name = target.get_full_name() or target.username
+        detail = (
+            f'Your request has been sent to {target_name} — an M-Pesa prompt for '
+            f'KES {amount_text} toward {purpose} has gone to their phone.'
+            if prompt_sent else
+            f'Your request has been sent to {target_name}.'
+        )
+        if not prompt_sent and prompt_problem:
+            detail += f' No M-Pesa prompt went out: {prompt_problem}.'
+        if not target_email:
+            detail += (
+                f' {target_name} has no email on their account, so the letter '
+                'was recorded but not delivered.'
+            )
+
         return Response(
             {
-                'detail': (
-                    f'Your request has been sent to {target.get_full_name() or target.username}.'
-                    if target_email else
-                    f'{target.get_full_name() or target.username} has no email on their account, so the request was recorded but not delivered.'
-                ),
+                'detail': detail,
                 'id': giving_request.pk,
+                'prompt_sent': prompt_sent,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -7674,6 +8011,10 @@ class GivingRequestDetailView(APIView):
             'relationship': row.relationship,
             'relationship_display': row.get_relationship_display(),
             'message': row.message,
+            # What was asked for: the giving form preselects both when the
+            # recipient opens the link.
+            'purpose': row.purpose,
+            'amount': format(row.amount.normalize(), 'f') if row.amount is not None else None,
             'status': row.status,
         })
 
@@ -10291,8 +10632,12 @@ class DepartmentJoinRequestReviewView(APIView):
             member=user, department__is_active=True,
         ).values_list('department__code', flat=True)
         codes = set(managed)
-        profile = department_office_profile(user)
-        if profile:
+        # Only the installation administrator sees every department's join
+        # requests. Department leaders see their own departments' requests
+        # through their DepartmentAssignment rows. Elders, clerks and pastors
+        # do not get the "see all" treatment here — a join request for the
+        # Music department goes to Music's leaders, not to the eldership.
+        if user.is_staff or getattr(user, 'is_superuser', False):
             codes.update(code for code in Department.objects.filter(is_active=True).values_list('code', flat=True))
         return DepartmentJoinRequest.objects.filter(department__in=codes).select_related('member', 'reviewed_by')
 
@@ -10323,8 +10668,13 @@ class DepartmentJoinRequestReviewView(APIView):
         row = DepartmentJoinRequest.objects.select_related('member').filter(pk=pk).first()
         if row is None:
             return Response({'detail': 'Unknown request.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, row.department):
-            return Response({'detail': 'Only this department\u2019s leadership or the office can answer requests.'}, status=status.HTTP_403_FORBIDDEN)
+        # Same visibility rule as GET: only the department's own leaders and the
+        # installation administrator may answer a join request. Elders, clerks
+        # and pastors do not get blanket access here — a Music join request is
+        # answered by Music's leaders, not by the eldership.
+        visible = self._visible(request.user)
+        if not visible.filter(pk=pk).exists():
+            return Response({'detail': 'You cannot answer this request.'}, status=status.HTTP_403_FORBIDDEN)
         decision = str(request.data.get('status') or '')
         if decision not in ('approved', 'rejected'):
             return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -10380,11 +10730,20 @@ def department_account(user, code):
 
 
 LCB_DEPARTMENT_ACCESS_CODES = {'awm', 'eldership', 'clerkship', 'deaconate'}
+#: The desks that read the Msamaria Mwema fund beside their own: the
+#: deaconate serves its welfare work, and the elders answer for the fund.
+MSAMARIA_DEPARTMENT_ACCESS_CODES = {'eldership', 'deaconate'}
 
 
 def lcb_account():
     return TreasuryAccount.objects.filter(
         Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
+    ).order_by('id').first()
+
+
+def msamaria_account():
+    return TreasuryAccount.objects.filter(
+        Q(name__icontains='Msamaria') | Q(description__icontains='Msamaria')
     ).order_by('id').first()
 
 
@@ -10400,6 +10759,7 @@ def department_accounts(user, code):
     - The camp funds are kept off the Ambassadors and AYM desks: neither
       ministry raises a camp offering, so each reads its own fund alone.
     - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
+    - Msamaria Mwema is included only for Eldership and Deaconate.
     - Regular roll members see the department's primary fund(s).
     """
     can_manage = can_manage_department(user, code) or is_treasurer_or_admin(user)
@@ -10482,6 +10842,13 @@ def department_accounts(user, code):
         lcb = lcb_account()
         if lcb and lcb not in accounts:
             accounts.append(lcb)
+
+    # 7. Deaconate and Eldership: the Msamaria Mwema fund, whose welfare
+    #    work the deaconate serves and the elders answer for.
+    if can_manage and code in MSAMARIA_DEPARTMENT_ACCESS_CODES:
+        msamaria = msamaria_account()
+        if msamaria and msamaria not in accounts:
+            accounts.append(msamaria)
 
     return accounts
 

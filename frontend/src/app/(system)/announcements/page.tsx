@@ -186,7 +186,7 @@ export default function AnnouncementsPage() {
                     .find(Boolean);
                   // A little more room than the ledger cards: the notice
                   // reads as a card of its own, never a squashed strip.
-                  const cardClasses = "flex min-h-40 flex-col justify-between rounded-2xl border border-sand-line bg-white p-5 shadow-sm";
+                  const cardClasses = "flex min-h-40 flex-col justify-between rounded-2xl border border-sand-line bg-white p-5 text-sm shadow-sm md:min-h-56 md:p-6";
                   const content = (
                     <>
                       <div>

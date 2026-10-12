@@ -103,6 +103,12 @@ class MemberProfile(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     gifts = models.TextField(blank=True, default='', help_text="Spiritual gifts and talents of the member")
     disability = models.TextField(blank=True, default='', help_text="Disability or special needs of the member")
+    # How this member relates to the people they give for or ask to give —
+    # declared once, here, instead of re-asked on every gift. A list of
+    # {person_id, name, relationship} rows; person_id is set when the person
+    # holds a church account, and the name carries the rest (children, friends
+    # not yet on the roll). The giving form reads it rather than asking.
+    declared_relationships = models.JSONField(default=list, blank=True, help_text="People this member is related to, with the relationship for each")
     MINISTRY_CHOICES = [
         ('adventist_men', 'Adventist Men'),
         ('adventist_women', 'Adventist Women'),
@@ -204,6 +210,26 @@ class MemberProfile(models.Model):
         if legacy and legacy not in codes:
             codes.append(legacy)
         return codes or ['member']
+
+    def declared_relationship_for_person(self, person_id=None, name=''):
+        """The relationship this member has declared for ``person_id`` (or a
+        matching free-typed ``name``), or '' when none is declared.
+
+        The giving form no longer asks how the honoree relates to the giver:
+        the answer lives on the profile, and a gift or request without an
+        explicit relationship falls back to what is declared here.
+        """
+        rows = self.declared_relationships or []
+        if person_id:
+            for row in rows:
+                if row.get('person_id') == person_id:
+                    return row.get('relationship') or ''
+        typed = (name or '').strip().lower()
+        if typed:
+            for row in rows:
+                if not row.get('person_id') and (row.get('name') or '').strip().lower() == typed:
+                    return row.get('relationship') or ''
+        return ''
 
     def get_assistant_roles(self):
         """Return the roles this member holds as an assistant (never the leader)."""
@@ -1114,6 +1140,9 @@ class Contribution(models.Model):
     )
     honoree_name = models.CharField(max_length=160, blank=True)
     relationship = models.CharField(max_length=20, choices=GIFT_RELATIONSHIP_CHOICES, blank=True)
+    # The phone of the person the gift was given for — kept when they hold no
+    # church account, so the row still carries a way to follow up with them.
+    honoree_phone = models.CharField(max_length=20, blank=True)
     honoree_receipt_sent_at = models.DateTimeField(null=True, blank=True)
     # The giver asked not to be tied to the gift. Kept on the row rather than
     # inferred from a blank name: the honoree's letter must never guess the
@@ -1420,6 +1449,15 @@ class GivingRequest(models.Model):
     )
     relationship = models.CharField(max_length=20, choices=GIFT_RELATIONSHIP_CHOICES)
     message = models.TextField(blank=True)
+    # The phone the person asked can be reached on — when they do not hold a
+    # church account, the email goes to nothing; this keeps a way to follow up.
+    giver_phone = models.CharField(max_length=20, blank=True)
+    # The gift the request asks for: which account it feeds and how much.
+    # Both arrive with the giving form — the request's second modal — and
+    # drive the M-Pesa prompt sent to the person asked. Rows written before
+    # the prompt existed carry neither.
+    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    purpose = models.CharField(max_length=160, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     fulfilled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

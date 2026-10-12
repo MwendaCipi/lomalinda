@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, Mail, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft, Download, Loader2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, FileSpreadsheet, ArrowLeft, Download, Loader2, Trash2, X } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
-import { ContactModal } from "@/components/contact-modal";
+import { waMeNumber } from "@/components/contact-modal";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { openConversation } from "@/lib/chat";
 import { ChurchLockup } from "@/components/church-lockup";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { densityCellPad } from "@/lib/table-density";
 import Swal from "sweetalert2";
@@ -68,6 +71,9 @@ type CashReceipt = { id: number; received_on: string; amount: string; purpose: s
 type IndividualGiving = {
   id: string;
   raw_id: number;
+  /** The member account behind the gift, when it is one's — the Chat action
+      opens a direct thread with them. */
+  member_id?: number | null;
   source: "digital" | "cash";
   giving_type: string;
   purpose: string;
@@ -148,7 +154,9 @@ export default function ReconciliationPage() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   // The desk-wide compact-rows preference, shared with the other tables.
   const rowPad = densityCellPad();
-  const [contactModalGiver, setContactModalGiver] = useState<IndividualGiving | null>(null);
+  // A failed attempt can be taken off the ledger; the row it came from
+  // shows this while its removal is in flight.
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
 
@@ -172,6 +180,54 @@ export default function ReconciliationPage() {
     }
   }, [fromDate, toDate, headers]);
 
+  // The desk reaches the giver the way a message actually gets read: a
+  // thread in this app when they hold an account, WhatsApp, or a call.
+  const handleChatGiver = async (giving: IndividualGiving) => {
+    if (!giving.member_id) return;
+    try {
+      await openConversation({ kind: "dm", member_id: giving.member_id });
+      window.location.href = `/chat?dm=${giving.member_id}`;
+    } catch (error) {
+      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  // A failed attempt is credited to nothing and receipted never, so — unlike
+  // a completed gift — it can be taken off the ledger. One press, after the
+  // desk confirms, and the whole payment goes: a split attempt's lines come
+  // off together on the server.
+  const handleRemoveFailed = async (giving: IndividualGiving) => {
+    const confirm = await Swal.fire({
+      title: "Remove this failed attempt?",
+      text: `${giving.donor_name} — KES ${money(giving.amount)} for ${giving.purpose} never arrived. Removing takes it off the ledger for good.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Remove it",
+      confirmButtonColor: brand.bark,
+      cancelButtonText: "Keep it",
+    });
+    if (!confirm.isConfirmed) return;
+    setRemovingId(giving.id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/failed/${giving.raw_id}/`, {
+        method: "DELETE",
+        headers: headers(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not remove this attempt.");
+      showAlert("Removed", data.detail || "The failed attempt is off the ledger.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      loadAllGivings();
+    } catch (error) {
+      showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
   // Position search bar and date range pickers to the RIGHT of the page header title & description
   useEffect(() => {
     setHeaderRightAction(
@@ -185,16 +241,8 @@ export default function ReconciliationPage() {
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
           />
         </div>
-        <button
-          type="button"
-          onClick={pullMpesaTransactions}
-          disabled={pulling}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60"
-          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-          {pulling ? "Pulling…" : "Pull M-Pesa"}
-        </button>
+        {/* The dates come before the pull: the window is what the desk
+            reads first, and the pull records into it. */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
           <label className="text-xs font-medium text-moss flex items-center gap-1">
             <span>From</span>
@@ -205,6 +253,16 @@ export default function ReconciliationPage() {
             <DateField value={toDate} onChange={changeToDate} label="Ledger to date" />
           </label>
         </div>
+        <button
+          type="button"
+          onClick={pullMpesaTransactions}
+          disabled={pulling}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60"
+          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
+          {pulling ? "Pulling…" : "Pull M-Pesa"}
+        </button>
       </div>
     );
   }, [setHeaderRightAction, searchQuery, pulling, fromDate, toDate]);
@@ -843,14 +901,36 @@ export default function ReconciliationPage() {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      {(g.giver_phone || g.giver_email) && (
+                                      {g.member_id && (
                                         <button
                                           type="button"
-                                          onClick={() => setContactModalGiver(g)}
-                                          className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-bark hover:bg-sand"
+                                          onClick={() => handleChatGiver(g)}
+                                          aria-label="Chat"
+                                          title="Chat in this app"
+                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
                                         >
-                                          Contact
+                                          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
                                         </button>
+                                      )}
+                                      {g.giver_phone && (
+                                        <a
+                                          href={`https://wa.me/${waMeNumber(g.giver_phone)}`}
+                                          aria-label="WhatsApp"
+                                          title="WhatsApp"
+                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                        >
+                                          <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                        </a>
+                                      )}
+                                      {g.giver_phone && (
+                                        <a
+                                          href={`tel:${g.giver_phone}`}
+                                          aria-label="Call"
+                                          title="Call"
+                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                        >
+                                          <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </a>
                                       )}
                                       <button
                                         type="button"
@@ -925,14 +1005,36 @@ export default function ReconciliationPage() {
                                       </td>
                                       <td className={`px-4 ${rowPad} text-center`}>
                                         <div className="flex items-center justify-center gap-2">
-                                          {(g.giver_phone || g.giver_email) && (
+                                          {g.member_id && (
                                             <button
                                               type="button"
-                                              onClick={() => setContactModalGiver(g)}
-                                              className="rounded-lg border border-sand-mute px-2.5 py-1 text-xs font-semibold text-bark hover:bg-sand"
+                                              onClick={() => handleChatGiver(g)}
+                                              aria-label="Chat"
+                                              title="Chat in this app"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
                                             >
-                                              Contact
+                                              <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
                                             </button>
+                                          )}
+                                          {g.giver_phone && (
+                                            <a
+                                              href={`https://wa.me/${waMeNumber(g.giver_phone)}`}
+                                              aria-label="WhatsApp"
+                                              title="WhatsApp"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                            >
+                                              <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                            </a>
+                                          )}
+                                          {g.giver_phone && (
+                                            <a
+                                              href={`tel:${g.giver_phone}`}
+                                              aria-label="Call"
+                                              title="Call"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                            >
+                                              <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                                            </a>
                                           )}
                                           <button
                                             type="button"
@@ -1258,13 +1360,45 @@ export default function ReconciliationPage() {
                                     <span className="text-[11px] font-semibold text-moss">No receipt — payment failed</span>
                                   )}
                                   <div className="flex items-center gap-2">
-                                    {(giving.giver_phone || giving.giver_email) && (
+                                    {giving.member_id && (
                                       <button
                                         type="button"
-                                        onClick={() => setContactModalGiver(giving)}
-                                        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-bark hover:bg-sand"
+                                        onClick={() => handleChatGiver(giving)}
+                                        aria-label="Chat"
+                                        title="Chat in this app"
+                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
                                       >
-                                        Contact
+                                        <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                                      </button>
+                                    )}
+                                    {giving.giver_phone && (
+                                      <a
+                                        href={`https://wa.me/${waMeNumber(giving.giver_phone)}`}
+                                        aria-label="WhatsApp"
+                                        title="WhatsApp"
+                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                      >
+                                        <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                      </a>
+                                    )}
+                                    {giving.giver_phone && (
+                                      <a
+                                        href={`tel:${giving.giver_phone}`}
+                                        aria-label="Call"
+                                        title="Call"
+                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                      >
+                                        <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                                      </a>
+                                    )}
+                                    {!isReceivedGiving(giving) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveFailed(giving)}
+                                        disabled={removingId === giving.id}
+                                        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-ember hover:bg-sand disabled:opacity-60"
+                                      >
+                                        {removingId === giving.id ? "Removing…" : "Remove"}
                                       </button>
                                     )}
                                     {isReceivedGiving(giving) && (
@@ -1399,13 +1533,62 @@ export default function ReconciliationPage() {
                                               type="button"
                                               onClick={() => {
                                                 setActiveActionMenuId(null);
-                                                setContactModalGiver(giving);
+                                                handleChatGiver(giving);
                                               }}
-                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition"
+                                              disabled={!giving.member_id}
+                                              title={giving.member_id ? "Open a thread in this app" : "This giver holds no member account — use WhatsApp or Call"}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition disabled:opacity-45"
                                             >
-                                              <Phone className="h-3.5 w-3.5 text-sage" />
-                                              <span>Contact Giver</span>
+                                              <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                              <span>Chat</span>
                                             </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveActionMenuId(null);
+                                                if (giving.giver_phone) window.location.href = `https://wa.me/${waMeNumber(giving.giver_phone)}`;
+                                              }}
+                                              disabled={!giving.giver_phone}
+                                              title={giving.giver_phone ? "WhatsApp this giver" : "No phone number recorded for this giver"}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition disabled:opacity-45"
+                                            >
+                                              <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                              <span>WhatsApp</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveActionMenuId(null);
+                                                if (giving.giver_phone) window.location.href = `tel:${giving.giver_phone}`;
+                                              }}
+                                              disabled={!giving.giver_phone}
+                                              title={giving.giver_phone ? "Call this giver" : "No phone number recorded for this giver"}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition disabled:opacity-45"
+                                            >
+                                              <Phone className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                              <span>Call</span>
+                                            </button>
+
+                                            {!isReceivedGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={removingId === giving.id}
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  handleRemoveFailed(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                              >
+                                                {removingId === giving.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Trash2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                )}
+                                                <span>Remove</span>
+                                              </button>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -1478,53 +1661,6 @@ export default function ReconciliationPage() {
           </div>
         </div>
       </div>
-
-      {/* Contact Giver Quick Action Modal — the shared contact shell with the
-          receipt as context; a giver isn't an app member, so no Chat here. */}
-      {contactModalGiver && (
-        <ContactModal
-          onClose={() => setContactModalGiver(null)}
-          title="Contact Giver"
-          subtitle={contactModalGiver.donor_name}
-          context={
-            <div className="rounded-xl bg-sand p-3 text-xs space-y-1">
-              <p className="font-semibold text-bark">{contactModalGiver.purpose}</p>
-              <p className="text-moss">
-                Amount: <span className="font-bold text-bark">{money(contactModalGiver.amount)}</span>
-              </p>
-              <p className="text-moss">Ref: {contactModalGiver.receipt_number}</p>
-            </div>
-          }
-          actions={[
-            {
-              key: "call",
-              icon: <Phone size={14} className="shrink-0 text-ember" aria-hidden="true" />,
-              label: "Call",
-              detail: contactModalGiver.giver_phone || "No phone number recorded for this giver.",
-              href: contactModalGiver.giver_phone ? `tel:${contactModalGiver.giver_phone}` : undefined,
-              disabled: !contactModalGiver.giver_phone,
-            },
-            {
-              key: "sms",
-              icon: <MessageSquare size={14} className="shrink-0 text-ember" aria-hidden="true" />,
-              label: "Send SMS",
-              detail: contactModalGiver.giver_phone || "No phone number recorded for this giver.",
-              href: contactModalGiver.giver_phone ? `sms:${contactModalGiver.giver_phone}` : undefined,
-              disabled: !contactModalGiver.giver_phone,
-            },
-            {
-              key: "email",
-              icon: <Mail size={14} className="shrink-0 text-ember" aria-hidden="true" />,
-              label: "Email",
-              detail: contactModalGiver.giver_email || "No email address recorded for this giver.",
-              href: contactModalGiver.giver_email
-                ? `mailto:${contactModalGiver.giver_email}?subject=Giving%20Receipt%20-%20${encodeURIComponent(contactModalGiver.purpose)}`
-                : undefined,
-              disabled: !contactModalGiver.giver_email,
-            },
-          ]}
-        />
-      )}
 
       {/* Add Receipt Modal — the same modal the contributions ledger uses,
           shared with the fund drives console. */}

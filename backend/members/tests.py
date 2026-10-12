@@ -1066,6 +1066,199 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertFalse(self.held.needs_review)
 
 
+class TreasuryFailedViewTests(APITestCase):
+    """The Failed tab: what never arrived — counted for the badge, and
+    removable, unlike any completed gift."""
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('failed.treasurer', 'failed.treasurer@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.member = User.objects.create_user('failed.member', 'failed.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member')
+        self.failed = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='failed',
+            amount=Decimal('100.00'), purpose='Tithe', item_description='Request cancelled by user',
+            checkout_request_id='ws_CO_failed1',
+        )
+
+    def test_count_feeds_the_badge(self):
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='cancelled',
+            amount=Decimal('50.00'), purpose='Tithe',
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='OKK9DONE1', amount=Decimal('999.00'), purpose='Tithe',
+            paid_at=timezone.now(),
+        )
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.get('/api/members/treasury/failed/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+
+    def test_treasurer_removes_a_failed_attempt(self):
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.delete(f'/api/members/treasury/failed/{self.failed.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Contribution.objects.filter(pk=self.failed.id).exists())
+
+    def test_a_split_attempt_comes_off_as_one_payment(self):
+        group = uuid.uuid4()
+        self.failed.payment_group = group
+        self.failed.save(update_fields=['payment_group'])
+        second = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='failed',
+            amount=Decimal('50.00'), purpose='Combined Offering',
+            checkout_request_id='ws_CO_failed1', payment_group=group,
+        )
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.delete(f'/api/members/treasury/failed/{second.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Contribution.objects.filter(checkout_request_id='ws_CO_failed1').exists())
+
+    def test_a_completed_gift_cannot_be_removed(self):
+        done = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='OKK9DONE2', amount=Decimal('100.00'), purpose='Tithe',
+            paid_at=timezone.now(),
+        )
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.delete(f'/api/members/treasury/failed/{done.id}/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Contribution.objects.filter(pk=done.id).exists())
+
+    def test_ordinary_member_cannot_review_or_remove(self):
+        self.client.force_authenticate(user=self.member)
+        self.assertEqual(
+            self.client.get('/api/members/treasury/failed/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.delete(f'/api/members/treasury/failed/{self.failed.id}/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+class DedupeMpesaReceiptsCommandTests(TestCase):
+    """One payment, one receipt: the pull and the callback each recorded
+    some payments on their own, and the ledger grew a twin. The command
+    takes the duplicates back off — a held "Rehema Moraa" beside the
+    completed "Rehema" is exactly what it was written for."""
+
+    def _run(self, *args):
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('dedupe_mpesa_receipts', *args, stdout=out)
+        return out.getvalue()
+
+    def setUp(self):
+        self.tithe = TreasuryAccount.objects.create(
+            name='Tithe', description='Tithe', account_type='mobile_money', balance=Decimal('1000.00'),
+        )
+
+    def test_held_duplicate_beside_the_completed_row_is_removed(self):
+        completed = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH01MAA1', amount=Decimal('100.00'), purpose='Tithe',
+            donor_name='Rehema', checkout_request_id='ws_CO_reh1', paid_at=timezone.now(),
+        )
+        held = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH01MAA1', amount=Decimal('100.00'), purpose='youth trip',
+            donor_name='Rehema Moraa', needs_review=True, paid_at=timezone.now(),
+        )
+        self._run()
+        rows = list(Contribution.objects.filter(mpesa_receipt_number='REH01MAA1'))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].pk, completed.pk, 'the completed, attributed row must survive')
+        self.assertFalse(Contribution.objects.filter(pk=held.pk).exists())
+
+    def test_double_credit_is_reversed_from_the_balance(self):
+        # Both duplicates were credited before the fix, so the account says
+        # 1200 where the giver paid 100 once. The command removes one credit
+        # and brings the balance back down, the reversal left on the log.
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH02MAA2', amount=Decimal('100.00'), purpose='Tithe',
+            donor_name='Rehema', checkout_request_id='ws_CO_reh2', paid_at=timezone.now(),
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH02MAA2', amount=Decimal('100.00'), purpose='Tithe',
+            donor_name='Rehema Moraa', paid_at=timezone.now(),
+        )
+        apply_credit(account=self.tithe, amount=Decimal('100.00'), description='Rehema — M-Pesa (Tithe)', reference='REH02MAA2')
+        apply_credit(account=self.tithe, amount=Decimal('100.00'), description='Rehema Moraa — M-Pesa (Tithe)', reference='REH02MAA2')
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1200.00'))
+
+        self._run()
+
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='REH02MAA2').count(), 1)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        credits = TreasuryAccountTransaction.objects.filter(
+            account=self.tithe, transaction_type='credit', reference='REH02MAA2',
+        )
+        self.assertEqual(credits.count(), 1)
+        reversal = TreasuryAccountTransaction.objects.filter(
+            account=self.tithe, transaction_type='debit', reference='REH02MAA2',
+        )
+        self.assertEqual(reversal.count(), 1)
+        self.assertIn('duplicate', reversal.first().description.lower())
+
+    def test_split_gift_sharing_a_receipt_is_left_alone(self):
+        group = uuid.uuid4()
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='SPL01PLIT1', amount=Decimal('300.00'), purpose='Tithe',
+            payment_group=group, checkout_request_id='ws_CO_split1', paid_at=timezone.now(),
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='SPL01PLIT1', amount=Decimal('200.00'), purpose='Combined Offering',
+            payment_group=group, checkout_request_id='ws_CO_split1', paid_at=timezone.now(),
+        )
+        self._run()
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SPL01PLIT1').count(), 2)
+
+    def test_a_stray_row_beside_a_real_split_is_left_for_a_human(self):
+        group = uuid.uuid4()
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='MIX01IXED1', amount=Decimal('300.00'), purpose='Tithe',
+            payment_group=group, checkout_request_id='ws_CO_mix1', paid_at=timezone.now(),
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='MIX01IXED1', amount=Decimal('200.00'), purpose='Combined Offering',
+            payment_group=group, checkout_request_id='ws_CO_mix1', paid_at=timezone.now(),
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='MIX01IXED1', amount=Decimal('500.00'), purpose='youth trip',
+            needs_review=True, paid_at=timezone.now(),
+        )
+        self._run()
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='MIX01IXED1').count(), 3)
+
+    def test_dry_run_reports_but_changes_nothing(self):
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH03MAA3', amount=Decimal('100.00'), purpose='Tithe',
+            checkout_request_id='ws_CO_reh3', paid_at=timezone.now(),
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='REH03MAA3', amount=Decimal('100.00'), purpose='youth trip',
+            needs_review=True, paid_at=timezone.now(),
+        )
+        out = self._run('--dry-run')
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='REH03MAA3').count(), 2)
+        self.assertIn('dry-run', out)
+
+
 class RegisterMpesaC2BUrlsCommandTests(TestCase):
     def _run(self, *args, **options):
         from django.core.management import call_command
@@ -6999,6 +7192,106 @@ class TreasuryAutoCreditTests(APITestCase):
         self.assertEqual(TreasuryAccountTransaction.objects.count(), tx_before,
                          'C2B confirmation for an already-recorded gift must not credit again.')
 
+    # -- The pull and the callback meeting over one transaction ------------
+
+    def test_callback_adopts_the_row_the_pull_already_recorded(self):
+        # The treasurer pulled the statement while this gift's callback was
+        # still in flight — or Safaricom retried one that had failed. The
+        # pull found the transaction and held it (the short prompt reference
+        # names no treasury account), so the same payment was about to
+        # appear twice: once in the Unassigned queue and once in the
+        # completed givings. The callback must adopt the held row instead —
+        # one receipt, one gift, credited once to the account the giver
+        # chose on the form.
+        from .views import record_direct_paybill_payment
+
+        record_direct_paybill_payment({
+            'TransID': 'SAA9QKAUTO', 'TransAmount': '100.00',
+            'BillRefNumber': 'youth trip', 'MSISDN': '254712345678',
+        })
+        pulled = Contribution.objects.get(mpesa_receipt_number='SAA9QKAUTO')
+        self.assertTrue(pulled.needs_review, 'the pull held the payment: its reference names no account')
+
+        self._callback({'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'})
+
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 1,
+                         'one payment must never appear as two givings — once held, once completed.')
+        pulled.refresh_from_db()
+        self.assertFalse(pulled.needs_review)
+        self.assertEqual(pulled.purpose, 'Tithe')
+        self.assertEqual(pulled.checkout_request_id, 'ws_CO_auto')
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
+
+    def test_callback_leaves_a_credited_row_on_its_account(self):
+        # The other shape of the same race: the pull's reference matched and
+        # the account was already credited. The late callback adds its marks
+        # but must not move the gift to the account the form named, nor
+        # credit it a second time.
+        from .views import record_direct_paybill_payment
+
+        record_direct_paybill_payment({
+            'TransID': 'SAA9QKAUTO', 'TransAmount': '100.00',
+            'BillRefNumber': 'Tithe', 'MSISDN': '254712345678',
+        })
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+
+        self._callback({'amount': '100.00', 'purpose': 'Combined Offering', 'phone_number': '254712345678'})
+
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 1)
+        pulled = Contribution.objects.get(mpesa_receipt_number='SAA9QKAUTO')
+        self.assertEqual(pulled.purpose, 'Tithe', 'the credited account must not move under the desk')
+        self.assertEqual(pulled.checkout_request_id, 'ws_CO_auto')
+        self.tithe.refresh_from_db()
+        self.combined.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        self.assertEqual(self.combined.balance, Decimal('500.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
+
+    def test_retried_callback_after_adoption_still_credits_once(self):
+        # Safaricom retries an unacknowledged result on its own schedule; the
+        # adoption stamps the checkout id, so every later retry finds the
+        # gift already recorded.
+        from .views import record_direct_paybill_payment
+
+        record_direct_paybill_payment({
+            'TransID': 'SAA9QKAUTO', 'TransAmount': '100.00',
+            'BillRefNumber': 'youth trip', 'MSISDN': '254712345678',
+        })
+        context = {'amount': '100.00', 'purpose': 'Tithe', 'phone_number': '254712345678'}
+        self._callback(context)
+        self._callback(context)
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 1)
+        self.tithe.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1100.00'))
+        self.assertEqual(TreasuryAccountTransaction.objects.count(), 1)
+
+    def test_callback_splits_a_held_row_the_way_the_form_asked(self):
+        # The giver split the payment across two accounts; the pull had held
+        # the unsplit statement row. Adoption splits it to match the form
+        # and credits each account once.
+        from .views import record_direct_paybill_payment
+
+        record_direct_paybill_payment({
+            'TransID': 'SAA9QKAUTO', 'TransAmount': '300.00',
+            'BillRefNumber': 'youth trip', 'MSISDN': '254712345678',
+        })
+        self._callback({
+            'amount': '300.00', 'purpose': 'Tithe', 'phone_number': '254712345678',
+            'allocations': [
+                {'purpose': 'Tithe', 'account': 'Tithe', 'amount': '200.00'},
+                {'purpose': 'Combined Offering', 'account': 'CombinedOff', 'amount': '100.00'},
+            ],
+        })
+        self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO').count(), 2)
+        self.tithe.refresh_from_db()
+        self.combined.refresh_from_db()
+        self.assertEqual(self.tithe.balance, Decimal('1200.00'))
+        self.assertEqual(self.combined.balance, Decimal('600.00'))
+        self.assertFalse(Contribution.objects.filter(mpesa_receipt_number='SAA9QKAUTO', needs_review=True).exists())
+
     # -- Paystack webhook --------------------------------------------------
 
     def test_paystack_success_credits_the_account(self):
@@ -10141,8 +10434,15 @@ class DepartmentRequestDeskTests(APITestCase):
         self.department = Department.objects.get_or_create(
             code='music', defaults={'name': 'Music', 'group': 'ministry'},
         )[0]
+        self.music_leader_role = DepartmentRole.objects.get(department=self.department, name='Leader')
+        # The elder who answers music's join requests must actually lead music —
+        # a join request for the Music department goes to Music's leaders, not
+        # to the eldership (unless the elder is also Music's leader).
         self.elder = User.objects.create_user('desk.elder', 'desk.elder@example.com', 'StrongPass#2026')
         MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        DepartmentAssignment.objects.create(
+            department=self.department, member=self.elder, role=self.music_leader_role, kind='leader',
+        )
         self.member = User.objects.create_user('desk.member', 'desk.member@example.com', 'StrongPass#2026')
         MemberProfile.objects.create(user=self.member, role='member', roles='member')
 
@@ -10219,6 +10519,24 @@ class DepartmentRequestDeskTests(APITestCase):
         }, format='json')
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(DepartmentJoinRequest.objects.filter(member=self.member, status='pending').count(), 1)
+
+    def test_an_elder_who_does_not_lead_a_department_sees_no_join_requests(self):
+        # An elder without a DepartmentAssignment sees no join requests —
+        # they are routed to the departments' own leaders, not to the
+        # eldership.
+        non_leading_elder = User.objects.create_user('desk.nonlead.elder', 'desk.nonlead.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=non_leading_elder, role='elder', roles='elder,member')
+        self.client.force_authenticate(self.member)
+        self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+        self.client.force_authenticate(non_leading_elder)
+        queue = self.client.get('/api/members/department-join-requests/review/')
+        self.assertEqual(queue.status_code, status.HTTP_200_OK)
+        self.assertEqual(queue.data['requests'], [])
+        # And cannot answer one they cannot see.
+        answer = self.client.patch(
+            '/api/members/department-join-requests/1/', {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answer.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class DeaconateSeatTests(APITestCase):
@@ -10703,6 +11021,73 @@ class DepartmentFundTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([row['name'] for row in response.data['accounts']], ['AYM'])
+
+    def test_deaconate_desk_reads_msamaria_and_lcb(self):
+        """The deaconate serves Msamaria Mwema's welfare work and answers
+        for the church budget: its desk reads both beside its own fund."""
+        department = Department.objects.get(code='deaconate')
+        TreasuryAccount.objects.filter(department=department).delete()
+        role = DepartmentRole.objects.get(department=department, name='Head Deacon')
+        DepartmentAssignment.objects.create(
+            department=department, role=role, member=self.leader, kind='leader',
+        )
+        TreasuryAccount.objects.create(
+            name='Deaconate', description='Deaconate',
+            balance=Decimal('400.00'), department=department,
+        )
+        TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+        TreasuryAccount.objects.create(
+            name='Msamaria Mwema', description='Msamaria Mwema Children Home',
+            balance=Decimal('2500.00'),
+        )
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/deaconate/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['name'] for row in response.data['accounts']]
+        self.assertIn('Deaconate', names)
+        self.assertIn('LCB', names)
+        self.assertIn('Msamaria Mwema', names)
+
+    def test_eldership_desk_reads_msamaria_and_lcb(self):
+        """The elders answer for the Msamaria Mwema fund and for the church
+        budget: their desk carries both."""
+        TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
+        )
+        TreasuryAccount.objects.create(
+            name='Msamaria Mwema', description='Msamaria Mwema Children Home',
+            balance=Decimal('2500.00'),
+        )
+
+        self.client.force_authenticate(self.elder)
+        response = self.client.get('/api/members/departments/eldership/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['name'] for row in response.data['accounts']]
+        self.assertIn('LCB', names)
+        self.assertIn('Msamaria Mwema', names)
+
+    def test_msamaria_stays_out_of_other_ministry_desks(self):
+        """Msamaria Mwema is not every desk's fund: the music ministry's
+        strip carries its own fund alone."""
+        self._fund()
+        TreasuryAccount.objects.create(
+            name='Msamaria Mwema', description='Msamaria Mwema Children Home',
+            balance=Decimal('2500.00'),
+        )
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/music/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(
+            'Msamaria Mwema',
+            [row['name'] for row in response.data['accounts']],
+        )
 
     def test_children_still_read_the_camp_funds(self):
         """The camp funds stay with the desks that raise them — Children runs
@@ -11602,6 +11987,218 @@ class DepartmentRollRemovalTests(APITestCase):
         self.assertNotIn(self.leader.get_username(), holders)
 
 
+class ProfileRelationshipsAndPhoneTests(APITestCase):
+    """A member's own profile: their phone number, and the people they
+    declare relationships to.
+
+    Two things moved here from the giving form. The phone number a member
+    gives with is theirs to change — the old endpoint accepted only an email
+    and two switches, so a member who tried to update their number was told
+    the profile could not be updated. And how the honoree of a gift (or the
+    person a request is sent to) relates to the giver is now declared once on
+    the profile; the giving endpoints read it instead of asking on every gift.
+    """
+
+    ME_URL = '/api/members/me/'
+    REQUESTS_URL = '/api/members/giving-requests/'
+    INITIATE_URL = '/api/members/contributions/initiate/'
+
+    def setUp(self):
+        self.member = User.objects.create_user('rel.member', 'rel.member@example.com', 'StrongPass#2026', first_name='Ruth', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member', phone_number='0711000022')
+        self.spouse = User.objects.create_user('rel.spouse', 'rel.spouse@example.com', 'StrongPass#2026', first_name='Sam', last_name='Spouse')
+        MemberProfile.objects.create(user=self.spouse, role='member', roles='member')
+
+    def test_a_member_can_change_their_own_phone_number(self):
+        """The number on the member's record is theirs to change, saved with
+        the same validation the office edit gets."""
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {'phone_number': '0722333444'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member.member_profile.refresh_from_db()
+        self.assertEqual(self.member.member_profile.phone_number, '0722333444')
+
+    def test_a_member_number_is_normalised_like_any_other(self):
+        """2547... arrives as 07... — the record keeps one shape."""
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {'phone_number': '+254722333444'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member.member_profile.refresh_from_db()
+        self.assertEqual(self.member.member_profile.phone_number, '0722333444')
+
+    def test_a_bad_number_is_refused_with_the_reason(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {'phone_number': '12345'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone_number', response.data)
+        self.member.member_profile.refresh_from_db()
+        self.assertEqual(self.member.member_profile.phone_number, '0711000022')
+
+    def test_declared_relationships_are_saved_on_the_profile(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {
+            'declared_relationships': [
+                {'person_id': self.spouse.pk, 'relationship': 'spouse'},
+                {'name': 'Joy Member', 'relationship': 'child'},
+            ],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member.member_profile.refresh_from_db()
+        rows = self.member.member_profile.declared_relationships
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]['person_id'], self.spouse.pk)
+        self.assertEqual(rows[0]['name'], 'Sam Spouse')
+        self.assertEqual(rows[0]['relationship'], 'spouse')
+        self.assertEqual(rows[1], {'person_id': None, 'name': 'Joy Member', 'relationship': 'child'})
+        # And the member reads them back the same way.
+        listed = self.client.get(self.ME_URL).data['declared_relationships']
+        self.assertEqual(listed, rows)
+
+    def test_a_relationship_must_name_someone(self):
+        """A roll pick or a typed name — one of the two, always."""
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {
+            'declared_relationships': [{'person_id': None, 'name': '  ', 'relationship': 'friend'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('declared_relationships', response.data)
+
+    def test_a_member_cannot_declare_themselves(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {
+            'declared_relationships': [{'person_id': self.member.pk, 'relationship': 'spouse'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('declared_relationships', response.data)
+
+    def test_an_unknown_relationship_is_refused(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {
+            'declared_relationships': [{'name': 'Joy Member', 'relationship': 'cousin'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('declared_relationships', response.data)
+
+    def test_a_request_reads_the_declared_relationship(self):
+        """The request form no longer asks: the spouse declared on the
+        profile is the relationship the request carries."""
+        self.member.member_profile.declared_relationships = [
+            {'person_id': self.spouse.pk, 'name': 'Sam Spouse', 'relationship': 'spouse'},
+        ]
+        self.member.member_profile.save(update_fields=['declared_relationships'])
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'giver_phone': '0712345678',
+            'purpose': 'Tithe',
+            'amount': 100,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        request_row = GivingRequest.objects.get(requester=self.member)
+        self.assertEqual(request_row.relationship, 'spouse')
+
+    def test_a_request_with_nothing_declared_reads_other(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'giver_phone': '0712345678',
+            'purpose': 'Tithe',
+            'amount': 100,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(GivingRequest.objects.get(requester=self.member).relationship, 'other')
+
+    def test_a_gift_for_someone_reads_the_declared_relationship(self):
+        self.member.member_profile.declared_relationships = [
+            {'person_id': self.spouse.pk, 'name': 'Sam Spouse', 'relationship': 'spouse'},
+        ]
+        self.member.member_profile.save(update_fields=['declared_relationships'])
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        gift = Contribution.objects.get()
+        self.assertEqual(gift.relationship, 'spouse')
+        self.assertEqual(gift.honoree, self.spouse)
+
+    def test_a_gift_for_someone_with_nothing_declared_reads_other(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Contribution.objects.get().relationship, 'other')
+
+    def test_an_explicit_relationship_is_still_honoured(self):
+        """Older clients that still send one keep working — and a declared
+        relationship never overrides what the form actually said."""
+        self.member.member_profile.declared_relationships = [
+            {'person_id': self.spouse.pk, 'name': 'Sam Spouse', 'relationship': 'spouse'},
+        ]
+        self.member.member_profile.save(update_fields=['declared_relationships'])
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+            'relationship': 'friend',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Contribution.objects.get().relationship, 'friend')
+
+
+class UserDetailUpdateViewTests(APITestCase):
+    """The office's edit of a member's record: proposed, never applied —
+    and never a crash."""
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('upd.clerk', 'upd.clerk@example.com', 'StrongPass#2026', first_name='Cara', last_name='Clerk')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        self.member = User.objects.create_user('upd.member', 'upd.member@example.com', 'StrongPass#2026', first_name='Mo', last_name='Member')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member', phone_number='0711000033')
+
+    def test_a_phone_edit_becomes_a_proposal_the_member_approves(self):
+        self.client.force_authenticate(self.clerk)
+        response = self.client.patch(f'/api/members/users/{self.member.pk}/', {
+            'phone_number': '0755666777',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        proposal = ProfileChangeRequest.objects.get(member=self.member)
+        self.assertEqual(proposal.changes, {'phone_number': '0755666777'})
+        # Nothing moves until the member says so.
+        self.member.member_profile.refresh_from_db()
+        self.assertEqual(self.member.member_profile.phone_number, '0711000033')
+
+    def test_an_edit_touching_department_and_ministry_does_not_crash(self):
+        """The changes dict used to be built after the department and
+        ministry blocks wrote to it — an UnboundLocalError on any edit
+        carrying those fields."""
+        area, _ = Department.objects.get_or_create(code='aym', defaults={'name': 'Adventist Youth', 'group': 'ministry', 'is_active': True})
+        self.client.force_authenticate(self.clerk)
+        response = self.client.patch(f'/api/members/users/{self.member.pk}/', {
+            'first_name': 'Moses',
+            'department_ref': 'aym',
+            'ministries': ['aym'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        proposal = ProfileChangeRequest.objects.get(member=self.member)
+        self.assertEqual(proposal.changes.get('department_ref'), 'aym')
+        self.assertEqual(proposal.changes.get('ministries'), ['aym'])
+        self.assertEqual(proposal.changes.get('first_name'), 'Moses')
+        self.assertTrue(Department.objects.filter(pk=area.pk).exists())
+
+
 class GiveForSomeoneTests(APITestCase):
     """Giving in another member's name, and asking a member to give.
 
@@ -11669,7 +12266,10 @@ class GiveForSomeoneTests(APITestCase):
         self.assertIn('500.00', honoree_letters[0].body)
         self.assertIsNotNone(gift.honoree_receipt_sent_at)
 
-    def test_a_gift_for_someone_without_a_relationship_is_refused(self):
+    def test_a_gift_for_someone_without_a_relationship_falls_back_to_other(self):
+        """The form no longer asks how they relate — the giver's profile
+        declares it. Nothing declared on the profile reads as Other, never
+        as a refusal: the gift is what matters."""
         self.client.force_authenticate(self.payer)
         response = self.client.post(self.INITIATE_URL, {
             'giving_type': 'financial',
@@ -11677,6 +12277,24 @@ class GiveForSomeoneTests(APITestCase):
             'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
             'phone_number': '',
             'honoree_id': self.spouse.pk,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        gift = Contribution.objects.get()
+        self.assertEqual(gift.honoree, self.spouse)
+        self.assertEqual(gift.relationship, 'other')
+
+    def test_a_relationship_the_church_does_not_have_is_refused(self):
+        """Omitted falls back; a code outside the church's short list is
+        still refused rather than written to the ledger."""
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.INITIATE_URL, {
+            'giving_type': 'financial',
+            'payment_method': 'bank_transfer',
+            'allocations': [{'purpose': 'Tithe', 'amount': '500.00'}],
+            'phone_number': '',
+            'honoree_id': self.spouse.pk,
+            'relationship': 'cousin',
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -11788,12 +12406,17 @@ class GiveForSomeoneTests(APITestCase):
             'target_id': self.spouse.pk,
             'relationship': 'spouse',
             'message': 'Please give the budget offering this month.',
+            'purpose': 'Local Church Budget',
+            'amount': '1000',
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['prompt_sent'])
         giving_request = GivingRequest.objects.get()
         self.assertEqual(giving_request.requester, self.payer)
         self.assertEqual(giving_request.target, self.spouse)
+        self.assertEqual(giving_request.purpose, 'Local Church Budget')
+        self.assertEqual(giving_request.amount, Decimal('1000'))
         # Delivered to the target's own account address — the form never
         # names where it goes.
         self.assertTrue(any(self.spouse.email in message.to for message in mail.outbox))
@@ -11838,6 +12461,8 @@ class GiveForSomeoneTests(APITestCase):
             'target_id': self.spouse.pk,
             'relationship': 'sibling',
             'message': 'Kindly give towards camp.',
+            'purpose': 'Camp Goal',
+            'amount': '300',
         }, format='json')
         giving_request = GivingRequest.objects.get()
 
@@ -11846,7 +12471,141 @@ class GiveForSomeoneTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['requester_name'], 'Faith Payer')
         self.assertEqual(response.data['relationship_display'], 'Sibling')
+        # The link's own form preselects what was asked for.
+        self.assertEqual(response.data['purpose'], 'Camp Goal')
+        self.assertEqual(response.data['amount'], '300')
         self.assertEqual(response.data['status'], 'pending')
+
+    def test_a_request_needs_an_account_and_an_amount(self):
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'amount': '500',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('purpose', response.data)
+
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'purpose': 'Tithe',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('amount', response.data)
+        self.assertEqual(GivingRequest.objects.count(), 0)
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_a_request_prompts_the_entered_phone_for_the_amount_and_purpose(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'message': 'Please give the budget offering this month.',
+            'purpose': 'Local Church Budget',
+            'amount': '1000',
+            'giver_phone': '0712345678',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['prompt_sent'])
+        kwargs = mock_stk.call_args.kwargs
+        self.assertEqual(kwargs['phone_number'], '254712345678')
+        self.assertEqual(int(kwargs['amount']), 1000)
+        # Everything the callback needs rides the signed context: the person
+        # asked is the giver, and the landing gift closes their request.
+        context = unpack_callback_context(kwargs['context_token'])
+        self.assertEqual(context['member_id'], self.spouse.pk)
+        self.assertEqual(context['giving_request_id'], GivingRequest.objects.get().pk)
+        self.assertEqual(context['purpose'], 'Local Church Budget')
+        self.assertEqual(context['phone_number'], '254712345678')
+        self.assertEqual(len(context['allocations']), 1)
+        self.assertEqual(context['allocations'][0]['purpose'], 'Local Church Budget')
+        self.assertEqual(context['allocations'][0]['amount'], str(Decimal('1000')))
+        self.assertTrue(context['allocations'][0]['account'])
+        self.assertEqual(kwargs['purpose'], context['allocations'][0]['account'])
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_the_prompt_falls_back_to_the_number_on_the_targets_account(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        MemberProfile.objects.filter(user=self.spouse).update(phone_number='0722000111')
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'purpose': 'Tithe',
+            'amount': '200',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['prompt_sent'])
+        self.assertEqual(mock_stk.call_args.kwargs['phone_number'], '254722000111')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_a_request_without_any_phone_is_recorded_but_sends_no_prompt(self, mock_stk):
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'purpose': 'Tithe',
+            'amount': '200',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['prompt_sent'])
+        self.assertIn('no phone number', response.data['detail'])
+        mock_stk.assert_not_called()
+        self.assertEqual(GivingRequest.objects.get().status, 'pending')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_an_unavailable_mpesa_still_records_the_request(self, mock_stk):
+        from .mpesa import MpesaConfigurationError
+        mock_stk.side_effect = MpesaConfigurationError('M-Pesa is not configured on this server.')
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'purpose': 'Tithe',
+            'amount': '350',
+            'giver_phone': '0712345678',
+        }, format='json')
+
+        # The ask stands even when the prompt cannot go out — the emailed
+        # link still lets the person give.
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['prompt_sent'])
+        self.assertIn('M-Pesa is not configured', response.data['detail'])
+        row = GivingRequest.objects.get()
+        self.assertEqual(row.status, 'pending')
+        self.assertEqual(row.amount, Decimal('350'))
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_the_prompt_closes_the_request_when_the_money_lands(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+        self.client.force_authenticate(self.payer)
+        response = self.client.post(self.REQUESTS_URL, {
+            'target_id': self.spouse.pk,
+            'relationship': 'spouse',
+            'purpose': 'Tithe',
+            'amount': '500',
+            'giver_phone': '0712345678',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        token = mock_stk.call_args.kwargs['context_token']
+
+        # Safaricom confirms: the money moved on the person's phone.
+        self.client.force_authenticate(user=None)
+        callback = self.client.post(
+            f'{self.CALLBACK_URL}?ctx={token}', self._callback_payload(), format='json'
+        )
+        self.assertEqual(callback.status_code, status.HTTP_200_OK)
+        row = GivingRequest.objects.get()
+        self.assertEqual(row.status, 'fulfilled')
+        self.assertIsNotNone(row.fulfilled_at)
+        gift = Contribution.objects.get(status='completed')
+        self.assertEqual(gift.member, self.spouse)
+        self.assertEqual(gift.purpose, 'Tithe')
 
 
 class SabbathSchoolLessonTests(APITestCase):

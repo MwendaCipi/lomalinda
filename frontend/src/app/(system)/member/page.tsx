@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
 import { kenyaCounties } from "@/config/kenya-counties";
@@ -14,6 +14,19 @@ import { OfflineBanner } from "@/components/offline-banner";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
 type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
+
+/** One person this member is related to, as the profile keeps it: an
+    account when the roll found them, a name alone otherwise. */
+type DeclaredRelationship = { person_id?: number | null; name: string; relationship: string };
+
+/** The church's short list — anything rarer is Other. */
+const RELATIONSHIP_CHOICES = [
+  { value: "spouse", label: "Spouse" },
+  { value: "sibling", label: "Sibling" },
+  { value: "child", label: "Child" },
+  { value: "friend", label: "Friend" },
+  { value: "other", label: "Other" },
+];
 
 export default function MemberPage() {
   const { theme, setTheme } = useAccessibility();
@@ -29,17 +42,141 @@ export default function MemberPage() {
   const [isOffline, setIsOffline] = useState(false);
   const [cachedAt, setCachedAt] = useState<Date | null>(null);
 
+  // The contact line: the member's own to change, same validation the
+  // office edit gets — no appointment needed to say the number moved.
+  const [phone, setPhone] = useState("");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState("");
+
+  // The people this member gives for or asks to give: declared here once,
+  // read by the giving form instead of being asked on every gift.
+  const [relationships, setRelationships] = useState<DeclaredRelationship[]>([]);
+  const [relSaving, setRelSaving] = useState(false);
+  const [relMessage, setRelMessage] = useState("");
+  const [relQuery, setRelQuery] = useState("");
+  const [relMatches, setRelMatches] = useState<{ id: number; name: string }[]>([]);
+  const [pickedForAdd, setPickedForAdd] = useState<{ id?: number; name: string } | null>(null);
+  const [newRelationship, setNewRelationship] = useState("");
+
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
     fetch(`${API_URL}/api/members/me/`, { headers })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data) setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
+        if (data) {
+          setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
+          setPhone(data.phone_number || "");
+          setRelationships(Array.isArray(data.declared_relationships) ? data.declared_relationships : []);
+        }
       })
       .catch(() => {});
     getPushState().then(setPushSupport).catch(() => setPushSupport(null));
   }, [token]);
+
+  async function savePhone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) return;
+    setPhoneSaving(true);
+    setPhoneMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ phone_number: phone.trim() }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        // The API names the field it refused — read it back verbatim.
+        throw new Error(data?.phone_number || data?.detail || "Your phone number could not be saved.");
+      }
+      setPhone(data?.phone_number ?? phone.trim());
+      const successMsg = "Your phone number has been saved.";
+      setPhoneMessage(successMsg);
+      showAlert("Phone number saved", successMsg, "success");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Your phone number could not be saved.";
+      setPhoneMessage(errorMsg);
+      showAlert("Not saved", errorMsg, "error");
+    } finally {
+      setPhoneSaving(false);
+    }
+  }
+
+  /** Debounced roll search while adding a person: a keystroke schedules the
+      lookup, the previous one is cancelled, and nothing sets state until the
+      answer lands. */
+  const relSearchTimer = useRef<number | null>(null);
+  const searchPersonToAdd = (raw: string) => {
+    setRelQuery(raw);
+    setPickedForAdd(null);
+    if (relSearchTimer.current) window.clearTimeout(relSearchTimer.current);
+    const query = raw.trim();
+    if (query.length < 2) {
+      setRelMatches([]);
+      return;
+    }
+    relSearchTimer.current = window.setTimeout(() => {
+      fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setRelMatches(Array.isArray(data?.matches) ? data.matches : []))
+        .catch(() => setRelMatches([]));
+    }, 250);
+  };
+
+  const addRelationship = () => {
+    const person = pickedForAdd || (relQuery.trim() ? { name: relQuery.trim() } : null);
+    if (!person) {
+      showAlert("Name needed", "Type a name, or pick the person from the list as you type.", "warning");
+      return;
+    }
+    if (!newRelationship) {
+      showAlert("Relationship needed", "Say how this person relates to you — spouse, sibling, child, friend or other.", "warning");
+      return;
+    }
+    const already = relationships.some((row) =>
+      person.id && row.person_id ? row.person_id === person.id : (row.name || "").trim().toLowerCase() === person.name.trim().toLowerCase()
+    );
+    if (already) {
+      showAlert("Already listed", "This person is already among your relationships.", "warning");
+      return;
+    }
+    setRelationships([...relationships, { person_id: person.id ?? null, name: person.name, relationship: newRelationship }]);
+    setRelQuery("");
+    setRelMatches([]);
+    setPickedForAdd(null);
+    setNewRelationship("");
+    setRelMessage("");
+  };
+
+  async function saveRelationships() {
+    if (!token) return;
+    setRelSaving(true);
+    setRelMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ declared_relationships: relationships }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.declared_relationships || data?.detail || "Your relationships could not be saved.");
+      }
+      setRelationships(Array.isArray(data?.declared_relationships) ? data.declared_relationships : relationships);
+      const successMsg = "Your relationships have been saved.";
+      setRelMessage(successMsg);
+      showAlert("Relationships saved", successMsg, "success");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Your relationships could not be saved.";
+      setRelMessage(errorMsg);
+      showAlert("Not saved", errorMsg, "error");
+    } finally {
+      setRelSaving(false);
+    }
+  }
 
   async function saveAnnouncePref(field: "email" | "push", value: boolean) {
     if (!announcePrefs) return;
@@ -130,6 +267,142 @@ export default function MemberPage() {
           </div>
 
           <OfflineBanner isOffline={isOffline} cachedAt={cachedAt} className="mt-4" />
+
+          <form onSubmit={savePhone} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <h2 className="text-xl font-semibold">Phone number</h2>
+            <p className="mt-2 text-sm leading-6 text-moss">
+              The number the church reaches you on, and the one M-Pesa prompts when you give.
+              A member in our system receives their letters on their account address; this is the line for everything else.
+            </p>
+            <label className="mt-5 block text-sm font-medium">
+              Phone number
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={12}
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="e.g. 0712345678"
+                className="mt-1.5 w-full max-w-sm rounded-xl border border-sand-mute px-4 py-2.5"
+              />
+            </label>
+            <button disabled={phoneSaving} className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
+              {phoneSaving ? "Saving..." : "Save phone number"}
+            </button>
+            {phoneMessage && <p className="mt-3 text-sm text-moss">{phoneMessage}</p>}
+          </form>
+
+          <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <h2 className="text-xl font-semibold">Relationships</h2>
+            <p className="mt-2 text-sm leading-6 text-moss">
+              How the people you give for — or ask to give — relate to you. Set them once here and the
+              giving form reads them, so no gift asks you the same question again. Anything not listed
+              is recorded as Other.
+            </p>
+
+            {relationships.length > 0 ? (
+              <ul className="mt-5 space-y-3">
+                {relationships.map((row, index) => (
+                  <li key={`${row.person_id ?? "name"}-${row.name}-${index}`} className="flex flex-wrap items-center gap-3 rounded-2xl bg-sand px-4 py-3">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                      {row.name}
+                      {!row.person_id && <span className="ml-2 text-xs font-normal text-moss">not on the roll</span>}
+                    </span>
+                    <select
+                      value={row.relationship}
+                      onChange={(event) => {
+                        const next = [...relationships];
+                        next[index] = { ...row, relationship: event.target.value };
+                        setRelationships(next);
+                        setRelMessage("");
+                      }}
+                      className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                    >
+                      {RELATIONSHIP_CHOICES.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRelationships(relationships.filter((_, i) => i !== index));
+                        setRelMessage("");
+                      }}
+                      aria-label={`Remove ${row.name}`}
+                      className="rounded-lg p-1.5 text-moss transition hover:text-ember"
+                    >
+                      &times;
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-5 rounded-2xl bg-sand px-4 py-3 text-sm text-moss">No relationships yet — add the first below.</p>
+            )}
+
+            <div className="mt-5 rounded-2xl border border-sand-line p-4">
+              <p className="mb-2 text-sm font-medium">Add a person</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={pickedForAdd ? pickedForAdd.name : relQuery}
+                  onChange={(event) => searchPersonToAdd(event.target.value)}
+                  placeholder="Type a name from the church roll…"
+                  className="w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
+                />
+                {!pickedForAdd && relMatches.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1.5 max-h-52 overflow-y-auto rounded-2xl border border-sand-line bg-white p-2 shadow-xl">
+                    {relMatches.map((person) => (
+                      <button
+                        key={person.id}
+                        type="button"
+                        onClick={() => {
+                          setPickedForAdd(person);
+                          setRelQuery(person.name);
+                          setRelMatches([]);
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-moss-dark transition hover:bg-sand hover:text-bark"
+                      >
+                        <span className="min-w-0 truncate">{person.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <select
+                  value={newRelationship}
+                  onChange={(event) => setNewRelationship(event.target.value)}
+                  className="rounded-xl border border-sand-mute bg-white px-3 py-2.5 text-sm outline-none focus:border-ember"
+                >
+                  <option value="">How do they relate?</option>
+                  {RELATIONSHIP_CHOICES.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={addRelationship}
+                  className="rounded-full bg-bark px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-ember"
+                >
+                  Add
+                </button>
+                {!pickedForAdd && relQuery.trim().length >= 2 && relMatches.length === 0 && (
+                  <span className="text-xs text-moss">No match — Add writes the name as typed.</span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={relSaving}
+              onClick={saveRelationships}
+              className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {relSaving ? "Saving..." : "Save relationships"}
+            </button>
+            {relMessage && <p className="mt-3 text-sm text-moss">{relMessage}</p>}
+          </section>
 
           {details && (
             <form onSubmit={saveDetails} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">

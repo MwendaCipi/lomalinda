@@ -26,8 +26,13 @@ const defaultPurposes = [
 
 type MethodOfGiving = "mpesa" | "bank_transfer";
 
-/** How the person a gift is for (or asked to give) relates to the one
-    giving or asking. The church's short list — anything rarer is Other. */
+/** Who the one form is for: the giver themselves (the default), another
+    member the gift is written on, or a member being asked to give. */
+type RecipientMode = "myself" | "for_someone" | "request";
+
+/** How a person a gift is for (or asked to give) relates to the one giving
+    or asking. The church's short list — anything rarer is Other. These are
+    declared once, in the member's profile; the form only reads them. */
 const relationships = [
   { value: "spouse", label: "Spouse" },
   { value: "sibling", label: "Sibling" },
@@ -35,6 +40,9 @@ const relationships = [
   { value: "friend", label: "Friend" },
   { value: "other", label: "Other" },
 ];
+
+/** One row of the relationships declared in the member's profile. */
+type DeclaredRelationship = { person_id?: number | null; name: string; relationship: string };
 
 /** One person from the roll: an account id when the picker found them, and
     always the name the gift should read. */
@@ -99,25 +107,6 @@ function PersonField({
         </p>
       )}
     </div>
-  );
-}
-
-/** The relationship choice both modals carry. */
-function RelationshipField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="block text-sm font-medium text-bark">
-      Relationship
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
-      >
-        <option value="">-- select --</option>
-        {relationships.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 
@@ -195,19 +184,18 @@ function GivePageContent() {
   const [showGiveModal, setShowGiveModal] = useState(false);
 
   // ── Giving for someone, and asking someone to give ─────────────────────
-  // Both begin the same way — the person, and how they relate — and part
-  // ways at the end: one is a gift written on that person's record too, the
-  // other is a letter asking them to give one.
-  const [showForModal, setShowForModal] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [honoree, setHonoree] = useState<{ id?: number; name: string; relationship: string } | null>(null);
+  // All three ways of giving live in this one modal, picked from a combo at
+  // its top: the giver's own gift, a gift written on another member's
+  // record, and an ask sent to another member. The person and how they
+  // relate are gathered inline whenever the mode needs them.
+  const [recipientMode, setRecipientMode] = useState<RecipientMode>("myself");
+  const [honoreePhone, setHonoreePhone] = useState("");
   const [personQuery, setPersonQuery] = useState("");
   const [personMatches, setPersonMatches] = useState<{ id: number; name: string }[]>([]);
   const [pickedPerson, setPickedPerson] = useState<PickedPerson | null>(null);
-  const [forRelationship, setForRelationship] = useState("");
-  const [requestRelationship, setRequestRelationship] = useState("");
-  const [requestMessage, setRequestMessage] = useState("");
-  const [sendingRequest, setSendingRequest] = useState(false);
+  // How the signed-in giver relates to the people they give for or ask to
+  // give — declared once in their profile, read here, never picked again.
+  const [declaredRelationships, setDeclaredRelationships] = useState<DeclaredRelationship[]>([]);
   // A request arrived by its own link: this gift, if made through it, closes
   // that request. Fetched from the id in the address bar.
   const [askingRequest, setAskingRequest] = useState<{ id: number; requesterName: string; message: string } | null>(null);
@@ -252,19 +240,35 @@ function GivePageContent() {
     setPickedPerson(null);
     setPersonQuery("");
     setPersonMatches([]);
-    setForRelationship("");
-    setRequestRelationship("");
-    setRequestMessage("");
   };
 
-  const openForModal = () => {
-    resetPersonField();
-    setShowForModal(true);
+  /** The relationship declared in the profile for the person picked: by
+      account id when the roll found them, by name for one typed alone. An
+      empty string means none is on record — the server then records Other. */
+  const declaredLabelFor = (person: PickedPerson | null) => {
+    if (!person) return "";
+    const wantedId = person.id;
+    const wantedName = person.name.trim().toLowerCase();
+    const row = declaredRelationships.find((entry) =>
+      wantedId && entry.person_id
+        ? entry.person_id === wantedId
+        : (!wantedId || !entry.person_id) && (entry.name || "").trim().toLowerCase() === wantedName
+    );
+    return row ? relationships.find((option) => option.value === row.relationship)?.label || "" : "";
   };
 
-  const openRequestModal = () => {
+  /** Switching who the one form is for: the person is gathered afresh, and
+      the prompt phone belongs to whoever pays — the payer's own number
+      returns the moment the form is not asking someone else to pay, and
+      never leaks into an ask, where the number asked is typed anew. */
+  const changeRecipientMode = (mode: RecipientMode) => {
+    setRecipientMode(mode);
     resetPersonField();
-    setShowRequestModal(true);
+    setHonoreePhone("");
+    // A request is always settled by M-Pesa prompt, so its mode starts
+    // there; the payer's own number returns the moment it is a gift again.
+    if (mode === "request") setMethodOfGiving("mpesa");
+    setPhoneNumber(mode === "request" ? "" : payerPhoneRef.current);
   };
 
   // A request's own link opens the giving form with the ask waiting on it:
@@ -277,51 +281,23 @@ function GivePageContent() {
       .then((data) => {
         if (data && data.status === "pending") {
           setAskingRequest({ id: data.id, requesterName: data.requester_name, message: data.message || "" });
+          // What was asked for rides the link: the form opens with the
+          // purpose chosen and the amount already entered, so the recipient
+          // only has to confirm the phone and continue.
+          if (data.purpose) {
+            setSelectedAccounts([data.purpose]);
+            const askedAmount = Number(data.amount);
+            setAccountAmounts(
+              Number.isFinite(askedAmount) && askedAmount >= 1
+                ? { [data.purpose]: String(askedAmount) }
+                : {}
+            );
+          }
           setShowGiveModal(true);
         }
       })
       .catch(() => {});
   }, [rawRequestParam]);
-
-  async function submitRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) {
-      showAlert("Sign in first", "Only a member can ask another member to give — the request carries your name.", "warning");
-      return;
-    }
-    const targetId = pickedPerson?.id;
-    if (!targetId) {
-      showAlert("Choose the person", "Pick the one you are asking from the list as you type their name.", "warning");
-      return;
-    }
-    if (!requestRelationship) {
-      showAlert("Relationship needed", "Say how they relate to you — spouse, sibling, child, friend or other.", "warning");
-      return;
-    }
-    setSendingRequest(true);
-    try {
-      const response = await fetch(`${API_URL}/api/members/giving-requests/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          target_id: targetId,
-          relationship: requestRelationship,
-          message: requestMessage.trim(),
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || Object.values(data).flat().join(" ") || "The request could not be sent.");
-      }
-      setShowRequestModal(false);
-      showAlert("Request sent", data.detail || "Your request has been sent.", "success");
-    } catch (error) {
-      showAlert("Request failed", error instanceof Error ? error.message : "Unable to send the request.", "error");
-    } finally {
-      setSendingRequest(false);
-    }
-  }
 
   // ── Who is giving ────────────────────────────────────────────────────────────
   // The record itself lives on its own route now (/member/givings, linked
@@ -335,6 +311,10 @@ function GivePageContent() {
     if (token) setSignedIn(true);
   }, []);
 
+  // The payer's own prompt phone, kept aside: returning to a plain give
+  // after a request restores it, never the asked person's number.
+  const payerPhoneRef = useRef("");
+
   // A signed-in giver's receipt is addressed from their account, so the form
   // only needs to know whether that account carries an email — it shows the
   // add-an-email field when it does not.
@@ -346,9 +326,13 @@ function GivePageContent() {
       .then((me) => {
         if (!me) return;
         setAccountEmail(me.email || "");
+        // How this member relates to the people they give for or ask to
+        // give — declared in their profile, shown read-only below the person.
+        setDeclaredRelationships(Array.isArray(me.declared_relationships) ? me.declared_relationships : []);
         // The phone the M-Pesa prompt goes to: pre-filled from the account
         // when it is a Safaricom number, left empty otherwise.
-        setPhoneNumber((current) => (current ? current : safaricomPhoneOf(me.phone_number || "")));
+        payerPhoneRef.current = safaricomPhoneOf(me.phone_number || "");
+        setPhoneNumber((current) => (current ? current : payerPhoneRef.current));
       })
       .catch(() => {});
   }, []);
@@ -389,10 +373,20 @@ function GivePageContent() {
     if (showGiveModal) setMessage("");
   }, [showGiveModal]);
 
+  // One modal, three flows: the giver's own gift, a gift for someone, and
+  // a request sent to someone — the last one submitted to the request
+  // endpoint instead of the giving one.
+  const isRequestMode = recipientMode === "request";
+
   const toggleAccount = (account: string) => {
-    setSelectedAccounts((current) =>
-      current.includes(account) ? current.filter((item) => item !== account) : [...current, account]
-    );
+    setSelectedAccounts((current) => {
+      if (isRequestMode) {
+        // A request asks for one gift in one account: picking another
+        // replaces the choice instead of adding a second row.
+        return current.includes(account) ? current.filter((item) => item !== account) : [account];
+      }
+      return current.includes(account) ? current.filter((item) => item !== account) : [...current, account];
+    });
   };
 
   /**
@@ -513,13 +507,70 @@ function GivePageContent() {
         amount: Number(accountAmounts[account]) || 0,
       }));
 
-      if (methodOfGiving === "mpesa") {
+      if (methodOfGiving === "mpesa" && (phoneNumber || !isRequestMode)) {
         const cleanPhone = phoneNumber.replace(/\D/g, "");
         if (cleanPhone.length !== 10) {
           showAlert("Invalid Phone Number", "Please enter a valid 10-digit phone number.", "warning");
           setLoading(false);
           return;
         }
+      }
+
+      // A gift given FOR someone: the person gathered in the form above.
+      // A visitor's typed name still writes the gift in that person's name;
+      // a member's pick also lands it on their record.
+      const forSomeone = recipientMode === "for_someone";
+      const honoreeName = forSomeone ? (pickedPerson?.name || personQuery).trim() : "";
+      if (forSomeone && !honoreeName) {
+        showAlert("Name needed", "Type the name of the person this gift is for.", "warning");
+        setLoading(false);
+        return;
+      }
+
+      // A request is sent rather than a gift: the form's purpose, amount and
+      // phone become the ask, and the server prompts that phone for exactly
+      // this gift — the person asked gives by entering their PIN, or not at
+      // all. The email and the link stay as the way to give without one.
+      if (isRequestMode) {
+        const askedName = (pickedPerson?.name || personQuery).trim();
+        const targetId = pickedPerson?.id;
+        if (!targetId || !askedName) {
+          showAlert("Choose the person", "Pick the one you are asking from the list as you type their name.", "warning");
+          setLoading(false);
+          return;
+        }
+        if (!token) {
+          setLoading(false);
+          showAlert("Sign in first", "Only a member can ask another member to give — the request carries your name.", "warning");
+          return;
+        }
+        const response = await fetch(`${API_URL}/api/members/giving-requests/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            target_id: targetId,
+            giver_phone: phoneNumber,
+            purpose: allocations[0].purpose,
+            amount: allocationTotal,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.detail || Object.values(data).flat().join(" ") || "The request could not be sent.");
+        }
+        setShowGiveModal(false);
+        setLoading(false);
+        setRecipientMode("myself");
+        resetPersonField();
+        showAlert(
+          "Request sent",
+          data.detail || "Your request has been sent.",
+          data.prompt_sent ? "success" : "warning"
+        );
+        return;
       }
 
       // The receipt is addressed from the account (the API ignores any address
@@ -567,13 +618,15 @@ function GivePageContent() {
         // backend drops the name and email when it sees it.
         ...(anonymous ? { anonymous: true } : {}),
         // A gift given FOR someone: the account the picker found (or the
-        // name alone for a visitor) and how they relate to the giver. The
-        // person in our system receives their letter by email.
-        ...(honoree
+        // name alone for a visitor). The relationship comes from the giver's
+        // profile, read on the server — the form never asks for it. The
+        // person in our system receives their letter by email. The phone
+        // travels only when the honoree holds no account — a way to follow up.
+        ...(forSomeone
           ? {
-              ...(honoree.id ? { honoree_id: honoree.id } : {}),
-              honoree_name: honoree.name,
-              relationship: honoree.relationship,
+              ...(pickedPerson?.id ? { honoree_id: pickedPerson.id } : {}),
+              honoree_name: honoreeName,
+              honoree_phone: honoreePhone,
             }
           : {}),
         // A gift made through a request's own link closes that request.
@@ -638,9 +691,9 @@ function GivePageContent() {
     }
   }
 
-  let submitButtonText = "Submit Bank-to-Bank Giving";
-  if (loading) submitButtonText = "Submitting...";
-  else if (methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
+  let submitButtonText = isRequestMode ? "Send the request" : "Submit Bank-to-Bank Giving";
+  if (loading) submitButtonText = isRequestMode ? "Sending…" : "Submitting...";
+  else if (!isRequestMode && methodOfGiving === "mpesa") submitButtonText = "Continue with M-Pesa";
 
   return (
     <main className={signedIn ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
@@ -663,10 +716,12 @@ function GivePageContent() {
               <button
                 type="button"
                 onClick={() => {
-                  // Give Now is the giver's own gift; the honoree travels
-                  // only through "Give for someone". A request's link keeps
-                  // its ask attached, which is exactly why it was opened.
-                  setHonoree(null);
+                  // Give Now is the giver's own gift: the form opens with the
+                  // details shown and the payer's own prompt phone.
+                  resetPersonField();
+                  setHonoreePhone("");
+                  setRecipientMode("myself");
+                  setPhoneNumber(payerPhoneRef.current);
                   setShowGiveModal(true);
                 }}
                 className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
@@ -674,13 +729,17 @@ function GivePageContent() {
                 Give Now
               </button>
               {/* The two ways giving reaches past oneself: honour someone
-                  with a gift, or ask someone to give one. */}
+                  with a gift, or ask someone to give one. Both open the same
+                  form, whose combo is set to their way. */}
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => {
-                    setHonoree(null);
-                    openForModal();
+                    resetPersonField();
+                    setHonoreePhone("");
+                    setRecipientMode("for_someone");
+                    setPhoneNumber(payerPhoneRef.current);
+                    setShowGiveModal(true);
                   }}
                   className="rounded-full border border-ember/50 bg-white px-6 py-2.5 text-sm font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
                 >
@@ -688,10 +747,16 @@ function GivePageContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={openRequestModal}
+                  onClick={() => {
+                    resetPersonField();
+                    setHonoreePhone("");
+                    setRecipientMode("request");
+                    setPhoneNumber("");
+                    setShowGiveModal(true);
+                  }}
                   className="rounded-full border border-sand-line bg-white px-6 py-2.5 text-sm font-semibold text-moss-dark transition hover:border-bark hover:text-bark"
                 >
-                  Request for someone
+                  Request from someone
                 </button>
               </div>
               {signedIn && (
@@ -784,7 +849,9 @@ function GivePageContent() {
                 {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
                 <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
                 <h3 id="give-modal-title" className="text-lg font-bold text-bark">
-                  {honoree ? "Give for someone" : "Give Now"}
+                  {isRequestMode
+                    ? "Request from someone"
+                    : recipientMode === "for_someone" ? "Give for someone" : "Give Now"}
                 </h3>
               </div>
               <button
@@ -797,29 +864,137 @@ function GivePageContent() {
               </button>
             </div>
 
-            {/* Who this gift is for, and who asked for it — named before
-                the money is, so the record and the letter agree. */}
-            {honoree && (
-              <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-ember/30 bg-mist-select px-4 py-3">
-                <UserRound size={16} className="mt-0.5 shrink-0 text-ember" aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-bark">For {honoree.name}</p>
-                  <p className="text-[11px] text-moss">
-                    Your {relationships.find((option) => option.value === honoree.relationship)?.label.toLowerCase() || honoree.relationship}
-                    {honoree.id ? " — in our system, so their letter goes by email." : "."}
-                  </p>
-                </div>
+            {/* ── The two switches that frame every gift ──
+                Whose name it carries (the toggle) and who it is for (the
+                combo), both at the top: nothing else on the form turns on
+                them more. A request carries the asker's name by nature, so
+                the toggle stands only where a gift is being given. */}
+            {!isRequestMode && (
+              <div
+                role="radiogroup"
+                aria-label="Whose name the gift carries"
+                className="relative mt-4 flex w-full items-center rounded-full border border-sand-mute bg-sand p-1"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-y-1 left-1 w-[calc(50%_-_0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-sand-line transition-transform duration-200 ease-out ${anonymous ? "translate-x-[calc(100%_-_0.5rem)]" : "translate-x-0"}`}
+                />
                 <button
                   type="button"
-                  onClick={() => setHonoree(null)}
-                  aria-label="Give for myself instead"
-                  className="shrink-0 rounded-lg p-1 text-moss transition hover:text-ember"
+                  role="radio"
+                  aria-checked={!anonymous}
+                  onClick={() => setAnonymous(false)}
+                  className={`relative z-10 min-w-0 flex-1 rounded-full px-2 py-2 text-xs font-semibold transition-colors ${anonymous ? "text-moss" : "text-bark"}`}
                 >
-                  <X size={16} aria-hidden="true" />
+                  Show my details
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={anonymous}
+                  onClick={() => setAnonymous(true)}
+                  className={`relative z-10 min-w-0 flex-1 rounded-full px-2 py-2 text-xs font-semibold transition-colors ${anonymous ? "text-bark" : "text-moss"}`}
+                >
+                  Give anonymously
                 </button>
               </div>
             )}
-            {askingRequest && (
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-bark">
+                Who is this for?
+                <select
+                  value={recipientMode}
+                  onChange={(event) => changeRecipientMode(event.target.value as RecipientMode)}
+                  className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+                >
+                  <option value="myself">Give for myself</option>
+                  <option value="for_someone">Give for someone</option>
+                  <option value="request">Request from someone</option>
+                </select>
+              </label>
+            </div>
+
+            {/* A gift in another member's name is written on their record
+                too, and they receive their letter by email — a spouse's
+                tithe counts on the spouse's statement. */}
+            {recipientMode === "for_someone" && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="mb-2 text-sm font-medium text-bark">Who is it for?</p>
+                  <PersonField
+                    signedIn={signedIn}
+                    query={personQuery}
+                    matches={personMatches}
+                    picked={pickedPerson}
+                    onQuery={searchPerson}
+                    onPick={pickPerson}
+                  />
+                </div>
+                {/* The relationship lives in the profile, not here: it reads
+                    back for the person picked, or says where to set it. */}
+                {pickedPerson && (
+                  <p className="text-xs text-moss">
+                    {declaredLabelFor(pickedPerson) ? (
+                      <>Your relationship: <span className="font-semibold text-bark">{declaredLabelFor(pickedPerson)}</span></>
+                    ) : (
+                      <>Not set yet — add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the gift is recorded as Other.</>
+                    )}
+                  </p>
+                )}
+                {/* The phone of the person this is for — only when they hold no
+                    account, so the row still carries a way to follow up. */}
+                {pickedPerson && !pickedPerson.id && (
+                  <label className="block text-sm font-medium text-bark">
+                    Phone number <span className="font-normal text-moss">(optional)</span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                      value={honoreePhone}
+                      onChange={(e) => setHonoreePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      placeholder="e.g. 0712345678"
+                      className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+            {/* Ask a member to give — the person stands where the money is
+                named, so the prompt and the request agree on who is being
+                asked. */}
+            {isRequestMode && (
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-moss">
+                  Ask a member to give — the account and the amount below set
+                  the ask. A request is an invitation, never a debt.
+                </p>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-bark">Who are you asking?</p>
+                  <PersonField
+                    signedIn={signedIn}
+                    query={personQuery}
+                    matches={personMatches}
+                    picked={pickedPerson}
+                    onQuery={searchPerson}
+                    onPick={pickPerson}
+                  />
+                </div>
+                {/* The ask carries the relationship declared in the profile —
+                    the server reads it when the request is sent. */}
+                {pickedPerson && (
+                  <p className="text-xs text-moss">
+                    {declaredLabelFor(pickedPerson) ? (
+                      <>Your relationship: <span className="font-semibold text-bark">{declaredLabelFor(pickedPerson)}</span></>
+                    ) : (
+                      <>Not set yet — add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the request is recorded as Other.</>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+            {askingRequest && !isRequestMode && (
               <div className="mt-4 rounded-2xl border border-sage-strong/40 bg-sage-strong/10 px-4 py-3 text-sm text-bark">
                 <p className="font-semibold">
                   {askingRequest.requesterName} has asked you to give.
@@ -849,8 +1024,10 @@ function GivePageContent() {
                   email; an anonymous giver's rides the phone they give with.
                   Only a member whose account has no email sees a field — the
                   one thing they alone can fix. An anonymous gift keeps even
-                  that: nothing of theirs is saved. */}
-              {signedIn && !anonymous && !accountEmail.trim() && (
+                  that: nothing of theirs is saved. A request keeps none of
+                  it: the prompt's recipient is the person asked, whose own
+                  receipt rides their phone. */}
+              {signedIn && !anonymous && !accountEmail.trim() && !isRequestMode && (
                 <label className="block text-sm font-medium text-bark">
                   Email for receipts <span className="font-normal text-moss">(optional)</span>
                   <input
@@ -866,51 +1043,45 @@ function GivePageContent() {
                 </label>
               )}
 
-              {/* 2. How the money moves: anonymity first, then the method,
-                  the phone the M-Pesa prompt goes to, and finally which
-                  accounts it goes to. */}
+              {/* 2. How the money moves: the method, the phone the M-Pesa
+                  prompt goes to, and finally which accounts it goes to.
+                  Whose name the gift carries is the toggle at the top. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {methodOfGiving === "mpesa" && (
-                  <label className="flex cursor-pointer items-center gap-2 self-start rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark">
-                    <input
-                      type="checkbox"
-                      id="give-anonymously"
-                      checked={anonymous}
-                      onChange={(event) => setAnonymous(event.target.checked)}
-                      className="h-4 w-4 shrink-0 rounded border-sand-mute text-ember focus:ring-ember"
-                    />
-                    <span className="text-sm">Give anonymously</span>
+                {!isRequestMode && (
+                  <label className="block self-start text-sm font-medium text-bark">
+                    Method of Giving
+                    <select
+                      value={methodOfGiving}
+                      onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
+                      className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+                    >
+                      <option value="mpesa">M-Pesa</option>
+                      <option value="bank_transfer">Bank-to-Bank</option>
+                    </select>
                   </label>
                 )}
 
-                <label className="block self-start text-sm font-medium text-bark">
-                  Method of Giving
-                  <select
-                    value={methodOfGiving}
-                    onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
-                    className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
-                  >
-                    <option value="mpesa">M-Pesa</option>
-                    <option value="bank_transfer">Bank-to-Bank</option>
-                  </select>
-                </label>
-
                 {methodOfGiving === "mpesa" && (
                   <label className="block self-start text-sm font-medium text-bark">
-                    Phone number
+                    {isRequestMode ? "Their phone number" : "Phone number"}
                     <input
                       type="tel"
                       inputMode="numeric"
                       pattern="[0-9]{10}"
                       maxLength={10}
                       minLength={10}
-                      required
+                      required={!isRequestMode}
                       placeholder="e.g. 0712345678"
                       value={phoneNumber}
                       onFocus={liftAboveKeyboard}
                       onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
                       className="mt-2 w-full rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
                     />
+                    {isRequestMode && (
+                      <span className="mt-1 block text-[11px] font-normal text-moss">
+                        Where the M-Pesa prompt goes. Leave it empty to use the number on their account.
+                      </span>
+                    )}
                   </label>
                 )}
 
@@ -959,9 +1130,9 @@ function GivePageContent() {
                         <div className="flex items-center justify-between gap-2 border-t border-sand-line bg-white px-2.5 py-1.5">
                           {/* The phrase wraps rather than ellipsizing: on a phone
                               the Done button leaves it just short of one line. */}
-                          <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ember">
-                            Select the account(s) to give to
-                          </p>
+                        <p className="min-w-0 flex-1 pr-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ember">
+                          {isRequestMode ? "Select the account to request" : "Select the account(s) to give to"}
+                        </p>
                           <button
                             type="button"
                             onClick={() => setShowAccountPicker(false)}
@@ -1080,144 +1251,6 @@ function GivePageContent() {
                   {submitButtonText}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Give for someone modal ──
-          The person and the relationship come first; the rest of the form
-          is the same one Give Now opens, carrying them along. */}
-      {showForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="for-modal-title"
-            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
-          >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
-              <div>
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
-                <h3 id="for-modal-title" className="text-lg font-bold text-bark">Give for someone</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowForModal(false)}
-                className="text-xl leading-none text-moss hover:text-bark"
-              >
-                <X size={20} aria-hidden="true" />
-              </button>
-            </div>
-
-            <p className="mt-4 text-sm text-moss">
-              A gift in another member&apos;s name is written on their record too, and
-              they receive their letter by email — a spouse&apos;s tithe counts on the
-              spouse&apos;s statement.
-            </p>
-
-            <form
-              className="mt-5 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const name = (pickedPerson?.name || personQuery).trim();
-                if (!name) {
-                  showAlert("Name needed", "Type the name of the person this gift is for.", "warning");
-                  return;
-                }
-                if (!forRelationship) {
-                  showAlert("Relationship needed", "Say how they relate to you — spouse, sibling, child, friend or other.", "warning");
-                  return;
-                }
-                setHonoree({ id: pickedPerson?.id, name, relationship: forRelationship });
-                setShowForModal(false);
-                setShowGiveModal(true);
-              }}
-            >
-              <div>
-                <p className="mb-2 text-sm font-medium text-bark">Who is it for?</p>
-                <PersonField
-                  signedIn={signedIn}
-                  query={personQuery}
-                  matches={personMatches}
-                  picked={pickedPerson}
-                  onQuery={searchPerson}
-                  onPick={pickPerson}
-                />
-              </div>
-              <RelationshipField value={forRelationship} onChange={setForRelationship} />
-              <button
-                disabled={loading}
-                className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
-              >
-                Continue to the gift
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Request for someone modal ──
-          A member asks a member: the request carries the asker's name, so
-          only a session may send one, and it arrives at the target's own
-          address. */}
-      {showRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="request-modal-title"
-            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
-          >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
-              <div>
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
-                <h3 id="request-modal-title" className="text-lg font-bold text-bark">Request for someone</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowRequestModal(false)}
-                disabled={sendingRequest}
-                className="text-xl leading-none text-moss hover:text-bark"
-              >
-                <X size={20} aria-hidden="true" />
-              </button>
-            </div>
-
-            <p className="mt-4 text-sm text-moss">
-              Ask a member to give — by email, carrying your name and theirs. A
-              request is an invitation, never a debt.
-            </p>
-
-            <form onSubmit={submitRequest} className="mt-5 space-y-4">
-              <div>
-                <p className="mb-2 text-sm font-medium text-bark">Who are you asking?</p>
-                <PersonField
-                  signedIn={signedIn}
-                  query={personQuery}
-                  matches={personMatches}
-                  picked={pickedPerson}
-                  onQuery={searchPerson}
-                  onPick={pickPerson}
-                />
-              </div>
-              <RelationshipField value={requestRelationship} onChange={setRequestRelationship} />
-              <label className="block text-sm font-medium text-bark">
-                Message <span className="font-normal text-moss">(optional)</span>
-                <textarea
-                  value={requestMessage}
-                  onChange={(event) => setRequestMessage(event.target.value)}
-                  rows={3}
-                  placeholder="e.g. Please give the budget offering this month."
-                  className="mt-2 w-full resize-none rounded-xl border border-sand-mute px-4 py-3 text-sm outline-none focus:border-ember"
-                />
-              </label>
-              <button
-                disabled={sendingRequest}
-                className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
-              >
-                {sendingRequest ? "Sending…" : "Send the request"}
-              </button>
             </form>
           </div>
         </div>

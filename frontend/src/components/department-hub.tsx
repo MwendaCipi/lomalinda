@@ -2901,9 +2901,11 @@ export function DepartmentAccountsPanel({
         setCanRequest(Boolean(data?.can_request_withdrawal));
 
         // Initial default account filter:
-        // For AWM, both accounts are selected by default ("all").
+        // The desks that read more than their own fund — AWM and Development,
+        // and the Eldership and Deaconate desks, whose strips carry LCB and
+        // Msamaria Mwema beside their own — are selected by default ("all").
         // For other departments, their primary account is selected by default, or "all".
-        if (department.code === "awm" || department.code === "development") {
+        if (["awm", "development", "eldership", "deaconate"].includes(department.code)) {
           setAccountFilter("all");
         } else if (accList.length > 0) {
           const primary = accList.find((a) => a.is_primary) ?? accList[0];

@@ -45,6 +45,7 @@ export function TreasuryNav({
   onSelect,
   requestsCount,
   unassignedCount,
+  failedCount,
 }: {
   /** Which of the treasury's views the page is showing. */
   active: TreasuryView;
@@ -53,13 +54,17 @@ export function TreasuryNav({
   requestsCount?: number;
   /** Optional override for the unassigned badge count. */
   unassignedCount?: number;
+  /** Optional override for the failed-givings badge count. */
+  failedCount?: number;
 }) {
   // Track only the counts fetched from the API; when a prop is provided the
   // parent's value wins and no fetch is needed.
   const [fetchedCount, setFetchedCount] = useState<number>(0);
   const [fetchedUnassigned, setFetchedUnassigned] = useState<number>(0);
+  const [fetchedFailed, setFetchedFailed] = useState<number>(0);
   const displayCount = typeof requestsCount === "number" ? requestsCount : fetchedCount;
   const displayUnassigned = typeof unassignedCount === "number" ? unassignedCount : fetchedUnassigned;
+  const displayFailed = typeof failedCount === "number" ? failedCount : fetchedFailed;
 
   useEffect(() => {
     // If the parent supplies a count there is nothing to fetch.
@@ -98,6 +103,22 @@ export function TreasuryNav({
     };
   }, [unassignedCount]);
 
+  // The failed badge: attempts that never arrived. The desk clears them off
+  // the ledger one by one, and the count says how much noise is left.
+  useEffect(() => {
+    if (typeof failedCount === "number") return;
+    let alive = true;
+    fetch(`${API_URL}/api/members/treasury/failed/`, { headers: fundAuthHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && typeof data?.count === "number") setFetchedFailed(data.count);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [failedCount]);
+
   // The same underline tabs the rest of the app uses — a label over the band's
   // rule rather than a pill button.
   const tabClass = (isActive: boolean) =>
@@ -125,6 +146,11 @@ export function TreasuryNav({
           {view.key === "unassigned" && displayUnassigned > 0 && (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
               {displayUnassigned}
+            </span>
+          )}
+          {view.key === "failed" && displayFailed > 0 && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
+              {displayFailed}
             </span>
           )}
         </button>
