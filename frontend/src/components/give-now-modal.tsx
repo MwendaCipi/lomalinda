@@ -507,15 +507,12 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
             </label>
           )}
 
-          {/* 2. How the money moves: anonymity first, then the method, the
-              phone the M-Pesa prompt goes to, and finally which accounts it
-              goes to. */}
+          {/* 2. How the money moves: the method, the phone the M-Pesa prompt
+              goes to, and which accounts it goes to. The anonymity checkbox
+              is off the form for now — kept commented out below in case it
+              returns. Every gift is recorded with its giver. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {methodOfGiving === "mpesa" && (
-              /* Labelled and stacked exactly like the field beside it: the
-                 box sat where the other row's label sits, so the two never
-                 lined up. Privacy names the row's own concern — what of the
-                 giver is kept. */
+            {/* {methodOfGiving === "mpesa" && (
               <div className="block self-start text-sm font-medium text-bark">
                 <span>Privacy</span>
                 <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm font-medium text-bark">
@@ -529,7 +526,7 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
                   <span className="text-sm">Give anonymously</span>
                 </label>
               </div>
-            )}
+            )} */}
 
             <label className="block self-start text-sm font-medium text-bark">
               Method of Giving

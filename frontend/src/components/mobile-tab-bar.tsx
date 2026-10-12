@@ -24,7 +24,7 @@ type TabItem = {
  *
  * Every tab navigates: a section's tab opens the section's first page, and
  * the chip strip on that page carries its siblings (AppFrame). The last tab
- * includes Fellowship, the member's ministry map, Giving and Chat. The office
+ * includes Fellowship, the member's ministry map, Stewardship and Chat. The office
  * console has no tab any more (the church's own areas matter more than the
  * office's here); staff reach it from the account menu.
  */
@@ -108,7 +108,7 @@ export function MobileTabBar() {
       {
         key: entry.key,
         href: dest.href,
-        label: dest.short ?? dest.label,
+        label: dest.tabLabel ?? dest.short ?? dest.label,
         icon: dest.icon,
         active: isActive(dest, pathname),
       },
@@ -137,7 +137,7 @@ export function MobileTabBar() {
             }`}
           >
             <Icon className={`mb-0.5 h-5 w-5 ${item.active ? "text-gold" : "text-white/80"}`} />
-            <span className="max-w-[52px] truncate text-[10px] leading-none tracking-tight">{item.label}</span>
+            <span className="max-w-[64px] truncate text-[10px] leading-none tracking-tight">{item.label}</span>
             {item.key === "chat" && chatUnread > 0 && (
               <span className="absolute right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
                 {chatUnread > 9 ? "9+" : chatUnread}

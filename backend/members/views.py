@@ -89,7 +89,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -441,7 +441,14 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
     }
 
 
-def send_contribution_receipt(contribution):
+def send_contribution_receipt(contribution, receipt_email=''):
+    """Letter the giver about their gift — by email and SMS where reachable.
+
+    ``receipt_email`` is a delivery address that never touched the ledger:
+    an anonymous gift records no name, email or account against its row, but
+    the giver's own account address may still carry their receipt. The row's
+    own address (or member's) always wins; this one is the fallback.
+    """
     if contribution.receipt_sent_at or contribution.status != 'completed':
         return
 
@@ -463,7 +470,11 @@ def send_contribution_receipt(contribution):
     )
     date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')
     summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
-    email = contribution.donor_email or (contribution.member.email if contribution.member else '')
+    email = (
+        usable_email(contribution.donor_email)
+        or (usable_email(contribution.member.email) if contribution.member else '')
+        or usable_email(receipt_email)
+    )
     # The email carries the thermal paper and points at it; the SMS gets the
     # same letter without the promise — a text cannot carry a file.
     attachment = contribution_receipt_attachment(contribution) if email else None
@@ -492,7 +503,7 @@ def send_contribution_receipt(contribution):
         contribution.save(update_fields=['receipt_sent_at'])
 
 
-def send_grouped_contribution_receipts(group):
+def send_grouped_contribution_receipts(group, receipt_email=''):
     """One receipt for a gift spread over several accounts.
 
     A giver who ticked three accounts used to receive three letters, one per
@@ -533,7 +544,11 @@ def send_grouped_contribution_receipts(group):
     receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
     account_list = ' / '.join(row.purpose for row in completed)
     summary = receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
-    email = first.donor_email or (first.member.email if first.member else '')
+    email = (
+        usable_email(first.donor_email)
+        or (usable_email(first.member.email) if first.member else '')
+        or usable_email(receipt_email)
+    )
     # One slip prints the whole split — the same itemised paper the member
     # page downloads — and rides the email the letter goes in.
     attachment = contribution_receipt_attachment(first) if email else None
@@ -633,7 +648,7 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {cash.purpose}",
         body=body,
-        email=cash.giver_email if send_email else '',
+        email=usable_email(cash.giver_email) if send_email else '',
         phone=cash.giver_phone if send_sms else '',
         mark_sent=lambda: None,
     )
@@ -681,7 +696,7 @@ def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {account_list}",
         body=body,
-        email=first.giver_email if send_email else '',
+        email=usable_email(first.giver_email) if send_email else '',
         phone=first.giver_phone if send_sms else '',
         mark_sent=lambda: None,
     )
@@ -3108,10 +3123,12 @@ def ensure_giver_profile(donor_name, phone_number, donor_email):
             username = f"{base_username[:130]}_{count}"
             count += 1
 
-        email = donor_email if donor_email else f"{username}@friend.church"
+        # No address was given, so the account carries none. An invented
+        # address is a mailbox that does not exist — a receipt sent to it is a
+        # receipt nobody receives, and the desk cannot tell the two apart.
         user = User.objects.create(
             username=username,
-            email=email,
+            email=donor_email,
             first_name=first_name,
             last_name=last_name,
             is_active=True
@@ -4261,7 +4278,7 @@ class ResendContributionReceiptView(APIView):
                     {'detail': 'Enter a valid phone number — 9 to 15 digits.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            email = supplied_email or contribution.donor_email or (contribution.member.email if contribution.member else '')
+            email = usable_email(supplied_email) or usable_email(contribution.donor_email) or (usable_email(contribution.member.email) if contribution.member else '')
             phone = supplied_phone or contribution.phone_number or ''
             if not phone and contribution.member:
                 profile = getattr(contribution.member, 'member_profile', None)
@@ -4335,7 +4352,7 @@ class ResendContributionReceiptView(APIView):
                     {'detail': 'Enter a valid phone number — 9 to 15 digits.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            email = supplied_email or (cash.giver_email or '').strip()
+            email = usable_email(supplied_email) or usable_email(cash.giver_email)
             phone = supplied_phone or (cash.giver_phone or '').strip()
             if send_email and not email:
                 return Response(
@@ -4427,6 +4444,13 @@ class InitiateContributionView(APIView):
             return self._initiate_mpesa_stk_push(request, serializer)
 
         method = serializer.validated_data.get('payment_method', 'mpesa')
+        # An anonymous gift is nobody's record, but its receipt still has
+        # somewhere to go: the signed-in giver's own account address, used
+        # for delivery only and never written to the row. A signed-out
+        # giver has no verifiable address, so nothing changes for them.
+        anonymous_receipt_email = (
+            receipt_email_for(request.user) if serializer.validated_data.get('anonymous') else ''
+        )
         allocations = serializer.validated_data['allocations']
         # One payment per account line, so the books show which account each part
         # of the gift went to. A single-account gift is simply one line.
@@ -4472,13 +4496,13 @@ class InitiateContributionView(APIView):
                 # exists, after this loop; a single-account gift is receipted
                 # here and now.
                 if not group:
-                    send_contribution_receipt(contribution)
+                    send_contribution_receipt(contribution, receipt_email=anonymous_receipt_email)
                 # The honoree's own letter never waits on the group: it is
                 # addressed to a different person than the payer's receipt.
                 send_honoree_receipt(contribution)
             created.append(contribution)
         if group and any(row.status == 'completed' for row in created):
-            send_grouped_contribution_receipts(group)
+            send_grouped_contribution_receipts(group, receipt_email=anonymous_receipt_email)
             for row in created:
                 send_honoree_receipt(row)
         # A gift made through a request's own link closes that request.
@@ -4541,8 +4565,15 @@ class InitiateContributionView(APIView):
             context['donor_email'] = donor_email
         # The anonymity stamp rides the signed context, so the callback
         # records the gift without resolving the payer's name or account.
+        # Anonymity hides the gift from the giver's *record* — the ledger row
+        # carries no name, email or member — but it must not also cost them
+        # their receipt: the account's own address rides alongside under its
+        # own key, used only to deliver the letter, never written to the row.
         if data.get('anonymous'):
             context['anonymous'] = True
+            own_address = receipt_email_for(request.user)
+            if own_address:
+                context['receipt_email'] = own_address
         item_description = (data.get('item_description') or '').strip()
         if item_description:
             context['item_description'] = item_description
@@ -4798,10 +4829,13 @@ class MpesaCallbackView(APIView):
                 self._link_giver(contribution, context)
             # One gift, one receipt: a split payment sends one letter listing
             # its distribution; a single-account gift keeps its own letter.
+            # An anonymous gift's letter still has somewhere to go: the
+            # account address that rode the context for delivery alone.
+            receipt_email = context.get('receipt_email', '')
             if group:
-                send_grouped_contribution_receipts(group)
+                send_grouped_contribution_receipts(group, receipt_email=receipt_email)
             else:
-                send_contribution_receipt(contribution)
+                send_contribution_receipt(contribution, receipt_email=receipt_email)
             # The honoree's letter is their own — one per line is one per
             # account, each written on their record.
             for row in Contribution.objects.filter(
@@ -5289,7 +5323,7 @@ class TreasuryUnassignedView(APIView):
                 'typed_reference': row.purpose,
                 'mpesa_receipt_number': row.mpesa_receipt_number or '',
                 'donor_name': row.donor_name,
-                'donor_email': row.donor_email or '',
+                'donor_email': usable_email(row.donor_email),
                 'phone_number': row.phone_number,
                 # The payer's own account, where they have one — the contact
                 # sheet's "Chat here" door needs the id, not the name.

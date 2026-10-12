@@ -459,7 +459,7 @@ function CalendarPageContent() {
         </div>
       </section>
 
-      <div ref={contentRef} className={`mx-auto max-w-6xl space-y-4 px-6 ${signedIn ? "flex-1 min-h-0 overflow-y-auto py-4 lg:px-8 lg:py-5" : "py-10 lg:px-8 lg:py-12"}`}>
+      <div ref={contentRef} className={`mx-auto w-full max-w-6xl space-y-4 px-6 ${signedIn ? "flex flex-1 min-h-0 flex-col overflow-y-auto pt-4 lg:px-8 lg:pt-5" : "py-10 lg:px-8 lg:py-12"}`}>
         {/* The church's letterhead, on the printed page only — what makes
             a printout of the calendar the church's own sheet. */}
         <ChurchLockup className="hidden print:flex print:mb-2" />
@@ -608,17 +608,18 @@ function CalendarPageContent() {
           <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
         )}
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
-        {/* On a phone in list mode the footer stays put — pinned against
-            the scroll (lifted clear of the bottom tab bar when signed in)
-            so the count and the Print button never scroll away. */}
+        {/* The footer stays put — pinned flush to the foot of the page's
+            own scroller (which the shell keeps just above the bottom tab
+            bar) so the count and the Print button never scroll away and no
+            calendar row shows beneath them, in either view. */}
         <div
-          className={`flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3 ${
-            view === "table"
-              ? `sticky z-20 -mx-6 bg-sand px-6 md:static md:mx-0 md:px-0 ${
-                  signedIn ? "bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))]" : "bottom-0"
-                }`
-              : ""
-          }`}
+          // margin-top:auto drops the footer to the foot of the scroller even
+          // when the page is too short to scroll (inline: space-y-4's
+          // margin-top outranks mt-auto in the cascade). The scroller is a
+          // flex column only when signed in; in block layout auto computes
+          // to 0 and changes nothing.
+          style={{ marginTop: "auto" }}
+          className={`sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:px-0`}
         >
           <p className="text-xs text-moss">
             Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : " this year"}.

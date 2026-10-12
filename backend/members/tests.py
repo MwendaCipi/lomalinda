@@ -5982,6 +5982,28 @@ class SplitGivingTests(APITestCase):
         self.assertIsNone(contribution.member)
 
     @patch('members.views._deliver_receipt_message')
+    def test_an_anonymous_mpesa_callback_still_receipts_to_the_account_address(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': True, 'sms_sent': False, 'sms_configured': True}
+        # The initiation packed the member's own address for delivery alone
+        # (see the anonymous branch of the STK push); the ledger row stays
+        # nameless while the letter still has somewhere to go.
+        context = {
+            'amount': '1500.00',
+            'purpose': 'Tithe',
+            'allocations': [{'purpose': 'Tithe', 'amount': '1500.00'}],
+            'phone_number': '254712345678',
+            'anonymous': True,
+            'receipt_email': 'giver@example.com',
+        }
+        response = self._post_callback(context)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.donor_name, '')
+        self.assertEqual(contribution.donor_email, '')
+        self.assertEqual(mock_deliver.call_args.kwargs['email'], 'giver@example.com')
+
+    @patch('members.views._deliver_receipt_message')
     def test_a_split_gift_receives_one_receipt_listing_its_distribution(self, mock_deliver):
         mock_deliver.return_value = {'email_sent': True, 'sms_sent': False, 'sms_configured': True}
         context = {
@@ -6189,6 +6211,23 @@ class ReceiptAddressEnforcementTests(APITestCase):
         self.assertNotIn('donor_email', context)
         self.assertNotIn('member_id', context)
         self.assertTrue(context['anonymous'])
+        # Anonymity hides the gift from the record, not the receipt from the
+        # giver: the account's own address still rides for delivery alone.
+        self.assertEqual(context.get('receipt_email'), 'anon@example.com')
+
+    @patch('members.views.initiate_stk_push_for_context')
+    def test_a_signed_out_anonymous_prompt_carries_no_address_at_all(self, mock_stk):
+        mock_stk.return_value = {'CustomerMessage': 'Prompt sent.'}
+
+        response = self._gift(
+            payment_method='mpesa', phone_number='0712345678',
+            donor_name='Esther Wanjiru', anonymous=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        context = unpack_callback_context(mock_stk.call_args.kwargs['context_token'])
+        # A visitor has no verifiable account address to route a receipt to.
+        self.assertNotIn('receipt_email', context)
 
     def test_an_anonymous_bank_gift_is_recorded_without_the_giver(self):
         response = self._gift(
@@ -6200,7 +6239,27 @@ class ReceiptAddressEnforcementTests(APITestCase):
         contribution = Contribution.objects.get()
         self.assertEqual(contribution.donor_name, '')
         self.assertEqual(contribution.donor_email, '')
-        # The money still counts — only the giver's identity is held back.        self.assertEqual(contribution.status, 'completed')
+        # The money still counts — only the giver's identity is held back.
+        self.assertEqual(contribution.status, 'completed')
+
+    def test_an_anonymous_members_gift_still_reaches_their_own_inbox(self):
+        from django.core import mail
+
+        member = User.objects.create_user('anon.inbox', 'anon.inbox@example.com', 'ChurchPass#2026')
+        self.client.force_authenticate(member)
+
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            response = self._gift(anonymous=True)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # The ledger keeps nothing of the giver...
+        contribution = Contribution.objects.get()
+        self.assertEqual(contribution.donor_name, '')
+        self.assertEqual(contribution.donor_email, '')
+        self.assertIsNone(contribution.member)
+        # ...but the receipt still reached the member's own address.
+        self.assertTrue(mail.outbox)
+        self.assertEqual(mail.outbox[-1].to, ['anon.inbox@example.com'])
 
 
 class MemberEmailFromTheGivingFormTests(APITestCase):
@@ -12939,3 +12998,79 @@ class EldershipDeskToolsTests(APITestCase):
         overlong = self.client.post(self.WORD_URL, {'text': 'x' * 2001}, format='json')
         self.assertEqual(overlong.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(DailyWord.objects.count(), 0)
+
+
+class NoGuessedEmailAddressTests(TestCase):
+    """A giver with no address gets no address — never an invented one.
+
+    The desk once minted ``<username>@friend.church`` for a giver who gave no
+    email: a mailbox that cannot receive anything, stored where real addresses
+    live. Receipts sent to it left the server and read as sent, though nobody
+    could receive them. An account now stands up with an empty email, every
+    send treats an invented address the same as none at all, and rows already
+    carrying one are blanked by migrations 0005 / 0199.
+    """
+
+    def test_a_giver_who_gives_no_address_gets_no_address(self):
+        from .views import ensure_giver_profile
+
+        user = ensure_giver_profile('Mercy Kananu', '0712345678', '')
+        self.assertIsNotNone(user)
+        self.assertEqual(user.email, '')
+
+    def test_an_address_still_lands_on_the_account_when_one_is_given(self):
+        from .views import ensure_giver_profile
+
+        user = ensure_giver_profile('Mercy Kananu', '0712345678', 'mercy@example.com')
+        self.assertEqual(user.email, 'mercy@example.com')
+
+    def test_an_invented_mailbox_is_treated_like_no_mailbox(self):
+        from .serializers import usable_email
+
+        self.assertEqual(usable_email('friend.0712345678@friend.church'), '')
+        self.assertEqual(usable_email('FRIEND.X@FRIEND.CHURCH'), '')
+        self.assertEqual(usable_email(''), '')
+        self.assertEqual(usable_email(None), '')
+        self.assertEqual(usable_email('  giver@example.com '), 'giver@example.com')
+
+    def test_a_receipt_is_never_addressed_to_an_invented_mailbox(self):
+        from .views import send_contribution_receipt
+
+        member = User.objects.create_user(
+            'mwa.kiende', 'friend.0712345678@friend.church', 'ChurchPass#2026',
+            first_name='Mwa', last_name='Kiende',
+        )
+        contribution = Contribution.objects.create(
+            member=member, amount=Decimal('300.00'), purpose='Tithe',
+            status='completed', donor_name='',
+        )
+        mail.outbox.clear()
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            send_contribution_receipt(contribution)
+        self.assertEqual(mail.outbox, [])
+        self.assertIsNone(contribution.receipt_sent_at)
+
+    def test_a_receipt_still_reaches_a_real_address_on_the_account(self):
+        from .views import send_contribution_receipt
+
+        member = User.objects.create_user(
+            'grace.mwangi', 'grace.mwangi@example.com', 'ChurchPass#2026',
+            first_name='Grace', last_name='Mwangi',
+        )
+        contribution = Contribution.objects.create(
+            member=member, amount=Decimal('300.00'), purpose='Tithe',
+            status='completed', donor_name='',
+        )
+        mail.outbox.clear()
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            send_contribution_receipt(contribution)
+        self.assertEqual([m.to for m in mail.outbox], [['grace.mwangi@example.com']])
+
+    def test_a_givers_own_invented_address_never_becomes_a_receipt_target(self):
+        from .serializers import receipt_email_for
+
+        class _SignedInGiver:
+            is_authenticated = True
+            email = 'friend.0712345678@friend.church'
+
+        self.assertEqual(receipt_email_for(_SignedInGiver()), '')

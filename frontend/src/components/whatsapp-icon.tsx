@@ -7,11 +7,16 @@
  * ember, so the icon wears `currentColor` and is coloured by the button that
  * owns it (text-ember on the contact modal, keeping it on the church's palette
  * rather than the app store's green).
+ *
+ * The size is the component's own and is never taken from `className`: an SVG
+ * with no width renders at the browser's replaced-element default (~300px),
+ * which pushed the word "WhatsApp" out of the contact row when a caller
+ * passed only colour classes.
  */
-export function WhatsAppIcon({ className = "h-4 w-4" }: { className?: string }) {
+export function WhatsAppIcon({ className = "" }: { className?: string }) {
   return (
     <svg
-      className={className}
+      className={`h-4 w-4${className ? ` ${className}` : ""}`}
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="currentColor"

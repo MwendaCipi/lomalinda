@@ -79,6 +79,12 @@ export type NavDestination = {
   label: string;
   /** Optional shorter label for surfaces with very little room (tab bar). */
   short?: string;
+  /**
+   * What the bottom tab bar alone calls this place, when the bar's word
+   * differs from the section's name — the Giving desk is Stewardship on
+   * the phone's bar without renaming it anywhere else.
+   */
+  tabLabel?: string;
   /** One-line description for surfaces that show one (tiles, hub cards). */
   description?: string;
   icon: LucideIcon;
@@ -245,6 +251,8 @@ export const destinations = {
     href: "/give",
     label: "Giving",
     short: "Giving",
+    // The bottom bar names the whole section, not just its front page.
+    tabLabel: "Stewardship",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
     area: "stewardship",

@@ -179,7 +179,9 @@ function GivePageContent() {
   // A tickable switch that keeps the gift from the giver: when ticked, the
   // request says it is not about this person, and the ledger records the gift
   // against the phone it was paid from alone — never their name or email.
-  const [anonymous, setAnonymous] = useState(false);
+  // The toggle is off the form for now (commented out below), so this stays
+  // false; the setter returns with the toggle.
+  const [anonymous] = useState(false);
 
   // Giving form modal (opened via Give Now or a ?purpose= deep link)
   const [showGiveModal, setShowGiveModal] = useState(false);
@@ -719,10 +721,17 @@ function GivePageContent() {
                 Give by M-Pesa or bank transfer in a moment: the form sends the M-Pesa prompt
                 straight to your phone and records the gift against your account.
               </p>
-              {/* The two ways to give itself: money, or goods, services
-                  and time. Money opens the giving form; in-kind opens the
-                  same modal the announcements and drives open. */}
+              {/* The two ways to give itself: goods, services and time,
+                  or money. In-kind opens the same modal the announcements
+                  and drives open; money opens the giving form. */}
               <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInKindModal(true)}
+                  className="rounded-full border border-ember/50 bg-white px-10 py-4 text-base font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
+                >
+                  Give in Kind
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -737,13 +746,6 @@ function GivePageContent() {
                   className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
                 >
                   Give Money
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowInKindModal(true)}
-                  className="rounded-full border border-ember/50 bg-white px-10 py-4 text-base font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
-                >
-                  Give in Kind
                 </button>
               </div>
               {signedIn && (
@@ -858,8 +860,12 @@ function GivePageContent() {
                 Whose name it carries (the toggle) and who it is for (the
                 combo), both at the top: nothing else on the form turns on
                 them more. A request carries the asker's name by nature, so
-                the toggle stands only where a gift is being given. */}
-            {!isRequestMode && (
+                the toggle stands only where a gift is being given.
+
+                The anonymity toggle is off the form for now — kept here
+                commented out in case it returns. Every gift is recorded
+                with its giver. */}
+            {/* {!isRequestMode && (
               <div
                 role="radiogroup"
                 aria-label="Whose name the gift carries"
@@ -888,7 +894,7 @@ function GivePageContent() {
                   Give anonymously
                 </button>
               </div>
-            )}
+            )} */}
 
             {/* Who the gift is for and how it is paid — the two choices
                 that frame the form, sharing one row. */}
