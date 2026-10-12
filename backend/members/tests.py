@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -10205,8 +10205,10 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['personal_ministries']['group'], 'ministry')
         self.assertEqual(rows['children']['group'], 'department')
         self.assertEqual(rows['ambassadors']['group'], 'department')
-        # The office bodies are neither list — they have desks of their own.
-        self.assertEqual(rows['eldership']['group'], 'office')
+        # Eldership is a ministry of the church's record (0197), filed with
+        # the ministries; the clerkship and deaconate hold the church's books
+        # and property — offices, neither of the two lists.
+        self.assertEqual(rows['eldership']['group'], 'ministry')
         self.assertEqual(rows['clerkship']['group'], 'office')
         self.assertEqual(rows['deaconate']['group'], 'office')
         # The AYM's name reads in full — the abbreviation moved out of it
@@ -11055,7 +11057,9 @@ class DepartmentFundTests(APITestCase):
 
     def test_eldership_desk_reads_msamaria_and_lcb(self):
         """The elders answer for the Msamaria Mwema fund and for the church
-        budget: their desk carries both."""
+        budget: their desk carries both — beside the Elders Kitty, and never
+        the whole treasury."""
+        self._fund()
         TreasuryAccount.objects.create(
             name='LCB', description='Local Church Budget', balance=Decimal('1000.00'),
         )
@@ -11071,6 +11075,12 @@ class DepartmentFundTests(APITestCase):
         names = [row['name'] for row in response.data['accounts']]
         self.assertIn('LCB', names)
         self.assertIn('Msamaria Mwema', names)
+        # The desk reads its own fund beside those two — never every account
+        # the church holds: the other ministries' funds stay on their own
+        # desks.
+        self.assertTrue(any(name in names for name in ('Elders', 'Elders Kitty')))
+        for other in ('MusicFund', 'Pathfinder', 'AWM'):
+            self.assertNotIn(other, names)
 
     def test_msamaria_stays_out_of_other_ministry_desks(self):
         """Msamaria Mwema is not every desk's fund: the music ministry's
@@ -12759,3 +12769,126 @@ class SabbathSchoolLessonTests(APITestCase):
         row.refresh_from_db()
         self.assertEqual(row.status, 'pending')
         self.assertIsNone(row.served_by)
+
+
+class EldershipDeskToolsTests(APITestCase):
+    """The eldership strip's own two: the baptismal class and the daily word.
+
+    The class is the elders' register of who they are preparing for the
+    font — a member of the roll, or a candidate who has no account yet and
+    is written in by name. The daily word is a short devotional thought the
+    eldership writes and every signed-in member may read: one day holds one
+    word, so posting again replaces it rather than stacking two.
+    """
+
+    CLASS_URL = '/api/members/baptismal-class/'
+    WORD_URL = '/api/members/daily-word/'
+
+    def setUp(self):
+        self.elder = User.objects.create_user('desk.elder', 'desk.elder@example.com', 'StrongPass#2026', first_name='Elroy', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.candidate = User.objects.create_user('desk.candidate', 'desk.candidate@example.com', 'StrongPass#2026', first_name='Candice', last_name='Candidate')
+        MemberProfile.objects.create(user=self.candidate, role='member', roles='member')
+        self.other = User.objects.create_user('desk.other', 'desk.other@example.com', 'StrongPass#2026', first_name='Otto', last_name='Other')
+        MemberProfile.objects.create(user=self.other, role='member', roles='member')
+
+    def test_a_member_may_not_read_or_write_the_class(self):
+        """The register is the desk's own: a member is refused, twice."""
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get(self.CLASS_URL).status_code, status.HTTP_403_FORBIDDEN)
+        posted = self.client.post(self.CLASS_URL, {'guest_name': 'Nathan Neighbour'}, format='json')
+        self.assertEqual(posted.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(BaptismalClassEntry.objects.count(), 0)
+
+    def test_the_elder_adds_a_roll_member_and_a_candidate_without_an_account(self):
+        self.client.force_authenticate(self.elder)
+        added = self.client.post(self.CLASS_URL, {'member_id': self.candidate.id, 'note': 'Studying weekly.'}, format='json')
+        self.assertEqual(added.status_code, status.HTTP_201_CREATED)
+        guest = self.client.post(self.CLASS_URL, {'guest_name': 'Nathan Neighbour'}, format='json')
+        self.assertEqual(guest.status_code, status.HTTP_201_CREATED)
+
+        listed = self.client.get(self.CLASS_URL)
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        names = {row['name'] for row in listed.data['entries']}
+        self.assertEqual(names, {'Candice Candidate', 'Nathan Neighbour'})
+
+    def test_an_empty_add_is_refused_and_a_double_add_is_refused(self):
+        self.client.force_authenticate(self.elder)
+        empty = self.client.post(self.CLASS_URL, {'note': 'no one named'}, format='json')
+        self.assertEqual(empty.status_code, status.HTTP_400_BAD_REQUEST)
+        self.client.post(self.CLASS_URL, {'member_id': self.candidate.id}, format='json')
+        again = self.client.post(self.CLASS_URL, {'member_id': self.candidate.id}, format='json')
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(BaptismalClassEntry.objects.count(), 1)
+
+    def test_the_walk_to_the_font_stamps_the_day_and_may_be_undone(self):
+        self.client.force_authenticate(self.elder)
+        added = self.client.post(self.CLASS_URL, {'member_id': self.candidate.id}, format='json')
+        entry_id = added.data['entry']['id']
+
+        ready = self.client.post(f'{self.CLASS_URL}{entry_id}/', {'status': 'ready'}, format='json')
+        self.assertEqual(ready.status_code, status.HTTP_200_OK)
+        self.assertEqual(BaptismalClassEntry.objects.get().status, 'ready')
+
+        baptised = self.client.post(f'{self.CLASS_URL}{entry_id}/', {'status': 'baptised'}, format='json')
+        self.assertEqual(baptised.status_code, status.HTTP_200_OK)
+        row = BaptismalClassEntry.objects.get()
+        self.assertEqual(row.status, 'baptised')
+        self.assertIsNotNone(row.baptized_on)
+
+        # Back to preparing clears the day: the class walks both ways.
+        preparing = self.client.post(f'{self.CLASS_URL}{entry_id}/', {'status': 'preparing'}, format='json')
+        self.assertEqual(preparing.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertIsNone(row.baptized_on)
+
+    def test_a_member_may_not_walk_a_candidate_and_removal_takes_the_row(self):
+        self.client.force_authenticate(self.elder)
+        added = self.client.post(self.CLASS_URL, {'member_id': self.candidate.id}, format='json')
+        entry_id = added.data['entry']['id']
+
+        self.client.force_authenticate(self.other)
+        refused = self.client.post(f'{self.CLASS_URL}{entry_id}/', {'status': 'ready'}, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.elder)
+        removed = self.client.post(f'{self.CLASS_URL}{entry_id}/', {'remove': True}, format='json')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertEqual(BaptismalClassEntry.objects.count(), 0)
+
+    def test_the_daily_word_reads_for_members_and_replaces_the_day(self):
+        # A member reads it; the desk writes it.
+        self.client.force_authenticate(self.other)
+        empty = self.client.get(self.WORD_URL)
+        self.assertEqual(empty.status_code, status.HTTP_200_OK)
+        self.assertIsNone(empty.data['today'])
+        self.assertFalse(empty.data['can_write'])
+
+        self.client.force_authenticate(self.elder)
+        first = self.client.post(self.WORD_URL, {'text': 'Faithfulness in small things.'}, format='json')
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        second = self.client.post(self.WORD_URL, {'text': 'Faithfulness in small things — revised.'}, format='json')
+        # The day holds one word: the second post replaces, not appends.
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(DailyWord.objects.count(), 1)
+
+        self.client.force_authenticate(self.other)
+        read = self.client.get(self.WORD_URL)
+        self.assertEqual(read.data['today']['text'], 'Faithfulness in small things — revised.')
+        # The word reads for everyone; the pen stays with the desk.
+        self.assertFalse(read.data['can_write'])
+        self.assertEqual(len(read.data['recent']), 1)
+
+    def test_an_empty_or_overlong_word_is_refused_and_a_member_may_not_write(self):
+        self.client.force_authenticate(self.other)
+        refused = self.client.post(self.WORD_URL, {'text': 'hi'}, format='json')
+        # A member may read today's word, never write it.
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(DailyWord.objects.count(), 0)
+
+        self.client.force_authenticate(self.elder)
+        empty = self.client.post(self.WORD_URL, {'text': '   '}, format='json')
+        self.assertEqual(empty.status_code, status.HTTP_400_BAD_REQUEST)
+        overlong = self.client.post(self.WORD_URL, {'text': 'x' * 2001}, format='json')
+        self.assertEqual(overlong.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(DailyWord.objects.count(), 0)

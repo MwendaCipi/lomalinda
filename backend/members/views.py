@@ -43,7 +43,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
@@ -8121,6 +8121,186 @@ class LessonRequestServeView(APIView):
         return Response({'detail': 'Request marked served.', 'status': row.status})
 
 
+class BaptismalClassView(APIView):
+    """The baptismal class: the members the elders are preparing for baptism.
+
+    The register is the eldership desk's own — who is being prepared, how
+    they are getting on, and who brought them — so only that desk reads it
+    and writes it. Adding names a member from the roll (the picker's id);
+    someone with no account yet is written in by name, because a candidate
+    for baptism is not held back by having no login.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _row(row):
+        name = (row.member.get_full_name() or row.member.username) if row.member_id else row.guest_name
+        return {
+            'id': row.id,
+            'name': name,
+            'status': row.status,
+            'status_display': row.get_status_display(),
+            'note': row.note,
+            'added_by_name': (
+                row.added_by.get_full_name() or row.added_by.username
+            ) if row.added_by_id else '',
+            'baptized_on': row.baptized_on,
+            'created_at': row.created_at,
+        }
+
+    def get(self, request):
+        if not can_manage_department(request.user, 'eldership'):
+            return Response(
+                {'detail': 'Only the eldership desk may read the baptismal class.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        rows = BaptismalClassEntry.objects.select_related('member', 'added_by')
+        return Response({'entries': [self._row(row) for row in rows]})
+
+    def post(self, request):
+        if not can_manage_department(request.user, 'eldership'):
+            return Response(
+                {'detail': 'Only the eldership desk may add to the baptismal class.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        member_id = request.data.get('member_id')
+        guest_name = (request.data.get('guest_name') or '').strip()
+        note = (request.data.get('note') or '').strip()
+        member = None
+        if member_id:
+            member = User.objects.filter(pk=member_id, is_active=True).first()
+            if member is None:
+                return Response(
+                    {'member_id': 'That member could not be found.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if member is None and not guest_name:
+            return Response(
+                {'detail': 'Pick a member from the roll, or write in a name for a candidate without an account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if member and BaptismalClassEntry.objects.filter(member=member, status__in=('preparing', 'ready')).exists():
+            return Response(
+                {'detail': 'That member is already in the baptismal class.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        row = BaptismalClassEntry.objects.create(
+            member=member, guest_name=guest_name if member is None else '',
+            note=note[:1000], added_by=request.user,
+        )
+        return Response(
+            {'detail': 'Added to the baptismal class.', 'entry': self._row(row)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BaptismalClassEntryView(APIView):
+    """One candidate's row: move their preparation on, or take them off.
+
+    The statuses walk the way the class walks — preparing, ready, baptised
+    — and baptising stamps the day. Taking a name off the register is the
+    desk's own act too; it needs no ceremony, only the keys.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not can_manage_department(request.user, 'eldership'):
+            return Response(
+                {'detail': 'Only the eldership desk may update the baptismal class.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        row = BaptismalClassEntry.objects.filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That entry no longer exists.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.data.get('remove'):
+            row.delete()
+            return Response({'detail': 'The name is off the baptismal class.'})
+        new_status = (request.data.get('status') or '').strip()
+        if new_status not in ('preparing', 'ready', 'baptised'):
+            return Response(
+                {'status': 'Choose preparing, ready, or baptised.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        row.status = new_status
+        fields = ['status', 'updated_at']
+        if new_status == 'baptised' and row.baptized_on is None:
+            row.baptized_on = timezone.localdate()
+            fields.append('baptized_on')
+        if new_status != 'baptised':
+            row.baptized_on = None
+            fields.append('baptized_on')
+        note = request.data.get('note')
+        if note is not None:
+            row.note = str(note)[:1000]
+            fields.append('note')
+        row.save(update_fields=fields)
+        return Response({'detail': f'Marked {row.get_status_display().lower()}.', 'entry': BaptismalClassView._row(row)})
+
+
+class DailyWordView(APIView):
+    """The daily word: today's devotional thought, and the desk that writes it.
+
+    Any signed-in member may read it — a devotional thought meant to be
+    shared reads like one. The eldership desk writes it, and one day holds
+    one word: posting again replaces the day's own thought rather than
+    stacking two. Days before today are kept, so the record of what the
+    church has been fed does not vanish when the day turns over.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _row(row):
+        return {
+            'id': row.id,
+            'date': row.date,
+            'text': row.text,
+            'author_name': (
+                row.author.get_full_name() or row.author.username
+            ) if row.author_id else '',
+            'updated_at': row.updated_at,
+        }
+
+    def get(self, request):
+        today = timezone.localdate()
+        row = DailyWord.objects.filter(date=today).first()
+        recent = list(DailyWord.objects.select_related('author').order_by('-date')[:14])
+        return Response({
+            'today': self._row(row) if row else None,
+            'recent': [self._row(item) for item in recent],
+            'can_write': can_manage_department(request.user, 'eldership'),
+        })
+
+    def post(self, request):
+        if not can_manage_department(request.user, 'eldership'):
+            return Response(
+                {'detail': 'Only the eldership desk may write the daily word.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        text = (request.data.get('text') or '').strip()
+        if not text:
+            return Response(
+                {'text': 'Write the thought for today first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(text) > 2000:
+            return Response(
+                {'text': 'A daily word is a short thought — keep it under 2000 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        today = timezone.localdate()
+        row, created = DailyWord.objects.update_or_create(
+            date=today,
+            defaults={'text': text, 'author': request.user},
+        )
+        return Response(
+            {'detail': 'The daily word is shared.', 'today': self._row(row)},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
 from .pdf_generator import (
     generate_reconciliation_pdf,
     generate_member_giving_statement_pdf,
@@ -10764,6 +10944,8 @@ def department_accounts(user, code):
       ministry raises a camp offering, so each reads its own fund alone.
     - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
     - Msamaria Mwema is included only for Eldership and Deaconate.
+    - Eldership reads its own fund (the Elders Kitty) with LCB and Msamaria
+      beside it — never the whole treasury.
     - The Treasury desk itself reads every account: it keeps the whole
       treasury, not one fund of it.
     - Regular roll members see the department's primary fund(s).
@@ -10834,13 +11016,6 @@ def department_accounts(user, code):
             Q(name__icontains='campout') | Q(description__icontains='campout')
         ).order_by('id')
         for acc in camp_accounts:
-            if acc not in accounts:
-                accounts.append(acc)
-
-    # 6. Eldership: access to all treasury accounts
-    if code == 'eldership':
-        all_accounts = TreasuryAccount.objects.all().order_by('id')
-        for acc in all_accounts:
             if acc not in accounts:
                 accounts.append(acc)
 

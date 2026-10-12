@@ -1505,6 +1505,73 @@ class LessonRequest(models.Model):
         return f"{self.member} asks for the lesson: {self.lesson[:40]}"
 
 
+class BaptismalClassEntry(models.Model):
+    """A member the elders are preparing for baptism.
+
+    The baptismal class is the eldership desk's own register: who is being
+    prepared for the font, how they are getting on, and the day they came
+    up when that day comes. Only the desk reads and writes it — a
+    candidate's preparation is pastoral work, not the church's noticeboard.
+    One person holds one active row; baptising keeps the day, so the class
+    remembers its fruit rather than only its present.
+    """
+
+    STATUS_CHOICES = [
+        ('preparing', 'Preparing'),
+        ('ready', 'Ready for baptism'),
+        ('baptised', 'Baptised'),
+    ]
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='baptismal_class_entries',
+    )
+    # The candidate's name, kept only where they have no account yet — a
+    # candidate for baptism is not held back by having no login.
+    guest_name = models.CharField(max_length=150, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='preparing')
+    note = models.TextField(blank=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='baptismal_class_entries_added',
+    )
+    baptized_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        name = (self.member.get_full_name() or self.member.username) if self.member_id else self.guest_name
+        return f"{name} — {self.get_status_display()}"
+
+
+class DailyWord(models.Model):
+    """The elders' devotional thought for the day.
+
+    One row per day: the short thought the church reads that day, written
+    by an elder. Any member may read it — sharing it is the whole point —
+    but only the eldership desk writes it, and a day carries one word:
+    writing again replaces that day's thought rather than stacking two.
+    """
+
+    date = models.DateField(unique=True)
+    text = models.TextField()
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='daily_words_given',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"Daily word {self.date}: {self.text[:40]}"
+
+
 class ChurchFinancialReport(models.Model):
     PERIOD_TYPE_CHOICES = [('monthly', 'Monthly'), ('quarterly', 'Quarterly'), ('annual', 'Annual')]
     title = models.CharField(max_length=160)

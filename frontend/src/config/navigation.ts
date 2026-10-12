@@ -989,6 +989,9 @@ const RAIL_AREA_CODES_MOVED = new Set([
   // already carries it as a section of its own (treasuryItems) — so the
   // ministries heading must not mint a second row beside it.
   "treasury",
+  // Eldership is a ministry of the record too (0197), filed the same way:
+  // the rail's Eldership section already names the desk.
+  "eldership",
   "beginners",
   "kindergarten",
   "primary",

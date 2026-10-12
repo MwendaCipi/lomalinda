@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, Info, LogOut, Mail, MessageSquare, MoreVertical, Phone, Plus, Search, UserMinus, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, Droplets, Info, LogOut, Mail, Megaphone, MessageSquare, MoreVertical, Phone, Plus, Search, UserMinus, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
+import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
+import { DailyWordPanel } from "@/components/daily-word-panel";
 import { LessonRequestsPanel } from "@/components/lesson-requests-panel";
 import { SubNav } from "@/components/sub-nav";
 import { isStaffRole } from "@/config/navigation";
@@ -549,7 +551,7 @@ export function MyAreas() {
 
   const [tab, setTab] = useState<AreaTab>("mine");
   const [openCode, setOpenCode] = useState<string | null>(null);
-  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts" | "lesson-requests">("members");
+  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts" | "lesson-requests" | "baptismal-class" | "daily-word">("members");
   const [joining, setJoining] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -617,11 +619,27 @@ export function MyAreas() {
   const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
 
   const { setCustomToggles, setCustomHeader } = usePageHeader();
+  const router = useRouter();
+  // The elders' desk keeps the church's announcements — on a phone the rail
+  // is out of sight, so the area's own strip carries the way in. It is the
+  // desk's page, not a view of this one, so the row walks the officer into
+  // it; the roles are the same three the rail row names.
+  const canOpenAnnouncements =
+    openArea?.code === "eldership" && ["elder", "clerk", "admin"].some((role) => roles.includes(role));
   const accountViewItems = useMemo(
     () => [
       { key: "members", label: "Members", icon: Users },
       { key: "calendar", label: "Calendar", icon: CalendarDays },
       { key: "accounts", label: "Account Status", short: "Accounts", help: "Account Status", icon: Wallet },
+      ...(canOpenAnnouncements
+        ? [
+            // The elders' own two: who they are preparing for the font,
+            // and the thought the church reads each day.
+            { key: "baptismal-class", label: "Baptismal Class", short: "Baptism", help: "Baptismal Class", icon: Droplets },
+            { key: "daily-word", label: "Daily Word", short: "Word", help: "Daily Word", icon: BookOpen },
+            { key: "announcements", label: "Announcements", short: "News", help: "Announcements", icon: Megaphone },
+          ]
+        : []),
       // Lesson requests belong to the Sabbath School alone: every church
       // member is on its roll by default, and its superintendent is the one
       // who serves what they ask for.
@@ -629,7 +647,7 @@ export function MyAreas() {
         ? [{ key: "lesson-requests", label: "Lesson Requests", short: "Lessons", help: "Lesson Requests", icon: MessageSquare }]
         : []),
     ],
-    [openArea?.code],
+    [openArea?.code, canOpenAnnouncements],
   );
 
   // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
@@ -639,7 +657,15 @@ export function MyAreas() {
         <SubNav
           label={`${openArea.label} views`}
           value={areaView}
-          onChange={(next) => setAreaView(next as typeof areaView)}
+          onChange={(next) => {
+            // Announcements is a console page rather than a view of this
+            // one — the strip's row opens the desk the rail names.
+            if (next === "announcements") {
+              router.push("/administration?tab=announcements");
+              return;
+            }
+            setAreaView(next as typeof areaView);
+          }}
           items={accountViewItems}
         />
       );
@@ -687,7 +713,6 @@ export function MyAreas() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [areaReload, setAreaReload] = useState(0);
-  const router = useRouter();
 
   useEffect(() => {
     if (!openArea) return;
@@ -1110,6 +1135,40 @@ export function MyAreas() {
                 </div>
               </div>
               <LessonRequestsPanel />
+            </section>
+          )}
+
+          {/* Section 4a: Baptismal Class — the elders' own register. */}
+          {areaView === "baptismal-class" && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <Droplets className="h-4 w-4 text-ember" aria-hidden="true" />
+                  Baptismal Class
+                </h2>
+                <p className="mt-0.5 text-xs text-moss">
+                  The members being prepared for baptism — their walk from
+                  studying to the font, kept by the eldership desk.
+                </p>
+              </div>
+              <BaptismalClassPanel />
+            </section>
+          )}
+
+          {/* Section 4b: Daily Word — the thought the church reads today. */}
+          {areaView === "daily-word" && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <BookOpen className="h-4 w-4 text-ember" aria-hidden="true" />
+                  Daily Word
+                </h2>
+                <p className="mt-0.5 text-xs text-moss">
+                  A short devotional thought for the day, shared with the
+                  church by the eldership.
+                </p>
+              </div>
+              <DailyWordPanel />
             </section>
           )}
 

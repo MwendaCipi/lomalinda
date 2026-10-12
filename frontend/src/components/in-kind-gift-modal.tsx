@@ -6,6 +6,29 @@ import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** One row from /giving-accounts/: the label givers read and the short
+    account name M-Pesa shows — all the in-kind form needs to offer the very
+    accounts the money form offers. */
+type GivingAccountOption = {
+  id: number;
+  name: string;
+  label: string;
+  account: string;
+  account_type: string;
+  account_type_display: string;
+};
+
+/** What the picker shows before the accounts arrive (or if the fetch fails):
+    the same fallback the money form uses, so neither form invents accounts. */
+const fallbackAccounts = [
+  "Tithe",
+  "Combined Offering",
+  "13th Sabbath",
+  "Camp Expenses",
+  "Camp Goal",
+  "Local Church Budget",
+];
+
 /** The accounts an in-kind gift can be recorded against — the same list the
     in-kind page offers, so a gift is filed the same way wherever it is given. */
 export const IN_KIND_PURPOSES = [
@@ -20,7 +43,7 @@ export type InKindGiftModalProps = {
   open: boolean;
   onClose: () => void;
   /** The account this gift belongs to — an announcement's support account,
-      say. It is added to the list when it is not one of the standard five. */
+      say. It leads the list when it is not one of the published accounts. */
   defaultPurpose?: string;
   /** The announcement the gift was given from, for the record's own note. */
   announcementTitle?: string;
@@ -40,7 +63,10 @@ export function InKindGiftModal({
   onRecorded,
 }: InKindGiftModalProps) {
   const [items, setItems] = useState("");
-  const [purpose, setPurpose] = useState(IN_KIND_PURPOSES[0]);
+  // The published giving accounts, fetched when the modal opens. A label
+  // list, so the select renders the same wording the money form shows.
+  const [accountOptions, setAccountOptions] = useState<string[]>(fallbackAccounts);
+  const [purpose, setPurpose] = useState(fallbackAccounts[0]);
   const [donorName, setDonorName] = useState("");
   // Who this gift is for: the giver themselves (the default), or another
   // person it is written on — the same choice the money giving form offers.
@@ -57,9 +83,41 @@ export function InKindGiftModal({
   useEffect(() => {
     if (!open) return;
     setMessage("");
-    setPurpose(defaultPurpose || IN_KIND_PURPOSES[0]);
     setNotes(announcementTitle ? `In response to: ${announcementTitle}` : "");
     setForSomeone(false);
+    // The accounts are the treasury's published giving accounts — the same
+    // list the money form offers — with the announcement's own account kept
+    // when it is not one of them, so a linked gift still lands where asked.
+    let alive = true;
+    fetch(`${API_URL}/api/members/giving-accounts/`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: GivingAccountOption[]) => {
+        if (!alive) return;
+        const labels = data.length ? data.map((option) => option.label) : fallbackAccounts;
+        const wanted = defaultPurpose || "";
+        const list = wanted && !labels.some((label) => label.toLowerCase() === wanted.toLowerCase())
+          ? [wanted, ...labels]
+          : labels;
+        setAccountOptions(list);
+        setPurpose(wanted || list[0]);
+      })
+      .catch(() => {
+        if (!alive) return;
+        const list = defaultPurpose && !fallbackAccounts.includes(defaultPurpose)
+          ? [defaultPurpose, ...fallbackAccounts]
+          : fallbackAccounts;
+        setAccountOptions(list);
+        setPurpose(defaultPurpose || list[0]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, defaultPurpose, announcementTitle]);
+
+  // The giver's own name is read only for the signed-in, and only once the
+  // accounts above are under way — neither fetch waits on the other.
+  useEffect(() => {
+    if (!open) return;
     const token = localStorage.getItem("access_token");
     if (!token) return;
     let alive = true;
@@ -75,14 +133,11 @@ export function InKindGiftModal({
     return () => {
       alive = false;
     };
-  }, [open, defaultPurpose, announcementTitle]);
+  }, [open]);
 
   if (!open) return null;
 
   const itemCount = items.split("\n").filter((line) => line.trim()).length;
-  const accounts = defaultPurpose && !IN_KIND_PURPOSES.includes(defaultPurpose)
-    ? [defaultPurpose, ...IN_KIND_PURPOSES]
-    : IN_KIND_PURPOSES;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -196,7 +251,7 @@ export function InKindGiftModal({
                 onChange={(event) => setPurpose(event.target.value)}
                 className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
               >
-                {accounts.map((account) => (
+                {accountOptions.map((account) => (
                   <option key={account}>{account}</option>
                 ))}
               </select>
