@@ -184,9 +184,17 @@ function WithdrawalFilterPopover({
 function WithdrawalRequestsPanel({
   search = "",
   statusFilter = "all",
+  onChanged,
 }: {
   search?: string;
   statusFilter?: "all" | "pending" | "approved" | "rejected";
+  /**
+   * Called after an action that moves money (approve / reverse), so the desk
+   * refetches its accounts. The approval debits the fund server-side; without
+   * this the Church Accounts view kept showing the pre-approval balance until
+   * a full reload.
+   */
+  onChanged?: () => void;
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +240,9 @@ function WithdrawalRequestsPanel({
       };
       const [title, msg] = messages[action] ?? ["Done", ""];
       showAlert(title, msg, "success");
+      // Approving and reversing change the account's balance; tell the desk to
+      // refetch so it does not keep showing the old figure.
+      if (action === "approve" || action === "reverse") onChanged?.();
       load();
     } catch (error) {
       showAlert("Could not complete action", error instanceof Error ? error.message : "Try again.", "error");
@@ -1196,7 +1207,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} onChanged={fetchAccounts} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : view === "unassigned" ? (

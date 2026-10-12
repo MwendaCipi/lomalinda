@@ -18,7 +18,8 @@ import { ChurchBudgetManager } from "@/components/church-budget-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
-import { SubNav } from "@/components/sub-nav";
+import { SectionNav, SubNav } from "@/components/sub-nav";
+import { usePageHeader } from "@/components/app-frame";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -332,6 +333,41 @@ function AdministrationContent() {
       router.replace(`/administration?tab=${fallback}`, { scroll: false });
     }
   }, [searchTab, isClerk, isElder, isAdmin, isFinance, status, router]);
+
+  // The console's own two pages — the register and the church's settings —
+  // no longer hang on a rail row (the account menu is the console's only
+  // door), so they would otherwise draw no strip above the desk. Give them
+  // one here, the same way every other desk's rail section does, so opening
+  // Administration from the account menu still meets a row of toggles to move
+  // between the two. Desks that own their own strip (treasury, deaconate,
+  // etc.) or ride a rail section are left alone.
+  const { setCustomToggles } = usePageHeader();
+  useEffect(() => {
+    if (activeTab !== "users" && activeTab !== "settings") return;
+    setCustomToggles(
+      <SectionNav
+        label="Administration pages"
+        activeHref={`/administration?tab=${activeTab}`}
+        items={[
+          {
+            key: "users",
+            href: "/administration?tab=users",
+            label: "User Management",
+            short: "Users",
+            help: "The church register — every member, the roles they hold and their standing.",
+          },
+          {
+            key: "settings",
+            href: "/administration?tab=settings",
+            label: "Church Settings",
+            short: "Settings",
+            help: "The church's name, channels, meeting times and public record.",
+          },
+        ]}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [activeTab, setCustomToggles]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is
