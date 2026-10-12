@@ -1006,10 +1006,18 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('friend@example.com', mail.outbox[0].to)
         self.assertIn('Thank you for your gift towards the welfare fund.', mail.outbox[0].body)
+        # The letter points the giver at the paper riding with it.
+        self.assertIn('Find your receipt attached', mail.outbox[0].body)
         # The structured tail still rides along, so the receipt reads like
         # every other receipt the church sends.
         self.assertIn('Receipt Summary:', mail.outbox[0].body)
         self.assertIn('Welfare', mail.outbox[0].body)
+        # And the thermal slip itself is the attachment — a real PDF.
+        self.assertTrue(mail.outbox[0].attachments, 'the thermal receipt must ride along on the email')
+        filename, content, mimetype = mail.outbox[0].attachments[0]
+        self.assertTrue(filename.endswith('.pdf'), filename)
+        self.assertEqual(mimetype, 'application/pdf')
+        self.assertTrue(content.startswith(b'%PDF'), 'the attachment must be a real PDF')
         self.held.refresh_from_db()
         self.assertIsNotNone(self.held.receipt_sent_at)
 

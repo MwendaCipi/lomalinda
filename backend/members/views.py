@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, send_mail
 from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.db import connection, transaction
@@ -151,6 +151,55 @@ def receipt_summary(*, account, amount, payment_channel, receipt_ref, date_displ
         f"Receipt No: {receipt_ref}\n"
         f"Date: {date_display}"
     )
+
+
+#: The line that points the giver at the paper riding with the letter. Only
+#: the email carries it — a text message cannot carry a file — so the SMS
+#: keeps the letter without the promise.
+RECEIPT_ATTACHED_NOTE = (
+    'Find your receipt attached to this message. It carries the same details '
+    'in print-ready form, for your records.'
+)
+
+
+def contribution_receipt_attachment(contribution):
+    """The thermal PDF for a completed digital giving, as an email attachment.
+
+    The same paper the member page downloads — one slip per payment, a split
+    gift itemised with its total — built here from the rows that share the
+    payment. Returns ``None`` where no paper can be cut (an in-kind record, a
+    row still under review): a letter without its receipt is still a letter,
+    and must never be held back by the printer.
+    """
+    try:
+        if contribution.giving_type != 'financial' or not contribution.currency:
+            return None
+        if contribution.payment_group:
+            lines = list(
+                Contribution.objects.filter(
+                    payment_group=contribution.payment_group, status='completed',
+                ).order_by('id')
+            )
+        else:
+            lines = [contribution]
+        lines = [row for row in lines if row.status == 'completed'] or [contribution]
+        donor_name = giver_display_name(
+            contribution.donor_name,
+            member=contribution.member,
+            email=contribution.donor_email,
+            phone=contribution.phone_number,
+        ) or 'Friend'
+        pdf_bytes = generate_contribution_thermal_receipt_pdf(
+            church_name=church_name_short(),
+            donor_name=donor_name,
+            contributions=lines,
+        )
+        reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
+        return (f'Receipt-{reference}.pdf', pdf_bytes, 'application/pdf')
+    except Exception:
+        # The receipt letter must never fail to send because the printer did.
+        logger.exception('Thermal receipt for contribution %s could not be built.', contribution.pk)
+        return None
 
 
 def send_enrollment_email(enrollment):
@@ -340,14 +389,25 @@ def send_password_reset_email(user, uid, token):
     )
 
 
-def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent):
-    """Attempt every available receipt channel and report whether one succeeded."""
+def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, attachments=None, email_body=None):
+    """Attempt every available receipt channel and report whether one succeeded.
+
+    ``attachments`` ride the email only — SMS cannot carry files — so the
+    email may carry its own ``email_body`` (the same letter plus the line
+    pointing at the paper) while the text message keeps the plain letter.
+    """
     email_sent = False
     sms_sent = False
     sms_configured = bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))
     if email:
         try:
-            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            if attachments:
+                message = EmailMessage(subject, email_body or body, settings.DEFAULT_FROM_EMAIL, [email])
+                for filename, content, mimetype in attachments:
+                    message.attach(filename, content, mimetype)
+                message.send(fail_silently=False)
+            else:
+                send_mail(subject, email_body or body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
             email_sent = True
         except Exception:
             # A receipt that never went out must not read as sent — and the
@@ -402,20 +462,30 @@ def send_contribution_receipt(contribution):
         contribution.purpose,
     )
     date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')
-    # The settings template is the whole message (greeting included); only the
-    # structured summary and signature are appended around it.
+    summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
+    email = contribution.donor_email or (contribution.member.email if contribution.member else '')
+    # The email carries the thermal paper and points at it; the SMS gets the
+    # same letter without the promise — a text cannot carry a file.
+    attachment = contribution_receipt_attachment(contribution) if email else None
     body = (
         f"{receipt_message}\n\n"
-        f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
+        f"{summary}\n\n"
         f"{receipt_email_signature()}"
     )
-    email = contribution.donor_email or (contribution.member.email if contribution.member else '')
+    email_body = (
+        f"{receipt_message}\n\n"
+        f"{RECEIPT_ATTACHED_NOTE}\n\n"
+        f"{summary}\n\n"
+        f"{receipt_email_signature()}"
+    ) if attachment else body
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {contribution.purpose}",
         body=body,
         email=email,
         phone=contribution.phone_number,
         mark_sent=lambda: None,
+        attachments=[attachment] if attachment else None,
+        email_body=email_body,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
         contribution.receipt_sent_at = timezone.now()
@@ -462,18 +532,30 @@ def send_grouped_contribution_receipts(group):
     date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
     receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
     account_list = ' / '.join(row.purpose for row in completed)
+    summary = receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
+    email = first.donor_email or (first.member.email if first.member else '')
+    # One slip prints the whole split — the same itemised paper the member
+    # page downloads — and rides the email the letter goes in.
+    attachment = contribution_receipt_attachment(first) if email else None
     body = (
         f"{receipt_message}\n\n"
-        f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)}\n\n"
+        f"{summary}\n\n"
         f"{receipt_email_signature()}"
     )
-    email = first.donor_email or (first.member.email if first.member else '')
+    email_body = (
+        f"{receipt_message}\n\n"
+        f"{RECEIPT_ATTACHED_NOTE}\n\n"
+        f"{summary}\n\n"
+        f"{receipt_email_signature()}"
+    ) if attachment else body
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {account_list}",
         body=body,
         email=email,
         phone=first.phone_number,
         mark_sent=lambda: None,
+        attachments=[attachment] if attachment else None,
+        email_body=email_body,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
         Contribution.objects.filter(id__in=[row.id for row in completed]).update(receipt_sent_at=timezone.now())
@@ -4188,17 +4270,30 @@ class ResendContributionReceiptView(APIView):
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
             amount_display = f"KES {contribution.amount:,.2f}"
+            summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))
+            receipt_message = render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)
+            # A copy arrives with its paper — the same slip the first letter
+            # carried, re-cut from the ledger rows.
+            attachment = contribution_receipt_attachment(contribution) if send_email else None
             body = (
-                f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)}\n\n"
-                f"{receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
+                f"{receipt_message}\n\n"
+                f"{summary}\n\n"
                 f"{receipt_email_signature()}"
             )
+            email_body = (
+                f"{receipt_message}\n\n"
+                f"{RECEIPT_ATTACHED_NOTE}\n\n"
+                f"{summary}\n\n"
+                f"{receipt_email_signature()}"
+            ) if attachment else body
             delivery = _deliver_receipt_message(
                 subject=f"Receipt Copy — {contribution.purpose}",
                 body=body,
                 email=email if send_email else '',
                 phone=phone if send_sms else '',
                 mark_sent=lambda: None,
+                attachments=[attachment] if attachment else None,
+                email_body=email_body,
             )
             sent = bool(delivery['email_sent'] or delivery['sms_sent'])
             # The corrected contacts are kept even if the send itself failed,
@@ -5293,17 +5388,29 @@ class AssignContributionAccountView(APIView):
         )
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
         date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
+        summary = receipt_summary(account=account_list, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=reference, date_display=date_display)
+        # The assign press thanks the giver and hands them the paper in the
+        # same act — the slip cut from the ledger rows just credited.
+        attachment = contribution_receipt_attachment(contribution) if email else None
         body = (
             f"{receipt_message}\n\n"
-            f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=reference, date_display=date_display)}\n\n"
+            f"{summary}\n\n"
             f"{receipt_email_signature()}"
         )
+        email_body = (
+            f"{receipt_message}\n\n"
+            f"{RECEIPT_ATTACHED_NOTE}\n\n"
+            f"{summary}\n\n"
+            f"{receipt_email_signature()}"
+        ) if attachment else body
         delivery = _deliver_receipt_message(
             subject=f"Giving receipt — {account_list}",
             body=body,
             email=email,
             phone=phone,
             mark_sent=lambda: None,
+            attachments=[attachment] if attachment else None,
+            email_body=email_body,
         )
         if delivery['email_sent'] or delivery['sms_sent']:
             contribution.receipt_sent_at = timezone.now()

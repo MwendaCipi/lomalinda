@@ -464,7 +464,8 @@ function AssignPaymentModal({
               className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-3 text-xs focus:border-ember focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-moss">
-              The receipt summary and the church&apos;s signature are appended to this note.
+              The thermal receipt is attached to the email; the summary and the
+              church&apos;s signature are appended to this note.
             </p>
           </div>
 
