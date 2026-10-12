@@ -746,37 +746,6 @@ function GivePageContent() {
                   Give in Kind
                 </button>
               </div>
-              {/* The two ways giving reaches past oneself: honour someone
-                  with a gift, or ask someone to give one. Both open the same
-                  form, whose combo is set to their way. */}
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetPersonField();
-                    setHonoreePhone("");
-                    setRecipientMode("for_someone");
-                    setPhoneNumber(payerPhoneRef.current);
-                    setShowGiveModal(true);
-                  }}
-                  className="rounded-full border border-ember/50 bg-white px-6 py-2.5 text-sm font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
-                >
-                  Give for someone
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetPersonField();
-                    setHonoreePhone("");
-                    setRecipientMode("request");
-                    setPhoneNumber("");
-                    setShowGiveModal(true);
-                  }}
-                  className="rounded-full border border-sand-line bg-white px-6 py-2.5 text-sm font-semibold text-moss-dark transition hover:border-bark hover:text-bark"
-                >
-                  Request from someone
-                </button>
-              </div>
               {signedIn && (
                 <Link href="/member/givings" className="text-xs font-semibold text-ember hover:underline">
                   View my givings
@@ -869,8 +838,6 @@ function GivePageContent() {
           >
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <div>
-                {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
-                <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
                 <h3 id="give-modal-title" className="text-lg font-bold text-bark">
                   {isRequestMode
                     ? "Request from someone"
@@ -923,8 +890,10 @@ function GivePageContent() {
               </div>
             )}
 
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-bark">
+            {/* Who the gift is for and how it is paid — the two choices
+                that frame the form, sharing one row. */}
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block self-start text-sm font-medium text-bark">
                 Who is this for?
                 <select
                   value={recipientMode}
@@ -936,6 +905,21 @@ function GivePageContent() {
                   <option value="request">Request from someone</option>
                 </select>
               </label>
+              {/* A request is settled by M-Pesa prompt alone, so the method
+                  stands only where a gift is being given. */}
+              {!isRequestMode && (
+                <label className="block self-start text-sm font-medium text-bark">
+                  Method of Giving
+                  <select
+                    value={methodOfGiving}
+                    onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
+                    className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
+                  >
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="bank_transfer">Bank-to-Bank</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             {/* A gift in another member's name is written on their record
@@ -1066,24 +1050,10 @@ function GivePageContent() {
                 </label>
               )}
 
-              {/* 2. How the money moves: the method, the phone the M-Pesa
-                  prompt goes to, and finally which accounts it goes to.
-                  Whose name the gift carries is the toggle at the top. */}
+              {/* 2. How the money moves: the phone the M-Pesa prompt goes to
+                  and which accounts it goes to — the method and who it is for
+                  share the row above the form. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {!isRequestMode && (
-                  <label className="block self-start text-sm font-medium text-bark">
-                    Method of Giving
-                    <select
-                      value={methodOfGiving}
-                      onChange={(event) => setMethodOfGiving(event.target.value as MethodOfGiving)}
-                      className="mt-2 w-full rounded-xl border border-sand-mute bg-white px-4 py-3 text-sm outline-none focus:border-ember"
-                    >
-                      <option value="mpesa">M-Pesa</option>
-                      <option value="bank_transfer">Bank-to-Bank</option>
-                    </select>
-                  </label>
-                )}
-
                 {methodOfGiving === "mpesa" && (
                   <label className="block self-start text-sm font-medium text-bark">
                     {isRequestMode ? "Their phone number" : "Phone number"}

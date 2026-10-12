@@ -42,6 +42,12 @@ export function InKindGiftModal({
   const [items, setItems] = useState("");
   const [purpose, setPurpose] = useState(IN_KIND_PURPOSES[0]);
   const [donorName, setDonorName] = useState("");
+  // Who this gift is for: the giver themselves (the default), or another
+  // person it is written on — the same choice the money giving form offers.
+  const [forSomeone, setForSomeone] = useState(false);
+  // The name read from the giver's own account, kept so switching back to a
+  // personal gift restores it after the field named the other person.
+  const [myName, setMyName] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -53,6 +59,7 @@ export function InKindGiftModal({
     setMessage("");
     setPurpose(defaultPurpose || IN_KIND_PURPOSES[0]);
     setNotes(announcementTitle ? `In response to: ${announcementTitle}` : "");
+    setForSomeone(false);
     const token = localStorage.getItem("access_token");
     if (!token) return;
     let alive = true;
@@ -60,8 +67,9 @@ export function InKindGiftModal({
       .then((res) => (res.ok ? res.json() : null))
       .then((me) => {
         if (!alive || !me) return;
-        const full = `${me.first_name || ""} ${me.last_name || ""}`.trim();
-        setDonorName(full || me.username || "");
+        const full = `${me.first_name || ""} ${me.last_name || ""}`.trim() || me.username || "";
+        setMyName(full);
+        setDonorName(full);
       })
       .catch(() => {});
     return () => {
@@ -160,6 +168,26 @@ export function InKindGiftModal({
             <p className="mt-1 text-[11px] text-moss">Write each item on its own line.</p>
           </div>
 
+          {/* The same question the money form asks: this gift can be the
+              giver's own, or written in another person's name. */}
+          <div>
+            <label className="block text-xs font-semibold text-bark">Who is this for?</label>
+            <select
+              value={forSomeone ? "for_someone" : "myself"}
+              onChange={(event) => {
+                const givingForSomeone = event.target.value === "for_someone";
+                setForSomeone(givingForSomeone);
+                // The name field belongs to whoever the gift is for: the
+                // giver's own name returns the moment it is their gift again.
+                setDonorName(givingForSomeone ? "" : myName);
+              }}
+              className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
+            >
+              <option value="myself">Give for myself</option>
+              <option value="for_someone">Give for someone</option>
+            </select>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-bark">Account</label>
@@ -174,12 +202,15 @@ export function InKindGiftModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-bark">Your name</label>
+              <label className="block text-xs font-semibold text-bark">
+                {forSomeone ? "Their name" : "Your name"}
+              </label>
               <input
                 type="text"
+                required={forSomeone}
                 value={donorName}
                 onChange={(event) => setDonorName(event.target.value)}
-                placeholder="Leave blank to give anonymously"
+                placeholder={forSomeone ? "The person this gift is for" : "Leave blank to give anonymously"}
                 className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
               />
             </div>
