@@ -5185,7 +5185,7 @@ class TreasuryUnassignedView(APIView):
     def get(self, request):
         if not is_treasurer_or_admin(request.user):
             raise PermissionDenied('Only church treasurers or administrators can review unassigned payments.')
-        rows = Contribution.objects.filter(needs_review=True, status='completed').order_by('-paid_at', '-created_at')
+        rows = Contribution.objects.filter(needs_review=True, status='completed').select_related('member').order_by('-paid_at', '-created_at')
         return Response([
             {
                 'id': row.id,
@@ -5194,7 +5194,11 @@ class TreasuryUnassignedView(APIView):
                 'typed_reference': row.purpose,
                 'mpesa_receipt_number': row.mpesa_receipt_number or '',
                 'donor_name': row.donor_name,
+                'donor_email': row.donor_email or '',
                 'phone_number': row.phone_number,
+                # The payer's own account, where they have one — the contact
+                # sheet's "Chat here" door needs the id, not the name.
+                'member_id': row.member_id,
                 'paid_at': (row.paid_at or row.created_at).isoformat(),
             }
             for row in rows
@@ -5251,9 +5255,60 @@ class AssignContributionAccountView(APIView):
     sending a list of {account_id, amount} objects; the amounts must add up
     to the payment's full amount. A repeated press finds the flag already
     cleared and refuses, so a payment can never be credited twice.
+
+    The same press may send the receipt: name a ``receipt_email`` or a
+    ``receipt_phone`` and the giver is thanked on that channel, with the
+    treasurer's own ``receipt_message`` in the letter (the church's default
+    message when none is sent). The message is the whole point of assigning
+    from here rather than from a ledger row later — the gift is answered in
+    the same act that files it.
     """
 
     permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _send_receipt(request, contribution, account_names):
+        """Deliver the receipt the desk asked for; None if it asked for none."""
+        email = str(request.data.get('receipt_email') or '').strip()
+        phone = str(request.data.get('receipt_phone') or '').strip()
+        if not email and not phone:
+            return None
+        church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
+        donor_name = giver_display_name(
+            contribution.donor_name,
+            member=contribution.member,
+            email=contribution.donor_email,
+            phone=contribution.phone_number,
+        ) or 'friend'
+        amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
+        account_list = ' / '.join(account_names)
+        # The treasurer's message is already the words they wrote (the modal
+        # prefills the church's default); the render pass fills any placeholder
+        # left standing rather than shipping braces to the giver.
+        receipt_message = render_receipt_message(
+            str(request.data.get('receipt_message') or '') or church_settings.default_receipt_message,
+            donor_name,
+            amount_display,
+            account_list,
+        )
+        reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
+        date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
+        body = (
+            f"{receipt_message}\n\n"
+            f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=reference, date_display=date_display)}\n\n"
+            f"{receipt_email_signature()}"
+        )
+        delivery = _deliver_receipt_message(
+            subject=f"Giving receipt — {account_list}",
+            body=body,
+            email=email,
+            phone=phone,
+            mark_sent=lambda: None,
+        )
+        if delivery['email_sent'] or delivery['sms_sent']:
+            contribution.receipt_sent_at = timezone.now()
+            contribution.save(update_fields=['receipt_sent_at'])
+        return delivery
 
     def post(self, request, pk):
         if not is_treasurer_or_admin(request.user):
@@ -5293,7 +5348,8 @@ class AssignContributionAccountView(APIView):
             contribution.needs_review = False
             contribution.purpose = account.name
             contribution.save(update_fields=['needs_review', 'purpose'])
-            return Response({'detail': f'Credited to {account.name}.', 'account': account.name})
+            delivery = self._send_receipt(request, contribution, [account.name])
+            return Response({'detail': f'Credited to {account.name}.', 'account': account.name, 'receipt': delivery})
 
         # Multi-account split: [{account_id, amount}, ...]
         if not isinstance(allocations, list) or not allocations:
@@ -5337,8 +5393,13 @@ class AssignContributionAccountView(APIView):
         # descriptions.
         contribution.purpose = resolved[0][0].name
         contribution.save(update_fields=['needs_review', 'purpose'])
+        delivery = self._send_receipt(request, contribution, [c.account.name for c in credited])
         return Response(
-            {'detail': f'Credited across {len(credited)} account(s).', 'accounts': [c.account.name for c in credited]},
+            {
+                'detail': f'Credited across {len(credited)} account(s).',
+                'accounts': [c.account.name for c in credited],
+                'receipt': delivery,
+            },
         )
 
 

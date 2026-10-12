@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, Mail, MessageSquare, Phone, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { ComboboxPopover } from "@/components/combobox-popover";
+import { ContactModal, waMeNumber } from "@/components/contact-modal";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { openConversation } from "@/lib/chat";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -20,7 +23,9 @@ type HeldPayment = {
   typed_reference: string;
   mpesa_receipt_number: string;
   donor_name: string;
+  donor_email: string;
   phone_number: string;
+  member_id: number | null;
   paid_at: string;
 };
 
@@ -44,32 +49,46 @@ function dmy(iso: string): string {
 /** An account the treasurer has checked, with the amount credited to it. */
 type PickedAccount = { accountId: number; amount: string };
 
+/** The church's receipt template, filled for this payment — the same
+    placeholder words the backend renders, so what the desk reads in the
+    textarea is what the giver receives. */
+function renderReceiptTemplate(
+  template: string,
+  vars: { name: string; amount: string; account: string }
+): string {
+  return template
+    .replaceAll("{name}", vars.name)
+    .replaceAll("{name)", vars.name)
+    .replaceAll("{amount}", vars.amount)
+    .replaceAll("{amount)", vars.amount)
+    .replaceAll("{account}", vars.account)
+    .replaceAll("{account)", vars.account)
+    .replaceAll("{purpose}", vars.account)
+    .replaceAll("{purpose)", vars.account)
+    .replace(/\{[a-z_]+[})]/g, "");
+}
+
 /**
  * The treasurer's queue of unassigned paybill payments.
  *
  * Safaricom delivers every paybill payment — typed references included — and a
  * reference that names no treasury account (a typo, a blank, a ministry kept
  * outside the treasury) lands here rather than being credited to nothing. The
- * treasurer checks one or more accounts and enters the amount for each; the
- * amounts must add up to the payment, and one press credits them all at the
- * payment's own date, so the month the money arrived stays correct however late
- * the assignment.
- *
- * The picker offers the church's own accounts only — a department's or
- * ministry's fund is read at its own desk, and a payment that really names one
- * belongs there, not here. Each row stays one line tall however many accounts
- * the church holds: the checkboxes live in a combo popover (see
- * AccountsPicker) instead of sprawling across the cell.
+ * row no longer carries the assignment itself: **Assign** opens a modal with
+ * the account combo, the giver's contact slots and the receipt message, so one
+ * press both files the gift and thanks the giver; **Contact** opens the
+ * church's standard contact sheet for the payer.
  */
 export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => void }) {
   const [rows, setRows] = useState<HeldPayment[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assigningId, setAssigningId] = useState<number | null>(null);
-  /** row.id → checked accounts with their amounts */
-  const [picked, setPicked] = useState<Record<number, PickedAccount[]>>({});
-  /** The one row whose account picker is open — a single popover at a time. */
-  const [openPickerId, setOpenPickerId] = useState<number | null>(null);
+  /** The payment the assignment modal is open for. */
+  const [assigningRow, setAssigningRow] = useState<HeldPayment | null>(null);
+  /** The payment the contact sheet is open for. */
+  const [contactingRow, setContactingRow] = useState<HeldPayment | null>(null);
+  /** The church's default receipt message, prefilled into the modal. */
+  const [defaultReceipt, setDefaultReceipt] = useState("");
 
   const load = () => {
     fetch(`${API_URL}/api/members/treasury/unassigned/`, { headers: authHeaders() })
@@ -85,89 +104,21 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setAccounts(Array.isArray(data) ? data : []))
       .catch(() => {});
+    fetch(`${API_URL}/api/members/church-settings/`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.default_receipt_message) setDefaultReceipt(data.default_receipt_message);
+      })
+      .catch(() => {});
   }, []);
 
   /** The church's own accounts — departments' and ministries' funds stay at
    *  their own desks, so this desk never offers them. */
   const churchAccounts = accounts.filter((a) => a.department_id == null);
 
-  const pickedAmount = (rowId: number) =>
-    picked[rowId]?.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0) || 0;
-
-  const toggleAccount = (row: HeldPayment, account: AccountOption) => {
-    setPicked((prev) => {
-      const current = prev[row.id] ?? [];
-      const existing = current.find((p) => p.accountId === account.id);
-      let next: PickedAccount[];
-      if (existing) {
-        next = current.filter((p) => p.accountId !== account.id);
-      } else {
-        // New account: seed its amount at the payment's remaining balance.
-        const remaining = Number(row.amount) - pickedAmount(row.id);
-        next = [...current, { accountId: account.id, amount: String(Math.max(0, remaining)) }];
-      }
-      return { ...prev, [row.id]: next };
-    });
-  };
-
-  const updateAmount = (rowId: number, accountId: number, amount: string) => {
-    setPicked((prev) => ({
-      ...prev,
-      [rowId]: (prev[rowId] ?? []).map((p) => (p.accountId === accountId ? { ...p, amount } : p)),
-    }));
-  };
-
-  const canAssign = (rowId: number) => {
-    const pickedForRow = picked[rowId];
-    if (!pickedForRow || pickedForRow.length === 0) return false;
-    const total = pickedForRow.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-    return Math.abs(total - Number(rows.find((r) => r.id === rowId)?.amount || 0)) < 0.01;
-  };
-
-  const assign = (row: HeldPayment) => {
-    const pickedForRow = picked[row.id];
-    if (!pickedForRow || pickedForRow.length === 0) {
-      showAlert("Choose an account", "Check at least one account to credit.", "warning");
-      return;
-    }
-    const total = pickedForRow.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-    if (Math.abs(total - Number(row.amount)) >= 0.01) {
-      showAlert(
-        "Amounts don't add up",
-        `The amounts you entered (KES ${total.toLocaleString("en-KE")}) must equal the payment (KES ${Number(row.amount).toLocaleString("en-KE")}).`,
-        "warning",
-      );
-      return;
-    }
-    setAssigningId(row.id);
-    fetch(`${API_URL}/api/members/treasury/contributions/${row.id}/assign/`, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        allocations: pickedForRow.map((p) => ({ account_id: p.accountId, amount: p.amount })),
-      }),
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          showAlert("Payment assigned", data.detail || `Credited across ${pickedForRow.length} account(s).`, "success", {
-            toast: true,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-          setRows((prev) => prev.filter((r) => r.id !== row.id));
-          setPicked((prev) => {
-            const next = { ...prev };
-            delete next[row.id];
-            return next;
-          });
-          onAssigned?.();
-        } else {
-          showAlert("Could not assign", data.detail || "Try again.", "error");
-        }
-      })
-      .catch(() => showAlert("Network error", "Could not reach the server.", "error"))
-      .finally(() => setAssigningId(null));
+  const dropRow = (row: HeldPayment) => {
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+    onAssigned?.();
   };
 
   if (!loading && rows.length === 0) {
@@ -190,61 +141,45 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3 custom-table-scrollbar sm:px-6">
         {/* Phone cards */}
         <div className="space-y-3 lg:hidden">
-          {rows.map((row) => {
-            const rowPicked = picked[row.id] ?? [];
-            const totalPicked = pickedAmount(row.id);
-            return (
-              <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-bark">
-                      KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="mt-0.5 text-xs text-moss">
-                      Typed: <span className="font-semibold text-bark">{row.typed_reference || "(blank)"}</span>
-                    </p>
+          {rows.map((row) => (
+            <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-bark">
+                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="mt-0.5 text-xs text-moss">
+                    Typed: <span className="font-semibold text-bark">{row.typed_reference || "(blank)"}</span>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-moss">
+                    {row.mpesa_receipt_number} · {dmy(row.paid_at)}
+                  </p>
+                  {(row.donor_name || row.phone_number) && (
                     <p className="mt-0.5 text-[11px] text-moss">
-                      {row.mpesa_receipt_number} · {dmy(row.paid_at)}
+                      {[row.donor_name, row.phone_number].filter(Boolean).join(" · ")}
                     </p>
-                    {(row.donor_name || row.phone_number) && (
-                      <p className="mt-0.5 text-[11px] text-moss">
-                        {[row.donor_name, row.phone_number].filter(Boolean).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-ember" aria-hidden="true" />
+                  )}
                 </div>
-                <div className="mt-3 space-y-2">
-                  <AccountsPicker
-                    accounts={churchAccounts}
-                    paymentAmount={row.amount}
-                    picked={rowPicked}
-                    onToggle={(account) => toggleAccount(row, account)}
-                    onAmount={(accountId, amount) => updateAmount(row.id, accountId, amount)}
-                    open={openPickerId === row.id}
-                    onOpenChange={(open) => setOpenPickerId(open ? row.id : null)}
-                    fill
-                  />
-                  <PickedSummary picked={rowPicked} accounts={churchAccounts} />
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className={totalPicked > 0 ? "font-semibold text-ember" : "text-moss"}>
-                      {totalPicked > 0
-                        ? "Credited: " + totalPicked.toLocaleString("en-KE", { minimumFractionDigits: 2 }) + (Number(row.amount) - totalPicked >= 0.01 ? " · " + (Number(row.amount) - totalPicked).toLocaleString("en-KE", { minimumFractionDigits: 2 }) + " remaining" : " · fully allocated")
-                        : "KES " + Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 }) + " to allocate"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => assign(row)}
-                    disabled={!canAssign(row.id) || assigningId === row.id}
-                    className="w-full rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {assigningId === row.id ? "Assigning…" : "Assign"}
-                  </button>
-                </div>
+                <AlertTriangle className="h-4 w-4 shrink-0 text-ember" aria-hidden="true" />
               </div>
-            );
-          })}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAssigningRow(row)}
+                  className="flex-1 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                >
+                  Assign
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactingRow(row)}
+                  className="flex-1 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  Contact
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Desktop table */}
@@ -257,64 +192,361 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
                 <th className="py-2 pr-3">Receipt</th>
                 <th className="py-2 pr-3">Paid</th>
                 <th className="py-2 pr-3">Giver</th>
-                <th className="py-2">Assign to</th>
+                <th className="py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const rowPicked = picked[row.id] ?? [];
-                const totalPicked = pickedAmount(row.id);
-                return (
-                  <tr key={row.id} className="border-b border-sand-line/60 align-middle hover:bg-sand">
-                    <td className="py-2.5 pr-3 text-xs font-semibold text-bark">
-                      KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-2.5 pr-3 text-xs text-bark">
-                      <span className="inline-flex items-center gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
-                        {row.typed_reference || "(blank)"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px] text-moss">{row.mpesa_receipt_number}</td>
-                    <td className="py-2.5 pr-3 text-xs text-moss">{dmy(row.paid_at)}</td>
-                    <td className="py-2.5 pr-3 text-xs text-moss">
-                      {[row.donor_name, row.phone_number].filter(Boolean).join(" · ") || "—"}
-                    </td>
-                    <td className="py-2.5">
-                      <AccountsPicker
-                        accounts={churchAccounts}
-                        paymentAmount={row.amount}
-                        picked={rowPicked}
-                        onToggle={(account) => toggleAccount(row, account)}
-                        onAmount={(accountId, amount) => updateAmount(row.id, accountId, amount)}
-                        open={openPickerId === row.id}
-                        onOpenChange={(open) => setOpenPickerId(open ? row.id : null)}
-                      />
-                      <PickedSummary picked={rowPicked} accounts={churchAccounts} className="mt-1.5" />
-                      <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                        <span className={totalPicked > 0 ? "font-semibold text-ember" : "text-moss"}>
-                          {totalPicked > 0
-                            ? `KES ${totalPicked.toLocaleString("en-KE", { minimumFractionDigits: 2 })} of KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`
-                            : `KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} to allocate`}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => assign(row)}
-                          disabled={!canAssign(row.id) || assigningId === row.id}
-                          className="shrink-0 rounded-xl bg-ember px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {assigningId === row.id ? "Assigning…" : "Assign"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b border-sand-line/60 align-middle hover:bg-sand">
+                  <td className="py-2.5 pr-3 text-xs font-semibold text-bark">
+                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs text-bark">
+                    <span className="inline-flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                      {row.typed_reference || "(blank)"}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pr-3 font-mono text-[11px] text-moss">{row.mpesa_receipt_number}</td>
+                  <td className="py-2.5 pr-3 text-xs text-moss">{dmy(row.paid_at)}</td>
+                  <td className="py-2.5 pr-3 text-xs text-moss">
+                    {[row.donor_name, row.phone_number].filter(Boolean).join(" · ") || "—"}
+                  </td>
+                  <td className="py-2.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAssigningRow(row)}
+                        className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
+                      >
+                        Assign
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setContactingRow(row)}
+                        className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                      >
+                        Contact
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {assigningRow && (
+        <AssignPaymentModal
+          row={assigningRow}
+          accounts={churchAccounts}
+          defaultReceipt={defaultReceipt}
+          onClose={() => setAssigningRow(null)}
+          onAssigned={dropRow}
+        />
+      )}
+      {contactingRow && (
+        <ContactGiverModal row={contactingRow} onClose={() => setContactingRow(null)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * The assignment modal: the account combo, the giver's contact slots, and the
+ * receipt — one press files the gift and thanks the giver.
+ *
+ * The combo is the same ticking popover the desk used inline: tick an account,
+ * type its share, and the amounts must add up to the payment. The email slot
+ * is filled with the payer's address as Safaricom sent it; the phone slot
+ * offers the SMS channel. Both empty means no receipt — the assignment still
+ * stands, the giver just hears nothing from this press.
+ */
+function AssignPaymentModal({
+  row,
+  accounts,
+  defaultReceipt,
+  onClose,
+  onAssigned,
+}: {
+  row: HeldPayment;
+  accounts: AccountOption[];
+  defaultReceipt: string;
+  onClose: () => void;
+  onAssigned: (row: HeldPayment) => void;
+}) {
+  const [picked, setPicked] = useState<PickedAccount[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [email, setEmail] = useState(row.donor_email || "");
+  const [phone, setPhone] = useState(row.phone_number || "");
+  // The message the desk will send, prefilled with the church's own words
+  // rendered for this giver; editing it is the whole point of the slot.
+  const [message, setMessage] = useState(() =>
+    renderReceiptTemplate(defaultReceipt || "Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly", {
+      name: row.donor_name || "friend",
+      amount: `${row.currency} ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`,
+      account: row.typed_reference || "the church",
+    })
+  );
+  const [sending, setSending] = useState(false);
+
+  // The church's default may arrive after the first render (the settings
+  // fetch races the tap). Fill the slot only while it still holds what this
+  // component generated, never a live edit — adjusted during render rather
+  // than by an effect, so a late template still lands in an untouched box.
+  const [seededWith, setSeededWith] = useState(defaultReceipt);
+  if (defaultReceipt && seededWith !== defaultReceipt) {
+    setSeededWith(defaultReceipt);
+    setMessage(
+      renderReceiptTemplate(defaultReceipt, {
+        name: row.donor_name || "friend",
+        amount: `${row.currency} ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`,
+        account: row.typed_reference || "the church",
+      })
+    );
+  }
+
+  const pickedTotal = picked.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const amountsFit = picked.length > 0 && Math.abs(pickedTotal - Number(row.amount)) < 0.01;
+
+  const toggleAccount = (account: AccountOption) => {
+    setPicked((current) => {
+      const existing = current.find((p) => p.accountId === account.id);
+      if (existing) return current.filter((p) => p.accountId !== account.id);
+      // New account: seed its amount at the payment's remaining balance.
+      const remaining = Number(row.amount) - pickedTotal;
+      return [...current, { accountId: account.id, amount: String(Math.max(0, remaining)) }];
+    });
+  };
+
+  const updateAmount = (accountId: number, amount: string) => {
+    setPicked((current) => current.map((p) => (p.accountId === accountId ? { ...p, amount } : p)));
+  };
+
+  const assign = () => {
+    if (picked.length === 0) {
+      showAlert("Choose an account", "Check at least one account to credit.", "warning");
+      return;
+    }
+    if (!amountsFit) {
+      showAlert(
+        "Amounts don't add up",
+        `The amounts you entered (KES ${pickedTotal.toLocaleString("en-KE")}) must equal the payment (KES ${Number(row.amount).toLocaleString("en-KE")}).`,
+        "warning",
+      );
+      return;
+    }
+    setSending(true);
+    fetch(`${API_URL}/api/members/treasury/contributions/${row.id}/assign/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        allocations: picked.map((p) => ({ account_id: p.accountId, amount: p.amount })),
+        receipt_email: email.trim(),
+        receipt_phone: phone.trim(),
+        receipt_message: message.trim(),
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const receipt = data.receipt as { email_sent?: boolean; sms_sent?: boolean } | null;
+          const thanked = receipt ? [receipt.email_sent && "email", receipt.sms_sent && "SMS"].filter(Boolean).join(" and ") : "";
+          showAlert(
+            "Payment assigned",
+            thanked
+              ? `Credited across ${picked.length} account(s). Receipt sent by ${thanked}.`
+              : data.detail || `Credited across ${picked.length} account(s).`,
+            "success",
+            { toast: true, timer: 3500, showConfirmButton: false },
+          );
+          onAssigned(row);
+          onClose();
+        } else {
+          showAlert("Could not assign", data.detail || "Try again.", "error");
+        }
+      })
+      .catch(() => showAlert("Network error", "Could not reach the server.", "error"))
+      .finally(() => setSending(false));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="assign-payment-title"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">
+              Unassigned payment
+            </p>
+            <h3 id="assign-payment-title" className="text-lg font-bold text-bark">
+              Assign KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="mt-0.5 text-[11px] text-moss">
+              Typed: {row.typed_reference || "(blank)"} · {row.mpesa_receipt_number} · {dmy(row.paid_at)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={sending}
+            aria-label="Close"
+            className="text-xl leading-none text-moss hover:text-bark"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {/* The account combo — the same ticking popover, now inside the
+              modal so the row itself stays one line of text. */}
+          <div>
+            <label className="block text-xs font-semibold text-bark">Account{picked.length === 1 ? "" : "s"}</label>
+            <div className="mt-1.5">
+              <AccountsPicker
+                accounts={accounts}
+                paymentAmount={row.amount}
+                picked={picked}
+                onToggle={toggleAccount}
+                onAmount={updateAmount}
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                fill
+                footerLabel="Assign"
+                onFooterAction={() => {
+                  setPickerOpen(false);
+                  assign();
+                }}
+              />
+            </div>
+            <PickedSummary picked={picked} accounts={accounts} className="mt-1.5" />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-bark">Email the receipt to</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder={row.donor_email || "No email on file"}
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-bark">SMS the receipt to (optional)</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder={row.phone_number || "No number on file"}
+                className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none"
+              />
+            </div>
+          </div>
+          {!email.trim() && !phone.trim() && (
+            <p className="text-[11px] text-moss">
+              No contact yet — the gift will be filed, but the giver will not be thanked from here.
+            </p>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-bark">Receipt message</label>
+            <textarea
+              rows={5}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-3 text-xs focus:border-ember focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-moss">
+              The receipt summary and the church&apos;s signature are appended to this note.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={assign}
+            disabled={sending}
+            className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+          >
+            {sending ? "Assigning…" : "Assign"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The payer's contact sheet — the church's standard options, on the payment's
+ * own details. Chat appears only where the payer turned out to be a member
+ * with an account; the rest work off whatever Safaricom sent.
+ */
+function ContactGiverModal({ row, onClose }: { row: HeldPayment; onClose: () => void }) {
+  const giver = row.donor_name || "the giver";
+  const chatHere = async () => {
+    onClose();
+    try {
+      await openConversation({ kind: "dm", member_id: row.member_id as number });
+      window.location.href = `/chat?dm=${row.member_id}`;
+    } catch (error) {
+      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  return (
+    <ContactModal
+      onClose={onClose}
+      title={`Contact ${giver}`}
+      subtitle={[row.mpesa_receipt_number, `KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`].filter(Boolean).join(" · ")}
+      actions={[
+        {
+          key: "call",
+          icon: <Phone size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+          label: "Call",
+          detail: row.phone_number || "No phone number on this payment",
+          href: row.phone_number ? `tel:${row.phone_number}` : undefined,
+          disabled: !row.phone_number,
+          onClick: onClose,
+        },
+        ...(row.member_id
+          ? [
+              {
+                key: "chat-here",
+                icon: <MessageSquare size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+                label: "Chat here",
+                detail: "Open a direct message in this app",
+                onClick: chatHere,
+              },
+            ]
+          : []),
+        {
+          key: "whatsapp",
+          icon: <WhatsAppIcon className="shrink-0 text-ember" />,
+          label: "WhatsApp",
+          detail: row.phone_number
+            ? `${row.phone_number}${row.donor_name ? "" : " (number on payment)"}`
+            : "No number on this payment",
+          href: row.phone_number ? `https://wa.me/${waMeNumber(row.phone_number)}` : undefined,
+          disabled: !row.phone_number,
+          onClick: onClose,
+        },
+        {
+          key: "email",
+          icon: <Mail size={14} className="shrink-0 text-ember" aria-hidden="true" />,
+          label: "Email",
+          detail: row.donor_email || "No email on this payment",
+          href: row.donor_email ? `mailto:${row.donor_email}` : undefined,
+          disabled: !row.donor_email,
+          onClick: onClose,
+        },
+      ]}
+    />
   );
 }
 
@@ -325,7 +557,8 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
  * table of inline checkboxes grows with each account and buries the payment
  * rows. The trigger hugs one line — the picked account's name, or a count —
  * and the popover carries the ticking and the amount for each tick, the way
- * the users table's role picker does.
+ * the users table's role picker does. Where the assignment modal hosts it,
+ * the popover's footer button carries the press home (``footerLabel``).
  */
 function AccountsPicker({
   accounts,
@@ -336,6 +569,8 @@ function AccountsPicker({
   open,
   onOpenChange,
   fill = false,
+  footerLabel = "Done",
+  onFooterAction,
 }: {
   accounts: AccountOption[];
   paymentAmount: string;
@@ -345,6 +580,10 @@ function AccountsPicker({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fill?: boolean;
+  /** The popover footer's button word — "Done" standalone, "Assign" in the modal. */
+  footerLabel?: string;
+  /** Runs (then closes) instead of merely closing, when the press should submit. */
+  onFooterAction?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // The panel lives in document.body (see ComboboxPopover), so outside-click
@@ -475,10 +714,16 @@ function AccountsPicker({
           </span>
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              if (onFooterAction) {
+                onFooterAction();
+                return;
+              }
+              onOpenChange(false);
+            }}
             className="rounded-xl bg-bark px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-ember"
           >
-            Done
+            {footerLabel}
           </button>
         </div>
       </ComboboxPopover>

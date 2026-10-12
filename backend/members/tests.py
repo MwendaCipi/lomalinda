@@ -987,6 +987,45 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(TreasuryAccountTransaction.objects.filter(account=account, reference='HELD99PAY1').count(), 1)
 
+    def test_assigning_may_send_the_receipt_the_desk_wrote(self):
+        """The same press that files the gift thanks the giver — the desk's
+        own words, with the summary and signature every receipt carries."""
+        account = TreasuryAccount.objects.create(name='Welfare', description='Welfare', account_type='mobile money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {
+                'account_id': account.id,
+                'receipt_email': 'friend@example.com',
+                'receipt_message': 'Thank you for your gift towards the welfare fund.',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['receipt']['email_sent'])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('friend@example.com', mail.outbox[0].to)
+        self.assertIn('Thank you for your gift towards the welfare fund.', mail.outbox[0].body)
+        # The structured tail still rides along, so the receipt reads like
+        # every other receipt the church sends.
+        self.assertIn('Receipt Summary:', mail.outbox[0].body)
+        self.assertIn('Welfare', mail.outbox[0].body)
+        self.held.refresh_from_db()
+        self.assertIsNotNone(self.held.receipt_sent_at)
+
+    def test_assigning_without_a_contact_sends_no_receipt(self):
+        account = TreasuryAccount.objects.create(name='AYM', description='AYM', account_type='mobile money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'account_id': account.id}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['receipt'])
+        self.assertEqual(len(mail.outbox), 0)
+        self.held.refresh_from_db()
+        self.assertIsNone(self.held.receipt_sent_at)
+
     def test_ordinary_member_cannot_review_or_assign(self):
         self.client.force_authenticate(user=self.member)
         self.assertEqual(

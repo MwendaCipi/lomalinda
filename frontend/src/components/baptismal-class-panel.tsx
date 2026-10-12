@@ -38,8 +38,12 @@ function authHeaders(): Record<string, string> {
 export function BaptismalClassPanel() {
   const [entries, setEntries] = useState<BaptismalRow[]>([]);
   const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<NameMatch[]>([]);
+  const [rawMatches, setRawMatches] = useState<NameMatch[]>([]);
   const [picked, setPicked] = useState<NameMatch | null>(null);
+  // The picker only shows results while a search is actually under way: a
+  // picked member, or a term too short to mean anything, reads as no list —
+  // derived at render rather than cleared by the effect below.
+  const matches = picked || query.trim().length < 2 ? [] : rawMatches;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -69,19 +73,16 @@ export function BaptismalClassPanel() {
   // read the gift form's person field uses.
   useEffect(() => {
     const term = query.trim();
-    if (picked || term.length < 2) {
-      setMatches([]);
-      return;
-    }
+    if (picked || term.length < 2) return;
     let alive = true;
     const timer = setTimeout(() => {
       fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(term)}`, { headers: authHeaders() })
         .then((res) => (res.ok ? res.json() : { matches: [] }))
         .then((data) => {
-          if (alive) setMatches(Array.isArray(data?.matches) ? data.matches : []);
+          if (alive) setRawMatches(Array.isArray(data?.matches) ? data.matches : []);
         })
         .catch(() => {
-          if (alive) setMatches([]);
+          if (alive) setRawMatches([]);
         });
     }, 250);
     return () => {
@@ -110,7 +111,7 @@ export function BaptismalClassPanel() {
       });
       setQuery("");
       setPicked(null);
-      setMatches([]);
+      setRawMatches([]);
       setNote("");
       await reload();
     } catch (error) {
@@ -178,7 +179,7 @@ export function BaptismalClassPanel() {
                   type="button"
                   onClick={() => {
                     setPicked(match);
-                    setMatches([]);
+                    setRawMatches([]);
                   }}
                   className="w-full px-3 py-2 text-left text-xs font-semibold text-bark transition hover:text-ember"
                 >
