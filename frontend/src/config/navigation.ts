@@ -623,7 +623,8 @@ export const clerkshipItems: RailRow[] = [
 
 /**
  * Eldership — the elders' desk: the church's programmes, the Leadership desk
- * that appoints the church's areas, and the requests members send.
+ * that appoints the church's areas, the church's accounts the elders answer
+ * for, and the requests members send.
  *
  * Church Settings moved to Administration, where the roster and the roles
  * stand with it; the meetings' minutes and the transfers are the clerk's own
@@ -648,6 +649,14 @@ export const eldershipItems: RailRow[] = [
   officeTab("requests", "Requests", HeartHandshake, {
     roles: REQUESTS_DESK_ROLES,
     description: "The asks the church has received — joining, prayer, visits, dedications and welfare.",
+  }),
+  // The elders answer for the church's money the same way the deaconate
+  // does: the desk reads every treasury account — LCB and Msamaria Mwema
+  // among them — with the movements on each.
+  officeTab("eldership-funding", "Funding & Accounts", Wallet, {
+    roles: ELDERSHIP_ROLES,
+    short: "Funding",
+    description: "The church's treasury accounts — LCB, Msamaria Mwema and its funds — with balances and movements.",
   }),
 ];
 

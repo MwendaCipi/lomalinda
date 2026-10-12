@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -9,7 +9,7 @@ import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
-import { DepartmentHub } from "@/components/department-hub";
+import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
@@ -89,6 +89,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   "deaconate-members": "the deaconate team",
   "deaconate-calendar": "the deaconate calendar",
   "deaconate-funding": "deaconate funding and accounts",
+  "eldership-funding": "eldership funding and accounts",
   settings: "church settings",
   overview: "the overview",
 };
@@ -292,7 +293,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -368,9 +369,11 @@ function AdministrationContent() {
       ? {
           label: "Eldership",
           icon: <Armchair size={16} aria-hidden="true" />,
-          description: "The church's announcements and the requests members send.",
+          description: "The church's leadership, announcements, accounts and the requests members send.",
           cards: [
+            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts — LCB, Msamaria Mwema and its funds.", href: "/administration?tab=eldership-funding" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
           ],
         }
@@ -571,6 +574,19 @@ function AdministrationContent() {
                       ? "funding"
                       : "inventory"
                   }
+                />
+              </div>
+            )}
+
+            {/* Eldership Funding & Accounts — the elders answer for the
+                church's money: the desk reads every treasury account, LCB
+                and Msamaria Mwema among them, with the movements on each. */}
+            {activeTab === "eldership-funding" && (isElder || isClerk || isAdmin) && (
+              <div className="h-full min-h-0">
+                <DepartmentAccountsPanel
+                  department={{ code: "eldership", label: "Eldership" }}
+                  onChanged={() => {}}
+                  search=""
                 />
               </div>
             )}
