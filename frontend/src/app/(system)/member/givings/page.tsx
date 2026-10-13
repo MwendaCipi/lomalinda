@@ -10,8 +10,7 @@ import { MemberWorkspace } from "@/components/member-workspace";
  * the act of giving behind a modal: money from /give, in-kind from
  * /support/in-kind. The account menu links this route (`myGivings` in the
  * navigation registry, which also names the page above), and what it opens is
- * one timeline — money gifts and in-kind gifts merged, grouped by day, under
- * one eye switch.
+ * one timeline — money gifts and in-kind gifts merged, grouped by day.
  */
 export default function MyGivingsPage() {
   return (

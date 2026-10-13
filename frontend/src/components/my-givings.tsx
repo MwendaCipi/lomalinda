@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Eye, EyeOff, Printer, Receipt, RotateCw, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Printer, Receipt } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { showAlert } from "@/lib/alerts";
@@ -145,14 +145,103 @@ const timeOf = (at: string) => {
   return formatted.includes(" ") ? formatted.slice(formatted.indexOf(" ") + 1) : "";
 };
 
+const KIND_OPTIONS: { key: "all" | "money" | "in-kind"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "money", label: "Money" },
+  { key: "in-kind", label: "In Kind" },
+];
+
+const STATUS_OPTIONS: { key: "successful" | "failed" | "all"; label: string }[] = [
+  { key: "successful", label: "Successful" },
+  { key: "failed", label: "Failed" },
+  { key: "all", label: "All" },
+];
+
+function FilterPopover<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { key: T; label: string }[];
+  onChange: (val: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const activeOption = options.find((o) => o.key === value);
+  const isDefault = value === options[0].key;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`Filter by ${label}`}
+        className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
+          !isDefault
+            ? "border-bark bg-bark text-white shadow-sm"
+            : "border-sand-line bg-sand text-bark hover:border-sand-mute"
+        }`}
+      >
+        <span className={!isDefault ? "font-normal text-sand-mute" : "font-normal text-moss"}>{label}:</span>
+        <span>{activeOption?.label ?? value}</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""} ${!isDefault ? "text-sand-mute" : "text-moss"}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-40 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-xl ring-1 ring-black/5">
+          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss">{label}</p>
+          {options.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                onChange(item.key);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                value === item.key ? "bg-sand text-ember font-bold" : "text-bark hover:bg-sand/60"
+              }`}
+            >
+              <span>{item.label}</span>
+              {value === item.key && <Check className="h-3.5 w-3.5 text-ember" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * My Givings — the member's giving, as one timeline.
  *
- * Money gifts (contributions) and in-kind gifts (goods handed over) used to be
- * two records behind two tabs; they are one record of one generosity, so they
- * are one list here: merged, grouped by day, newest first, under one privacy
- * eye. This lives on its own route (`/member/givings`, linked from the account
- * menu), so the giving pages stay about giving.
+ * Money gifts (contributions) and in-kind gifts (goods handed over) merged,
+ * grouped by day, newest first. This lives on its own route (`/member/givings`,
+ * linked from the account menu).
  */
 export function MyGivings() {
   const [money, setMoney] = useState<MyGiving[]>([]);
@@ -164,23 +253,15 @@ export function MyGivings() {
     () => typeof window !== "undefined" && !!localStorage.getItem("access_token")
   );
   const [loadingInKind, setLoadingInKind] = useState(true);
-  // Bumped by Refresh so the in-kind effect below can be re-run on demand
-  // without its deps list growing a function that closes over stale dates.
-  const [reloadNonce, setReloadNonce] = useState(0);
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(() => localDate());
-  // What kind of giving is on show: everything by default, with the two
-  // kinds one tap away when the eye is scanning one of them.
+  // What kind of giving is on show: everything by default.
   const [kindFilter, setKindFilter] = useState<"all" | "money" | "in-kind">("all");
-  // Status applies to money only — in-kind gifts have no failed state — and
-  // starts on Successful, the same default the record has always opened with.
+  // Status applies to money only — starts on Successful as default.
   const [statusFilter, setStatusFilter] = useState<"successful" | "failed" | "all">("successful");
-  const [showStatusFilterMenu, setShowStatusFilterMenu] = useState(false);
   const [givingSearch, setGivingSearch] = useState("");
-  const givingsVisible = useSyncExternalStore(subscribeGivingsVisibility, readGivingsVisibility, serverGivingsVisibility);
 
-  // The spinner is turned on by whoever asks for a visible load (the first
-  // paint's initial state, or the Refresh button's own click) and off here:
+  // The spinner is turned on by the initial load and off here:
   // nothing in this body runs synchronously, so calling it from an effect is
   // safe — a silent load (polling) never blanks the list on a hiccup either.
   const loadMoney = (opts?: { silent?: boolean }) => {
@@ -218,9 +299,9 @@ export function MyGivings() {
     return () => clearInterval(tick);
   }, []);
 
-  // The in-kind half loads against the chosen window — on mount, when the
-  // dates move, and whenever Refresh bumps the nonce. The work sits inside a
-  // short timeout, so stepping the date inputs does not fire a fetch per tick.
+  // The in-kind half loads against the chosen window — on mount and when the
+  // dates move. The work sits inside a short timeout, so stepping the date
+  // inputs does not fire a fetch per tick.
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
@@ -240,7 +321,7 @@ export function MyGivings() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [fromDate, toDate, reloadNonce]);
+  }, [fromDate, toDate]);
 
   // ── Merge, filter, order ────────────────────────────────────────────────
   const q = givingSearch.trim().toLowerCase();
@@ -318,14 +399,6 @@ export function MyGivings() {
     }
   };
 
-  const handleRefresh = () => {
-    // Guard first: with no token the loads would return immediately and leave
-    // the spinners they just turned on spinning forever.
-    if (!localStorage.getItem("access_token")) return;
-    setLoadingMoney(true);
-    loadMoney();
-    setReloadNonce((n) => n + 1);
-  };
 
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -433,212 +506,116 @@ export function MyGivings() {
   return (
     <section
       aria-label="My Givings"
-      className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
+      className="rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
     >
-      {/* The shell already names the page above this card, so the header here
-          carries only what acts on the record: the eye and a quiet refresh. */}
-      <div className="flex items-center justify-end gap-2 border-b border-sand-line px-5 py-4">
-        <button
-          type="button"
-          onClick={() => writeGivingsVisibility(!givingsVisible)}
-          aria-pressed={givingsVisible}
-          aria-label={givingsVisible ? "Hide my givings" : "Show my givings"}
-          title={givingsVisible ? "Hide my givings" : "Show my givings"}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-sand-line bg-sand text-moss transition hover:border-ember hover:text-ember"
-        >
-          {givingsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-        </button>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          title="Refresh my givings"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-sand px-3.5 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
-        >
-          <RotateCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+      {/* Filters in one row: date range, type popover, status popover, and search */}
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-sand-line px-5 py-3.5">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <input
+            type="date"
+            value={fromDate}
+            max={toDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            title="From date"
+            className="h-9 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+          />
+          <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
+          <input
+            type="date"
+            value={toDate}
+            min={fromDate}
+            onChange={(e) => setToDate(e.target.value)}
+            title="To date"
+            className="h-9 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+          />
+        </div>
+
+        <FilterPopover
+          label="Type"
+          value={kindFilter}
+          options={KIND_OPTIONS}
+          onChange={setKindFilter}
+        />
+
+        <FilterPopover
+          label="Status"
+          value={statusFilter}
+          options={STATUS_OPTIONS}
+          onChange={setStatusFilter}
+        />
+
+        <input
+          type="text"
+          placeholder="Search purpose, items, method or receipt…"
+          value={givingSearch}
+          onChange={(e) => setGivingSearch(e.target.value)}
+          className="h-9 min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 text-xs text-bark focus:border-ember focus:outline-none sm:min-w-[180px]"
+        />
       </div>
 
-      {/* Date span, the kind switch and the search — hidden with the record:
-          the filters would name what it conceals. */}
-      <div className={`flex flex-col gap-2 border-b border-sand-line px-5 py-4 md:flex-row md:flex-wrap md:items-center ${givingsVisible ? "" : "hidden"}`}>
-        <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
-          <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} title="From date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
-          <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
-          <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} title="To date" className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-2 text-xs focus:border-ember focus:outline-none" />
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label="Which giving record">
-          {([
-            ["all", "All"],
-            ["money", "Money"],
-            ["in-kind", "In-Kind"],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setKindFilter(key)}
-              aria-pressed={kindFilter === key}
-              className={`h-8 rounded-xl px-2.5 text-[11px] font-semibold transition ${
-                kindFilter === key
-                  ? "bg-bark text-white shadow-sm"
-                  : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {kindFilter !== "in-kind" && (
-          <div className="relative flex min-w-0 items-center gap-1.5">
-            {/* Mobile: the three statuses live behind one compact Filters
-                button; the segmented control stays for desktop. */}
-            <div className="md:hidden">
-              <button
-                type="button"
-                onClick={() => setShowStatusFilterMenu((open) => !open)}
-                aria-expanded={showStatusFilterMenu}
-                aria-label="Filter money by status"
-                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition ${
-                  statusFilter === "successful"
-                    ? "border-sand-line bg-sand text-moss"
-                    : "border-bark bg-bark text-white shadow-sm"
-                }`}
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                {statusFilter === "successful" ? "Filter" : statusFilter === "failed" ? "Failed" : "All"}
-              </button>
-              {showStatusFilterMenu && (
-                <div className="absolute left-0 top-9 z-20 w-36 overflow-hidden rounded-xl border border-sand-line bg-white shadow-lg">
-                  {(["successful", "failed", "all"] as const).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(key);
-                        setShowStatusFilterMenu(false);
-                      }}
-                      className={`flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold transition ${
-                        statusFilter === key ? "bg-mist-select text-bark" : "text-moss hover:bg-sand hover:text-bark"
-                      }`}
-                    >
-                      <span className="capitalize">{key}</span>
-                      {statusFilter === key && <Check className="h-3.5 w-3.5 text-ember" />}
-                    </button>
+      <div className="flex flex-col px-5 py-4">
+        {loading && entries.length === 0 ? (
+          <div className="py-10 text-center text-xs text-moss">Loading your givings…</div>
+        ) : entries.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="text-xs font-semibold text-bark">No givings in this period</p>
+            <p className="mt-1 text-[11px] text-moss">Adjust the filters above, or tap Give Now to add one.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5">
+            {groups.map((group) => (
+              <div key={group.day || "undated"}>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ember">
+                  {group.day ? dayFirst(group.day) : "—"}
+                </p>
+                <ul className="relative ml-1.5 space-y-2.5 border-l-2 border-sand-line pl-5">
+                  {group.rows.map((e) => (
+                    <li key={e.key} className="relative">
+                      <span aria-hidden="true" className="absolute -left-[26px] top-5 h-2.5 w-2.5 rounded-full bg-ember ring-4 ring-white" />
+                      {renderEntry(e)}
+                    </li>
                   ))}
-                </div>
-              )}
-            </div>
-            {/* Desktop: one independent button per status. */}
-            <div className="hidden h-8 shrink-0 items-center gap-1.5 md:flex" role="group" aria-label="Filter money by status">
-              {(["successful", "failed", "all"] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setStatusFilter(key)}
-                  aria-pressed={statusFilter === key}
-                  className={`h-8 rounded-xl px-2.5 text-[11px] font-semibold capitalize transition ${
-                    statusFilter === key
-                      ? "bg-bark text-white shadow-sm"
-                      : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-                  }`}
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
+                </ul>
+              </div>
+            ))}
           </div>
         )}
-
-        <input type="text" placeholder="Search purpose, items, method or receipt…" value={givingSearch} onChange={(e) => setGivingSearch(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none md:min-w-[200px]" />
       </div>
 
-      {!givingsVisible ? (
-        <div className="flex flex-col items-center justify-center gap-4 px-5 py-10 text-center">
-          <p className="text-xs text-moss">Your giving record is hidden. Tap the eye above to show it.</p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Link
-              href="/give"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep"
-            >
-              Give Money
-            </Link>
-            <Link
-              href="/support/in-kind"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm font-semibold text-bark transition hover:border-ember hover:bg-sand"
-            >
-              Give In-Kind
-            </Link>
-          </div>
+      {/* Footer actions */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <p className="text-[11px] text-moss">
+            {dayFirst(fromDate)} <ArrowRight size={10} className="inline" aria-hidden="true" /> {dayFirst(toDate)}
+          </p>
+          <p className="text-[11px] font-semibold text-bark">
+            {loading && entries.length === 0
+              ? "Loading your givings…"
+              : [
+                  kindFilter !== "in-kind" && `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
+                  kindFilter !== "money" && `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+          </p>
         </div>
-      ) : (
-        <div className="flex flex-col px-5 py-4">
-          {loading && entries.length === 0 ? (
-            <div className="py-10 text-center text-xs text-moss">Loading your givings…</div>
-          ) : entries.length === 0 ? (
-            <div className="py-10 text-center">
-              <p className="text-xs font-semibold text-bark">No givings in this period</p>
-              <p className="mt-1 text-[11px] text-moss">Adjust the filters above, or tap Give Now to add one.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-5">
-              {groups.map((group) => (
-                <div key={group.day || "undated"}>
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ember">
-                    {group.day ? dayFirst(group.day) : "—"}
-                  </p>
-                  <ul className="relative ml-1.5 space-y-2.5 border-l-2 border-sand-line pl-5">
-                    {group.rows.map((e) => (
-                      <li key={e.key} className="relative">
-                        <span aria-hidden="true" className="absolute -left-[26px] top-5 h-2.5 w-2.5 rounded-full bg-ember ring-4 ring-white" />
-                        {renderEntry(e)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <button
+            type="button"
+            onClick={handlePrintMyReport}
+            disabled={entries.length === 0}
+            className="inline-flex flex-1 items-center justify-center rounded-xl border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand disabled:opacity-50 sm:flex-none"
+          >
+            <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
+          </button>
+          <Link
+            href={kindFilter === "in-kind" ? "/support/in-kind" : "/give"}
+            className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
+          >
+            {kindFilter === "in-kind" ? "Give In-Kind" : "Give Now"}
+          </Link>
         </div>
-      )}
-
-      {/* Footer actions — hidden with the record: the count and
-          total would leak the giving it conceals. */}
-      {givingsVisible && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <p className="text-[11px] text-moss">{dayFirst(fromDate)} <ArrowRight size={10} className="inline" aria-hidden="true" /> {dayFirst(toDate)}</p>
-            <p className="text-[11px] font-semibold text-bark">
-              {loading && entries.length === 0
-                ? "Loading your givings…"
-                : [
-                    kindFilter !== "in-kind" && `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
-                    kindFilter !== "money" && `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-            </p>
-          </div>
-          {/* On a phone the two actions split the row evenly. */}
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <button
-              type="button"
-              onClick={handlePrintMyReport}
-              disabled={entries.length === 0}
-              className="inline-flex flex-1 items-center justify-center rounded-xl border border-sand-mute bg-white px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand disabled:opacity-50 sm:flex-none"
-            >
-              <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
-            </button>
-            <Link
-              href={kindFilter === "in-kind" ? "/support/in-kind" : "/give"}
-              className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
-            >
-              {kindFilter === "in-kind" ? "Give In-Kind" : "Give Now"}
-            </Link>
-          </div>
-        </div>
-      )}
+      </div>
     </section>
   );
 }
