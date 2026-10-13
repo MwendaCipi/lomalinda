@@ -44,7 +44,7 @@ type FeedItem = {
   attachment_size?: number | null;
   visibility: string;
   audience?: string[];
-  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion" | "job_vacancy";
   response_mode?: "open" | "closed" | "";
   response_options?: string;
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
@@ -192,11 +192,18 @@ export default function AnnouncementsPage() {
                       <div>
                         <div className="flex items-start justify-between gap-2">
                           <h2 className="text-base font-semibold">{item.title}</h2>
-                          {itemBadge && (
-                            <span className="shrink-0 whitespace-nowrap rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
-                              {itemBadge}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {item.announcement_type === "job_vacancy" && (
+                              <span className="whitespace-nowrap rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                Job Vacancy
+                              </span>
+                            )}
+                            {itemBadge && (
+                              <span className="whitespace-nowrap rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
+                                {itemBadge}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {eventLabel(item) && (
                           <p className="mt-1 text-sm font-semibold text-ember">Event date: {eventLabel(item)}</p>
@@ -207,9 +214,10 @@ export default function AnnouncementsPage() {
                             href={item.href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-3 inline-flex text-sm font-semibold text-ember underline underline-offset-2"
+                            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-ember underline underline-offset-2"
                           >
-                            Open link <ArrowUpRight size={12} className="inline" aria-hidden="true" />
+                            {item.announcement_type === "job_vacancy" ? "Apply / View details" : "Open link"}{" "}
+                            <ArrowUpRight size={12} className="inline" aria-hidden="true" />
                           </a>
                         )}
 

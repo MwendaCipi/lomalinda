@@ -63,7 +63,7 @@ type Announcement = {
   visibility: string;
   audience?: string[];
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
-  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion";
+  announcement_type?: "awareness" | "web_conference" | "promotion" | "opinion" | "job_vacancy";
   response_mode?: "open" | "closed" | "";
   response_options?: string;
   responses?: { id: number; action_type: string; response_text?: string; response_choice?: string; respondent_name?: string; created_at: string }[];
@@ -315,7 +315,7 @@ export function AnnouncementManager({
     // notice, a meeting link, a supported account, or a question the
     // congregation answers. Nothing is preselected on a new post so the
     // officer chooses the type on purpose.
-    announcement_type: "" as "awareness" | "web_conference" | "promotion" | "opinion" | "",
+    announcement_type: "" as "awareness" | "web_conference" | "promotion" | "opinion" | "job_vacancy" | "",
     action_type: "none",
     support_account: "",
     // Promotion posts only: the goal the post's fund drive opens with.
@@ -639,6 +639,7 @@ export function AnnouncementManager({
                     else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
                     else if (type === "opinion") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
                     else if (type === "promotion") setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
+                    else if (type === "job_vacancy") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
                     else setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
                   }}
                   className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
@@ -652,6 +653,7 @@ export function AnnouncementManager({
                   <option value="web_conference">Web conference</option>
                   <option value="promotion">Promotion / Contribution</option>
                   <option value="opinion">Opinion poll</option>
+                  <option value="job_vacancy">Job vacancy</option>
                 </select>
               </label>
 
@@ -732,6 +734,19 @@ export function AnnouncementManager({
                     value={form.href}
                     onChange={(e) => setForm({ ...form, href: e.target.value })}
                     placeholder="https://… — Zoom, Meet or Teams link"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  />
+                </label>
+              )}
+
+              {form.announcement_type === "job_vacancy" && (
+                <label className="block text-xs font-semibold text-bark md:col-span-2">
+                  Application / Information link (optional)
+                  <input
+                    type="url"
+                    value={form.href}
+                    onChange={(e) => setForm({ ...form, href: e.target.value })}
+                    placeholder="https://… — Application link or vacancy page (optional)"
                     className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
@@ -1139,7 +1154,13 @@ export function AnnouncementManager({
                 </span>
                 {item.announcement_type && item.announcement_type !== "awareness" && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    {item.announcement_type === "web_conference" ? "Web conference" : item.announcement_type === "opinion" ? "Opinion poll" : "Promotion / Contribution"}
+                    {item.announcement_type === "web_conference"
+                      ? "Web conference"
+                      : item.announcement_type === "opinion"
+                        ? "Opinion poll"
+                        : item.announcement_type === "job_vacancy"
+                          ? "Job vacancy"
+                          : "Promotion / Contribution"}
                   </span>
                 )}
                 {item.action_type && item.action_type !== "none" && item.action_type !== "respond" && (

@@ -411,7 +411,10 @@ class Department(models.Model):
     @property
     def unit_names(self):
         """The department's sub-units, in the order the desk wrote them."""
-        return [name.strip() for name in (self.units or '').split(',') if name.strip()]
+        names = [name.strip() for name in (self.units or '').split(',') if name.strip()]
+        if not names and self.code == 'children':
+            return ['Beginners', 'Kindergarten', 'Primary', 'Junior', 'Teens', 'Pathfinders']
+        return names
 
     def __str__(self):
         return self.name
@@ -958,8 +961,9 @@ class Announcement(models.Model):
         ('web_conference', 'Web conference'),
         ('promotion', 'Promotion / Contribution'),
         ('opinion', 'Opinion poll'),
+        ('job_vacancy', 'Job vacancy'),
     ]
-    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account; an opinion poll asks for responses')
+    announcement_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='awareness', help_text='Awareness is a plain notice; web conference carries a link; promotion invites support for an account; opinion poll asks for responses; job vacancy announces career openings')
     # An Opinion post collects answers in one of two shapes. ``open`` is free
     # text — members write what they think. ``closed`` offers fixed options
     # the officer writes here, one per line; a member picks one. The same

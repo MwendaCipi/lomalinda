@@ -20,6 +20,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Baby,
+  BookOpen,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -41,6 +42,7 @@ import {
   Search,
   Sparkles,
   Sun,
+  Trash2,
   UserCog,
   UserMinus,
   UserPlus,
@@ -64,6 +66,7 @@ import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
 import { formatOfficeRole } from "./roles-combobox";
+import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import {
   CalendarViewToggle,
   MonthGrid,
@@ -194,8 +197,8 @@ type DepartmentRow = {
 };
 
 type RollMember = {
-  membership_id: number;
-  id: number;
+  membership_id: number | null;
+  id: number | string;
   name: string;
   username: string;
   email: string;
@@ -203,6 +206,10 @@ type RollMember = {
   gender: string;
   role?: string;
   unit?: string;
+  class?: string;
+  child_id?: number;
+  is_child?: boolean;
+  age?: number | null;
   /** Music's roll is a union: a row with no membership id arrived through
       the choir or a singing group, and ``via`` names which. */
   via?: string;
@@ -249,7 +256,7 @@ type RollRow = {
   key: string;
   /** The user the row is — the board holder's or the roll entry's id, so
       the row's Actions can act on the person whatever their tie. */
-  id: number;
+  id: number | string;
   name: string;
   username: string;
   email: string;
@@ -261,6 +268,12 @@ type RollRow = {
   office: string | null;
   /** Custom or assigned role within this department. */
   role?: string | null;
+  /** The class/division the member or child belongs to in the department */
+  class?: string | null;
+  unit?: string | null;
+  child_id?: number | null;
+  is_child?: boolean;
+  age?: number | null;
   /** Where a unioned roll row came through ("Choir", a group's name) — the
       music desk's way of showing why someone with no membership row is on
       the roll. */
@@ -505,7 +518,7 @@ function AddChildModal({
           </div>
 
           <label className="block text-xs font-semibold text-bark">
-            Children Division / Category *
+            Class *
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -519,7 +532,7 @@ function AddChildModal({
               <option value="Pathfinders">Pathfinders Club (10–15 yrs)</option>
             </select>
             <span className="mt-1 block text-[11px] font-normal text-moss">
-              Auto-selected based on age, or chosen manually.
+              Select the child's class / department. Auto-suggested from age or selectable above.
             </span>
           </label>
 
@@ -3548,6 +3561,7 @@ function DepartmentDetail({
   // Music is the church's singing, and it sings in groups: the register of
   // singing groups is a music-desk view, not a general department one.
   const isMusic = department.code === "music";
+  const isSabbathSchool = department.code === "sabbath_school" || department.code === "sabbath-school";
   // The Deaconate reads as one page: its Team view is the roll itself, and the
   // desk's own strip above already names Team / Inventory / Duty Rota /
   // Calendar. The hub's Members / Calendar / Accounts toggles would only repeat
@@ -3585,7 +3599,7 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts">(initialTab);
+  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "lesson-orders">(initialTab);
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // The members view holds the roll *and* the asks to join it, so the desk
   // reads one list and narrows it here rather than opening a second view.
@@ -3775,6 +3789,7 @@ function DepartmentDetail({
       // groups registered under it each get a view beside the roll.
       ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+      ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
@@ -3784,7 +3799,7 @@ function DepartmentDetail({
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
     ];
-  }, [unitsKey, isMusic, keepsTheWeek, department.code]);
+  }, [unitsKey, isMusic, isSabbathSchool, keepsTheWeek, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -3794,7 +3809,7 @@ function DepartmentDetail({
       setSubTab("members");
       return;
     }
-    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts");
+    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "lesson-orders");
   }, []);
   useEffect(() => {
     if (isDeaconate) {
@@ -3949,6 +3964,27 @@ function DepartmentDetail({
     }
   };
 
+  const removeChild = async (childId: number, childName: string) => {
+    const result = await showAlert(
+      "Remove child record",
+      `Remove ${childName} from the children's ministry record?`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
+    );
+    if (!result.isConfirmed) return;
+    const res = await fetch(`${API_URL}/api/members/children/records/${childId}/`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      showAlert("Removed", `${childName} has been removed.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+      loadRoll();
+      onChanged();
+    } else {
+      showAlert("Could not remove", "The child record could not be removed.", "error");
+    }
+  };
+
   const addEvent = async (event: {
     title: string;
     date: string;
@@ -4049,7 +4085,9 @@ function DepartmentDetail({
     }
   };
 
-  const rollIds = new Set(roll.map((m) => m.id));
+  const rollIds = new Set<number>(
+    roll.map((m) => m.id).filter((id): id is number => typeof id === "number")
+  );
 
   // The roll's per-row Actions popover — one open at a time, found by a
   // marker on its own wrapper (a ref would only attach to whichever row
@@ -4082,7 +4120,7 @@ function DepartmentDetail({
    * is the first thing in it, and the roll reads as one list.
    */
   const rollRows: RollRow[] = (() => {
-    const keyOf = (person: { username?: string; id?: number }) =>
+    const keyOf = (person: { username?: string; id?: number | string }) =>
       (person.username || `id:${person.id ?? ""}`).toLowerCase();
     const seen = new Set<string>();
     const rows: RollRow[] = [];
@@ -4112,6 +4150,11 @@ function DepartmentDetail({
         sex: holder.gender || memberMatch?.gender || "",
         office,
         role: office || memberMatch?.role || null,
+        class: memberMatch?.class || memberMatch?.unit || null,
+        unit: memberMatch?.unit || null,
+        child_id: memberMatch?.child_id || null,
+        is_child: memberMatch?.is_child || false,
+        age: memberMatch?.age ?? null,
         via: null,
         member: memberMatch ?? null,
       });
@@ -4130,6 +4173,11 @@ function DepartmentDetail({
         sex: member.gender,
         office: null,
         role: member.role || null,
+        class: member.class || member.unit || null,
+        unit: member.unit || null,
+        child_id: member.child_id || null,
+        is_child: member.is_child || false,
+        age: member.age ?? null,
         via: member.via ?? null,
         member,
       });
@@ -4207,6 +4255,9 @@ function DepartmentDetail({
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                   <tr className="border-b border-sand-line">
                     <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                    {department.code === "children" && (
+                      <th className="px-4 pb-3 pt-3 font-bold">Class</th>
+                    )}
                     <th className="px-4 pb-3 pt-3 font-bold">Role</th>
                     {/* The desks the church files by age read who they are
                         filed by: Young Adults, Ambassadors and Children's
@@ -4226,9 +4277,14 @@ function DepartmentDetail({
                             squeezed to "Peter Nd…" identifies nobody. */}
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <p className="font-semibold text-bark">{row.name}</p>
+                          {department.code === "children" && (row.class || row.unit) && (
+                            <span className="sm:hidden text-[11px] font-medium text-fuchsia-800">
+                              · {row.class || row.unit}
+                            </span>
+                          )}
                           {/* A unioned row: the person sits on the roll through
                               the choir or a singing group, not a roll entry. */}
-                          {row.via && (
+                          {row.via && !isSabbathSchool && (
                             <span
                               className="shrink-0 rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss"
                               title={`On the roll through ${row.via} — remove them there`}
@@ -4262,6 +4318,17 @@ function DepartmentDetail({
                           )}
                         </div>
                       </td>
+                      {department.code === "children" && (
+                        <td className={`px-4 ${rowPad} align-middle`}>
+                          {row.class || row.unit ? (
+                            <span className="inline-flex rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-0.5 text-[11px] font-semibold text-fuchsia-800">
+                              {row.class || row.unit}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-moss-mute">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className={`px-4 ${rowPad} align-middle`}>
                         {row.request ? (
                           // The ask speaks for the row where a role would: the
@@ -4361,7 +4428,18 @@ function DepartmentDetail({
                                   <Mail className="h-4 w-4 text-sage-strong" /> Contact member
                                 </button>
                               )}
-                              {row.member ? (
+                              {row.is_child && row.child_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuKey(null);
+                                    removeChild(row.child_id!, row.name);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" /> Remove child
+                                </button>
+                              ) : row.member ? (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -4374,7 +4452,7 @@ function DepartmentDetail({
                                 </button>
                               ) : (
                                 <p className="px-3 py-2 text-[11px] italic text-moss-faint">
-                                  {row.via ? `On the roll through ${row.via}` : "Appointed — no roll entry"}
+                                  {row.via && !isSabbathSchool ? `On the roll through ${row.via}` : "Appointed — no roll entry"}
                                 </p>
                               )}
                                 </>
@@ -4559,6 +4637,9 @@ function DepartmentDetail({
           it. Church-wide, so it is its own view rather than a calendar entry. */}
       {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel search={meetingsSearch} />}
 
+      {/* Sabbath School Lesson Orders */}
+      {subTab === "lesson-orders" && isSabbathSchool && <LessonOrdersPanel />}
+
       {showAddChild && (
         <AddChildModal
           initialUnit={unit}
@@ -4580,7 +4661,7 @@ function DepartmentDetail({
           onBatchAdd={addMembers}
         />
       )}
-      {assignFor && (
+      {assignFor && typeof assignFor.id === "number" && (
         <AssignRoleModal
           department={department}
           member={{ id: assignFor.id, name: assignFor.name, sex: assignFor.sex }}

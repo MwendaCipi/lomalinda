@@ -2,6 +2,7 @@ import re
 from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -630,6 +631,12 @@ class AnnouncementSerializer(serializers.ModelSerializer):
                 attrs['response_options'] = '\n'.join(options)
             else:
                 attrs['response_options'] = ''
+        elif announcement_type == 'job_vacancy':
+            # Job vacancy can carry an optional application link or attachment
+            attrs['support_account'] = ''
+            attrs['response_mode'] = ''
+            attrs['response_options'] = ''
+            attrs['action_type'] = 'none'
         else:  # awareness: a plain notice carries no link, no account, no question
             attrs['href'] = ''
             attrs['support_account'] = ''
@@ -1054,6 +1061,14 @@ class ChildRecordSerializer(serializers.ModelSerializer):
         group = validated_data.get('group')
         dob = validated_data.get('date_of_birth')
         age = validated_data.get('age')
+        unit = (validated_data.get('unit') or '').strip()
+
+        if not group and unit:
+            group = ChildrenGroup.objects.filter(
+                Q(name__iexact=unit) | Q(code__iexact=unit)
+            ).first()
+            if group:
+                validated_data['group'] = group
 
         if not group:
             computed_age = None

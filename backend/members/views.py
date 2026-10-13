@@ -10425,9 +10425,12 @@ class DepartmentMembersView(APIView):
                 'phone_number': (profile.phone_number if profile else '') or '',
                 'whatsapp_number': (profile.whatsapp_number if profile else '') or '',
                 'gender': (profile.gender if profile else '') or '',
+                'sex': (profile.gender if profile else '') or '',
                 'unit': unit_value,
+                'class': unit_value or 'General',
                 'via': via,
                 'role': role,
+                'is_child': False,
                 'added_at': None,
             }
 
@@ -10443,6 +10446,70 @@ class DepartmentMembersView(APIView):
             row = row_for(user, membership_id=membership.id, unit_value=membership.unit)
             row['added_at'] = membership.created_at
             members.append(row)
+
+        # Children Ministry is the umbrella over all children classes and records.
+        # Include active children records and children sub-department memberships.
+        if department == 'children':
+            children_departments = {
+                'beginners': 'Beginners',
+                'kindergarten': 'Kindergarten',
+                'primary': 'Primary',
+                'junior': 'Junior',
+                'teens': 'Teens',
+                'pathfinders': 'Pathfinders',
+            }
+            child_qs = ChildRecord.objects.filter(is_active=True).select_related('group')
+            if unit:
+                child_qs = child_qs.filter(
+                    Q(unit__iexact=unit) | Q(group__name__iexact=unit) | Q(group__code__iexact=unit)
+                )
+            for child in child_qs.order_by('first_name', 'last_name'):
+                cls_name = child.unit or (child.group.name if child.group else '') or 'General'
+                members.append({
+                    'membership_id': None,
+                    'child_id': child.id,
+                    'id': f"child_{child.id}",
+                    'name': child.full_name,
+                    'username': f"child_{child.id}",
+                    'email': child.guardian_email or '',
+                    'phone_number': child.guardian_phone or '',
+                    'whatsapp_number': '',
+                    'gender': child.gender or '',
+                    'sex': child.gender or '',
+                    'unit': cls_name,
+                    'class': cls_name,
+                    'via': 'Child record',
+                    'role': 'Child',
+                    'is_child': True,
+                    'age': child.get_computed_age(),
+                    'guardian_name': child.guardian_name or '',
+                    'guardian_phone': child.guardian_phone or '',
+                    'added_at': child.created_at,
+                })
+
+            if unit:
+                sub_dept_codes = [code for code, name in children_departments.items() if name.lower() == unit.lower() or code == unit.lower()]
+            else:
+                sub_dept_codes = list(children_departments.keys())
+
+            for sub_code in sub_dept_codes:
+                sub_dept_name = children_departments.get(sub_code, sub_code.title())
+                for membership in (
+                    DepartmentMembership.objects.select_related('member', 'member__member_profile')
+                    .filter(department=sub_code, member__is_active=True)
+                ):
+                    if membership.member_id in seen_ids:
+                        continue
+                    seen_ids.add(membership.member_id)
+                    sub_row = row_for(
+                        membership.member,
+                        membership_id=membership.id,
+                        unit_value=sub_dept_name,
+                        via=f"{sub_dept_name} Department",
+                    )
+                    sub_row['class'] = sub_dept_name
+                    sub_row['added_at'] = membership.created_at
+                    members.append(sub_row)
 
         # Music is the church's singing: whoever is on the choir's roll, or in a
         # registered singing group, counts as music ministry. The music desk's
@@ -10479,9 +10546,10 @@ class DepartmentMembersView(APIView):
         # Annotate each member with any role they hold in this department.
         # A member may hold more than one role (e.g. Leader + Choir Director);
         # we show a comma-joined list, or a blank string when they hold none.
+        int_member_ids = [m['id'] for m in members if isinstance(m['id'], int)]
         assignments = (
             DepartmentAssignment.objects.select_related('role')
-            .filter(department__code=department, member__in=[m['id'] for m in members])
+            .filter(department__code=department, member__in=int_member_ids)
         )
         role_map: dict[int, list[str]] = {}
         for asgn in assignments:
@@ -12093,6 +12161,10 @@ class ChildRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ChildRecord.objects.all()
     serializer_class = ChildRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save(update_fields=['is_active'])
 
 
 class ChildrenAutoProgressView(APIView):
