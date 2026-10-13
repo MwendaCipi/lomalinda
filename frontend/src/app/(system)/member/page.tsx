@@ -401,10 +401,12 @@ export default function MemberPage() {
                 />
               </label>
             </div>
-            <button disabled={phoneSaving} className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
-              {phoneSaving ? "Saving..." : "Save contact details"}
-            </button>
-            {phoneMessage && <p className="mt-3 text-sm text-moss">{phoneMessage}</p>}
+            <div className="mt-5 flex justify-end">
+              <button disabled={phoneSaving} className="rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                {phoneSaving ? "Saving..." : "Save contact details"}
+              </button>
+            </div>
+            {phoneMessage && <p className="mt-3 text-right text-sm text-moss">{phoneMessage}</p>}
           </form>
 
           <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
@@ -508,15 +510,17 @@ export default function MemberPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              disabled={relSaving}
-              onClick={saveRelationships}
-              className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {relSaving ? "Saving..." : "Save relationships"}
-            </button>
-            {relMessage && <p className="mt-3 text-sm text-moss">{relMessage}</p>}
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                disabled={relSaving}
+                onClick={saveRelationships}
+                className="rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {relSaving ? "Saving..." : "Save relationships"}
+              </button>
+            </div>
+            {relMessage && <p className="mt-3 text-right text-sm text-moss">{relMessage}</p>}
           </section>
 
           {details && (
@@ -556,10 +560,12 @@ export default function MemberPage() {
                   </label>
                 )}
               </div>
-              <button disabled={savingDetails} className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
-                {savingDetails ? "Saving..." : "Save details"}
-              </button>
-              {detailsMessage && <p className="mt-3 text-sm text-moss">{detailsMessage}</p>}
+              <div className="mt-5 flex justify-end">
+                <button disabled={savingDetails} className="rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                  {savingDetails ? "Saving..." : "Save details"}
+                </button>
+              </div>
+              {detailsMessage && <p className="mt-3 text-right text-sm text-moss">{detailsMessage}</p>}
             </form>
           )}
 
