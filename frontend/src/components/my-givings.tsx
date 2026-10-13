@@ -506,7 +506,8 @@ export function MyGivings() {
   return (
     <section
       aria-label="My Givings"
-      className="rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
+      className="flex flex-col rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
+      style={{ maxHeight: "min(70svh, 640px)" }}
     >
       {/* Filters in one row: date range, type popover, status popover, and search */}
       <div className="flex flex-wrap items-center gap-2.5 border-b border-sand-line px-5 py-3.5">
@@ -553,7 +554,7 @@ export function MyGivings() {
         />
       </div>
 
-      <div className="flex flex-col px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {loading && entries.length === 0 ? (
           <div className="py-10 text-center text-xs text-moss">Loading your givings…</div>
         ) : entries.length === 0 ? (
@@ -582,23 +583,18 @@ export function MyGivings() {
         )}
       </div>
 
-      {/* Footer actions */}
+      {/* Footer actions — always visible at the bottom */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <p className="text-[11px] text-moss">
-            {dayFirst(fromDate)} <ArrowRight size={10} className="inline" aria-hidden="true" /> {dayFirst(toDate)}
-          </p>
-          <p className="text-[11px] font-semibold text-bark">
-            {loading && entries.length === 0
-              ? "Loading your givings…"
-              : [
-                  kindFilter !== "in-kind" && `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
-                  kindFilter !== "money" && `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-          </p>
-        </div>
+        <p className="text-[11px] font-semibold text-bark">
+          {loading && entries.length === 0
+            ? "Loading your givings…"
+            : [
+                kindFilter !== "in-kind" && `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
+                kindFilter !== "money" && `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+        </p>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <button
             type="button"
