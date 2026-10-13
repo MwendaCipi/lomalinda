@@ -303,7 +303,7 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
         <div className="flex items-center justify-between border-b border-sand-line pb-4">
           <div>
             <h2 className="text-xl font-semibold text-bark">Add Receipt</h2>
-            <p className="mt-0.5 text-xs text-moss">Record a manual payment or contribution for treasury reconciliation.</p>
+            <p className="mt-0.5 text-xs text-moss">Record a manual payment or contribution for the treasury ledger.</p>
           </div>
           <button
             type="button"

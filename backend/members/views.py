@@ -42,7 +42,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionReconciliation, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .validators import validate_phone_number
@@ -89,7 +89,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionReconciliationSerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -3308,7 +3308,7 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         return rows, delivery_message
 
 
-class ContributionReconciliationView(APIView):
+class ContributionTreasuryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _selected_date_range(self, request):
@@ -3410,7 +3410,7 @@ class ContributionReconciliationView(APIView):
             'total': str(grand_total),
         }
 
-        reconciliation = ContributionReconciliation.objects.filter(reconciliation_date__range=(start_date, end_date)).order_by('-reconciliation_date').first() if start_date == end_date else None
+        treasury = ContributionTreasury.objects.filter(treasury_date__range=(start_date, end_date)).order_by('-treasury_date').first() if start_date == end_date else None
         date_display = start_date.isoformat() if start_date == end_date else f"{start_date.isoformat()} to {end_date.isoformat()}"
 
         result = {
@@ -3424,7 +3424,7 @@ class ContributionReconciliationView(APIView):
             'cash_contribution_count': cash.count(),
             'purpose_breakdown': purpose_breakdown,
             'totals': column_totals,
-            'reconciliation': ContributionReconciliationSerializer(reconciliation).data if reconciliation else None,
+            'treasury': ContributionTreasurySerializer(treasury).data if treasury else None,
         }
         return Response(result)
 
@@ -3436,11 +3436,11 @@ class ContributionReconciliationView(APIView):
     def put(self, request):
         self._require_finance_manager(request)
         start_date, end_date = self._selected_date_range(request)
-        reconciliation, _ = ContributionReconciliation.objects.get_or_create(
-            reconciliation_date=end_date,
+        treasury, _ = ContributionTreasury.objects.get_or_create(
+            treasury_date=end_date,
             defaults={'reconciled_by': request.user},
         )
-        serializer = ContributionReconciliationSerializer(reconciliation, data=request.data, partial=True)
+        serializer = ContributionTreasurySerializer(treasury, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save(reconciled_by=request.user)
         return self._response(start_date, end_date)
@@ -4673,7 +4673,7 @@ def alert_payment_callback_failure(label, payload, exc):
             'find the payment on the M-Pesa statement and record it by hand.'
         )
         recipients = list(finance_alert_audience())
-        link = '/administration/reconciliation'
+        link = '/administration/treasury'
         ChurchNotification.objects.bulk_create([
             ChurchNotification(user=user, title=title, message=body, link=link)
             for user in recipients
@@ -5045,7 +5045,7 @@ def member_for_giver_name(safaricom_name):
 def record_direct_paybill_payment(payload):
     """Record one direct paybill (C2B) payment from a Safaricom payload.
 
-    Shared by the confirmation callback and the pull-based reconciliation
+    Shared by the confirmation callback and the pull-based statement
     command: money that reached the paybill is a completed contribution,
     credited once, however the server first heard of it — Safaricom pushing
     a confirmation, or the church pulling its own statement. Returns the
@@ -8505,7 +8505,7 @@ class DailyWordView(APIView):
 
 
 from .pdf_generator import (
-    generate_reconciliation_pdf,
+    generate_treasury_pdf,
     generate_member_giving_statement_pdf,
     generate_business_meeting_pdf,
     generate_financial_report_pdf,
@@ -8513,7 +8513,7 @@ from .pdf_generator import (
     generate_in_kind_thermal_receipt_pdf,
 )
 
-class ReconciliationPdfView(APIView):
+class TreasuryPdfView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -8631,7 +8631,7 @@ class ReconciliationPdfView(APIView):
         # Gather weekly breakdown for NEKF format
         saturdays, weekly_data, overall_purpose_map = _gather_weekly_contributions(start_date, end_date)
 
-        pdf_bytes = generate_reconciliation_pdf(
+        pdf_bytes = generate_treasury_pdf(
             church_name=church_name,
             start_date=start_date.strftime("%Y-%m-%d"),
             end_date=end_date.strftime("%Y-%m-%d"),
@@ -8646,7 +8646,7 @@ class ReconciliationPdfView(APIView):
             purpose_title=purpose_param,
         )
 
-        filename = f"Individual_Givings_{purpose_param}_{start_date.strftime('%Y%m%d')}.pdf" if purpose_param else f"Financial_Reconciliation_{start_date.strftime('%Y%m%d')}.pdf"
+        filename = f"Individual_Givings_{purpose_param}_{start_date.strftime('%Y%m%d')}.pdf" if purpose_param else f"Financial_Treasury_{start_date.strftime('%Y%m%d')}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
@@ -8890,7 +8890,7 @@ def _gather_weekly_contributions(start_date, end_date):
     return saturdays, weekly_data, purpose_map
 
 
-class ReconciliationSpreadsheetView(APIView):
+class TreasurySpreadsheetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -11134,11 +11134,17 @@ def msamaria_account():
     ).order_by('id').first()
 
 
+def evangelism_account():
+    return TreasuryAccount.objects.filter(
+        Q(name__icontains='Evangelism') | Q(description__icontains='Evangelism')
+    ).order_by('id').first()
+
+
 def department_accounts(user, code):
     """The treasury accounts accessible for this department desk:
     - Specific account mappings:
         - development: Church Plot and Church Development accounts
-        - clerkship: LCB (Local Church Budget)
+        - clerkship: LCB (Local Church Budget), Msamaria Mwema and Evangelism
         - dorcas: Nyakundis / Dorcas account
         - personal_ministries: Evangelism
         - children, youth, pathfinders: Department fund + Camporee / Campout accounts
@@ -11147,6 +11153,9 @@ def department_accounts(user, code):
       ministry raises a camp offering, so each reads its own fund alone.
     - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
     - Msamaria Mwema is included only for Eldership and Deaconate.
+    - The clerk keeps the church's own books, so the Clerkship desk reads the
+      church budget with the welfare and outreach funds beside it — LCB,
+      Msamaria Mwema and Evangelism.
     - Eldership reads its own fund (the Elders Kitty) with LCB and Msamaria
       beside it — never the whole treasury.
     - The Treasury desk itself reads every account: it keeps the whole
@@ -11183,11 +11192,13 @@ def department_accounts(user, code):
             if 'station' not in (a.name or '').lower() and 'station' not in (a.description or '').lower()
         ]
 
-    # 2. Clerkship: LCB account
+    # 2. Clerkship: the clerk keeps the church's books, so the desk reads the
+    #    church budget and the two funds the church's welfare and outreach sit
+    #    in beside it: LCB, Msamaria Mwema and Evangelism.
     if code == 'clerkship':
-        lcb = lcb_account()
-        if lcb and lcb not in accounts:
-            accounts.append(lcb)
+        for account in (lcb_account(), msamaria_account(), evangelism_account()):
+            if account and account not in accounts:
+                accounts.append(account)
 
     # 3. Dorcas: Nyakundi / Dorcas account
     if code in ('dorcas', 'dorcas_ministry'):
@@ -11441,8 +11452,9 @@ class DepartmentWithdrawalReviewView(APIView):
     POST — handles four actions via the ``action`` field:
            • ``elder_approve`` (elder or admin only) — blesses the request so
              the treasurer can then act on it.
-           • ``approve`` (treasurer or admin only) — requires the request to
-             be ``elder_approved`` (or ``reversed``, releasing it a second
+           • ``approve`` (treasurer or admin only, and never the officer who
+             gave the elder approval) — requires the request to be
+             ``elder_approved`` (or ``reversed``, releasing it a second
              time); debits the fund, never below zero.
            • ``decline`` (elder or treasurer) — declines with a reply.
            • ``reverse`` (treasurer or admin only) — credits the fund back
@@ -11457,7 +11469,16 @@ class DepartmentWithdrawalReviewView(APIView):
         rows = DepartmentWithdrawalRequest.objects.select_related(
             'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
         ).order_by('-created_at')
-        return Response({'requests': [_withdrawal_review_row(row) for row in rows]})
+        data = []
+        for row in rows:
+            item = _withdrawal_review_row(row)
+            # Per-viewer, so the queue can tell the truth about the release:
+            # whoever cleared this one as the elder may not also be the
+            # treasurer who pays it, and the desk says so before the button
+            # is pressed rather than answering with a refusal.
+            item['you_elder_approved'] = row.elder_approved_by_id == request.user.id
+            data.append(item)
+        return Response({'requests': data})
 
     def post(self, request):
         action = str(request.data.get('action') or '').strip()
@@ -11510,6 +11531,17 @@ class DepartmentWithdrawalReviewView(APIView):
             ).first()
             if row is None:
                 return Response({'detail': 'That request is not waiting on approval, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            # Two people, two desks: the elder who cleared the ask gives it one
+            # approval, and the treasurer who releases the money is the second.
+            # An officer holding both roles therefore approves in one capacity
+            # only — otherwise a dual-role holder would bless their own ask and
+            # then pay it, and the two-step review would be one step wearing
+            # two names.
+            if row.elder_approved_by_id == request.user.id:
+                return Response(
+                    {'detail': 'You gave this request its elder approval — a different treasurer must release the money.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             if row.amount > row.account.balance:
                 return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
             reply = str(request.data.get('reply') or '').strip()[:255]

@@ -82,6 +82,9 @@ type WithdrawalRequestRow = {
   requested_by: string;
   elder_approved_by: string | null;
   elder_approved_at: string | null;
+  /** Whether the signed-in officer gave this row its elder approval — the
+      treasurer who releases the money then has to be someone else. */
+  you_elder_approved?: boolean;
   decided_by: string | null;
   decided_at: string | null;
   reply: string;
@@ -461,6 +464,12 @@ function WithdrawalRequestsPanel({
         const awaitingTreasurer = target.status === "elder_approved";
         const canReverse = target.status === "approved";
         const isReversed = target.status === "reversed";
+        // Two desks, two people: whoever cleared this ask as the elder cannot
+        // also release it as the treasurer. The API refuses the second step,
+        // and the button says why rather than letting the desk find out by
+        // error — a person may approve a request as an elder or as the
+        // treasurer, never as both.
+        const selfCleared = Boolean(target.you_elder_approved);
         // Approving a reversed request debits the fund a second time, so the
         // option is offered only while the account still covers the ask — the
         // API enforces the same rule; this keeps the button honest.
@@ -492,6 +501,11 @@ function WithdrawalRequestsPanel({
                           ? "Reversed — the fund was credited back. It can be approved again while the account covers it."
                           : `Decided by ${target.decided_by ?? "the office"}${target.reply ? ` — “${target.reply}”` : ""}.`}
                 </p>
+                {selfCleared && (awaitingTreasurer || isReversed) && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-ember">
+                    You cleared this request as its elder — the treasurer who releases the money has to be someone else.
+                  </p>
+                )}
                 {isReversed && !reversedCovered && (
                   <p className="mt-1.5 text-[11px] font-semibold text-red-600">
                     {target.account_name} holds KES {Number(target.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} —
@@ -551,7 +565,12 @@ function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy}
+                    disabled={busy || selfCleared}
+                    title={
+                      selfCleared
+                        ? "You gave this request its elder approval — a different treasurer must release the money."
+                        : undefined
+                    }
                     className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
                   >
                     {busy ? "Saving…" : "Approve request"}
@@ -562,7 +581,12 @@ function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy}
+                    disabled={busy || selfCleared}
+                    title={
+                      selfCleared
+                        ? "You cleared this request as its elder — a different treasurer must release the money."
+                        : undefined
+                    }
                     className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
                   >
                     {busy ? "Saving…" : "Approve again"}
@@ -646,7 +670,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   }, [initialView]);
 
   // The treasury's six views, drawn once in the shell's header band. The two
-  // ledgers live on the reconciliation page; the four desks here are this
+  // ledgers live on the treasury page; the four desks here are this
   // page's own views. Rendering it through the band (rather than as a row in
   // this component's own header) is what keeps the treasury to a single line
   // of toggles — the band shows this strip instead of the section's pages.
@@ -656,13 +680,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       <TreasuryNav
         active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : view === "unassigned" ? "unassigned" : "requests"}
         onSelect={(next) => {
-          if (next === "givings") router.push("/administration/reconciliation?mode=all_givings");
-          else if (next === "summary") router.push("/administration/reconciliation?mode=summary");
+          if (next === "givings") router.push("/administration/treasury?mode=all_givings");
+          else if (next === "summary") router.push("/administration/treasury?mode=summary");
           else if (next === "unassigned") setView("unassigned");
           else if (next === "accounts") setView("accounts");
           else if (next === "drives") router.push("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
-          else if (next === "failed") router.push("/administration/reconciliation?mode=failed");
+          else if (next === "failed") router.push("/administration/treasury?mode=failed");
           else setView("withdrawals");
         }}
       />
@@ -785,7 +809,14 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: authHeaders() });
-      if (res.ok) setAccounts(await res.json());
+      if (res.ok) {
+        // The desk sums what it is handed, so a payload that is not the
+        // array the endpoint promises (an error body under a 200, a
+        // proxy's reply) must leave the roll as it was rather than take
+        // the whole page down at `.reduce`.
+        const data = await res.json();
+        if (Array.isArray(data)) setAccounts(data);
+      }
     } catch {
       // ignore
     } finally {
@@ -837,7 +868,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   const [withdrawalSearch, setWithdrawalSearch] = useState("");
   const [withdrawalFilter, setWithdrawalFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   // The spending window opens on the church's month to date — the same window
-  // the reconciliation ledger and the report composer open on — so the desk
+  // the treasury ledger and the report composer open on — so the desk
   // lands on what it is reviewing rather than on the whole history.
   const [expenseFrom, setExpenseFrom] = useState(firstDayOfMonth);
   const [expenseTo, setExpenseTo] = useState(localDate);

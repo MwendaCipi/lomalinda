@@ -129,7 +129,7 @@ class TestimonyAPITests(APITestCase):
         self.assertEqual(Testimony.objects.count(), 2)
 
 
-class ContributionReconciliationAPITests(APITestCase):
+class ContributionTreasuryAPITests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='treasurer', password='secure-password')
         MemberProfile.objects.create(user=self.user, role='treasurer')
@@ -153,7 +153,7 @@ class ContributionReconciliationAPITests(APITestCase):
         self.assertEqual(cash_response.status_code, status.HTTP_201_CREATED)
 
         reconcile_response = self.client.put(
-            f'/api/members/treasury/reconciliation/?date={self.today.isoformat()}',
+            f'/api/members/treasury/ledger/?date={self.today.isoformat()}',
             {'digital_amount_confirmed': '1500.00', 'cash_amount_counted': '400.00', 'notes': 'Counted by two officers.'},
             format='json',
         )
@@ -188,11 +188,11 @@ class ContributionReconciliationAPITests(APITestCase):
         self.assertIn('Jane Doe', donor_names)
         self.assertIn('John Smith', donor_names)
 
-    def test_member_cannot_access_treasury_reconciliation(self):
+    def test_member_cannot_access_treasury_ledger(self):
         member = User.objects.create_user(username='member', password='secure-password')
         MemberProfile.objects.create(user=member, role='member')
         self.client.force_authenticate(member)
-        response = self.client.get('/api/members/treasury/reconciliation/')
+        response = self.client.get('/api/members/treasury/ledger/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_purpose_contributions_shows_failed_only_when_asked(self):
@@ -914,7 +914,7 @@ class PaymentCallbackAlertTests(APITestCase):
         self.assertIn('Payment callback failed', note.title)
         self.assertIn('simulated crash', note.message)
         self.assertIn('ALERT01', note.message)
-        self.assertEqual(note.link, '/administration/reconciliation')
+        self.assertEqual(note.link, '/administration/treasury')
         self.assertEqual([m.to for m in mail.outbox], [['treasury@example.com']])
 
         # Safaricom retries the same callback: one crash, one alert.
@@ -2080,7 +2080,7 @@ class PdfGenerationAPITests(APITestCase):
         MemberProfile.objects.create(user=self.user, role='treasurer')
         self.client.force_authenticate(user=self.user)
 
-    def test_reconciliation_pdf_returns_valid_pdf_stream(self):
+    def test_treasury_pdf_returns_valid_pdf_stream(self):
         CashContribution.objects.create(
             received_by=self.user,
             amount=Decimal('1500.00'),
@@ -2088,14 +2088,14 @@ class PdfGenerationAPITests(APITestCase):
             received_on=date.today(),
             payment_method='cash',
         )
-        response = self.client.get('/api/members/reports/reconciliation/pdf/?include_individual=true')
+        response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(response.content.startswith(b'%PDF'))
 
-    def test_individual_reconciliation_pdf_direct_call(self):
-        from .pdf_generator import generate_reconciliation_pdf
-        pdf_bytes = generate_reconciliation_pdf(
+    def test_individual_treasury_pdf_direct_call(self):
+        from .pdf_generator import generate_treasury_pdf
+        pdf_bytes = generate_treasury_pdf(
             church_name="SDA Church Test",
             start_date="2026-01-01",
             end_date="2026-01-31",
@@ -2206,7 +2206,7 @@ class PdfGenerationAPITests(APITestCase):
 
 
 
-class ReconciliationSpreadsheetRangeTests(APITestCase):
+class TreasurySpreadsheetRangeTests(APITestCase):
     """The workbook is cut to the dates the treasurer selected — not to the
     month the range happens to sit in."""
 
@@ -2239,7 +2239,7 @@ class ReconciliationSpreadsheetRangeTests(APITestCase):
 
         from openpyxl import load_workbook
 
-        response = self.client.get(f'/api/members/reports/reconciliation/spreadsheet/?{query}')
+        response = self.client.get(f'/api/members/reports/ledger/spreadsheet/?{query}')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sheet = load_workbook(BytesIO(response.content)).active
         # Row 22 is the Trust Fund's Tithe line; column B is the week of the 3rd.
@@ -10311,11 +10311,11 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['personal_ministries']['group'], 'ministry')
         self.assertEqual(rows['children']['group'], 'department')
         self.assertEqual(rows['ambassadors']['group'], 'department')
-        # Eldership is a ministry of the church's record (0197), filed with
-        # the ministries; the clerkship and deaconate hold the church's books
-        # and property — offices, neither of the two lists.
+        # Eldership (0197) and Clerkship (0201) are ministries of the church's
+        # own record, filed with the ministries; the deaconate holds the
+        # church's property — an office, neither of the two lists.
         self.assertEqual(rows['eldership']['group'], 'ministry')
-        self.assertEqual(rows['clerkship']['group'], 'office')
+        self.assertEqual(rows['clerkship']['group'], 'ministry')
         self.assertEqual(rows['deaconate']['group'], 'office')
         # The AYM's name reads in full — the abbreviation moved out of it
         # (0178), and the rail keeps its own short form beside the name.
@@ -11188,6 +11188,33 @@ class DepartmentFundTests(APITestCase):
         for other in ('MusicFund', 'Pathfinder', 'AWM'):
             self.assertNotIn(other, names)
 
+    def test_clerkship_desk_reads_lcb_msamaria_and_evangelism(self):
+        """The clerk keeps the church's own books: the desk reads the church
+        budget with the welfare and outreach funds beside it — LCB, Msamaria
+        Mwema and Evangelism, and nothing else the church holds."""
+        department = Department.objects.get(code='clerkship')
+        role, _ = DepartmentRole.objects.get_or_create(department=department, name='Church Clerk')
+        DepartmentAssignment.objects.create(
+            department=department, role=role, member=self.leader, kind='leader',
+        )
+        for name, description in (
+            ('LCB', 'Local Church Budget'),
+            ('Msamaria Mwema', 'Msamaria Mwema Children Home'),
+            ('Evangelism', 'Evangelism - Field'),
+        ):
+            TreasuryAccount.objects.get_or_create(
+                name=name, defaults={'description': description, 'balance': Decimal('100.00')},
+            )
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/clerkship/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {row['name'] for row in response.data['accounts']},
+            {'LCB', 'Msamaria Mwema', 'Evangelism'},
+        )
+
     def test_msamaria_stays_out_of_other_ministry_desks(self):
         """Msamaria Mwema is not every desk's fund: the music ministry's
         strip carries its own fund alone."""
@@ -11319,6 +11346,56 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(movement.amount, Decimal('200.00'))
         self.assertEqual(movement.reference, f"WD-{self._pending().id}")
         self.assertEqual(self._pending().status, 'approved')
+
+    def test_the_elder_who_cleared_it_cannot_also_release_it(self):
+        """Two desks, two people: an officer holding both the elder's seat and
+        the treasurer's approves in one capacity only. The one who blessed the
+        ask may not be the one who pays it — otherwise a dual-role holder
+        would clear their own ask and release the money in the same sitting,
+        and the two-step review would be one step wearing two names."""
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Buses to the camporee',
+        }, format='json')
+        row = self._pending()
+        # One person wearing both hats — an elder who is also the treasurer.
+        both = User.objects.create_user(
+            'fund.both', 'fund.both@example.com', 'StrongPass#2026',
+            first_name='Both', last_name='Hats',
+        )
+        MemberProfile.objects.create(user=both, role='treasurer', roles='elder,treasurer,member')
+
+        self.client.force_authenticate(both)
+        bless = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'elder_approve',
+        }, format='json')
+        self.assertEqual(bless.status_code, status.HTTP_200_OK)
+
+        # The same hand cannot then release it, and no money moves.
+        release = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(release.status_code, status.HTTP_403_FORBIDDEN)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'elder_approved')
+
+        # The queue says why before the button is pressed...
+        queue = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertTrue(queue.data['requests'][0]['you_elder_approved'])
+
+        # ...and another treasurer's hand can release it as usual.
+        self.client.force_authenticate(self.treasurer)
+        queue = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertFalse(queue.data['requests'][0]['you_elder_approved'])
+        paid = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(paid.status_code, status.HTTP_200_OK)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('300.00'))
 
     def test_an_approval_cannot_overdraw_the_fund(self):
         account = self._fund()

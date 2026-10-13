@@ -267,7 +267,7 @@ def pull_paybill_transactions(start_date, end_date, offset=0):
     always-on for the shortcode; this is the other direction — the church
     asks Safaricom what the paybill received — so a manual "send money to
     paybill" payment is readable here whether or not a callback was ever
-    configured. Reconciliation pulls with it and records what the ledger
+    configured. This pull reads the same window and records what the ledger
     has not seen (see the pull_mpesa_transactions command).
 
     Dates are 'YYYY-MM-DD HH:MM:SS' strings in Nairobi time; OffSetValue
@@ -319,7 +319,7 @@ def normalize_pull_rows(page):
     while a C2B confirmation carries `TransID`/`TransAmount`/`BillRefNumber`
     /`MSISDN`. The recorder takes one shape only, so a pull's rows are
     translated here, once, for the browser's Pull button and the
-    reconciliation command alike. A row already in the callback shape passes
+    pull command alike. A row already in the callback shape passes
     through untouched, so an answer in either spelling still records.
     """
     raw = page.get('Response')

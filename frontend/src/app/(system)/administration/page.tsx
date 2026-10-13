@@ -91,6 +91,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   "deaconate-calendar": "the deaconate calendar",
   "deaconate-funding": "deaconate funding and accounts",
   "eldership-funding": "eldership funding and accounts",
+  "clerkship-funding": "clerkship funding and accounts",
   settings: "church settings",
   overview: "the overview",
 };
@@ -294,7 +295,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -398,6 +399,7 @@ function AdministrationContent() {
             { icon: <Armchair size={20} aria-hidden="true" />, label: "Board Meetings", description: "The board's schedules, agendas, files and minutes.", href: "/administration?tab=board" },
             { icon: <Briefcase size={20} aria-hidden="true" />, label: "Business Meetings", description: "The congregation in session: agendas, files and minutes.", href: "/administration?tab=business" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for — LCB, Msamaria Mwema and Evangelism.", href: "/administration?tab=clerkship-funding" },
           ],
         }
       : null,
@@ -420,7 +422,7 @@ function AdministrationContent() {
           icon: <Landmark size={16} aria-hidden="true" />,
           description: "Accounts, ledger, fund drives, budget and refunds.",
           cards: [
-            { icon: <Scale size={20} aria-hidden="true" />, label: "Contributions Ledger", description: "Record cash receipts and track all giving breakdown ledgers.", href: "/administration/reconciliation" },
+            { icon: <Scale size={20} aria-hidden="true" />, label: "Contributions Ledger", description: "Record cash receipts and track all giving breakdown ledgers.", href: "/administration/treasury" },
             { icon: <Landmark size={20} aria-hidden="true" />, label: "Church Accounts", description: "Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.", href: "/administration?tab=accounts" },
             { icon: <Heart size={20} aria-hidden="true" />, label: "Fund Drives", description: "Manage the church's fund drives — targets, dates, receipts and member invites.", href: "/administration/fund-drives" },
             { icon: <BarChart3 size={20} aria-hidden="true" />, label: "Church Budget", description: "Post the year's plan — income, spending — and publish it to the congregation.", href: "/administration?tab=budget" },
@@ -506,7 +508,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Clerk Approval Notice */}
-            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "clerkship-funding", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Church Clerk Access:</span>
@@ -621,6 +623,19 @@ function AdministrationContent() {
               <div className="h-full min-h-0">
                 <DepartmentAccountsPanel
                   department={{ code: "eldership", label: "Eldership" }}
+                  onChanged={() => {}}
+                  search=""
+                />
+              </div>
+            )}
+
+            {/* Clerkship Funding & Accounts — the clerk keeps the church's own
+                books: the desk reads the church budget with the two funds the
+                welfare and outreach sit in, and the movements on each. */}
+            {activeTab === "clerkship-funding" && isClerk && (
+              <div className="h-full min-h-0">
+                <DepartmentAccountsPanel
+                  department={{ code: "clerkship", label: "Clerkship" }}
                   onChanged={() => {}}
                   search=""
                 />

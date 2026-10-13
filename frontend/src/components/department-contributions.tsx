@@ -98,7 +98,10 @@ export function DepartmentContributionsTable({
       },
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => data && setAccounts(data))
+      // The desk reads the accounts as a list; a payload that is not one (an
+      // error body under a 200, a proxy's reply) leaves the roll empty rather
+      // than taking the page down.
+      .then((data) => setAccounts(Array.isArray(data) ? data : []))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   }, []);

@@ -12,7 +12,7 @@ const fundAuthHeaders = (): Record<string, string> => {
 /**
  * The treasury's views, as one line of toggles.
  *
- * The ledger (reconciliation), the accounts desk and the drives page all show
+ * The ledger, the accounts desk and the drives page all show
  * this same strip — Individual Givings, Summary Contributions, Church
  * Accounts, Fund Drives, Expenses, Requests and Failed — so the treasurer meets one
  * navigation wherever in the treasury they stand. Each page renders it into

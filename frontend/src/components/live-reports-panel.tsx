@@ -54,7 +54,13 @@ export function LiveReportsPanel() {
       const token = localStorage.getItem("access_token");
       const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const accountsRes = await fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: auth });
-      if (accountsRes.ok) setAccounts(await accountsRes.json());
+      if (accountsRes.ok) {
+        // The panel lists the accounts; a payload that is not the array the
+        // endpoint promises keeps the last good read rather than crashing the
+        // page at its first .filter.
+        const rows = await accountsRes.json();
+        if (Array.isArray(rows)) setAccounts(rows);
+      }
     } catch {
       // silently retry
     } finally {

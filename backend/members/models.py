@@ -356,10 +356,11 @@ class Department(models.Model):
     here — church-wide roles are assigned from User Management.
     """
 
-    #: Where the rail files a department. The three office bodies the church is
-    #: governed by are not listed under either heading — they are desks of
-    #: their own (Elders', Clerk's, Deaconate) — while the ministries and the
-    #: departments are the two lists the rail shows.
+    #: Where the rail files a department: the ministries and the departments
+    #: are the two lists it shows. The office bodies the church is governed by
+    #: are desks of their own in the frontend, filed away from both lists —
+    #: and of them, Eldership (0197) and Clerkship (0201) read as ministries in
+    #: this record itself, while the deaconate stays an office.
     GROUP_CHOICES = [
         ('office', 'Church office'),
         ('ministry', 'Ministry'),
@@ -1255,17 +1256,17 @@ class InKindContribution(models.Model):
         return f"{self.donor_name or 'Anonymous'} — {first_item[:40]}"
 
 
-class ContributionReconciliation(models.Model):
+class ContributionTreasury(models.Model):
     """The amounts independently confirmed against a day's digital and cash ledgers."""
-    reconciliation_date = models.DateField(unique=True)
+    treasury_date = models.DateField(unique=True)
     digital_amount_confirmed = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     cash_amount_counted = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
-    reconciled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='contribution_reconciliations')
+    reconciled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='contribution_treasuries')
     reconciled_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-reconciliation_date']
+        ordering = ['-treasury_date']
 
 
 class SupportSubmission(models.Model):

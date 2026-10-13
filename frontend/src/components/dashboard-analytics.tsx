@@ -385,10 +385,10 @@ export function DashboardAnalytics() {
             ))}
           </div>
           <Link
-            href="/administration/reconciliation"
+            href="/administration/treasury"
             className="rounded-full border border-sand-mute bg-white px-3.5 py-2 text-[11px] font-semibold text-bark hover:border-ember"
           >
-            Reconciliation
+            Treasury
           </Link>
           <Link
             href="/support/financial"

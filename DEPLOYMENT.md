@@ -101,9 +101,9 @@ cd backend
 venv/bin/python manage.py register_mpesa_pull_url
 ```
 
-The register call is idempotent (every run after the first answers "Shortcode already Registered"), so re-running it is harmless. Until it has been run, both the reconciliation page's Pull button and the command below are answered with `No records found or Organization Name not available` — Safaricom's sentence for a shortcode nobody enabled Pull for, which the app now reports verbatim with the fix named.
+The register call is idempotent (every run after the first answers "Shortcode already Registered"), so re-running it is harmless. Until it has been run, both the treasury page's Pull button and the command below are answered with `No records found or Organization Name not available` — Safaricom's sentence for a shortcode nobody enabled Pull for, which the app now reports verbatim with the fix named.
 
-Verify from the server itself, then pull from the reconciliation page or the command line:
+Verify from the server itself, then pull from the treasury page or the command line:
 
 ```bash
 cd backend

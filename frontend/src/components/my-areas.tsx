@@ -570,6 +570,9 @@ export function MyAreas() {
   const openCode = searchParams.get("area");
   const [joining, setJoining] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
+  /** Which card's actions popover is open — one at a time, the way the desks
+      file their row menus. */
+  const [openMenuCode, setOpenMenuCode] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   /** Whether the screen is wide enough for the leadership card. A phone
       reads the area as one list — every leader is a member row wearing their
@@ -632,9 +635,15 @@ export function MyAreas() {
     [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
   );
 
-  const openArea = openCode ? rows.find((row) => row.code === openCode) ?? null : null;
+  // The Treasury is filed in this list, but it is a desk of the console,
+  // not an area of the map — it has no Members/Calendar/Accounts views of
+  // its own, and drawing them under the treasury's name is what made the
+  // card read as broken. A `?area=treasury` in the address bar (an old
+  // link, a restored history step) therefore renders no area here; the
+  // effect below walks it to the desk instead.
+  const openArea = openCode && openCode !== "treasury" ? rows.find((row) => row.code === openCode) ?? null : null;
 
-  const { setCustomToggles, setCustomHeader } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
   const router = useRouter();
   // The elders' desk keeps the church's announcements — on a phone the rail
   // is out of sight, so the area's own strip carries the way in, and the
@@ -682,9 +691,23 @@ export function MyAreas() {
   // while the bar still names the card on screen.
   const showMap = useCallback(() => router.replace("/my-areas"), [router]);
   const openAreaView = useCallback(
-    (code: string) => router.push(`/my-areas?area=${code}&view=members`),
+    // The Treasury card is a door, not a view: the registry names its
+    // destination once — "Treasury opening the accounts tab of
+    // Administration" — and the hand-placed card this row replaced did the
+    // same, so pressing it walks straight to the desk and its own toggles
+    // rather than opening an area the treasury does not have.
+    (code: string) =>
+      router.push(code === "treasury" ? "/administration?tab=accounts" : `/my-areas?area=${code}&view=members`),
     [router]
   );
+  // …and a `?area=treasury` already in the address bar goes to the desk
+  // too: holders to the accounts desk itself, anyone else back to the map
+  // (the row is the treasurer's and the admin's to open). Replacing keeps
+  // the map one step back, the way pressing the card is not.
+  useEffect(() => {
+    if (openCode !== "treasury") return;
+    router.replace(holdsTreasury ? "/administration?tab=accounts" : "/my-areas");
+  }, [openCode, holdsTreasury, router]);
   const selectAreaView = useCallback(
     (view: string) => router.replace(`/my-areas?area=${openCode}&view=${view}`),
     [openCode, router]
@@ -726,11 +749,47 @@ export function MyAreas() {
     return () => setCustomToggles(null);
   }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap]);
 
-  // The shell names the area the member opened, or the map they are on.
+  // One card's actions popover at a time: a press anywhere outside the menu
+  // closes it, the same way the desks' row menus behave.
+  useEffect(() => {
+    if (openMenuCode === null) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-area-actions]")) setOpenMenuCode(null);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuCode]);
+
+  // A phone reads this page top-down: the place is named first, then the views
+  // it answers to. The shell's default is the other order — the strip names the
+  // place and the heading answers to it — so the page asks for its own order
+  // while it is the page on screen.
+  useEffect(() => {
+    setHeadingFirst(true);
+    return () => setHeadingFirst(false);
+  }, [setHeadingFirst]);
+
+  // The shell names the area the member opened, or the map they are on. On a
+  // phone the way back out of an area rides above that name: back link, the
+  // place, then the views it answers to.
   useEffect(() => {
     setCustomHeader(
       openArea
-        ? { label: openArea.label, description: openArea.description }
+        ? {
+            label: openArea.label,
+            description: openArea.description,
+            leading: (
+              <button
+                type="button"
+                onClick={showMap}
+                className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Ministry
+              </button>
+            ),
+          }
         : {
             label: "Ministry",
             description:
@@ -740,7 +799,7 @@ export function MyAreas() {
           }
     );
     return () => setCustomHeader(null);
-  }, [openArea, tab, setCustomHeader]);
+  }, [openArea, tab, setCustomHeader, showMap]);
 
   const [roll, setRoll] = useState<RollRow[]>([]);
   const [events, setEvents] = useState<AreaEvent[]>([]);
@@ -938,18 +997,24 @@ export function MyAreas() {
   };
   if (openArea) {
     const canManageCurrentArea = manageAreaCode === openArea.code && canManageArea;
+    // Whether this area is already the member's own — the ask to join is only
+    // ever offered to someone reading a ministry they are not on.
+    const inThisArea = isMyMinistry(openArea);
     const leaders = openArea.holders.filter((holder) => holder.kind === "leader");
     const assistants = openArea.holders.filter((holder) => holder.kind === "assistant");
     return (
       <div className="flex-1 min-w-0 h-full w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
         <div className="mx-auto max-w-4xl space-y-5">
+          {/* The way back rides above the name on a phone, in the shell's
+              heading band (`setCustomHeader`'s leading node); the wider screens
+              read it here, beside the rail that already carries the map. */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => {
                 showMap();
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+              className="hidden items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:inline-flex"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
               Ministry
@@ -1107,6 +1172,24 @@ export function MyAreas() {
                   </button>
                 )}
               </div>
+              {/* The wider screens' own foot for the ask to join: it waits at
+                  the end of the roll it is about, the way the desk's All
+                  Members page offers it. A phone reads the same ask in the
+                  card's Actions popover instead — its roll foot is already
+                  spoken for. */}
+              {!inThisArea && canJoin(openArea.code) && (
+                <div className="mt-4 hidden items-center justify-end gap-3 border-t border-sand-line pt-3 sm:flex">
+                  <button
+                    type="button"
+                    onClick={() => void requestToJoin(openArea.code, openArea.label)}
+                    disabled={joining === openArea.code}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+                  >
+                    <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    {joining === openArea.code ? "Sending…" : "Request to join"}
+                  </button>
+                </div>
+              )}
             </section>
           )}
 
@@ -1325,51 +1408,84 @@ export function MyAreas() {
                 <p className="text-[11px] text-moss">
                   {area.memberCount} on the roll · {area.eventCount} event{area.eventCount === 1 ? "" : "s"}
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-sand-line pt-3">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openAreaView(area.code);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-sand-line pt-3">
+                  {/* The card's own actions sit in one popover: opening the
+                      area, the ask to join, and leaving it. On a phone the ask
+                      belongs here with them — the row has no room for a button
+                      beside Actions — and the wider screens read the same ask
+                      as the foot of the area's own Members page, where the roll
+                      it is about is on screen. The desks file their row
+                      actions the same way. */}
+                  <div
+                    className="relative ml-auto"
+                    data-area-actions
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {area.group === "ministry" ? "View ministry" : "View department"}
-                  </button>
-                  {!inArea && canJoin(area.code) && (
                     <button
                       type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void requestToJoin(area.code, area.label);
-                      }}
-                      disabled={joining === area.code}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+                      aria-haspopup="menu"
+                      aria-expanded={openMenuCode === area.code}
+                      aria-label={`Actions for ${area.label}`}
+                      onClick={() => setOpenMenuCode((open) => (open === area.code ? null : area.code))}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                     >
-                      <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                      {joining === area.code ? "Sending…" : "Request to join"}
+                      <MoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                      Actions
                     </button>
-                  )}
-                  {/* Leaving is the member's own door, and it sits on their
-                      own card among its actions. */}
-                  {inArea && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void leaveArea(area);
-                      }}
-                      disabled={leaving === area.code}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember disabled:opacity-60"
-                    >
-                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                      {leaving === area.code
-                        ? "Leaving…"
-                        : area.group === "ministry"
-                        ? "Leave ministry"
-                        : "Leave department"}
-                    </button>
-                  )}
+                    {openMenuCode === area.code && (
+                      <div
+                        role="menu"
+                        className="absolute right-0 z-50 mt-2 w-52 rounded-2xl border border-sand-line bg-white py-2 shadow-xl"
+                      >
+                        {!inArea && canJoin(area.code) && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuCode(null);
+                              void requestToJoin(area.code, area.label);
+                            }}
+                            disabled={joining === area.code}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-bark transition hover:bg-sand disabled:opacity-60 sm:hidden"
+                          >
+                            <UserPlus className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                            {joining === area.code ? "Sending…" : "Request to join"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setOpenMenuCode(null);
+                            openAreaView(area.code);
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-bark transition hover:bg-sand"
+                        >
+                          <Users className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                          {area.group === "ministry" ? "View ministry" : "View department"}
+                        </button>
+                        {inArea && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuCode(null);
+                              void leaveArea(area);
+                            }}
+                            disabled={leaving === area.code}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-moss transition hover:bg-sand hover:text-ember disabled:opacity-60"
+                          >
+                            <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                            {leaving === area.code
+                              ? "Leaving…"
+                              : area.group === "ministry"
+                              ? "Leave ministry"
+                              : "Leave department"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

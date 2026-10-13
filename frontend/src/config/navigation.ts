@@ -626,6 +626,14 @@ export const clerkshipItems: RailRow[] = [
     short: "Transfers",
     description: "Membership transfers into the church and out of it.",
   }),
+  // The clerk keeps the church's own books, so the desk carries its accounts
+  // beside the minutes: the church budget and the two funds the church's
+  // welfare and outreach sit in — LCB, Msamaria Mwema and Evangelism.
+  officeTab("clerkship-funding", "Funding & Accounts", Wallet, {
+    roles: CLERKSHIP_ROLES,
+    short: "Funding",
+    description: "The church funds the clerk keeps the books for — LCB, Msamaria Mwema and Evangelism — with balances and movements.",
+  }),
 ];
 
 /**
@@ -760,11 +768,11 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
  */
 export const treasuryItems: RailRow[] = [
   {
-    href: "/administration/reconciliation",
+    href: "/administration/treasury",
     label: "Contributions Ledger",
     short: "Ledger",
     icon: Scale,
-    match: ["/administration/reconciliation"],
+    match: ["/administration/treasury"],
     roles: ["treasurer", "admin"],
     description: "Every contribution the church has received, reconciled line by line.",
   },
@@ -1000,6 +1008,9 @@ const RAIL_AREA_CODES_MOVED = new Set([
   // Eldership is a ministry of the record too (0197), filed the same way:
   // the rail's Eldership section already names the desk.
   "eldership",
+  // Clerkship is a ministry of the record now (0201), and the rail's
+  // Clerkship section already names the desk.
+  "clerkship",
   "beginners",
   "kindergarten",
   "primary",

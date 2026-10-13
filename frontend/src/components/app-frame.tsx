@@ -13,7 +13,16 @@ import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-depa
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
 
-type PageHeaderHeading = { label: string; description?: string };
+type PageHeaderHeading = {
+  label: string;
+  description?: string;
+  /**
+   * A node the heading band carries above the heading itself — the way back
+   * out of an opened area, which on a phone is read before the name it
+   * returns from rather than after it.
+   */
+  leading?: React.ReactNode;
+};
 
 type PageHeaderContextType = {
   setHeaderRightAction: (node: React.ReactNode) => void;
@@ -34,6 +43,14 @@ type PageHeaderContextType = {
    * Givings" leaves the page titled after the ledger it sits in.
    */
   setCustomHeader: (heading: PageHeaderHeading | null) => void;
+  /**
+   * A page whose own name leads on a phone: the heading band rides *above* the
+   * row of toggles instead of under it, so the place is named before its views
+   * are offered. The shell's default is the other order — the strip names the
+   * place and the heading answers to it, which keeps the page's height for the
+   * page — so this is asked for a page at a time, never imposed on all of them.
+   */
+  setHeadingFirst: (on: boolean) => void;
 };
 
 const PageHeaderContext = createContext<PageHeaderContextType>({
@@ -41,6 +58,7 @@ const PageHeaderContext = createContext<PageHeaderContextType>({
   setCustomToggles: () => {},
   setTogglesRightAction: () => {},
   setCustomHeader: () => {},
+  setHeadingFirst: () => {},
 });
 
 export function usePageHeader() {
@@ -80,6 +98,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
   const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
+  const [headingFirst, setHeadingFirst] = useState(false);
 
   // The setters never change identity, so the context value must not either.
   // A fresh object on every shell render re-renders every page that injects a
@@ -88,8 +107,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // `setHeaderRightAction` → shell re-render → new context → page re-render →
   // effect. One stable value breaks the loop for every desk at once.
   const pageHeaderSlots = useMemo(
-    () => ({ setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader }),
-    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader]
+    () => ({ setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst }),
+    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst]
   );
 
   // A page's header chrome belongs to the route it was drawn for, so it is
@@ -106,6 +125,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setCustomToggles(null);
     setTogglesRightAction(null);
     setCustomHeader(null);
+    setHeadingFirst(false);
   }
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
@@ -135,7 +155,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       ? { label: hereItem.label, description: hereItem.description }
       : pageHeaderFor(pathname);
   // A page that names itself wins over the rail row that led here.
-  const header = customHeader ?? pageHeader;
+  const header: PageHeaderHeading | null = customHeader ?? pageHeader;
   const sectionPages = (section && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({
@@ -172,16 +192,22 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 // entirely. On a phone this band drops below the row of toggles —
                 // the strip names the place, and the search answers to it — and
                 // the wider screens keep the heading first, controls to its right.
+                // A page that asks to be named first (`setHeadingFirst`) swaps
+                // those two on the phone: heading, then its own strip beneath.
                 <div
-                  className={`order-2 sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    headerRightAction ? "" : "hidden sm:flex"
+                  className={`${headingFirst ? "order-1" : "order-2"} sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    headerRightAction || headingFirst ? "" : "hidden sm:flex"
                   }`}
                 >
                   {header && (
-                    <div className="hidden sm:block">
+                    <div className={headingFirst ? "" : "hidden sm:block"}>
+                      {/* Above the name on a phone: the way back out of an
+                          opened area, which is read before the name it
+                          returns from. The node carries its own breakpoints. */}
+                      {header.leading}
                       <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{header.label}</h1>
                       {header.description && (
-                        <p className="mt-0.5 text-xs text-moss sm:text-sm">{header.description}</p>
+                        <p className="mt-0.5 hidden text-xs text-moss sm:block sm:text-sm">{header.description}</p>
                       )}
                     </div>
                   )}
@@ -193,7 +219,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               {(customToggles || sectionPages.length > 1) && (
-                <div className="order-1 sm:order-none flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5">
+                <div
+                  className={`${headingFirst ? "order-2" : "order-1"} sm:order-none flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5`}
+                >
                   <div className="min-w-0 flex-1">
                     {customToggles ? (
                       <div className="pt-2">{customToggles}</div>

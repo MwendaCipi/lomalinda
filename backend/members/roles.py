@@ -164,7 +164,7 @@ def unknown_audience_codes(codes):
 
 #: The whole rights vocabulary, in display order: (code, label, description).
 ROLE_RIGHTS = (
-    ('finance', 'Finance', 'Open the finance desk: reconciliation, cash receipts, refunds and fund drives.'),
+    ('finance', 'Finance', 'Open the finance desk: the treasury, cash receipts, refunds and fund drives.'),
     ('treasury_accounts', 'Treasury Accounts', 'Create and manage treasury accounts, transfers and expenditures.'),
     ('board_invitations', 'Board Invitations', 'Schedule board meetings and send board invitations.'),
     ('business_invitations', 'Business Invitations', 'Schedule business meetings and send the invitations.'),

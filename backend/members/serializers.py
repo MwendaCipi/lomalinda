@@ -8,7 +8,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionReconciliation, Department, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
+    CashContribution, ChurchSettings, Contribution, ContributionTreasury, Department, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
     InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
@@ -724,13 +724,13 @@ class CashContributionSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContributionReconciliationSerializer(serializers.ModelSerializer):
+class ContributionTreasurySerializer(serializers.ModelSerializer):
     reconciled_by_name = serializers.CharField(source='reconciled_by.get_full_name', read_only=True)
 
     class Meta:
-        model = ContributionReconciliation
-        fields = ('reconciliation_date', 'digital_amount_confirmed', 'cash_amount_counted', 'notes', 'reconciled_by_name', 'reconciled_at')
-        read_only_fields = ('reconciliation_date', 'reconciled_by_name', 'reconciled_at')
+        model = ContributionTreasury
+        fields = ('treasury_date', 'digital_amount_confirmed', 'cash_amount_counted', 'notes', 'reconciled_by_name', 'reconciled_at')
+        read_only_fields = ('treasury_date', 'reconciled_by_name', 'reconciled_at')
 
     def validate_digital_amount_confirmed(self, value):
         if value < 0:

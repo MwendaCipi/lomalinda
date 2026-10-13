@@ -254,7 +254,7 @@ def pdf_church_name(church_name):
     return re.sub(r"^SDA\b", "SDA Church", text, flags=re.IGNORECASE)
 
 
-def generate_reconciliation_pdf(
+def generate_treasury_pdf(
     church_name,
     start_date,
     end_date,

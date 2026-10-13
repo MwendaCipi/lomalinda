@@ -112,8 +112,17 @@ export function ExpenditureManager({
         fetch(`${API_URL}/api/members/treasury/expenditures/`, { headers: authHeaders() }),
         fetch(`${API_URL}/api/members/treasury/accounts/`, { headers: authHeaders() }),
       ]);
-      if (expRes.ok) setExpenditures(await expRes.json());
-      if (accRes.ok) setAccounts(await accRes.json());
+      // Both are lists; a payload that is not one (an error body under a 200,
+      // a proxy's reply) leaves the roll as it was rather than taking the page
+      // down at the first .filter on it.
+      if (expRes.ok) {
+        const rows = await expRes.json();
+        if (Array.isArray(rows)) setExpenditures(rows);
+      }
+      if (accRes.ok) {
+        const accounts = await accRes.json();
+        if (Array.isArray(accounts)) setAccounts(accounts);
+      }
     } catch {
       // ignore
     } finally {
